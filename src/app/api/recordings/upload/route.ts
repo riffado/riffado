@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
-import { promisify } from "node:util";
+import { parseBuffer } from "music-metadata";
 import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
@@ -12,8 +9,6 @@ import { auth } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
-
-const execFileAsync = promisify(execFile);
 
 const ACCEPTED_EXTENSIONS = new Set([
     ".mp3",
@@ -27,31 +22,31 @@ const ACCEPTED_EXTENSIONS = new Set([
     ".flac",
 ]);
 
-async function getAudioDurationMs(filePath: string): Promise<number> {
-    // Try stream duration first, fall back to format duration
-    for (const flag of ["-show_streams", "-show_format"]) {
-        try {
-            const { stdout } = await execFileAsync(
-                "ffprobe",
-                ["-v", "quiet", "-print_format", "json", flag, filePath],
-                { timeout: 30000 },
-            );
-            const info = JSON.parse(stdout) as {
-                streams?: Array<{ codec_type: string; duration?: string }>;
-                format?: { duration?: string };
-            };
-            const durationStr =
-                flag === "-show_streams"
-                    ? info.streams?.find((s) => s.codec_type === "audio")
-                          ?.duration
-                    : info.format?.duration;
-            const sec = parseFloat(durationStr ?? "0");
-            if (sec > 0) return Math.round(sec * 1000);
-        } catch {
-            // try next flag
-        }
+async function getAudioDurationMs(
+    buffer: Uint8Array,
+    mimeType: string,
+): Promise<number> {
+    // Pure-JS metadata parse — no system ffprobe binary required. The
+    // `duration: true` option forces a full scan when the container
+    // doesn't expose duration in its headers (e.g. Chrome-recorded
+    // WebM/Opus, raw ADTS AAC). MIME hint short-circuits format sniffing.
+    try {
+        const { format } = await parseBuffer(
+            buffer,
+            { mimeType, size: buffer.byteLength },
+            { duration: true },
+        );
+        const sec = format.duration ?? 0;
+        if (sec > 0) return Math.round(sec * 1000);
+        return 0;
+    } catch (err) {
+        // Surface the real reason instead of silently returning 0 — the
+        // caller turns 0 into a 422 "invalid audio stream" response, and
+        // a swallowed parse error there is the exact bug class that made
+        // #58 hard to diagnose.
+        console.error("Audio metadata parse failed:", err);
+        return 0;
     }
-    return 0;
 }
 
 export async function POST(request: Request) {
@@ -62,10 +57,6 @@ export async function POST(request: Request) {
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const tmpDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "openplaud-upload-"),
-    );
 
     try {
         const formData = await request.formData();
@@ -105,23 +96,6 @@ export async function POST(request: Request) {
         // double memory usage for large files)
         const buffer = Buffer.from(await file.arrayBuffer());
 
-        // Write to temp file so ffprobe can read it
-        const inputPath = path.join(tmpDir, `input${ext}`);
-        await fs.writeFile(inputPath, buffer);
-
-        // Compute MD5 synchronously (no need to parallelize a sync operation)
-        const md5 = createHash("md5").update(buffer).digest("hex");
-        const durationMs = await getAudioDurationMs(inputPath);
-
-        // Reject files where ffprobe could not detect a valid audio stream.
-        // A duration of 0 means the file contains no readable audio data.
-        if (durationMs === 0) {
-            return NextResponse.json(
-                { error: "File does not contain a valid audio stream" },
-                { status: 422 },
-            );
-        }
-
         // Unique ID and storage key for this upload
         const fileId = `uploaded-${nanoid()}`;
         const storageKey = `${session.user.id}/${fileId}${ext}`;
@@ -129,6 +103,20 @@ export async function POST(request: Request) {
         // trust the user-supplied file.type, which could be set to text/html
         // and cause a stored XSS if the file is ever served directly.
         const contentType = getAudioMimeType(storageKey);
+
+        // Compute MD5 synchronously (no need to parallelize a sync operation)
+        const md5 = createHash("md5").update(buffer).digest("hex");
+        const durationMs = await getAudioDurationMs(buffer, contentType);
+
+        // Reject files where the audio metadata parser could not detect a
+        // valid stream. Duration 0 means no readable audio data — the
+        // underlying parse error (if any) is logged inside the helper.
+        if (durationMs === 0) {
+            return NextResponse.json(
+                { error: "File does not contain a valid audio stream" },
+                { status: 422 },
+            );
+        }
 
         const storage = await createUserStorageProvider(session.user.id);
         await storage.uploadFile(storageKey, buffer, contentType);
@@ -175,7 +163,5 @@ export async function POST(request: Request) {
             { error: "Failed to upload recording" },
             { status: 500 },
         );
-    } finally {
-        await fs.rm(tmpDir, { recursive: true, force: true });
     }
 }

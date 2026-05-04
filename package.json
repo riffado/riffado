@@ -58,6 +58,7 @@
         "date-fns": "^4.1.0",
         "drizzle-orm": "^0.44.7",
         "lucide-react": "^0.554.0",
+        "music-metadata": "^11.12.3",
         "nanoid": "^5.1.6",
         "next": "16.0.7",
         "next-themes": "^0.4.6",

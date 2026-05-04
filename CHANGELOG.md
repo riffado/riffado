@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Audio uploads no longer require `ffprobe`/`ffmpeg` on the host. Duration is now parsed in pure JS via [`music-metadata`](https://github.com/Borewit/music-metadata), fixing uploads on the published Docker image (which never shipped ffmpeg) and on local dev environments where `ffprobe` is missing from the Node process `PATH` ([#58](https://github.com/openplaud/openplaud/issues/58)).
+
 ### Added
 - New connect screen with three methods: **Sign in with Plaud** (browser-extension bridge — the easy path), **Email code** (existing OTP flow), and **Paste token** (advanced fallback). Targets accounts created via Google or Apple sign-in on Plaud, where the OTP flow silently signs users into a separate empty shadow account and sync returns zero recordings ([#65](https://github.com/openplaud/openplaud/issues/65)).
 - Companion browser extension [openplaud/connector](https://github.com/openplaud/connector) (AGPL-3.0) detected by the connect screen via `window.__openplaudConnector`. Lets users sign in to Plaud the way they normally do — Google, Apple, or email/password — with no copy-pasting. The extension hands the resulting access token back to OpenPlaud via the new `/api/plaud/auth/connect-token` endpoint, which encrypts it (AES-256-GCM) and persists alongside any existing OTP-flow connections.
