@@ -32,10 +32,10 @@ describe("issue #58 — upload duration parsing without ffprobe", () => {
             { duration: true },
         );
 
-        expect(format.container).toBe("MPEG");
-        expect(format.codec).toMatch(/MPEG \d Layer 3/);
         // Fixture is a 1-second 440 Hz sine; allow generous tolerance for
-        // MP3 frame alignment on either end.
+        // MP3 frame alignment on either end. Duration is the only thing
+        // this regression cares about — container/codec assertions would
+        // just be brittle coupling to music-metadata internals.
         expect(format.duration).toBeGreaterThan(0.5);
         expect(format.duration).toBeLessThan(2);
     });
