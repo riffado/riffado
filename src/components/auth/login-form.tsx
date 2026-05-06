@@ -22,8 +22,11 @@ interface LoginFormProps {
     registrationEnabled?: boolean;
     /**
      * Whether SMTP is configured on this instance. When false we hide the
-     * "Forgot password?" link because the reset email cannot be delivered.
-     * Self-host operators see a hint instead so they know why it's missing.
+     * "Forgot password?" link entirely because the reset email cannot be
+     * delivered -- end users shouldn't see a non-functional affordance on
+     * the sign-in screen. Self-host operators get the explanatory panel
+     * (with the SMTP env-var names) by navigating to /forgot-password
+     * directly, which is also linked from the README.
      */
     smtpConfigured?: boolean;
 }
