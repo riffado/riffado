@@ -20,9 +20,18 @@ interface LoginFormProps {
      * is UX only.
      */
     registrationEnabled?: boolean;
+    /**
+     * Whether SMTP is configured on this instance. When false we hide the
+     * "Forgot password?" link because the reset email cannot be delivered.
+     * Self-host operators see a hint instead so they know why it's missing.
+     */
+    smtpConfigured?: boolean;
 }
 
-export function LoginForm({ registrationEnabled = true }: LoginFormProps) {
+export function LoginForm({
+    registrationEnabled = true,
+    smtpConfigured = false,
+}: LoginFormProps) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +97,17 @@ export function LoginForm({ registrationEnabled = true }: LoginFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        {smtpConfigured ? (
+                            <Link
+                                href="/forgot-password"
+                                className="text-xs text-muted-foreground hover:text-accent-cyan hover:underline"
+                            >
+                                Forgot password?
+                            </Link>
+                        ) : null}
+                    </div>
                     <Input
                         id="password"
                         type="password"

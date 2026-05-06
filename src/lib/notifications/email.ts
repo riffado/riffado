@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import React from "react";
 import { env } from "@/lib/env";
 import { NewRecordingEmail } from "./email-templates/new-recording-email";
+import { PasswordResetEmail } from "./email-templates/password-reset-email";
 import { TestEmail } from "./email-templates/test-email";
 
 interface EmailOptions {
@@ -14,9 +15,19 @@ interface EmailOptions {
 
 let transporter: nodemailer.Transporter | null = null;
 
+/**
+ * Whether SMTP credentials are configured on this instance. Used by
+ * server-rendered auth pages to decide whether to surface email-dependent
+ * features like password reset. This only checks env presence -- it does not
+ * verify that the SMTP server actually accepts connections.
+ */
+export function isSmtpConfigured(): boolean {
+    return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
+}
+
 function getTransporter(): nodemailer.Transporter | null {
     // Return null if SMTP is not configured
-    if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASSWORD) {
+    if (!isSmtpConfigured()) {
         return null;
     }
 
@@ -149,6 +160,36 @@ ${
 View recordings: ${dashboardUrl}
 
 Manage notifications: ${settingsUrl}
+    `.trim();
+
+    return sendEmail({
+        to: email,
+        subject,
+        html,
+        text,
+    });
+}
+
+export async function sendPasswordResetEmail(
+    email: string,
+    resetUrl: string,
+): Promise<boolean> {
+    const subject = "Reset your OpenPlaud password";
+
+    const html = await render(
+        React.createElement(PasswordResetEmail, {
+            resetUrl,
+        }),
+    );
+
+    const text = `
+${subject}
+
+We received a request to reset your OpenPlaud password. Click the link below to choose a new password. This link expires in 1 hour.
+
+${resetUrl}
+
+If you didn't request a password reset, you can safely ignore this email -- your password will not change.
     `.trim();
 
     return sendEmail({

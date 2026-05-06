@@ -9,4 +9,11 @@ export const authClient = createAuthClient({
             : "http://localhost:3000",
 });
 
-export const { useSession, signIn, signOut, signUp } = authClient;
+export const {
+    useSession,
+    signIn,
+    signOut,
+    signUp,
+    forgetPassword,
+    resetPassword,
+} = authClient;

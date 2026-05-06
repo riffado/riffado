@@ -1,19 +1,15 @@
-import { LoginForm } from "@/components/auth/login-form";
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
-import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/notifications/email";
 
-export default async function LoginPage() {
+export default async function ForgotPasswordPage() {
     // Redirect to dashboard if already authenticated
     await redirectIfAuthenticated();
 
     return (
         <div className="flex min-h-screen items-center justify-center p-4">
             <div className="w-full max-w-md">
-                <LoginForm
-                    registrationEnabled={!env.DISABLE_REGISTRATION}
-                    smtpConfigured={isSmtpConfigured()}
-                />
+                <ForgotPasswordForm smtpConfigured={isSmtpConfigured()} />
             </div>
         </div>
     );
