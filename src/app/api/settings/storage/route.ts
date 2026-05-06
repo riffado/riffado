@@ -1,8 +1,9 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { recordings, storageConfig } from "@/db/schema";
+import { recordings } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 // GET - Get storage usage and info
 export async function GET(request: Request) {
@@ -18,14 +19,7 @@ export async function GET(request: Request) {
             );
         }
 
-        // Get storage config
-        const [config] = await db
-            .select()
-            .from(storageConfig)
-            .where(eq(storageConfig.userId, session.user.id))
-            .limit(1);
-
-        const storageType = config?.storageType || "local";
+        const storageType = env.DEFAULT_STORAGE_TYPE;
 
         // Calculate storage usage
         const userRecordings = await db
