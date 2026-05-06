@@ -1,6 +1,8 @@
 "use client";
 
 import type { SettingsSection } from "@/types/settings";
+import { ApiTokensSection } from "./settings/api-tokens-section";
+import { WebhooksSection } from "./settings/webhooks-section";
 import { DevSection } from "./settings-sections/dev-section";
 import { DisplaySection } from "./settings-sections/display-section";
 import { ExportSection } from "./settings-sections/export-section";
@@ -44,6 +46,10 @@ export function SettingsContent({
                     isHosted={isHosted}
                 />
             );
+        case "api-tokens":
+            return <ApiTokensSection />;
+        case "webhooks":
+            return <WebhooksSection />;
         case "transcription":
             return <TranscriptionSection />;
         case "summary":

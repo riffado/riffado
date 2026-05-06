@@ -17,6 +17,7 @@ import {
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
+import { emitEvent } from "@/lib/webhooks/emit";
 
 export async function transcribeRecording(
     userId: string,
@@ -47,7 +48,12 @@ export async function transcribeRecording(
         const [existingTranscription] = await db
             .select()
             .from(transcriptions)
-            .where(eq(transcriptions.recordingId, recordingId))
+            .where(
+                and(
+                    eq(transcriptions.recordingId, recordingId),
+                    eq(transcriptions.userId, userId),
+                ),
+            )
             .limit(1);
 
         if (existingTranscription?.text) {
@@ -120,50 +126,86 @@ export async function transcribeRecording(
         const { text: transcriptionText, detectedLanguage } =
             parseTranscriptionResponse(transcription, responseFormat);
 
-        // Re-check tombstone after the provider call. The user may have
-        // deleted the recording while we were waiting on the transcription
-        // API; abort before writing so we don't recreate child rows the
-        // DELETE handler has already cleaned up.
-        const [stillActive] = await db
-            .select({ deletedAt: recordings.deletedAt })
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.id, recordingId),
-                    eq(recordings.userId, userId),
-                ),
-            )
-            .limit(1);
-        if (!stillActive || stillActive.deletedAt) {
-            return {
-                success: false,
-                error: "Recording was deleted before transcription finished",
-            };
-        }
+        const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
+        try {
+            await db.transaction(async (tx) => {
+                const [stillActive] = await tx
+                    .select({ deletedAt: recordings.deletedAt })
+                    .from(recordings)
+                    .where(
+                        and(
+                            eq(recordings.id, recordingId),
+                            eq(recordings.userId, userId),
+                        ),
+                    )
+                    .for("update")
+                    .limit(1);
 
-        // Encrypt the transcript before persisting.
-        const encryptedTranscriptionText = encryptText(transcriptionText);
-        if (existingTranscription) {
-            await db
-                .update(transcriptions)
-                .set({
-                    text: encryptedTranscriptionText,
-                    detectedLanguage,
-                    transcriptionType: "server",
-                    provider: credentials.provider,
-                    model: credentials.defaultModel || "whisper-1",
-                })
-                .where(eq(transcriptions.id, existingTranscription.id));
-        } else {
-            await db.insert(transcriptions).values({
-                recordingId,
-                userId,
-                text: encryptedTranscriptionText,
-                detectedLanguage,
-                transcriptionType: "server",
-                provider: credentials.provider,
-                model: credentials.defaultModel || "whisper-1",
+                if (!stillActive || stillActive.deletedAt) {
+                    throw RECORDING_TOMBSTONED;
+                }
+
+                const [currentTranscription] = await tx
+                    .select()
+                    .from(transcriptions)
+                    .where(
+                        and(
+                            eq(transcriptions.recordingId, recordingId),
+                            eq(transcriptions.userId, userId),
+                        ),
+                    )
+                    .limit(1);
+
+                const encryptedTranscriptionText =
+                    encryptText(transcriptionText);
+
+                if (currentTranscription) {
+                    await tx
+                        .update(transcriptions)
+                        .set({
+                            text: encryptedTranscriptionText,
+                            detectedLanguage,
+                            transcriptionType: "server",
+                            provider: credentials.provider,
+                            model: credentials.defaultModel || "whisper-1",
+                        })
+                        .where(
+                            and(
+                                eq(transcriptions.id, currentTranscription.id),
+                                eq(transcriptions.userId, userId),
+                            ),
+                        );
+                } else {
+                    await tx.insert(transcriptions).values({
+                        recordingId,
+                        userId,
+                        text: encryptedTranscriptionText,
+                        detectedLanguage,
+                        transcriptionType: "server",
+                        provider: credentials.provider,
+                        model: credentials.defaultModel || "whisper-1",
+                    });
+                }
+
+                await tx
+                    .update(recordings)
+                    .set({ updatedAt: new Date() })
+                    .where(
+                        and(
+                            eq(recordings.id, recordingId),
+                            eq(recordings.userId, userId),
+                            isNull(recordings.deletedAt),
+                        ),
+                    );
             });
+        } catch (txError) {
+            if (txError === RECORDING_TOMBSTONED) {
+                return {
+                    success: false,
+                    error: "Recording was deleted before transcription finished",
+                };
+            }
+            throw txError;
         }
 
         if (autoGenerateTitle && transcriptionText.trim()) {
@@ -183,7 +225,13 @@ export async function transcribeRecording(
                             filename: encryptText(generatedTitle),
                             updatedAt: new Date(),
                         })
-                        .where(eq(recordings.id, recordingId));
+                        .where(
+                            and(
+                                eq(recordings.id, recordingId),
+                                eq(recordings.userId, userId),
+                                isNull(recordings.deletedAt),
+                            ),
+                        );
 
                     if (syncTitleToPlaud) {
                         try {
@@ -241,9 +289,14 @@ export async function transcribeRecording(
             }
         }
 
+        await emitEvent("transcription.completed", userId, recordingId);
+
         return { success: true };
     } catch (error) {
         console.error("Error transcribing recording:", error);
+        await emitEvent("transcription.failed", userId, recordingId, {
+            error: error instanceof Error ? error.message : String(error),
+        });
         return {
             success: false,
             error:

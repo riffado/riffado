@@ -127,6 +127,27 @@
       "when": 1777730082791,
       "tag": "0017_curved_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778078594215,
+      "tag": "0018_slippery_kabuki",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1778078610898,
+      "tag": "0019_lively_gravity",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1778083848061,
+      "tag": "0020_moaning_expediter",
+      "breakpoints": true
     }
   ]
 }

@@ -39,6 +39,10 @@ vi.mock("@/lib/transcription/transcribe-recording", () => ({
     transcribeRecording: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+vi.mock("@/lib/webhooks/emit", () => ({
+    emitEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { db } from "@/db";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";

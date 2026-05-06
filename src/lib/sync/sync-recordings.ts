@@ -8,6 +8,7 @@ import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
+import { emitEvent } from "@/lib/webhooks/emit";
 import type { PlaudRecording } from "@/types/plaud";
 
 /**
@@ -60,6 +61,7 @@ async function uniqueStorageKey(
             .from(recordings)
             .where(
                 and(
+                    eq(recordings.userId, userId),
                     eq(recordings.storagePath, key),
                     ne(recordings.plaudFileId, plaudFileId),
                 ),
@@ -89,7 +91,12 @@ async function processRecording(
         const [existingRecording] = await db
             .select()
             .from(recordings)
-            .where(eq(recordings.plaudFileId, plaudRecording.id))
+            .where(
+                and(
+                    eq(recordings.plaudFileId, plaudRecording.id),
+                    eq(recordings.userId, context.userId),
+                ),
+            )
             .limit(1);
 
         const versionKey = plaudRecording.version_ms.toString();
@@ -157,7 +164,17 @@ async function processRecording(
             await db
                 .update(recordings)
                 .set({ ...recordingData, updatedAt: new Date() })
-                .where(eq(recordings.id, existingRecording.id));
+                .where(
+                    and(
+                        eq(recordings.id, existingRecording.id),
+                        eq(recordings.userId, context.userId),
+                    ),
+                );
+            await emitEvent(
+                "recording.updated",
+                context.userId,
+                existingRecording.id,
+            );
             return {
                 status: "updated",
                 recordingId: existingRecording.id,
@@ -170,6 +187,8 @@ async function processRecording(
             .insert(recordings)
             .values(recordingData)
             .returning({ id: recordings.id });
+
+        await emitEvent("recording.synced", context.userId, newRecording.id);
 
         return {
             status: "new",

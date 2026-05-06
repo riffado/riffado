@@ -1,11 +1,17 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { aiEnhancements, recordings, transcriptions } from "@/db/schema";
+import {
+    aiEnhancements,
+    recordings,
+    transcriptions,
+    webhookDeliveries,
+} from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { createRedactedWebhookPayload } from "@/lib/webhooks/payload";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -166,8 +172,11 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
         // Object already absent — continue with tombstone.
     }
 
-    // 2. Atomic DB writes: child rows + tombstone in one transaction.
+    // 2. Atomic DB writes: child rows, webhook delivery payload redaction,
+    //    and tombstone in one transaction.
     await db.transaction(async (tx) => {
+        const now = new Date();
+
         await tx
             .delete(transcriptions)
             .where(
@@ -187,8 +196,21 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
             );
 
         await tx
+            .update(webhookDeliveries)
+            .set({
+                payload: createRedactedWebhookPayload(id, now),
+                updatedAt: now,
+            })
+            .where(
+                and(
+                    eq(webhookDeliveries.recordingId, id),
+                    eq(webhookDeliveries.userId, userId),
+                ),
+            );
+
+        await tx
             .update(recordings)
-            .set({ deletedAt: new Date(), updatedAt: new Date() })
+            .set({ deletedAt: now, updatedAt: now })
             .where(
                 and(
                     eq(recordings.id, id),

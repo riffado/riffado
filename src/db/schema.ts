@@ -433,3 +433,95 @@ export const userSettings = pgTable("user_settings", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const personalAccessTokens = pgTable(
+    "personal_access_tokens",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        name: text("name").notNull(),
+        tokenHash: text("token_hash").notNull().unique(),
+        tokenPrefix: varchar("token_prefix", { length: 16 }).notNull(),
+        scopes: jsonb("scopes").$type<string[]>().notNull().default(["read"]),
+        lastUsedAt: timestamp("last_used_at"),
+        expiresAt: timestamp("expires_at"),
+        revokedAt: timestamp("revoked_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("pat_user_id_idx").on(table.userId),
+        tokenHashIdx: index("pat_token_hash_idx").on(table.tokenHash),
+    }),
+);
+
+export const webhookEndpoints = pgTable(
+    "webhook_endpoints",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        url: text("url").notNull(),
+        secret: text("secret").notNull(),
+        events: jsonb("events").$type<string[]>().notNull(),
+        description: text("description"),
+        enabled: boolean("enabled").notNull().default(true),
+        lastDeliveryAt: timestamp("last_delivery_at"),
+        lastDeliveryStatus: varchar("last_delivery_status", {
+            length: 16,
+        }),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("webhook_endpoints_user_id_idx").on(table.userId),
+    }),
+);
+
+export const webhookDeliveries = pgTable(
+    "webhook_deliveries",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        endpointId: text("endpoint_id")
+            .notNull()
+            .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        recordingId: text("recording_id").references(() => recordings.id, {
+            onDelete: "cascade",
+        }),
+        event: varchar("event", { length: 64 }).notNull(),
+        payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+        status: varchar("status", { length: 16 }).notNull(),
+        attempts: integer("attempts").notNull().default(0),
+        lastAttemptAt: timestamp("last_attempt_at"),
+        nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+        lastResponseStatus: integer("last_response_status"),
+        lastResponseBody: text("last_response_body"),
+        lastError: text("last_error"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        pendingScanIdx: index("webhook_deliveries_pending_idx").on(
+            table.status,
+            table.nextAttemptAt,
+        ),
+        endpointIdIdx: index("webhook_deliveries_endpoint_id_idx").on(
+            table.endpointId,
+        ),
+        recordingIdIdx: index("webhook_deliveries_recording_id_idx").on(
+            table.recordingId,
+        ),
+    }),
+);

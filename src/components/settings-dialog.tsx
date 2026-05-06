@@ -6,12 +6,14 @@ import {
     Download,
     FileText,
     HardDrive,
+    KeyRound,
     ListChecks,
     Mic,
     Monitor,
     Play,
     RefreshCw,
     Settings as SettingsIcon,
+    Webhook,
     Wrench,
 } from "lucide-react";
 import * as React from "react";
@@ -69,6 +71,12 @@ import type { SettingsSection } from "@/types/settings";
 
 const settingsNav = [
     { name: "AI", id: "providers" as SettingsSection, icon: Bot },
+    {
+        name: "API Tokens",
+        id: "api-tokens" as SettingsSection,
+        icon: KeyRound,
+    },
+    { name: "Webhooks", id: "webhooks" as SettingsSection, icon: Webhook },
     {
         name: "Transcription",
         id: "transcription" as SettingsSection,

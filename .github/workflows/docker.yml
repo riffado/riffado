@@ -1,6 +1,7 @@
 name: Docker
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -42,12 +43,16 @@ jobs:
           #   - `latest`       → newest stable release (v* tag push)
           #   - `X.Y.Z` / `X.Y` → specific release versions
           #   - `dev`          → rolling build from `main` (unstable, opt-in)
+          #   - `pr-<branch>`  → manually dispatched test image for a feature branch
+          #   - `sha-<sha>`    → manually dispatched test image pinned to a commit
           # `main` is a rolling integration branch, so it MUST NOT overwrite `latest`.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch,prefix=pr-,enable=${{ github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') }}
+            type=sha,prefix=sha-,format=short,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6

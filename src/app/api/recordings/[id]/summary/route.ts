@@ -60,7 +60,12 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     const [transcription] = await db
         .select()
         .from(transcriptions)
-        .where(eq(transcriptions.recordingId, id))
+        .where(
+            and(
+                eq(transcriptions.recordingId, id),
+                eq(transcriptions.userId, session.user.id),
+            ),
+        )
         .limit(1);
 
     if (!transcription) {
@@ -303,7 +308,12 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
                         provider: credentials.provider,
                         model,
                     })
-                    .where(eq(aiEnhancements.id, existing.id));
+                    .where(
+                        and(
+                            eq(aiEnhancements.id, existing.id),
+                            eq(aiEnhancements.userId, session.user.id),
+                        ),
+                    );
             } else {
                 await tx.insert(aiEnhancements).values({
                     recordingId: id,
@@ -315,6 +325,17 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
                     model,
                 });
             }
+
+            await tx
+                .update(recordings)
+                .set({ updatedAt: new Date() })
+                .where(
+                    and(
+                        eq(recordings.id, id),
+                        eq(recordings.userId, session.user.id),
+                        isNull(recordings.deletedAt),
+                    ),
+                );
         });
     } catch (txError) {
         if (txError === RECORDING_TOMBSTONED) {
@@ -375,14 +396,30 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
 
     const { id } = await (context as IdContext).params;
 
-    await db
-        .delete(aiEnhancements)
-        .where(
-            and(
-                eq(aiEnhancements.recordingId, id),
-                eq(aiEnhancements.userId, session.user.id),
-            ),
-        );
+    await db.transaction(async (tx) => {
+        const deleted = await tx
+            .delete(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.recordingId, id),
+                    eq(aiEnhancements.userId, session.user.id),
+                ),
+            )
+            .returning({ id: aiEnhancements.id });
+
+        if (deleted.length > 0) {
+            await tx
+                .update(recordings)
+                .set({ updatedAt: new Date() })
+                .where(
+                    and(
+                        eq(recordings.id, id),
+                        eq(recordings.userId, session.user.id),
+                        isNull(recordings.deletedAt),
+                    ),
+                );
+        }
+    });
 
     return NextResponse.json({ success: true });
 });

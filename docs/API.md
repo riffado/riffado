@@ -10,7 +10,16 @@ http://localhost:3000/api
 
 ## Authentication
 
-All authenticated endpoints require a valid session cookie set by Better Auth.
+Browser endpoints require a valid session cookie set by Better Auth.
+
+Automation endpoints under `/api/v1/` also accept personal access tokens:
+
+```http
+Authorization: Bearer opp_...
+```
+
+Tokens are created from Settings -> API Tokens. The raw token is shown once,
+stored as a SHA-256 hash, and can be revoked at any time.
 
 ## Endpoints
 
@@ -229,6 +238,29 @@ Transcribe a recording.
 
 ### Settings
 
+#### GET `/settings/tokens`
+
+List personal access tokens for the signed-in user. Requires a session cookie;
+tokens cannot manage tokens.
+
+#### POST `/settings/tokens`
+
+Create a read-only personal access token. The raw `token` field is returned
+once.
+
+**Body:**
+```json
+{
+  "name": "Hermes Agent",
+  "expiresAt": "2026-12-31T23:59:59.000Z",
+  "scopes": ["read"]
+}
+```
+
+#### DELETE `/settings/tokens/[id]`
+
+Revoke a personal access token.
+
 #### GET `/settings/user`
 
 Get user settings.
@@ -329,6 +361,75 @@ Send test email to verify SMTP configuration.
 
 ---
 
+### Automation API v1
+
+All v1 endpoints accept either a browser session cookie or
+`Authorization: Bearer opp_...`.
+
+#### GET `/v1/recordings`
+
+List recordings with cursor pagination and incremental filters.
+
+**Query Parameters:**
+- `cursor`: base64url cursor from `next_cursor`
+- `limit`: 1-100, default 50
+- `created_since`: ISO timestamp
+- `updated_since`: ISO timestamp; includes recording metadata, transcript,
+  summary, and generated-title changes
+- `has_transcription`: `true` or `false`
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": "abc123",
+      "title": "Meeting Notes",
+      "created_at": "2026-05-06T12:00:00.000Z",
+      "updated_at": "2026-05-06T12:05:00.000Z",
+      "recorded_at": "2026-05-06T11:30:00.000Z",
+      "duration_ms": 3600000,
+      "filesize_bytes": 15728640,
+      "device": {
+        "serial_number": "888317426694681884",
+        "name": "Plaud Note",
+        "model": "Note"
+      },
+      "has_transcription": true,
+      "has_summary": false,
+      "links": {
+        "self": "/api/v1/recordings/abc123",
+        "transcript": "/api/v1/recordings/abc123/transcript",
+        "audio": "/api/v1/recordings/abc123/audio"
+      }
+    }
+  ],
+  "next_cursor": null,
+  "has_more": false
+}
+```
+
+`updated_at` is the recording resource timestamp for v1 clients. It changes
+when the recording metadata changes and when transcript, summary, or generated
+title state changes.
+
+#### GET `/v1/recordings/[id]`
+
+Return the stable recording shape plus inline `transcript` and `summary`
+objects when present.
+
+#### GET `/v1/recordings/[id]/transcript`
+
+Return transcript text and provider metadata, or `404` when the recording has
+not been transcribed.
+
+#### GET `/v1/recordings/[id]/audio`
+
+Return a `302` redirect to a presigned S3 URL for S3 storage, or stream local
+audio with byte-range support for local storage.
+
+---
+
 ### Export & Backup
 
 #### GET `/export`
@@ -386,7 +487,43 @@ Rate limiting is not currently enforced but may be added in future versions.
 
 ## Webhooks
 
-Webhooks are not currently supported but are planned for a future release.
+Webhooks are configured from Settings -> Webhooks. Endpoint URLs must use
+HTTPS.
+
+Supported events:
+- `recording.synced`
+- `recording.updated`
+- `transcription.completed`
+- `transcription.failed`
+
+OpenPlaud signs each request with HMAC-SHA256:
+
+```http
+X-OpenPlaud-Event: transcription.completed
+X-OpenPlaud-Delivery: <delivery-id>
+X-OpenPlaud-Timestamp: 1778078610
+X-OpenPlaud-Signature: t=1778078610,v1=<hex hmac>
+```
+
+The signature input is:
+
+```
+<unix_timestamp>.<raw_json_body>
+```
+
+Verify with the endpoint secret returned on creation. Reject old timestamps
+(five minutes is a reasonable default) and compare signatures in constant time.
+
+Delivery uses an in-process worker started by Next.js `instrumentation.ts`.
+This matches the Docker deployment model. Stateless serverless deployments need
+an external process or cron to run deliveries reliably.
+
+Delivery history stores only minimal event metadata. Recording, transcript, and
+summary data are hydrated at send time and redacted from delivery history when a
+recording is deleted.
+
+Retries use exponential backoff: 30 seconds, 2 minutes, 10 minutes, 1 hour,
+then 6 hours. After six failed attempts, the delivery is marked `dead`.
 
 ## SDK / Client Libraries
 
