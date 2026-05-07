@@ -7,15 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { formatBytes } from "@/lib/format-bytes";
 
-export function StorageSection() {
+interface StorageSectionProps {
+    isHosted?: boolean;
+}
+
+export function StorageSection({ isHosted = false }: StorageSectionProps) {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoDeleteRecordings, setAutoDeleteRecordings] = useState(false);
     const [retentionDays, setRetentionDays] = useState<number | null>(null);
     const [storageUsage, setStorageUsage] = useState<{
         storageType: string;
-        totalSizeMB: string;
+        totalSize: number;
         totalRecordings: number;
     } | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -103,36 +108,39 @@ export function StorageSection() {
                 <HardDrive className="w-5 h-5" />
                 Storage
             </h2>
-            <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                    <span className="text-muted-foreground">Type</span>
-                    <span className="font-medium">
-                        {storageUsage?.storageType || "Local"}
-                    </span>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border bg-card p-4">
+                        <div className="text-xs text-muted-foreground">
+                            Total Size
+                        </div>
+                        <div className="text-2xl font-semibold tabular-nums mt-1">
+                            {storageUsage
+                                ? formatBytes(storageUsage.totalSize)
+                                : "—"}
+                        </div>
+                    </div>
+                    <div className="rounded-lg border bg-card p-4">
+                        <div className="text-xs text-muted-foreground">
+                            Recordings
+                        </div>
+                        <div className="text-2xl font-semibold tabular-nums mt-1">
+                            {storageUsage?.totalRecordings ?? "—"}
+                        </div>
+                    </div>
                 </div>
-                {storageUsage && (
-                    <>
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                                Total Size
-                            </span>
-                            <span className="font-medium">
-                                {storageUsage.totalSizeMB} MB
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                                Recordings
-                            </span>
-                            <span className="font-medium">
-                                {storageUsage.totalRecordings}
-                            </span>
-                        </div>
-                    </>
+                {!isHosted && (
+                    <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Type</span>
+                        <span className="font-medium">
+                            {storageUsage?.storageType || "Local"}
+                        </span>
+                    </div>
                 )}
                 <p className="text-xs text-muted-foreground pt-2 border-t">
-                    Storage is configured at the instance level via environment
-                    variables.
+                    {isHosted
+                        ? "Storage for your account on OpenPlaud Hosted. Manage what's kept with auto-delete below."
+                        : "Storage is configured at the instance level via environment variables."}
                 </p>
             </div>
 
