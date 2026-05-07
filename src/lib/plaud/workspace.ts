@@ -150,14 +150,32 @@ export async function mintPlaudWorkspaceToken(
         // 5xx is treated as transient (don't relist on a server hiccup);
         // 4xx is treated as cache-stale (workspace gone, role revoked, ...).
         const stale = status >= 400 && status < 500;
-        throw new WorkspaceTokenError("Failed to mint Plaud workspace token", {
+        // 401 has a distinct contract: the stored token itself is no
+        // longer accepted by Plaud, so the UI must route the user to the
+        // reconnect flow. Collapsing it into PLAUD_WORKSPACE_UNAVAILABLE
+        // (400) would break that signal. Keep stale=true so callers still
+        // try a relist + remint before giving up; if the relist also 401s,
+        // the auth-typed error from listPlaudWorkspaces propagates.
+        let code: ErrorCode;
+        let statusCode: number;
+        let message = "Failed to mint Plaud workspace token";
+        if (status === 401) {
+            code = ErrorCode.PLAUD_INVALID_TOKEN;
+            statusCode = 401;
+            message =
+                "Plaud rejected the access token. Reconnect your Plaud account.";
+        } else if (status >= 500) {
+            code = ErrorCode.PLAUD_UPSTREAM_ERROR;
+            statusCode = 502;
+        } else {
+            code = ErrorCode.PLAUD_WORKSPACE_UNAVAILABLE;
+            statusCode = 400;
+        }
+        throw new WorkspaceTokenError(message, {
             httpStatus: status,
             stale,
-            code:
-                status >= 500
-                    ? ErrorCode.PLAUD_UPSTREAM_ERROR
-                    : ErrorCode.PLAUD_WORKSPACE_UNAVAILABLE,
-            statusCode: status >= 500 ? 502 : 400,
+            code,
+            statusCode,
         });
     }
 

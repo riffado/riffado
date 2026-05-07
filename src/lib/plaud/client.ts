@@ -228,7 +228,12 @@ export class PlaudClient {
             }
 
             if (error instanceof AppError) throw error;
-            if (error instanceof Error) throw error;
+            // Plain Error here means: fetch threw past our retry budget
+            // (network blow-up, DNS failure, AbortError) or response.json()
+            // failed parsing an unexpected body. Either way, this is an
+            // upstream / infra problem — surface it as PLAUD_UPSTREAM_ERROR
+            // (502) rather than letting apiHandler downgrade it to a generic
+            // INTERNAL_ERROR (500), which would mislead clients.
             throw new AppError(
                 ErrorCode.PLAUD_UPSTREAM_ERROR,
                 "Failed to communicate with Plaud. Please try again later.",
