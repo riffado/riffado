@@ -59,7 +59,25 @@
 - 🎙️ Plaud Note device with account at [plaud.ai](https://plaud.ai)
 - 🤖 OpenAI API key (or any OpenAI-compatible provider)
 
-### Installation
+### Quick install (Linux / macOS)
+
+If you have Docker running, one line gets you a working OpenPlaud:
+
+```bash
+curl -fsSL https://openplaud.com/install.sh | sh
+```
+
+The installer prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` + `env.example` from the latest GitHub release, generates secrets (`BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `POSTGRES_PASSWORD`), starts the stack, and waits for `/api/health` to return 200. Source: [`scripts/install.sh`](scripts/install.sh).
+
+Pin to a specific version for reproducible installs:
+
+```bash
+curl -fsSL https://openplaud.com/v0.2.0/install.sh | sh
+```
+
+Windows: install via WSL2. The manual install below is the supported fallback for any environment where `curl | sh` isn't appropriate.
+
+### Manual install
 
 OpenPlaud ships as a Docker image on GitHub Container Registry. You don't need to clone the repo to self-host — just grab the compose file and env template from the latest release.
 

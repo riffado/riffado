@@ -12,6 +12,15 @@ const RYBBIT_SITE_ID = process.env.RYBBIT_SITE_ID;
 
 const nextConfig: NextConfig = {
     output: "standalone",
+    // The `/install.sh` and `/[version]/install.sh` routes read
+    // `scripts/install.sh` from disk at request time. The standalone
+    // output only includes files reachable through the build graph, so
+    // declare the script as an extra traced input or it won't ship in
+    // the Docker image. See `src/lib/install-script.ts`.
+    outputFileTracingIncludes: {
+        "/install.sh": ["./scripts/install.sh"],
+        "/[version]/install.sh": ["./scripts/install.sh"],
+    },
     images: {
         loader: "custom",
         loaderFile: "./loader.ts",

@@ -189,6 +189,7 @@ Both surfaces are user contracts. The **deploy surface** — DB schema, env vars
 - **Schema changes are additive by default.** Dropping columns or tables requires a user-impact assessment and a migration plan. See the **Database Migrations** block below.
 - **Env var renames need deprecation.** Keep the old name working for at least one release cycle, log a deprecation warning, document both in `CHANGELOG.md`.
 - **`docker-compose.yml` is a user contract.** Breaking structural changes need a CHANGELOG migration note.
+- **The one-line installer is part of the deploy surface.** `scripts/install.sh`, the `openplaud.com/install.sh` route, and the version-pinned `openplaud.com/vX.Y.Z/install.sh` route are a single contract — the script is served from the repo file via `src/app/install.sh/route.ts` and `src/app/[version]/install.sh/route.ts`. Breaking changes (renaming, removing prompts, changing the URL shape) need a deprecation cycle and a CHANGELOG note. Self-hosters paste these URLs into their own runbooks; don't break them silently.
 - **Test sync against a real Plaud account** before shipping anything touching `src/lib/sync/` or `src/lib/plaud/`. Sync regressions destroy user trust fastest.
 - **Breaking changes ship with loud logging + Sentry context + CHANGELOG notes.** Never silently.
 - **Never gate features behind `IS_HOSTED` in a way that breaks self-host.** Hosted-only branches must degrade cleanly to the self-host path, not crash or silently disable functionality self-hosters expect.
