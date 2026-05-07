@@ -1,4 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { createHmac } from "node:crypto";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockEnv = vi.hoisted(() => ({
+    BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
+    API_TOKEN_HASH_SECRET: undefined as string | undefined,
+}));
+
+vi.mock("@/lib/env", () => ({
+    env: mockEnv,
+}));
 
 vi.mock("@/db", () => ({
     db: {
@@ -24,6 +34,11 @@ import {
 } from "@/lib/auth-request";
 
 describe("API tokens", () => {
+    beforeEach(() => {
+        mockEnv.BETTER_AUTH_SECRET = "better-auth-secret-with-32-chars";
+        mockEnv.API_TOKEN_HASH_SECRET = undefined;
+    });
+
     it("generates opp-prefixed tokens and display prefixes", () => {
         const token = createPersonalAccessToken();
 
@@ -38,6 +53,39 @@ describe("API tokens", () => {
         expect(hash).toHaveLength(64);
         expect(hash).toBe(hashPersonalAccessToken(token));
         expect(hash).not.toContain(token);
+        expect(hash).toBe(
+            createHmac("sha256", mockEnv.BETTER_AUTH_SECRET)
+                .update(token)
+                .digest("hex"),
+        );
+    });
+
+    it("hashes the same token differently when the HMAC key changes", () => {
+        const token = "opp_testtoken";
+        const first = hashPersonalAccessToken(token);
+
+        mockEnv.BETTER_AUTH_SECRET = "different-better-auth-secret-32-chars";
+        const second = hashPersonalAccessToken(token);
+
+        expect(second).not.toBe(first);
+    });
+
+    it("uses API_TOKEN_HASH_SECRET before BETTER_AUTH_SECRET", () => {
+        const token = "opp_testtoken";
+        mockEnv.API_TOKEN_HASH_SECRET = "api-token-hash-secret-32-characters";
+
+        const hash = hashPersonalAccessToken(token);
+
+        expect(hash).toBe(
+            createHmac("sha256", mockEnv.API_TOKEN_HASH_SECRET)
+                .update(token)
+                .digest("hex"),
+        );
+        expect(hash).not.toBe(
+            createHmac("sha256", mockEnv.BETTER_AUTH_SECRET)
+                .update(token)
+                .digest("hex"),
+        );
     });
 
     it("treats revoked and expired tokens as inactive", () => {

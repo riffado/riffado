@@ -7,6 +7,7 @@ import { signalWebhookWorker } from "@/lib/webhooks/worker";
 export const WEBHOOK_EVENTS = [
     "recording.synced",
     "recording.updated",
+    "recording.deleted",
     "transcription.completed",
     "transcription.failed",
 ] as const;

@@ -5,12 +5,15 @@ import { db } from "@/db";
 import { webhookEndpoints } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { WEBHOOK_EVENTS } from "@/lib/webhooks/emit";
-import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
+import {
+    encryptWebhookSecret,
+    encryptWebhookUrl,
+} from "@/lib/webhooks/secrets";
 import {
     parseWebhookEvents,
     serializeWebhookEndpoint,
 } from "@/lib/webhooks/settings";
-import { assertPublicWebhookUrl, parseWebhookUrl } from "@/lib/webhooks/url";
+import { assertWebhookUrlAllowed, parseWebhookUrl } from "@/lib/webhooks/url";
 
 export async function GET(request: Request) {
     try {
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
         let events: string[];
         try {
             url = parseWebhookUrl(body.url);
-            await assertPublicWebhookUrl(url);
+            await assertWebhookUrlAllowed(url);
             events = parseWebhookEvents(body.events);
         } catch (error) {
             return NextResponse.json(
@@ -82,11 +85,12 @@ export async function POST(request: Request) {
 
         const secret = `whsec_${nanoid(32)}`;
         const encryptedSecret = encryptWebhookSecret(secret);
+        const encryptedUrl = encryptWebhookUrl(url);
         const [endpoint] = await db
             .insert(webhookEndpoints)
             .values({
                 userId: session.user.id,
-                url,
+                url: encryptedUrl,
                 secret: encryptedSecret,
                 events,
                 description:

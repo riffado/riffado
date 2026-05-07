@@ -10,6 +10,10 @@ import {
 } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth-request";
 import {
+    enforceV1AuthenticatedRateLimit,
+    enforceV1IpRateLimit,
+} from "@/lib/v1/rate-limit";
+import {
     decodeRecordingCursor,
     encodeRecordingCursor,
     serializeRecording,
@@ -42,6 +46,9 @@ function parseBooleanFilter(value: string | null): boolean | null {
 
 export async function GET(request: Request) {
     try {
+        const ipLimitResponse = await enforceV1IpRateLimit(request);
+        if (ipLimitResponse) return ipLimitResponse;
+
         const authn = await authenticateRequest(request);
         if (!authn) {
             return NextResponse.json(
@@ -49,6 +56,9 @@ export async function GET(request: Request) {
                 { status: 401 },
             );
         }
+
+        const authLimitResponse = await enforceV1AuthenticatedRateLimit(authn);
+        if (authLimitResponse) return authLimitResponse;
 
         const url = new URL(request.url);
         let limit: number;

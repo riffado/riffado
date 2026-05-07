@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { env } from "@/lib/env";
 
 export type PublicWebhookAddress = {
     address: string;
@@ -8,8 +9,18 @@ export type PublicWebhookAddress = {
 
 export type PublicWebhookTarget = {
     url: URL;
-    addresses: PublicWebhookAddress[];
+    addresses: PublicWebhookAddress[] | null;
 };
+
+export function webhookTargetsRequirePublic(): boolean {
+    return env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS ?? env.IS_HOSTED;
+}
+
+function assertHttpOrHttpsWebhookUrl(url: URL): void {
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new Error("Webhook URL must use HTTP or HTTPS");
+    }
+}
 
 function assertHttpsWebhookUrl(url: URL): void {
     if (url.protocol !== "https:") {
@@ -22,11 +33,14 @@ export function parseWebhookUrl(value: unknown): string {
 
     const trimmed = value.trim();
     const url = new URL(trimmed);
-    assertHttpsWebhookUrl(url);
+    assertHttpOrHttpsWebhookUrl(url);
     if (url.username || url.password) {
         throw new Error("Webhook URL must not include credentials");
     }
-    assertAllowedWebhookHostname(url.hostname);
+    if (webhookTargetsRequirePublic()) {
+        assertHttpsWebhookUrl(url);
+        assertAllowedWebhookHostname(url.hostname);
+    }
     return url.toString();
 }
 
@@ -156,14 +170,34 @@ function assertAllowedWebhookHostname(hostname: string): void {
     }
 }
 
-export async function assertPublicWebhookUrl(urlString: string): Promise<void> {
-    await resolvePublicWebhookUrl(urlString);
+export function isWebhookUrlPolicyError(message: string): boolean {
+    return (
+        message === "URL is required" ||
+        message === "Webhook URL must use HTTP or HTTPS" ||
+        message === "Webhook URL must use HTTPS" ||
+        message === "Webhook URL must not include credentials" ||
+        message === "Webhook URL must use a public hostname or IP address" ||
+        message === "Webhook URL must resolve to public IP addresses"
+    );
 }
 
-export async function resolvePublicWebhookUrl(
+export async function assertWebhookUrlAllowed(
+    urlString: string,
+): Promise<void> {
+    await resolveWebhookUrl(urlString);
+}
+
+export async function resolveWebhookUrl(
     urlString: string,
 ): Promise<PublicWebhookTarget> {
-    const url = new URL(urlString);
+    const url = new URL(parseWebhookUrl(urlString));
+    if (!webhookTargetsRequirePublic()) {
+        return {
+            url,
+            addresses: null,
+        };
+    }
+
     assertHttpsWebhookUrl(url);
     assertAllowedWebhookHostname(url.hostname);
 

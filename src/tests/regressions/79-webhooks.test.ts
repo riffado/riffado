@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+vi.mock("@/lib/env", () => ({
+    env: {
+        APP_URL: "https://openplaud.example",
+        IS_HOSTED: false,
+        WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined,
+    },
+}));
+
 vi.mock("@/db", () => ({
     db: {
         select: vi.fn(),
@@ -58,5 +66,28 @@ describe("Issue #79 — webhook emission", () => {
         expect(values[0].payload).not.toHaveProperty("data");
         expect(JSON.stringify(values[0].payload)).not.toContain("transcript");
         expect(JSON.stringify(values[0].payload)).not.toContain("summary");
+    });
+
+    it("creates pending recording.deleted deliveries", async () => {
+        (db.select as Mock).mockReturnValueOnce({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue([{ id: "wh-1" }]),
+            }),
+        });
+
+        const valuesSpy = vi.fn().mockResolvedValue(undefined);
+        (db.insert as Mock).mockReturnValue({
+            values: valuesSpy,
+        });
+
+        await emitEvent("recording.deleted", "user-79", "rec-1");
+
+        const values = valuesSpy.mock.calls[0][0] as Array<{
+            event: string;
+            payload: Record<string, unknown>;
+        }>;
+        expect(values[0].event).toBe("recording.deleted");
+        expect(values[0].payload.event).toBe("recording.deleted");
+        expect(values[0].payload.recording_id).toBe("rec-1");
     });
 });

@@ -253,6 +253,7 @@ import {
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { createUserStorageProvider as createStorage } from "@/lib/storage/factory";
+import { emitEvent } from "@/lib/webhooks/emit";
 
 describe("DELETE /api/recordings/[id]", () => {
     const userId = "user-123";
@@ -437,6 +438,14 @@ describe("DELETE /api/recordings/[id]", () => {
             recording_id: recordingId,
             redacted: true,
         });
+        expect(emitEvent).toHaveBeenCalledWith(
+            "recording.deleted",
+            userId,
+            recordingId,
+        );
+        expect(
+            (db.transaction as Mock).mock.invocationCallOrder[0],
+        ).toBeLessThan((emitEvent as Mock).mock.invocationCallOrder[0]);
     });
 
     it("refuses to tombstone when storage delete fails for a non-not-found reason", async () => {
@@ -456,6 +465,7 @@ describe("DELETE /api/recordings/[id]", () => {
         expect(res.status).toBe(500);
         // No tombstone, no orphan: retry is safe.
         expect(db.transaction).not.toHaveBeenCalled();
+        expect(emitEvent).not.toHaveBeenCalled();
     });
 
     it("still tombstones when storage reports the object is already gone", async () => {
@@ -482,5 +492,10 @@ describe("DELETE /api/recordings/[id]", () => {
             "update:webhook_deliveries",
             "update:recordings",
         ]);
+        expect(emitEvent).toHaveBeenCalledWith(
+            "recording.deleted",
+            userId,
+            recordingId,
+        );
     });
 });

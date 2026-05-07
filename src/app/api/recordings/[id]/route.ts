@@ -11,6 +11,7 @@ import { requireApiSession } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { emitEvent } from "@/lib/webhooks/emit";
 import { createRedactedWebhookPayload } from "@/lib/webhooks/payload";
 
 type IdContext = { params: Promise<{ id: string }> };
@@ -219,6 +220,8 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
                 ),
             );
     });
+
+    await emitEvent("recording.deleted", userId, id);
 
     return NextResponse.json({ success: true });
 });

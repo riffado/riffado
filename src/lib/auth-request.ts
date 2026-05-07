@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "@/db";
 import { personalAccessTokens } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 export type AuthenticatedRequest = {
     user: { id: string };
@@ -22,7 +23,11 @@ export function createPersonalAccessToken(): string {
 }
 
 export function hashPersonalAccessToken(token: string): string {
-    return createHash("sha256").update(token).digest("hex");
+    const key = env.API_TOKEN_HASH_SECRET ?? env.BETTER_AUTH_SECRET;
+    if (!key) {
+        throw new Error("API token hash secret is not configured");
+    }
+    return createHmac("sha256", key).update(token).digest("hex");
 }
 
 export function getPersonalAccessTokenPrefix(token: string): string {

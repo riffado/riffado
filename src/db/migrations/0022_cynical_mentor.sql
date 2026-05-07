@@ -1,0 +1,2 @@
+ALTER TABLE "recordings" DROP CONSTRAINT "recordings_plaud_file_id_unique";--> statement-breakpoint
+ALTER TABLE "recordings" ADD CONSTRAINT "recordings_user_id_plaud_file_id_unique" UNIQUE("user_id","plaud_file_id");

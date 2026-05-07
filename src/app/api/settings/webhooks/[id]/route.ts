@@ -3,11 +3,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { webhookEndpoints } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { encryptWebhookUrl } from "@/lib/webhooks/secrets";
 import {
     parseWebhookEvents,
     serializeWebhookEndpoint,
 } from "@/lib/webhooks/settings";
-import { assertPublicWebhookUrl, parseWebhookUrl } from "@/lib/webhooks/url";
+import { assertWebhookUrlAllowed, parseWebhookUrl } from "@/lib/webhooks/url";
 
 export async function PATCH(
     request: Request,
@@ -36,8 +37,9 @@ export async function PATCH(
 
         try {
             if (body.url !== undefined) {
-                updates.url = parseWebhookUrl(body.url);
-                await assertPublicWebhookUrl(updates.url);
+                const url = parseWebhookUrl(body.url);
+                await assertWebhookUrlAllowed(url);
+                updates.url = encryptWebhookUrl(url);
             }
             if (body.events !== undefined) {
                 updates.events = parseWebhookEvents(body.events);

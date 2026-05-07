@@ -23,7 +23,10 @@ export async function POST(
 
         const { id, deliveryId } = await params;
         const [endpoint] = await db
-            .select({ id: webhookEndpoints.id })
+            .select({
+                id: webhookEndpoints.id,
+                enabled: webhookEndpoints.enabled,
+            })
             .from(webhookEndpoints)
             .where(
                 and(
@@ -37,6 +40,12 @@ export async function POST(
             return NextResponse.json(
                 { error: "Webhook not found" },
                 { status: 404 },
+            );
+        }
+        if (!endpoint.enabled) {
+            return NextResponse.json(
+                { error: "Webhook is disabled" },
+                { status: 409 },
             );
         }
 

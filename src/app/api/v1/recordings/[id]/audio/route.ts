@@ -5,12 +5,19 @@ import { recordings } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth-request";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
+import {
+    enforceV1AuthenticatedRateLimit,
+    enforceV1IpRateLimit,
+} from "@/lib/v1/rate-limit";
 
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ id: string }> },
 ) {
     try {
+        const ipLimitResponse = await enforceV1IpRateLimit(request);
+        if (ipLimitResponse) return ipLimitResponse;
+
         const authn = await authenticateRequest(request);
         if (!authn) {
             return NextResponse.json(
@@ -18,6 +25,9 @@ export async function GET(
                 { status: 401 },
             );
         }
+
+        const authLimitResponse = await enforceV1AuthenticatedRateLimit(authn);
+        if (authLimitResponse) return authLimitResponse;
 
         const { id } = await params;
         const [recording] = await db

@@ -209,10 +209,8 @@ export const recordings = pgTable(
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
         deviceSn: varchar("device_sn", { length: 255 }).notNull(),
-        // Unique ID from Plaud API
-        plaudFileId: varchar("plaud_file_id", { length: 255 })
-            .notNull()
-            .unique(),
+        // Unique ID from Plaud API, scoped per OpenPlaud user.
+        plaudFileId: varchar("plaud_file_id", { length: 255 }).notNull(),
         filename: text("filename").notNull(),
         duration: integer("duration").notNull(), // milliseconds
         startTime: timestamp("start_time").notNull(),
@@ -251,6 +249,9 @@ export const recordings = pgTable(
             table.userId,
             table.startTime,
         ),
+        userPlaudFileUnique: unique(
+            "recordings_user_id_plaud_file_id_unique",
+        ).on(table.userId, table.plaudFileId),
     }),
 );
 
@@ -468,6 +469,7 @@ export const webhookEndpoints = pgTable(
         userId: text("user_id")
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
+        // Encrypted target URL. Receiver URLs can contain path/query secrets.
         url: text("url").notNull(),
         secret: text("secret").notNull(),
         events: jsonb("events").$type<string[]>().notNull(),
@@ -522,6 +524,22 @@ export const webhookDeliveries = pgTable(
         ),
         recordingIdIdx: index("webhook_deliveries_recording_id_idx").on(
             table.recordingId,
+        ),
+    }),
+);
+
+export const apiRateLimitBuckets = pgTable(
+    "api_rate_limit_buckets",
+    {
+        key: text("key").primaryKey(),
+        count: integer("count").notNull().default(0),
+        resetAt: timestamp("reset_at").notNull(),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        resetAtIdx: index("api_rate_limit_buckets_reset_at_idx").on(
+            table.resetAt,
         ),
     }),
 );

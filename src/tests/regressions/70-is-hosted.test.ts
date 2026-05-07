@@ -17,7 +17,7 @@
  * so other tests sharing the worker aren't affected.
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 type EnvSchema = typeof import("@/lib/env")["envSchema"];
 let envSchema: EnvSchema;
@@ -53,5 +53,109 @@ describe("issue #70: IS_HOSTED env contract", () => {
     it("is true only for the literal string 'true'", () => {
         const parsed = envSchema.parse({ IS_HOSTED: "true" });
         expect(parsed.IS_HOSTED).toBe(true);
+    });
+
+    it("preserves unset WEBHOOKS_REQUIRE_PUBLIC_TARGETS", () => {
+        const parsed = envSchema.parse({});
+        expect(parsed.WEBHOOKS_REQUIRE_PUBLIC_TARGETS).toBeUndefined();
+    });
+
+    it("parses WEBHOOKS_REQUIRE_PUBLIC_TARGETS as a strict optional boolean", () => {
+        expect(
+            envSchema.parse({ WEBHOOKS_REQUIRE_PUBLIC_TARGETS: "true" })
+                .WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
+        ).toBe(true);
+        expect(
+            envSchema.parse({ WEBHOOKS_REQUIRE_PUBLIC_TARGETS: "false" })
+                .WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
+        ).toBe(false);
+
+        expect(
+            envSchema.parse({ WEBHOOKS_REQUIRE_PUBLIC_TARGETS: "" })
+                .WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
+        ).toBeUndefined();
+
+        for (const v of ["0", "1", "yes", "TRUE", "False"]) {
+            expect(() =>
+                envSchema.parse({ WEBHOOKS_REQUIRE_PUBLIC_TARGETS: v }),
+            ).toThrow();
+        }
+    });
+
+    it("parses RATE_LIMIT_TRUST_PROXY_HEADERS as a strict optional boolean", () => {
+        expect(
+            envSchema.parse({ RATE_LIMIT_TRUST_PROXY_HEADERS: "true" })
+                .RATE_LIMIT_TRUST_PROXY_HEADERS,
+        ).toBe(true);
+        expect(
+            envSchema.parse({ RATE_LIMIT_TRUST_PROXY_HEADERS: "false" })
+                .RATE_LIMIT_TRUST_PROXY_HEADERS,
+        ).toBe(false);
+        expect(
+            envSchema.parse({ RATE_LIMIT_TRUST_PROXY_HEADERS: "" })
+                .RATE_LIMIT_TRUST_PROXY_HEADERS,
+        ).toBeUndefined();
+
+        for (const v of ["0", "1", "yes", "TRUE", "False"]) {
+            expect(() =>
+                envSchema.parse({ RATE_LIMIT_TRUST_PROXY_HEADERS: v }),
+            ).toThrow();
+        }
+    });
+
+    it("requires API_TOKEN_HASH_SECRET to be strong when set", () => {
+        expect(envSchema.parse({}).API_TOKEN_HASH_SECRET).toBeUndefined();
+        expect(
+            envSchema.parse({ API_TOKEN_HASH_SECRET: "" })
+                .API_TOKEN_HASH_SECRET,
+        ).toBeUndefined();
+        expect(() =>
+            envSchema.parse({ API_TOKEN_HASH_SECRET: "short" }),
+        ).toThrow();
+        expect(
+            envSchema.parse({
+                API_TOKEN_HASH_SECRET: "token-hash-secret-with-32-characters",
+            }).API_TOKEN_HASH_SECRET,
+        ).toBe("token-hash-secret-with-32-characters");
+    });
+
+    it("requires trusted proxy IP headers when hosted mode serves runtime requests", async () => {
+        const originalEnv = { ...process.env };
+        const runtimeEnv = {
+            APP_URL: "http://localhost:3000",
+            BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
+            DATABASE_URL: "postgresql://user:password@localhost:5432/openplaud",
+            ENCRYPTION_KEY:
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            IS_HOSTED: "true",
+            NEXT_PHASE: undefined,
+        };
+
+        try {
+            process.env = {
+                ...originalEnv,
+                ...runtimeEnv,
+            } as NodeJS.ProcessEnv;
+            delete process.env.NEXT_PHASE;
+            delete process.env.RATE_LIMIT_TRUST_PROXY_HEADERS;
+            vi.resetModules();
+
+            await expect(import("@/lib/env")).rejects.toThrow(
+                "RATE_LIMIT_TRUST_PROXY_HEADERS=true must be set when IS_HOSTED=true",
+            );
+
+            process.env.RATE_LIMIT_TRUST_PROXY_HEADERS = "true";
+            vi.resetModules();
+
+            await expect(import("@/lib/env")).resolves.toMatchObject({
+                env: expect.objectContaining({
+                    IS_HOSTED: true,
+                    RATE_LIMIT_TRUST_PROXY_HEADERS: true,
+                }),
+            });
+        } finally {
+            process.env = originalEnv;
+            vi.resetModules();
+        }
     });
 });

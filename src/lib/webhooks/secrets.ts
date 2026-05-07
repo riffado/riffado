@@ -9,6 +9,15 @@ export function decryptWebhookSecret(storedSecret: string): string {
     return decrypt(storedSecret);
 }
 
+export function encryptWebhookUrl(url: string): string {
+    return encrypt(url);
+}
+
+export function decryptWebhookUrl(storedUrl: string): string {
+    if (/^https?:\/\//i.test(storedUrl)) return storedUrl;
+    return decrypt(storedUrl);
+}
+
 export function maskWebhookSecret(secret: string): string {
     return `whsec_****${secret.slice(-4)}`;
 }

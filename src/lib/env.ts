@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+const optionalStrictBoolean = z
+    .string()
+    .optional()
+    .transform((val, ctx) => {
+        if (val === undefined || val === "") return undefined;
+        if (val === "true") return true;
+        if (val === "false") return false;
+
+        ctx.addIssue({
+            code: "custom",
+            message: 'must be either "true" or "false"',
+        });
+        return z.NEVER;
+    });
+
 export const envSchema = z.object({
     // Deployment mode. `true` means this instance is the OpenPlaud-operated
     // hosted product (marketing landing visible at `/`). Default `false`:
@@ -26,7 +41,22 @@ export const envSchema = z.object({
     DATABASE_URL: z.string().optional(),
 
     BETTER_AUTH_SECRET: z.string().optional(),
+    API_TOKEN_HASH_SECRET: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val))
+        .refine((val) => val === undefined || val.length >= 32, {
+            message: "API_TOKEN_HASH_SECRET must be at least 32 characters",
+        }),
     APP_URL: z.string().url("APP_URL must be a valid URL").optional(),
+
+    // Webhook target hardening. Unset means default to IS_HOSTED; explicit
+    // false keeps self-host integrations like Docker service hostnames working.
+    WEBHOOKS_REQUIRE_PUBLIC_TARGETS: optionalStrictBoolean,
+
+    // Only enable when a trusted reverse proxy strips or overwrites incoming
+    // client-supplied forwarding headers before requests reach Next.js.
+    RATE_LIMIT_TRUST_PROXY_HEADERS: optionalStrictBoolean,
 
     // Encryption
     // Optional at env-schema level so that builds don't fail if it's missing;
@@ -148,7 +178,12 @@ function validateEnv(): Env {
             DISABLE_REGISTRATION: process.env.DISABLE_REGISTRATION,
             DATABASE_URL: process.env.DATABASE_URL,
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+            API_TOKEN_HASH_SECRET: process.env.API_TOKEN_HASH_SECRET,
             APP_URL: process.env.APP_URL,
+            WEBHOOKS_REQUIRE_PUBLIC_TARGETS:
+                process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
+            RATE_LIMIT_TRUST_PROXY_HEADERS:
+                process.env.RATE_LIMIT_TRUST_PROXY_HEADERS,
             ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
             DEFAULT_STORAGE_TYPE: process.env.DEFAULT_STORAGE_TYPE,
             LOCAL_STORAGE_PATH: process.env.LOCAL_STORAGE_PATH,
@@ -199,6 +234,15 @@ function validateEnv(): Env {
             if (!parsed.APP_URL) {
                 throw new Error(
                     "APP_URL must be set in non-build runtime (dev/prod server)",
+                );
+            }
+
+            if (
+                parsed.IS_HOSTED &&
+                parsed.RATE_LIMIT_TRUST_PROXY_HEADERS !== true
+            ) {
+                throw new Error(
+                    "RATE_LIMIT_TRUST_PROXY_HEADERS=true must be set when IS_HOSTED=true so /api/v1/* rate limits use a per-client IP bucket",
                 );
             }
 

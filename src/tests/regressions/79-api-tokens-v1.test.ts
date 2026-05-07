@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+vi.mock("@/lib/env", () => ({
+    env: {
+        BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
+        API_TOKEN_HASH_SECRET: undefined,
+    },
+}));
+
 vi.mock("@/db", () => ({
     db: {
         insert: vi.fn(),
@@ -14,6 +21,11 @@ vi.mock("@/lib/auth", () => ({
             getSession: vi.fn(),
         },
     },
+}));
+
+vi.mock("@/lib/v1/rate-limit", () => ({
+    enforceV1IpRateLimit: vi.fn().mockResolvedValue(null),
+    enforceV1AuthenticatedRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
 import { POST as createToken } from "@/app/api/settings/tokens/route";

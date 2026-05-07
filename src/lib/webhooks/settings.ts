@@ -1,13 +1,16 @@
 import type { webhookEndpoints } from "@/db/schema";
 import { isWebhookEvent, WEBHOOK_EVENTS } from "@/lib/webhooks/emit";
-import { maskStoredWebhookSecret } from "@/lib/webhooks/secrets";
+import {
+    decryptWebhookUrl,
+    maskStoredWebhookSecret,
+} from "@/lib/webhooks/secrets";
 
 export function serializeWebhookEndpoint(
     endpoint: typeof webhookEndpoints.$inferSelect,
 ) {
     return {
         id: endpoint.id,
-        url: endpoint.url,
+        url: decryptWebhookUrl(endpoint.url),
         secret: maskStoredWebhookSecret(endpoint.secret),
         events: endpoint.events,
         description: endpoint.description,

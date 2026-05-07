@@ -19,7 +19,11 @@ Authorization: Bearer opp_...
 ```
 
 Tokens are created from Settings -> API Tokens. The raw token is shown once,
-stored as a SHA-256 hash, and can be revoked at any time.
+stored as an HMAC-SHA256 hash, and can be revoked at any time. Hashing uses
+`API_TOKEN_HASH_SECRET` when set, otherwise `BETTER_AUTH_SECRET`; the dedicated
+secret is optional and lets operators rotate auth/session secrets independently
+from API token hashes. `API_TOKEN_HASH_SECRET` must be at least as strong as
+`BETTER_AUTH_SECRET`.
 
 ## Endpoints
 
@@ -257,6 +261,9 @@ once.
 }
 ```
 
+Scopes use string identifiers. v1 supports only `"read"` today; future scopes
+may be added without invalidating existing read tokens.
+
 #### DELETE `/settings/tokens/[id]`
 
 Revoke a personal access token.
@@ -483,16 +490,37 @@ All errors follow this format:
 
 ## Rate Limiting
 
-Rate limiting is not currently enforced but may be added in future versions.
+Automation endpoints under `/api/v1/*` are rate limited with shared server-side
+fixed windows:
+
+- 1,200 requests per minute per client IP.
+- 600 requests per minute per authenticated identity (`opp_...` token, or user
+  session for browser-authenticated calls).
+
+Rate-limited requests return `429` with `Retry-After`,
+`X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`
+headers.
+
+Forwarding headers such as `X-Forwarded-For` are ignored unless
+`RATE_LIMIT_TRUST_PROXY_HEADERS=true`; only enable it behind a trusted reverse
+proxy that strips or overwrites client-supplied forwarding headers.
 
 ## Webhooks
 
-Webhooks are configured from Settings -> Webhooks. Endpoint URLs must use
-HTTPS.
+Webhooks are configured from Settings -> Webhooks. Target validation is
+controlled by `WEBHOOKS_REQUIRE_PUBLIC_TARGETS ?? IS_HOSTED`.
+
+When strict public targets are required, endpoint URLs must use HTTPS, must not
+include credentials, must use public hostnames/IPs, and are delivered with DNS
+pinning to the resolved public addresses. When strict public targets are not
+required, self-host instances may use HTTP, private IPs, loopback addresses,
+`.local` names, and Docker service hostnames such as
+`http://n8n:5678/webhook`.
 
 Supported events:
 - `recording.synced`
 - `recording.updated`
+- `recording.deleted`
 - `transcription.completed`
 - `transcription.failed`
 
@@ -519,8 +547,38 @@ This matches the Docker deployment model. Stateless serverless deployments need
 an external process or cron to run deliveries reliably.
 
 Delivery history stores only minimal event metadata. Recording, transcript, and
-summary data are hydrated at send time and redacted from delivery history when a
-recording is deleted.
+summary data are hydrated at delivery time. Retries and manual redelivery also
+hydrate data at retry/redelivery time, not at original event time. Consumers
+should order events by `delivered_at` and treat `data` as the latest observed
+state at delivery time.
+
+Webhook recording links are absolute API URLs built from `APP_URL`. Normal v1
+API responses keep their documented relative links.
+
+Webhook transcript payloads include a bounded preview instead of the full text:
+
+```json
+{
+  "transcript": {
+    "preview": "first 500 characters...",
+    "truncated": true,
+    "length": 24837,
+    "language": "en",
+    "provider": "openai",
+    "model": "whisper-1",
+    "created_at": "2026-05-06T12:05:00.000Z"
+  },
+  "links": {
+    "transcript": "https://openplaud.example/api/v1/recordings/abc123/transcript"
+  }
+}
+```
+
+`recording.deleted` is the exception to normal latest-state hydration because
+normal v1 recording reads exclude tombstoned rows. Deleted recording payloads
+use tombstoned metadata that is still available, include `deleted_at`, set
+`transcript` and `summary` to `null`, and keep absolute resource/API URLs for
+identity and follow-up handling.
 
 Retries use exponential backoff: 30 seconds, 2 minutes, 10 minutes, 1 hour,
 then 6 hours. After six failed attempts, the delivery is marked `dead`.

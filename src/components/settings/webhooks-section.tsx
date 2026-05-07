@@ -49,6 +49,7 @@ type WebhookDelivery = {
 const DEFAULT_EVENTS = [
     "recording.synced",
     "recording.updated",
+    "recording.deleted",
     "transcription.completed",
     "transcription.failed",
 ];
