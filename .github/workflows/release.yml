@@ -42,16 +42,41 @@ jobs:
           fi
           echo "tag=$PREV" >> "$GITHUB_OUTPUT"
 
-      - name: Generate release notes
+      # Pull release notes straight from CHANGELOG.md. The maintainer-curated
+      # `## [X.Y.Z]` section is the single source of truth -- the workflow
+      # just extracts it. Fail loud if the section is missing so we never
+      # publish a release with empty / wrong notes (this is the CI gate that
+      # keeps GitHub Releases, Docker tags, and CHANGELOG.md from drifting).
+      - name: Extract release notes from CHANGELOG.md
         id: notes
-        uses: github/copilot-release-notes@main
-        with:
-          base-ref: ${{ steps.prev.outputs.tag }}
-          head-ref: ${{ steps.tag.outputs.current }}
-          model: gpt-4.1
-          instructions: .github/release-notes-instructions.md
         env:
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.current }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          # Print the [VERSION] section: from "## [VERSION]" up to (but not
+          # including) the next "## [" heading. Use a plain-string prefix
+          # match (index()) instead of a regex so the dots/brackets in the
+          # version don't have to be escaped.
+          BODY=$(awk -v prefix="## [${VERSION}]" '
+            index($0, prefix) == 1 { found=1; print; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$BODY" ]; then
+            echo "::error file=CHANGELOG.md::No '## [${VERSION}]' section found in CHANGELOG.md. Update CHANGELOG.md before tagging ${TAG}."
+            exit 1
+          fi
+          {
+            printf '%s\n' "$BODY"
+            printf '\n---\n\n'
+            printf 'Full changelog: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' "$REPO" "$TAG"
+            printf 'Install: see `docker-compose.yml` and `env.example` attached below, or follow [README \xe2\x86\x92 Quick Start](https://github.com/%s#-quick-start).\n' "$REPO"
+          } > /tmp/release-body.md
+          # Output name uses an underscore so `${{ steps.notes.outputs.body_path }}`
+          # is parsed as a property access rather than `body - path`.
+          echo "body_path=/tmp/release-body.md" >> "$GITHUB_OUTPUT"
 
       # softprops/action-gh-release renames hidden files (e.g. `.env.example`)
       # by prefixing them with `default.` on upload, which breaks predictable
@@ -65,7 +90,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.current }}
           name: ${{ steps.tag.outputs.current }}
-          body: ${{ steps.notes.outputs.release-notes }}
+          body_path: ${{ steps.notes.outputs.body_path }}
           draft: true
           # Attach self-host install artifacts so users can
           #   curl -fLO .../releases/latest/download/docker-compose.yml

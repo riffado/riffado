@@ -58,7 +58,7 @@ export function SettingsContent({
         case "export":
             return <ExportSection onReRunOnboarding={onReRunOnboarding} />;
         case "storage":
-            return <StorageSection />;
+            return <StorageSection isHosted={isHosted} />;
         case "dev":
             if (process.env.NODE_ENV === "production") return null;
             return <DevSection />;
