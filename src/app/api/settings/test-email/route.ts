@@ -1,49 +1,43 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { sendTestEmail } from "@/lib/notifications/email";
 
-export async function POST(request: Request) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+export const POST = apiHandler(async (request: Request) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 },
-            );
-        }
-
-        const body = await request.json();
-        const { email } = body;
-
-        if (!email || typeof email !== "string") {
-            return NextResponse.json(
-                { error: "Email address is required" },
-                { status: 400 },
-            );
-        }
-
-        // Basic email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return NextResponse.json(
-                { error: "Invalid email address" },
-                { status: 400 },
-            );
-        }
-
-        // Send test email
-        await sendTestEmail(email);
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Error sending test email:", error);
-        const errorMessage =
-            error instanceof Error
-                ? error.message
-                : "Failed to send test email";
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
+    if (!session?.user) {
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
     }
-}
+
+    const body = await request.json();
+    const { email } = body;
+
+    if (!email || typeof email !== "string") {
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "Email address is required",
+            400,
+            { field: "email" },
+        );
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "Invalid email address",
+            400,
+            { field: "email" },
+        );
+    }
+
+    // Send test email — sendTestEmail throws on failure; mapErrorToAppError
+    // (SMTP* branches) converts the message to the right code/status.
+    await sendTestEmail(email);
+
+    return NextResponse.json({ success: true });
+}, ErrorCode.EMAIL_SEND_FAILED);

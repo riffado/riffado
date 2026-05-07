@@ -3,129 +3,120 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+type IdContext = { params: Promise<{ id: string }> };
 
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 },
-            );
-        }
+export const GET = apiHandler<IdContext>(async (request, context) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        const { id } = await params;
+    if (!session?.user) {
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
+    }
 
-        const [recording] = await db
-            .select()
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.id, id),
-                    eq(recordings.userId, session.user.id),
-                    isNull(recordings.deletedAt),
-                ),
-            )
-            .limit(1);
+    const { id } = await (context as IdContext).params;
 
-        if (!recording) {
-            return NextResponse.json(
-                { error: "Recording not found" },
-                { status: 404 },
-            );
-        }
+    const [recording] = await db
+        .select()
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
 
-        // Get storage provider
-        const storage = await createUserStorageProvider(session.user.id);
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
 
-        // Download file
-        const audioBuffer = await storage.downloadFile(recording.storagePath);
+    // Get storage provider
+    const storage = await createUserStorageProvider(session.user.id);
 
-        // Determine content type from file extension
-        const getContentType = (path: string): string => {
-            if (path.endsWith(".mp3")) return "audio/mpeg";
-            if (path.endsWith(".opus")) return "audio/opus";
-            if (path.endsWith(".wav")) return "audio/wav";
-            if (path.endsWith(".m4a")) return "audio/mp4";
-            if (path.endsWith(".ogg")) return "audio/ogg";
-            if (path.endsWith(".webm")) return "audio/webm";
-            // Default to mpeg for unknown types (as most Plaud recordings are MP3)
-            return "audio/mpeg";
-        };
+    // Download file
+    const audioBuffer = await storage.downloadFile(recording.storagePath);
 
-        const contentType = getContentType(recording.storagePath);
-        const fileSize = audioBuffer.length;
+    // Determine content type from file extension
+    const getContentType = (path: string): string => {
+        if (path.endsWith(".mp3")) return "audio/mpeg";
+        if (path.endsWith(".opus")) return "audio/opus";
+        if (path.endsWith(".wav")) return "audio/wav";
+        if (path.endsWith(".m4a")) return "audio/mp4";
+        if (path.endsWith(".ogg")) return "audio/ogg";
+        if (path.endsWith(".webm")) return "audio/webm";
+        // Default to mpeg for unknown types (as most Plaud recordings are MP3)
+        return "audio/mpeg";
+    };
 
-        // Parse Range header for seeking support
-        const rangeHeader = request.headers.get("range");
+    const contentType = getContentType(recording.storagePath);
+    const fileSize = audioBuffer.length;
 
-        if (rangeHeader) {
-            // Parse range header (e.g., "bytes=0-1023" or "bytes=1024-")
-            const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    // Parse Range header for seeking support
+    const rangeHeader = request.headers.get("range");
 
-            if (rangeMatch) {
-                const start = parseInt(rangeMatch[1], 10);
-                const end = rangeMatch[2]
-                    ? parseInt(rangeMatch[2], 10)
-                    : fileSize - 1;
+    if (rangeHeader) {
+        // Parse range header (e.g., "bytes=0-1023" or "bytes=1024-")
+        const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
 
-                // Validate range values
-                if (
-                    start < 0 ||
-                    start >= fileSize ||
-                    end < 0 ||
-                    end >= fileSize ||
-                    start > end
-                ) {
-                    // Return 416 Range Not Satisfiable
-                    return new NextResponse(null, {
-                        status: 416,
-                        headers: {
-                            "Content-Range": `bytes */${fileSize}`,
-                        },
-                    });
-                }
+        if (rangeMatch) {
+            const start = Number.parseInt(rangeMatch[1], 10);
+            const end = rangeMatch[2]
+                ? Number.parseInt(rangeMatch[2], 10)
+                : fileSize - 1;
 
-                const chunkSize = end - start + 1;
-
-                // Extract the requested chunk
-                const chunk = audioBuffer.slice(start, end + 1);
-
-                // Return 206 Partial Content
-                return new NextResponse(new Uint8Array(chunk), {
-                    status: 206,
+            // Validate range values. We return raw 416 (without our error
+            // envelope) because `Content-Range: bytes */N` is the contract
+            // browsers parse, and they don't read JSON on a 416.
+            if (
+                start < 0 ||
+                start >= fileSize ||
+                end < 0 ||
+                end >= fileSize ||
+                start > end
+            ) {
+                return new NextResponse(null, {
+                    status: 416,
                     headers: {
-                        "Content-Type": contentType,
-                        "Content-Length": chunkSize.toString(),
-                        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-                        "Accept-Ranges": "bytes",
-                        "Cache-Control": "public, max-age=31536000, immutable",
+                        "Content-Range": `bytes */${fileSize}`,
                     },
                 });
             }
-        }
 
-        // No range requested - return full file
-        return new NextResponse(new Uint8Array(audioBuffer), {
-            headers: {
-                "Content-Type": contentType,
-                "Content-Length": fileSize.toString(),
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "public, max-age=31536000, immutable",
-            },
-        });
-    } catch (error) {
-        console.error("Error streaming audio:", error);
-        return NextResponse.json(
-            { error: "Failed to stream audio" },
-            { status: 500 },
-        );
+            const chunkSize = end - start + 1;
+
+            // Extract the requested chunk
+            const chunk = audioBuffer.slice(start, end + 1);
+
+            // Return 206 Partial Content
+            return new NextResponse(new Uint8Array(chunk), {
+                status: 206,
+                headers: {
+                    "Content-Type": contentType,
+                    "Content-Length": chunkSize.toString(),
+                    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                },
+            });
+        }
     }
-}
+
+    // No range requested - return full file
+    return new NextResponse(new Uint8Array(audioBuffer), {
+        headers: {
+            "Content-Type": contentType,
+            "Content-Length": fileSize.toString(),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    });
+});

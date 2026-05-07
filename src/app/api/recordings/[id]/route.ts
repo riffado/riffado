@@ -3,76 +3,90 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiEnhancements, recordings, transcriptions } from "@/db/schema";
 import { auth } from "@/lib/auth";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+type IdContext = { params: Promise<{ id: string }> };
 
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 },
-            );
-        }
+export const GET = apiHandler<IdContext>(async (request, context) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        const { id } = await params;
+    if (!session?.user) {
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
+    }
 
-        const [recording] = await db
-            .select()
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.id, id),
-                    eq(recordings.userId, session.user.id),
-                    isNull(recordings.deletedAt),
-                ),
-            )
-            .limit(1);
+    const { id } = await (context as IdContext).params;
 
-        if (!recording) {
-            return NextResponse.json(
-                { error: "Recording not found" },
-                { status: 404 },
-            );
-        }
+    const [recording] = await db
+        .select()
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
 
-        // Get transcription if exists
-        const [transcription] = await db
-            .select()
-            .from(transcriptions)
-            .where(eq(transcriptions.recordingId, id))
-            .limit(1);
-
-        return NextResponse.json({
-            recording,
-            transcription: transcription || null,
-        });
-    } catch (error) {
-        console.error("Error fetching recording:", error);
-        return NextResponse.json(
-            { error: "Failed to fetch recording" },
-            { status: 500 },
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
         );
     }
-}
+
+    // Get transcription if exists
+    const [transcription] = await db
+        .select()
+        .from(transcriptions)
+        .where(eq(transcriptions.recordingId, id))
+        .limit(1);
+
+    return NextResponse.json({
+        recording,
+        transcription: transcription || null,
+    });
+});
 
 /**
  * Storage providers throw on any deleteFile error including "object not
  * present". Detect the not-found case so retries after a half-failed delete
- * still tombstone cleanly. We match on common substrings rather than typed
- * error classes so this works across the local-fs adapter (ENOENT) and the
- * S3 adapter (NoSuchKey / NotFound / 404).
+ * still tombstone cleanly.
+ *
+ * Prefer typed signals over message matching:
+ *   - Node fs: `error.code === "ENOENT"`
+ *   - AWS SDK v3: `error.name` is `"NoSuchKey"` or `"NotFound"`, or
+ *     `error.$metadata?.httpStatusCode === 404`
+ *
+ * Fall back to a narrow substring match for adapters that wrap their
+ * underlying error (rare, but the local-fs adapter has done it before).
+ * The fallback is anchored to known not-found phrases rather than the
+ * raw `\b404\b` regex, which previously could match `request_id=...404abc`
+ * style strings inside otherwise-unrelated 5xx errors.
  */
 function isStorageNotFoundError(error: unknown): boolean {
-    const message =
-        error instanceof Error ? error.message : String(error ?? "");
-    return /ENOENT|NoSuchKey|NotFound|\b404\b/i.test(message);
+    if (!error || typeof error !== "object") return false;
+    const e = error as {
+        code?: unknown;
+        name?: unknown;
+        message?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
+    };
+    if (e.code === "ENOENT") return true;
+    if (e.name === "NoSuchKey" || e.name === "NotFound") return true;
+    if (e.$metadata?.httpStatusCode === 404) return true;
+    if (typeof e.message === "string") {
+        // Narrow substring fallback only — anchored to phrases adapters
+        // actually emit, not bare 404 anywhere in the string.
+        return /(ENOENT|NoSuchKey|NotFound|no such file or directory)/i.test(
+            e.message,
+        );
+    }
+    return false;
 }
 
 /**
@@ -95,103 +109,89 @@ function isStorageNotFoundError(error: unknown): boolean {
  * resurrect the recording. This endpoint does NOT delete the file on
  * Plaud's servers — Plaud remains the upstream source of truth.
  */
-export async function DELETE(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+export const DELETE = apiHandler<IdContext>(async (request, context) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 },
+    if (!session?.user) {
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
+    }
+
+    const { id } = await (context as IdContext).params;
+    const userId = session.user.id;
+
+    const [recording] = await db
+        .select()
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, userId),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
+
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
+
+    // 1. Storage delete first. Treat "already gone" as success; surface
+    //    every other error so the user can retry.
+    try {
+        const storage = await createUserStorageProvider(userId);
+        await storage.deleteFile(recording.storagePath);
+    } catch (storageError) {
+        if (!isStorageNotFoundError(storageError)) {
+            console.error(
+                `Failed to delete storage file for recording ${id}:`,
+                storageError,
+            );
+            throw new AppError(
+                ErrorCode.STORAGE_ERROR,
+                "Failed to delete recording audio. Please retry.",
+                500,
             );
         }
+        // Object already absent — continue with tombstone.
+    }
 
-        const { id } = await params;
-        const userId = session.user.id;
+    // 2. Atomic DB writes: child rows + tombstone in one transaction.
+    await db.transaction(async (tx) => {
+        await tx
+            .delete(transcriptions)
+            .where(
+                and(
+                    eq(transcriptions.recordingId, id),
+                    eq(transcriptions.userId, userId),
+                ),
+            );
 
-        const [recording] = await db
-            .select()
-            .from(recordings)
+        await tx
+            .delete(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.recordingId, id),
+                    eq(aiEnhancements.userId, userId),
+                ),
+            );
+
+        await tx
+            .update(recordings)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(
                 and(
                     eq(recordings.id, id),
                     eq(recordings.userId, userId),
                     isNull(recordings.deletedAt),
                 ),
-            )
-            .limit(1);
-
-        if (!recording) {
-            return NextResponse.json(
-                { error: "Recording not found" },
-                { status: 404 },
             );
-        }
+    });
 
-        // 1. Storage delete first. Treat "already gone" as success; surface
-        //    every other error so the user can retry.
-        try {
-            const storage = await createUserStorageProvider(userId);
-            await storage.deleteFile(recording.storagePath);
-        } catch (storageError) {
-            if (!isStorageNotFoundError(storageError)) {
-                console.error(
-                    `Failed to delete storage file for recording ${id}:`,
-                    storageError,
-                );
-                return NextResponse.json(
-                    {
-                        error: "Failed to delete recording audio. Please retry.",
-                    },
-                    { status: 500 },
-                );
-            }
-            // Object already absent — continue with tombstone.
-        }
-
-        // 2. Atomic DB writes: child rows + tombstone in one transaction.
-        await db.transaction(async (tx) => {
-            await tx
-                .delete(transcriptions)
-                .where(
-                    and(
-                        eq(transcriptions.recordingId, id),
-                        eq(transcriptions.userId, userId),
-                    ),
-                );
-
-            await tx
-                .delete(aiEnhancements)
-                .where(
-                    and(
-                        eq(aiEnhancements.recordingId, id),
-                        eq(aiEnhancements.userId, userId),
-                    ),
-                );
-
-            await tx
-                .update(recordings)
-                .set({ deletedAt: new Date(), updatedAt: new Date() })
-                .where(
-                    and(
-                        eq(recordings.id, id),
-                        eq(recordings.userId, userId),
-                        isNull(recordings.deletedAt),
-                    ),
-                );
-        });
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Error deleting recording:", error);
-        return NextResponse.json(
-            { error: "Failed to delete recording" },
-            { status: 500 },
-        );
-    }
-}
+    return NextResponse.json({ success: true });
+});

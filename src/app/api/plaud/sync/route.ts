@@ -1,37 +1,27 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { AppError, createErrorResponse, ErrorCode } from "@/lib/errors";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
-export async function POST(request: Request) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+export const POST = apiHandler(async (request: Request) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        if (!session?.user) {
-            const error = new AppError(
-                ErrorCode.UNAUTHORIZED,
-                "You must be logged in to sync recordings",
-                401,
-            );
-            const response = createErrorResponse(error);
-            return NextResponse.json(response.body, {
-                status: response.status,
-            });
-        }
-
-        const result = await syncRecordingsForUser(session.user.id);
-
-        return NextResponse.json({
-            success: true,
-            newRecordings: result.newRecordings,
-            updatedRecordings: result.updatedRecordings,
-            errors: result.errors,
-        });
-    } catch (error) {
-        console.error("Error syncing recordings:", error);
-        const response = createErrorResponse(error, ErrorCode.PLAUD_API_ERROR);
-        return NextResponse.json(response.body, { status: response.status });
+    if (!session?.user) {
+        throw new AppError(
+            ErrorCode.AUTH_SESSION_MISSING,
+            "You must be logged in to sync recordings",
+            401,
+        );
     }
-}
+
+    const result = await syncRecordingsForUser(session.user.id);
+
+    return NextResponse.json({
+        success: true,
+        newRecordings: result.newRecordings,
+        updatedRecordings: result.updatedRecordings,
+        errors: result.errors,
+    });
+}, ErrorCode.PLAUD_API_ERROR);

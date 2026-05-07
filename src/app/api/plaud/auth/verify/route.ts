@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isUserActionablePlaudError, plaudVerifyOtp } from "@/lib/plaud/auth";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { plaudVerifyOtp } from "@/lib/plaud/auth";
 import { persistPlaudConnection } from "@/lib/plaud/persist-connection";
 import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
 
@@ -10,87 +11,72 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
  * Verifies the OTP code against Plaud's API, obtains a long-lived access
  * token, encrypts it, and stores the connection.
  *
+ * Errors are unified via `apiHandler` — Plaud helpers throw structured
+ * `AppError`s, so a Plaud 5xx after retries surfaces as 502
+ * `PLAUD_UPSTREAM_ERROR` (not 400 "fix your token"), and a Plaud 4xx
+ * surfaces as 400 `PLAUD_API_ERROR` / `PLAUD_OTP_INVALID` with the
+ * upstream `msg` preserved.
+ *
  * Source: https://github.com/openplaud/openplaud/blob/main/src/app/api/plaud/auth/verify/route.ts
  */
-export async function POST(request: Request) {
-    try {
-        const session = await auth.api.getSession({
-            headers: request.headers,
-        });
+export const POST = apiHandler(async (request: Request) => {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+    });
 
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: "Unauthorized" },
-                { status: 401 },
-            );
-        }
+    if (!session?.user) {
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
+    }
 
-        const { code, otpToken, apiBase, email } = await request.json();
+    const { code, otpToken, apiBase, email } = await request.json();
 
-        if (
-            typeof code !== "string" ||
-            typeof otpToken !== "string" ||
-            typeof apiBase !== "string" ||
-            !code ||
-            !otpToken ||
-            !apiBase
-        ) {
-            return NextResponse.json(
-                { error: "Code, OTP token, and API base are required" },
-                { status: 400 },
-            );
-        }
-
-        // SSRF guard: the client sends apiBase back to us (originally obtained
-        // via the regional -302 redirect in send-code). Restrict to plaud.ai
-        // hosts so a tampered client cannot point the server at an arbitrary
-        // URL and coerce it into an internal-network request.
-        if (!isValidPlaudApiUrl(apiBase)) {
-            return NextResponse.json(
-                { error: "Invalid API base" },
-                { status: 400 },
-            );
-        }
-
-        const plaudEmail =
-            typeof email === "string" && email.trim().length > 0
-                ? email.trim().toLowerCase()
-                : null;
-
-        // Verify OTP with Plaud → get the (long-lived) user token (UT)
-        const { accessToken } = await plaudVerifyOtp(code, otpToken, apiBase);
-
-        // Hand off to the shared persistence path: workspace discovery,
-        // end-to-end /device/list validation, encrypted upsert, device sync.
-        // Same gauntlet the paste-token connect flow runs through.
-        const { devices } = await persistPlaudConnection({
-            userId: session.user.id,
-            accessToken,
-            apiBase,
-            plaudEmail,
-        });
-
-        return NextResponse.json({
-            success: true,
-            devices,
-        });
-    } catch (error) {
-        console.error("Error verifying Plaud OTP:", error);
-        // User-actionable errors (invalid code, expired OTP, rate-limited,
-        // bad API base — i.e. HTTP 4xx) pass through unchanged and return
-        // 400. Anything else (5xx from Plaud after retries, DB errors,
-        // network blowups) is treated as an internal bug — generic
-        // message, 500 status — so we don't mislead users with "fix your
-        // token" advice when Plaud is the one that's broken.
-        if (
-            error instanceof Error &&
-            isUserActionablePlaudError(error.message)
-        ) {
-            return NextResponse.json({ error: error.message }, { status: 400 });
-        }
-        return NextResponse.json(
-            { error: "Verification failed" },
-            { status: 500 },
+    if (
+        typeof code !== "string" ||
+        typeof otpToken !== "string" ||
+        typeof apiBase !== "string" ||
+        !code ||
+        !otpToken ||
+        !apiBase
+    ) {
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "Code, OTP token, and API base are required",
+            400,
         );
     }
-}
+
+    // SSRF guard: the client sends apiBase back to us (originally obtained
+    // via the regional -302 redirect in send-code). Restrict to plaud.ai
+    // hosts so a tampered client cannot point the server at an arbitrary
+    // URL and coerce it into an internal-network request.
+    if (!isValidPlaudApiUrl(apiBase)) {
+        throw new AppError(
+            ErrorCode.PLAUD_INVALID_API_BASE,
+            "Invalid API base",
+            400,
+        );
+    }
+
+    const plaudEmail =
+        typeof email === "string" && email.trim().length > 0
+            ? email.trim().toLowerCase()
+            : null;
+
+    // Verify OTP with Plaud → get the (long-lived) user token (UT)
+    const { accessToken } = await plaudVerifyOtp(code, otpToken, apiBase);
+
+    // Hand off to the shared persistence path: workspace discovery,
+    // end-to-end /device/list validation, encrypted upsert, device sync.
+    // Same gauntlet the paste-token connect flow runs through.
+    const { devices } = await persistPlaudConnection({
+        userId: session.user.id,
+        accessToken,
+        apiBase,
+        plaudEmail,
+    });
+
+    return NextResponse.json({
+        success: true,
+        devices,
+    });
+});
