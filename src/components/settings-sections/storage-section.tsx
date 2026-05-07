@@ -24,25 +24,38 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
         totalRecordings: number;
     } | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+    // Tracks a retention-days edit that was scheduled but not yet sent.
+    // Used to flush the pending save on unmount so closing the settings
+    // dialog inside the debounce window doesn't drop the user's edit.
+    const pendingRetentionRef = useRef<number | null | undefined>(undefined);
 
     useEffect(() => {
+        const controller = new AbortController();
+        let cancelled = false;
+
         const fetchSettings = async () => {
             try {
-                const response = await fetch("/api/settings/user");
+                const response = await fetch("/api/settings/user", {
+                    signal: controller.signal,
+                });
+                if (cancelled) return;
                 if (response.ok) {
                     const data = await response.json();
+                    if (cancelled) return;
                     setAutoDeleteRecordings(data.autoDeleteRecordings ?? false);
                     setRetentionDays(data.retentionDays ?? null);
                 }
             } catch (error) {
+                if (cancelled) return;
+                if ((error as { name?: string })?.name === "AbortError") return;
                 console.error("Failed to fetch settings:", error);
             } finally {
-                setIsLoadingSettings(false);
+                if (!cancelled) setIsLoadingSettings(false);
             }
         };
         fetchSettings();
 
-        fetch("/api/settings/storage")
+        fetch("/api/settings/storage", { signal: controller.signal })
             .then(async (res) => {
                 if (!res.ok) return null;
                 const data = await res.json();
@@ -59,17 +72,55 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                 }
                 return null;
             })
-            .then((data) => setStorageUsage(data))
-            .catch(() => setStorageUsage(null));
+            .then((data) => {
+                if (cancelled) return;
+                setStorageUsage(data);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                if ((err as { name?: string })?.name === "AbortError") return;
+                setStorageUsage(null);
+            });
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
     }, [setIsLoadingSettings]);
 
     useEffect(() => {
         return () => {
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = undefined;
+            }
+            const pending = pendingRetentionRef.current;
+            if (pending !== undefined) {
+                pendingRetentionRef.current = undefined;
+                // Fire-and-forget so a pending edit isn't lost when the
+                // settings dialog closes inside the debounce window. We can't
+                // use handleStorageSettingChange here because it touches
+                // unmounted React state on rollback; we accept the trade-off
+                // of no error toast in this rare edge case.
+                void fetch("/api/settings/user", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ retentionDays: pending }),
+                }).catch(() => {});
             }
         };
     }, []);
+
+    const flushPendingRetentionSave = () => {
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = undefined;
+        }
+        const pending = pendingRetentionRef.current;
+        if (pending === undefined) return;
+        pendingRetentionRef.current = undefined;
+        handleStorageSettingChange({ retentionDays: pending });
+    };
 
     const handleStorageSettingChange = async (updates: {
         autoDeleteRecordings?: boolean;
@@ -197,32 +248,51 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                         <Input
                             id="retention-days"
                             type="number"
+                            inputMode="numeric"
                             min={1}
                             max={365}
+                            step={1}
                             value={retentionDays || ""}
                             onChange={(e) => {
-                                const value = parseInt(e.target.value, 10);
-                                if (
-                                    !Number.isNaN(value) &&
-                                    value >= 1 &&
-                                    value <= 365
-                                ) {
-                                    setRetentionDays(value);
+                                const raw = e.target.value;
+                                if (raw === "") {
+                                    setRetentionDays(null);
                                     if (saveTimeoutRef.current) {
                                         clearTimeout(saveTimeoutRef.current);
+                                        saveTimeoutRef.current = undefined;
                                     }
-                                    saveTimeoutRef.current = setTimeout(() => {
-                                        handleStorageSettingChange({
-                                            retentionDays: value,
-                                        });
-                                    }, 500);
-                                } else if (e.target.value === "") {
-                                    setRetentionDays(null);
+                                    pendingRetentionRef.current = undefined;
                                     handleStorageSettingChange({
                                         retentionDays: null,
                                     });
+                                    return;
                                 }
+                                const value = Number(raw);
+                                if (
+                                    !Number.isInteger(value) ||
+                                    value < 1 ||
+                                    value > 365
+                                ) {
+                                    // Reject non-integer or out-of-range
+                                    // values silently. Previously parseInt
+                                    // would silently floor "1.5" to 1 and
+                                    // save it; we now require an integer.
+                                    return;
+                                }
+                                setRetentionDays(value);
+                                if (saveTimeoutRef.current) {
+                                    clearTimeout(saveTimeoutRef.current);
+                                }
+                                pendingRetentionRef.current = value;
+                                saveTimeoutRef.current = setTimeout(() => {
+                                    saveTimeoutRef.current = undefined;
+                                    pendingRetentionRef.current = undefined;
+                                    handleStorageSettingChange({
+                                        retentionDays: value,
+                                    });
+                                }, 500);
                             }}
+                            onBlur={flushPendingRetentionSave}
                             placeholder="30"
                         />
                         <p className="text-xs text-muted-foreground">
