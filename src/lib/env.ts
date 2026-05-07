@@ -52,6 +52,13 @@ export const envSchema = z.object({
         .transform((val) => val === "true"),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
+    // Rybbit analytics (hosted mode only). Both must be set together for
+    // the tracking script and proxy rewrites to activate. Self-host leaves
+    // them unset; the analytics component returns null and no rewrites are
+    // registered, so no requests go to Rybbit at all.
+    RYBBIT_SITE_ID: z.string().optional(),
+    RYBBIT_HOST: z.string().url("RYBBIT_HOST must be a valid URL").optional(),
+
     SMTP_FROM: z
         .string()
         .optional()
@@ -97,6 +104,8 @@ function validateEnv(): Env {
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,
+            RYBBIT_SITE_ID: process.env.RYBBIT_SITE_ID,
+            RYBBIT_HOST: process.env.RYBBIT_HOST,
             SMTP_USER: process.env.SMTP_USER,
             SMTP_PASSWORD: process.env.SMTP_PASSWORD,
             SMTP_FROM: process.env.SMTP_FROM,
