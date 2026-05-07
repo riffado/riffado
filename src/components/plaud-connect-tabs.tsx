@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { parseApiError } from "@/lib/api-errors";
 import {
     DEFAULT_SERVER_KEY,
     PLAUD_SERVERS,
@@ -186,9 +187,10 @@ function ConnectorPane({
                     source: "connector",
                 }),
             });
-            const data = await res.json();
-            if (!res.ok)
-                throw new Error(data.error || "Failed to connect Plaud");
+            if (!res.ok) {
+                const err = await parseApiError(res);
+                throw new Error(err.error || "Failed to connect Plaud");
+            }
             toast.success("Plaud account connected");
             onConnected();
         } catch (err) {
@@ -324,8 +326,11 @@ function EmailCodePane({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: trimmed }),
             });
+            if (!res.ok) {
+                const err = await parseApiError(res);
+                throw new Error(err.error || "Failed to send code");
+            }
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to send code");
             setOtpToken(data.otpToken);
             setApiBase(data.apiBase);
             setLastSentAt(Date.now());
@@ -358,8 +363,10 @@ function EmailCodePane({
                     email,
                 }),
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Verification failed");
+            if (!res.ok) {
+                const err = await parseApiError(res);
+                throw new Error(err.error || "Verification failed");
+            }
             toast.success("Plaud account connected");
             onConnected();
         } catch (err) {
@@ -525,9 +532,10 @@ function PasteTokenPane({
                     source: "paste",
                 }),
             });
-            const data = await res.json();
-            if (!res.ok)
-                throw new Error(data.error || "Failed to connect Plaud");
+            if (!res.ok) {
+                const err = await parseApiError(res);
+                throw new Error(err.error || "Failed to connect Plaud");
+            }
             toast.success("Plaud account connected");
             onConnected();
         } catch (err) {
