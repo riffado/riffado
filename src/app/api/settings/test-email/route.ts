@@ -12,10 +12,16 @@ export const POST = apiHandler(async (request: Request) => {
         throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
     }
 
-    const body = await request.json();
-    const { email } = body;
+    // Tolerate malformed / null bodies: an unparseable JSON body is a
+    // client input bug (400), not a server bug (500). Without the catch,
+    // request.json() throws SyntaxError and apiHandler maps it to
+    // INTERNAL_ERROR / 500.
+    const body = (await request.json().catch(() => null)) as {
+        email?: unknown;
+    } | null;
+    const email = body?.email;
 
-    if (!email || typeof email !== "string") {
+    if (!email || typeof email !== "string" || !email.trim()) {
         throw new AppError(
             ErrorCode.MISSING_REQUIRED_FIELD,
             "Email address is required",
@@ -26,7 +32,7 @@ export const POST = apiHandler(async (request: Request) => {
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(email.trim())) {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
             "Invalid email address",
@@ -37,7 +43,7 @@ export const POST = apiHandler(async (request: Request) => {
 
     // Send test email — sendTestEmail throws on failure; mapErrorToAppError
     // (SMTP* branches) converts the message to the right code/status.
-    await sendTestEmail(email);
+    await sendTestEmail(email.trim());
 
     return NextResponse.json({ success: true });
-}, ErrorCode.EMAIL_SEND_FAILED);
+});

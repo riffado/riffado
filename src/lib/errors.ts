@@ -126,14 +126,14 @@ export class AppError extends Error {
 }
 
 /**
- * Legacy helper kept for backwards compatibility with the existing
- * `plaud/sync/route.ts` callsite. New code should prefer `errorResponse`.
+ * Legacy helper kept for backwards compatibility with older callers.
+ * New code should prefer `errorResponse` or `apiHandler`.
  */
-export function createErrorResponse(
-    error: AppError | Error | unknown,
-    defaultCode: ErrorCode = ErrorCode.INTERNAL_ERROR,
-): { body: AppErrorJSON; status: number } {
-    const app = mapErrorToAppError(error, defaultCode);
+export function createErrorResponse(error: AppError | Error | unknown): {
+    body: AppErrorJSON;
+    status: number;
+} {
+    const app = mapErrorToAppError(error);
     return { body: app.toJSON(), status: app.statusCode };
 }
 
@@ -141,11 +141,8 @@ export function createErrorResponse(
  * Return a `NextResponse` carrying the unified error envelope. This is the
  * one-line catch-block helper for routes that don't use `apiHandler`.
  */
-export function errorResponse(
-    error: AppError | Error | unknown,
-    defaultCode: ErrorCode = ErrorCode.INTERNAL_ERROR,
-): NextResponse {
-    const app = mapErrorToAppError(error, defaultCode);
+export function errorResponse(error: AppError | Error | unknown): NextResponse {
+    const app = mapErrorToAppError(error);
     return NextResponse.json(app.toJSON(), { status: app.statusCode });
 }
 
@@ -168,16 +165,21 @@ type RouteHandler<Ctx> = (
  *     today, so this is no regression)
  *   - never lets internal `Error.message` leak: unmapped errors fall back
  *     to `INTERNAL_ERROR` with a generic public message.
+ *
+ * Routes do not pass a default code: unmapped failures are always
+ * `INTERNAL_ERROR` (500). Domain-specific codes must be carried by the
+ * thrown `AppError` itself — a 500 labeled `AI_PROVIDER_API_ERROR` would
+ * mislead clients into thinking the provider failed when really our
+ * handler crashed.
  */
 export function apiHandler<Ctx = unknown>(
     handler: RouteHandler<Ctx>,
-    defaultCode: ErrorCode = ErrorCode.INTERNAL_ERROR,
 ): RouteHandler<Ctx> {
     return async (request, context) => {
         try {
             return await handler(request, context);
         } catch (error) {
-            const app = mapErrorToAppError(error, defaultCode);
+            const app = mapErrorToAppError(error);
             if (app.statusCode >= 500) {
                 console.error("[api]", app.code, error);
             }
@@ -201,10 +203,7 @@ export function apiHandler<Ctx = unknown>(
  *      response — internal stack traces / DB errors / provider secrets
  *      must not leak. Use server logs for the original.
  */
-export function mapErrorToAppError(
-    error: unknown,
-    defaultCode: ErrorCode = ErrorCode.INTERNAL_ERROR,
-): AppError {
+export function mapErrorToAppError(error: unknown): AppError {
     if (error instanceof AppError) {
         return error;
     }
@@ -317,6 +316,11 @@ export function mapErrorToAppError(
     }
 
     // Unmapped: do NOT reflect the raw message — generic public message,
-    // log internally for diagnosis.
-    return new AppError(defaultCode, "An unexpected error occurred", 500);
+    // log internally for diagnosis. Always INTERNAL_ERROR; domain-specific
+    // codes must travel on the thrown `AppError` itself.
+    return new AppError(
+        ErrorCode.INTERNAL_ERROR,
+        "An unexpected error occurred",
+        500,
+    );
 }

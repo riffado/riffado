@@ -206,4 +206,4 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         transcription: transcriptionText,
         detectedLanguage,
     });
-}, ErrorCode.TRANSCRIPTION_FAILED);
+});

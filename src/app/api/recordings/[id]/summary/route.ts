@@ -317,7 +317,7 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         provider: credentials.provider,
         model,
     });
-}, ErrorCode.AI_PROVIDER_API_ERROR);
+});
 
 // GET - Fetch existing summary
 export const GET = apiHandler<IdContext>(async (request, context) => {

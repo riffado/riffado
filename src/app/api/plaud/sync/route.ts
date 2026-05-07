@@ -24,4 +24,4 @@ export const POST = apiHandler(async (request: Request) => {
         updatedRecordings: result.updatedRecordings,
         errors: result.errors,
     });
-}, ErrorCode.PLAUD_API_ERROR);
+});

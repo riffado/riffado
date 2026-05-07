@@ -131,9 +131,14 @@ describe("mapErrorToAppError", () => {
         expect(r.message).not.toContain("secret-internal");
     });
 
-    it("uses defaultCode for unknown thrown values", () => {
-        const r = mapErrorToAppError("oops", ErrorCode.PLAUD_API_ERROR);
-        expect(r.code).toBe(ErrorCode.PLAUD_API_ERROR);
+    it("always falls back to INTERNAL_ERROR for unknown thrown values", () => {
+        // No `defaultCode` plumbing: domain codes must travel on the
+        // thrown AppError. An unmapped throw is by definition our bug,
+        // and labeling a 500 with e.g. PLAUD_API_ERROR would mislead
+        // clients about whose problem it is.
+        const r = mapErrorToAppError("oops");
+        expect(r.code).toBe(ErrorCode.INTERNAL_ERROR);
+        expect(r.statusCode).toBe(500);
         expect(r.message).toBe("An unexpected error occurred");
     });
 
