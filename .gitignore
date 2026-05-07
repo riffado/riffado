@@ -52,3 +52,7 @@ next-env.d.ts
 /storage
 /audio
 plans/
+
+# cli
+cli/node_modules
+cli/bun.lock

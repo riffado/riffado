@@ -1,0 +1,21 @@
+{
+    "name": "openplaud-cli",
+    "version": "0.1.0",
+    "description": "Lightweight CLI for syncing and transcribing Plaud Note recordings",
+    "type": "module",
+    "bin": {
+        "openplaud": "./src/index.ts"
+    },
+    "scripts": {
+        "start": "bun src/index.ts",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "commander": "^13.1.0",
+        "openai": "^6.9.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "typescript": "^5"
+    }
+}
