@@ -6,10 +6,12 @@ import { type Provider, SettingsDialog } from "@/components/settings-dialog";
 
 interface SettingsPageContentProps {
     initialProviders?: Provider[];
+    isHosted?: boolean;
 }
 
 export function SettingsPageContent({
     initialProviders = [],
+    isHosted = false,
 }: SettingsPageContentProps) {
     const router = useRouter();
     const [open, setOpen] = useState(true);
@@ -27,6 +29,7 @@ export function SettingsPageContent({
             open={open}
             onOpenChange={handleOpenChange}
             initialProviders={initialProviders}
+            isHosted={isHosted}
         />
     );
 }

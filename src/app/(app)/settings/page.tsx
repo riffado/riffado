@@ -3,6 +3,7 @@ import { SettingsPageContent } from "@/components/settings/settings-page-content
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-server";
+import { env } from "@/lib/env";
 
 export default async function SettingsPage() {
     const session = await requireAuth();
@@ -21,5 +22,10 @@ export default async function SettingsPage() {
         .from(apiCredentials)
         .where(eq(apiCredentials.userId, session.user.id));
 
-    return <SettingsPageContent initialProviders={providers} />;
+    return (
+        <SettingsPageContent
+            initialProviders={providers}
+            isHosted={env.IS_HOSTED}
+        />
+    );
 }

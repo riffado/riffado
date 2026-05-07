@@ -61,6 +61,7 @@ interface SettingsDialogProps {
     onOpenChange: (open: boolean) => void;
     initialProviders?: Provider[];
     onReRunOnboarding?: () => void;
+    isHosted?: boolean;
 }
 
 import type { SettingsSection } from "@/types/settings";
@@ -105,6 +106,7 @@ export function SettingsDialog({
     onOpenChange,
     initialProviders = [],
     onReRunOnboarding,
+    isHosted = false,
 }: SettingsDialogProps) {
     const [activeSection, setActiveSection] =
         React.useState<SettingsSection>("providers");
@@ -365,6 +367,7 @@ export function SettingsDialog({
                                     activeSection={activeSection}
                                     initialProviders={initialProviders}
                                     onReRunOnboarding={onReRunOnboarding}
+                                    isHosted={isHosted}
                                 />
                             </div>
                         </div>

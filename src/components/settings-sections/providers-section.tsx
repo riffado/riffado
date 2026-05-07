@@ -39,10 +39,12 @@ interface Provider {
 
 interface ProvidersSectionProps {
     initialProviders?: Provider[];
+    isHosted?: boolean;
 }
 
 export function ProvidersSection({
     initialProviders = [],
+    isHosted = false,
 }: ProvidersSectionProps) {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
@@ -721,6 +723,7 @@ Generate the title now:`}
             <AddProviderDialog
                 open={isAddProviderOpen}
                 onOpenChange={setIsAddProviderOpen}
+                isHosted={isHosted}
                 onSuccess={() => {
                     setIsAddProviderOpen(false);
                     refreshProviders();
@@ -736,6 +739,7 @@ Generate the title now:`}
                     }
                 }}
                 provider={editingProvider}
+                isHosted={isHosted}
                 onSuccess={() => {
                     setIsEditProviderOpen(false);
                     setEditingProvider(null);

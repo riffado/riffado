@@ -35,7 +35,15 @@ interface EditProviderDialogProps {
     onOpenChange: (open: boolean) => void;
     provider: Provider | null;
     onSuccess: () => void;
+    /**
+     * When true, hide the LM Studio / Ollama presets and show a hint that
+     * localhost base URLs aren't reachable from the hosted app. The server
+     * also rejects them on save.
+     */
+    isHosted?: boolean;
 }
+
+const LOCAL_PRESET_NAMES = new Set(["LM Studio", "Ollama"]);
 
 const providerPresets = [
     {
@@ -87,7 +95,11 @@ export function EditProviderDialog({
     onOpenChange,
     provider,
     onSuccess,
+    isHosted = false,
 }: EditProviderDialogProps) {
+    const visiblePresets = isHosted
+        ? providerPresets.filter((p) => !LOCAL_PRESET_NAMES.has(p.name))
+        : providerPresets;
     const [providerName, setProviderName] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -213,7 +225,7 @@ export function EditProviderDialog({
                                 <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent>
-                                {providerPresets.map((preset) => (
+                                {visiblePresets.map((preset) => (
                                     <SelectItem
                                         key={preset.name}
                                         value={preset.name}
@@ -260,6 +272,18 @@ export function EditProviderDialog({
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
+                        {isHosted && (
+                            <p className="text-xs text-muted-foreground">
+                                We can&apos;t reach{" "}
+                                <code className="font-mono">localhost</code> or
+                                other private addresses from the hosted app. To
+                                use LM Studio or Ollama, self-host OpenPlaud (
+                                <code className="font-mono">
+                                    docker compose up
+                                </code>
+                                ).
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-2">

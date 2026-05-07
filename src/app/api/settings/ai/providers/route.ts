@@ -2,8 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
+import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { auth } from "@/lib/auth";
 import { encrypt } from "@/lib/encryption";
+import { env } from "@/lib/env";
 
 // GET - List all AI providers for the user
 export async function GET(request: Request) {
@@ -68,6 +70,19 @@ export async function POST(request: Request) {
         if (!provider || !apiKey) {
             return NextResponse.json(
                 { error: "Provider and API key are required" },
+                { status: 400 },
+            );
+        }
+
+        // On hosted, the app process can't reach the user's machine — reject
+        // localhost / loopback baseUrls (e.g. LM Studio, Ollama) with a clear
+        // message. Self-host accepts everything.
+        const baseUrlCheck = validateAiBaseUrl(baseUrl, {
+            isHosted: env.IS_HOSTED,
+        });
+        if (!baseUrlCheck.ok) {
+            return NextResponse.json(
+                { error: baseUrlCheck.message },
                 { status: 400 },
             );
         }

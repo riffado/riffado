@@ -26,16 +26,23 @@ interface SettingsContentProps {
     activeSection: SettingsSection;
     initialProviders?: Provider[];
     onReRunOnboarding?: () => void;
+    isHosted?: boolean;
 }
 
 export function SettingsContent({
     activeSection,
     initialProviders = [],
     onReRunOnboarding,
+    isHosted = false,
 }: SettingsContentProps) {
     switch (activeSection) {
         case "providers":
-            return <ProvidersSection initialProviders={initialProviders} />;
+            return (
+                <ProvidersSection
+                    initialProviders={initialProviders}
+                    isHosted={isHosted}
+                />
+            );
         case "transcription":
             return <TranscriptionSection />;
         case "summary":

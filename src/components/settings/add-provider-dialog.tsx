@@ -24,7 +24,15 @@ interface AddProviderDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSuccess: () => void;
+    /**
+     * When true, hide the LM Studio / Ollama presets and show a hint that
+     * localhost base URLs aren't reachable from the hosted app. The server
+     * also rejects them — this is just a friendlier UI.
+     */
+    isHosted?: boolean;
 }
+
+const LOCAL_PRESET_NAMES = new Set(["LM Studio", "Ollama"]);
 
 const providerPresets = [
     {
@@ -75,7 +83,11 @@ export function AddProviderDialog({
     open,
     onOpenChange,
     onSuccess,
+    isHosted = false,
 }: AddProviderDialogProps) {
+    const visiblePresets = isHosted
+        ? providerPresets.filter((p) => !LOCAL_PRESET_NAMES.has(p.name))
+        : providerPresets;
     const [provider, setProvider] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -116,7 +128,10 @@ export function AddProviderDialog({
                 }),
             });
 
-            if (!response.ok) throw new Error("Failed to add provider");
+            if (!response.ok) {
+                const data = await response.json().catch(() => null);
+                throw new Error(data?.error || "Failed to add provider");
+            }
 
             toast.success("AI provider added successfully");
             onSuccess();
@@ -128,8 +143,12 @@ export function AddProviderDialog({
             setDefaultModel("");
             setIsDefaultTranscription(false);
             setIsDefaultEnhancement(false);
-        } catch {
-            toast.error("Failed to add AI provider");
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to add AI provider",
+            );
         } finally {
             setIsLoading(false);
         }
@@ -155,7 +174,7 @@ export function AddProviderDialog({
                                 <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent>
-                                {providerPresets.map((preset) => (
+                                {visiblePresets.map((preset) => (
                                     <SelectItem
                                         key={preset.name}
                                         value={preset.name}
@@ -193,6 +212,18 @@ export function AddProviderDialog({
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
+                        {isHosted && (
+                            <p className="text-xs text-muted-foreground">
+                                We can&apos;t reach{" "}
+                                <code className="font-mono">localhost</code> or
+                                other private addresses from the hosted app. To
+                                use LM Studio or Ollama, self-host OpenPlaud (
+                                <code className="font-mono">
+                                    docker compose up
+                                </code>
+                                ).
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-2">

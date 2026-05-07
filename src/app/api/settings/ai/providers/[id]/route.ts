@@ -2,8 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
+import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { auth } from "@/lib/auth";
 import { encrypt } from "@/lib/encryption";
+import { env } from "@/lib/env";
 
 // PUT - Update AI provider
 export async function PUT(
@@ -47,6 +49,19 @@ export async function PUT(
             return NextResponse.json(
                 { error: "Provider not found" },
                 { status: 404 },
+            );
+        }
+
+        // On hosted, the app process can't reach the user's machine — reject
+        // localhost / loopback baseUrls (e.g. LM Studio, Ollama) with a clear
+        // message. Self-host accepts everything.
+        const baseUrlCheck = validateAiBaseUrl(baseUrl, {
+            isHosted: env.IS_HOSTED,
+        });
+        if (!baseUrlCheck.ok) {
+            return NextResponse.json(
+                { error: baseUrlCheck.message },
+                { status: 400 },
             );
         }
 
