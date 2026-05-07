@@ -1,6 +1,11 @@
 import Script from "next/script";
 import { env } from "@/lib/env";
 
+// Module-scoped guard so the misconfig warning logs at most once per
+// server process, even though this server component re-renders on every
+// request (and may render multiple times in dev).
+let warnedMisconfig = false;
+
 /**
  * Rybbit analytics tracking script. Hosted-only.
  *
@@ -17,7 +22,8 @@ import { env } from "@/lib/env";
 export function RybbitAnalytics() {
     if (!env.IS_HOSTED) return null;
     if (!env.RYBBIT_SITE_ID || !env.RYBBIT_HOST) {
-        if (env.IS_HOSTED) {
+        if (!warnedMisconfig) {
+            warnedMisconfig = true;
             // Loud-but-non-fatal: hosted deploy missing analytics config.
             console.warn(
                 "[rybbit] IS_HOSTED=true but RYBBIT_SITE_ID and/or RYBBIT_HOST are unset; analytics disabled.",
