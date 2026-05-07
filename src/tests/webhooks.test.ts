@@ -47,9 +47,12 @@ vi.mock("@/db", () => ({
 
 vi.mock("@/lib/encryption", () => ({
     encrypt: vi.fn((plaintext: string) => `encrypted:${plaintext}`),
-    decrypt: vi.fn((ciphertext: string) =>
-        ciphertext.replace(/^encrypted:/, ""),
-    ),
+    decrypt: vi.fn((ciphertext: string) => {
+        if (!ciphertext.startsWith("encrypted:")) {
+            throw new Error("Expected encrypted webhook value");
+        }
+        return ciphertext.replace(/^encrypted:/, "");
+    }),
 }));
 
 vi.mock("@/lib/v1/serialize", () => ({
@@ -117,6 +120,7 @@ import { recordings, webhookDeliveries, webhookEndpoints } from "@/db/schema";
 import { getV1RecordingDetailForUser } from "@/lib/v1/serialize";
 import {
     decryptWebhookSecret,
+    decryptWebhookUrl,
     encryptWebhookSecret,
     maskStoredWebhookSecret,
 } from "@/lib/webhooks/secrets";
@@ -202,7 +206,7 @@ function endpointRow(overrides: Record<string, unknown> = {}) {
     return {
         id: "endpoint-1",
         userId: "user-1",
-        url: "https://example.com/webhook",
+        url: "encrypted:https://example.com/webhook",
         secret: "encrypted:whsec_abcdefghijkl",
         events: ["recording.synced"],
         description: null,
@@ -569,7 +573,12 @@ describe("webhooks", () => {
 
         expect(encrypted).toBe(`encrypted:${secret}`);
         expect(decryptWebhookSecret(encrypted)).toBe(secret);
-        expect(decryptWebhookSecret(secret)).toBe(secret);
+        expect(() => decryptWebhookSecret(secret)).toThrow(
+            "Expected encrypted webhook value",
+        );
+        expect(() => decryptWebhookUrl("https://example.com/webhook")).toThrow(
+            "Expected encrypted webhook value",
+        );
         expect(maskStoredWebhookSecret(encrypted)).toBe("whsec_****ijkl");
     });
 
@@ -662,7 +671,9 @@ describe("webhooks", () => {
         mockDueDeliveries([
             {
                 delivery: deliveryRow(),
-                endpoint: endpointRow({ url: "https://example.com/webhook" }),
+                endpoint: endpointRow({
+                    url: "encrypted:https://example.com/webhook",
+                }),
             },
         ]);
         mockSuccessfulUpdates();
@@ -706,7 +717,9 @@ describe("webhooks", () => {
         mockDueDeliveries([
             {
                 delivery: deliveryRow(),
-                endpoint: endpointRow({ url: "https://93.184.216.34/webhook" }),
+                endpoint: endpointRow({
+                    url: "encrypted:https://93.184.216.34/webhook",
+                }),
             },
         ]);
         mockSuccessfulUpdates();
@@ -722,7 +735,9 @@ describe("webhooks", () => {
         mockDueDeliveries([
             {
                 delivery: deliveryRow(),
-                endpoint: endpointRow({ url: "http://example.com/webhook" }),
+                endpoint: endpointRow({
+                    url: "encrypted:http://example.com/webhook",
+                }),
             },
         ]);
 
@@ -765,17 +780,18 @@ describe("webhooks", () => {
                     },
                 }),
                 endpoint: endpointRow({
-                    url: "http://n8n:5678/webhook",
+                    url: "encrypted:http://n8n:5678/webhook",
                     events: ["recording.deleted"],
                 }),
             },
         ]);
         const tombstoneSelect = mockTombstonedRecording();
-        mockSuccessfulUpdates();
+        const updateChain = mockSuccessfulUpdates();
         mockNodeResponse(httpRequest as unknown as Mock, 204, "");
 
         await deliverDueWebhooks();
 
+        expect(httpRequest).toHaveBeenCalledTimes(1);
         expect(getV1RecordingDetailForUser).not.toHaveBeenCalled();
         expect(tombstoneSelect.where).toHaveBeenCalled();
         const whereExpr = tombstoneSelect.where.mock.calls[0][0];
@@ -810,6 +826,14 @@ describe("webhooks", () => {
         });
         expect(requestBody.data?.links?.self).toBe(
             "https://openplaud.example/api/v1/recordings/rec-1",
+        );
+        expect(updateChain.set).toHaveBeenCalledWith(
+            expect.objectContaining({
+                status: "success",
+                attempts: 1,
+                lastResponseStatus: 204,
+                lastError: null,
+            }),
         );
     });
 });

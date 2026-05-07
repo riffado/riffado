@@ -505,6 +505,12 @@ Forwarding headers such as `X-Forwarded-For` are ignored unless
 `RATE_LIMIT_TRUST_PROXY_HEADERS=true`; only enable it behind a trusted reverse
 proxy that strips or overwrites client-supplied forwarding headers.
 
+When `RATE_LIMIT_TRUST_PROXY_HEADERS=false` or unset, OpenPlaud cannot derive a
+trusted client IP from the request. The unauthenticated IP limiter therefore
+uses one shared `"unknown"` bucket of 1,200 requests per minute for the whole
+instance. Authenticated identity limits still apply per token/session at 600
+requests per minute.
+
 ## Webhooks
 
 Webhooks are configured from Settings -> Webhooks. Target validation is

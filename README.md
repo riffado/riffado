@@ -42,6 +42,7 @@
 ### 📤 Export & Notifications
 - **Multiple Export Formats** - JSON, TXT, SRT, VTT subtitle formats
 - **Full Backups** - Export all your data with one click
+- **Automation API & Webhooks** - API tokens, `/api/v1`, and signed webhooks for integrations ([docs](docs/API.md))
 - **Browser Notifications** - Real-time alerts for new recordings
 - **Email Notifications** - SMTP support for email alerts
 

@@ -5,7 +5,6 @@ export function encryptWebhookSecret(secret: string): string {
 }
 
 export function decryptWebhookSecret(storedSecret: string): string {
-    if (storedSecret.startsWith("whsec_")) return storedSecret;
     return decrypt(storedSecret);
 }
 
@@ -14,7 +13,6 @@ export function encryptWebhookUrl(url: string): string {
 }
 
 export function decryptWebhookUrl(storedUrl: string): string {
-    if (/^https?:\/\//i.test(storedUrl)) return storedUrl;
     return decrypt(storedUrl);
 }
 

@@ -70,6 +70,7 @@ function serializeWebhookRecording(
     return payload;
 }
 
+// recording.deleted hydration depends on soft-delete tombstones.
 async function getDeletedWebhookRecordingDetailForUser(
     userId: string,
     recordingId: string,
