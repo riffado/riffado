@@ -1,6 +1,7 @@
 # Error codes
 
-OpenPlaud's API returns a single error envelope on every failure:
+OpenPlaud's API returns a single error envelope on every failure, with one
+documented exception (HTTP `416` audio range responses, see below):
 
 ```json
 {
@@ -9,6 +10,15 @@ OpenPlaud's API returns a single error envelope on every failure:
   "details": { "optional": "structured context" }
 }
 ```
+
+### Exception: HTTP 416 on audio streaming
+
+`GET /api/recordings/[id]/audio` returns a raw `416 Range Not Satisfiable`
+response with a `Content-Range: bytes */<size>` header and **no JSON body**
+when the client sends an out-of-bounds `Range` header. Browsers (and HLS /
+MSE players) parse the `Content-Range` header to recover, not JSON. This
+is the only route that bypasses the envelope, and only for that specific
+status code; all other failures from this route still return the envelope.
 
 - **`error`** — never contains stack traces, secrets, DB internals, or
   upstream payloads. Safe to render to end users.
@@ -99,7 +109,7 @@ rephrased between releases without notice; `code` will not.
 | `NO_TRANSCRIPTION_PROVIDER`   |   400  | User has no provider configured and chose a server-side option. |
 | `TRANSCRIPTION_API_ERROR`     |   502  | Transcription provider returned an error.                       |
 | `AI_PROVIDER_NOT_CONFIGURED`  |   400  | AI feature requested but no provider configured.                |
-| `AI_PROVIDER_API_ERROR`       |   502  | OpenAI-compatible provider returned a 4xx/5xx.                  |
+| `AI_PROVIDER_API_ERROR`       |  4xx/502 | OpenAI-compatible provider returned an error. Routes throwing this carry the upstream's status: 4xx for client-input issues, 502 for provider 5xx after retries. |
 | `AI_RATE_LIMITED`             |   429  | Provider rate-limited us.                                       |
 
 ## Recordings
