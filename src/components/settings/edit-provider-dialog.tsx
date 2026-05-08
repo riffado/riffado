@@ -1,6 +1,6 @@
 "use client";
 
-import { Shield } from "lucide-react";
+import { AlertTriangle, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
@@ -20,6 +20,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import {
+    findPreset,
+    getVisiblePresets,
+    isLocalPreset,
+} from "@/lib/ai/provider-presets";
 
 interface Provider {
     id: string;
@@ -43,53 +48,6 @@ interface EditProviderDialogProps {
     isHosted?: boolean;
 }
 
-const LOCAL_PRESET_NAMES = new Set(["LM Studio", "Ollama"]);
-
-const providerPresets = [
-    {
-        name: "OpenAI",
-        baseUrl: "",
-        placeholder: "sk-...",
-        defaultModel: "whisper-1",
-    },
-    {
-        name: "Groq",
-        baseUrl: "https://api.groq.com/openai/v1",
-        placeholder: "gsk_...",
-        defaultModel: "whisper-large-v3-turbo",
-    },
-    {
-        name: "Together AI",
-        baseUrl: "https://api.together.xyz/v1",
-        placeholder: "...",
-        defaultModel: "whisper-large-v3",
-    },
-    {
-        name: "OpenRouter",
-        baseUrl: "https://openrouter.ai/api/v1",
-        placeholder: "sk-or-...",
-        defaultModel: "whisper-1",
-    },
-    {
-        name: "LM Studio",
-        baseUrl: "http://localhost:1234/v1",
-        placeholder: "lm-studio",
-        defaultModel: "",
-    },
-    {
-        name: "Ollama",
-        baseUrl: "http://localhost:11434/v1",
-        placeholder: "ollama",
-        defaultModel: "",
-    },
-    {
-        name: "Custom",
-        baseUrl: "",
-        placeholder: "Your API key",
-        defaultModel: "",
-    },
-];
-
 export function EditProviderDialog({
     open,
     onOpenChange,
@@ -97,9 +55,17 @@ export function EditProviderDialog({
     onSuccess,
     isHosted = false,
 }: EditProviderDialogProps) {
-    const visiblePresets = isHosted
-        ? providerPresets.filter((p) => !LOCAL_PRESET_NAMES.has(p.name))
-        : providerPresets;
+    const visiblePresets = getVisiblePresets({ isHosted });
+    // Legacy case: a hosted user has an existing LM Studio / Ollama provider
+    // (added before hosted enforcement, or imported). Keep their currently
+    // selected preset visible in the dropdown — disabled — so the Select
+    // doesn't render an empty trigger. The save will still fail server-side
+    // because the stored baseUrl is loopback; we surface a notice so the
+    // user knows to delete and re-add with a public endpoint.
+    const legacyLocalProvider =
+        isHosted && provider != null && isLocalPreset(provider.provider)
+            ? provider.provider
+            : null;
     const [providerName, setProviderName] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -128,7 +94,7 @@ export function EditProviderDialog({
 
     const handleProviderChange = (value: string) => {
         setProviderName(value);
-        const preset = providerPresets.find((p) => p.name === value);
+        const preset = findPreset(value);
         if (preset) {
             setBaseUrl(preset.baseUrl);
             setDefaultModel(preset.defaultModel);
@@ -202,7 +168,7 @@ export function EditProviderDialog({
         }
     };
 
-    const selectedPreset = providerPresets.find((p) => p.name === providerName);
+    const selectedPreset = findPreset(providerName);
 
     if (!open || !provider) return null;
 
@@ -233,8 +199,34 @@ export function EditProviderDialog({
                                         {preset.name}
                                     </SelectItem>
                                 ))}
+                                {legacyLocalProvider && (
+                                    <SelectItem
+                                        key={legacyLocalProvider}
+                                        value={legacyLocalProvider}
+                                        disabled
+                                    >
+                                        {legacyLocalProvider} (not available on
+                                        hosted)
+                                    </SelectItem>
+                                )}
                             </SelectContent>
                         </Select>
+                        {legacyLocalProvider && (
+                            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                <span>
+                                    {legacyLocalProvider} isn&apos;t usable on
+                                    the hosted app — we can&apos;t reach your
+                                    machine. Delete this provider and re-add one
+                                    with a public endpoint, or self-host
+                                    OpenPlaud (
+                                    <code className="font-mono">
+                                        docker compose up
+                                    </code>
+                                    ).
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-2">

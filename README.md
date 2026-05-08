@@ -59,7 +59,25 @@
 - 🎙️ Plaud Note device with account at [plaud.ai](https://plaud.ai)
 - 🤖 OpenAI API key (or any OpenAI-compatible provider)
 
-### Installation
+### Quick install (Linux / macOS)
+
+If you have Docker running, one line gets you a working OpenPlaud:
+
+```bash
+curl -fsSL https://openplaud.com/install.sh | sh
+```
+
+The installer prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` + `env.example` from the latest GitHub release, generates secrets (`BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `POSTGRES_PASSWORD`), starts the stack, and waits for `/api/health` to return 200. Source: [`scripts/install.sh`](scripts/install.sh).
+
+Pin to a specific version for reproducible installs:
+
+```bash
+curl -fsSL https://openplaud.com/v0.2.0/install.sh | sh
+```
+
+Windows: install via WSL2. The manual install below is the supported fallback for any environment where `curl | sh` isn't appropriate.
+
+### Manual install
 
 OpenPlaud ships as a Docker image on GitHub Container Registry. You don't need to clone the repo to self-host — just grab the compose file and env template from the latest release.
 
@@ -392,7 +410,7 @@ OpenPlaud supports **client-side transcription** using Transformers.js, running 
 
 ### 🔒 Security
 
-- 🔐 **AES-256-GCM encryption** for all sensitive data (API keys, tokens)
+- 🔐 **AES-256-GCM encryption** for sensitive data — API keys, Plaud bearer tokens, and user content (transcripts, summaries, action items, key points, recording titles, custom prompts). Defends against DB-only compromise (stolen backups, snapshot leaks). Not zero-knowledge: the server holds the key and decrypts at request time to run AI. Self-host with browser/local AI if you need true zero-knowledge. See [docs/encryption-at-rest.md](docs/encryption-at-rest.md).
 - 🛡️ **Better Auth** for secure session management
 - 🗄️ **PostgreSQL** for reliable data persistence
 - 🐳 **Docker isolation** for secure deployment

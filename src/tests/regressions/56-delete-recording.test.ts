@@ -46,29 +46,27 @@ vi.mock("@/lib/auth", () => ({
     },
 }));
 
-// Routes now go through getApiSession (auth + suspension check). The tests
-// preserve the original `auth.api.getSession` mock for sync (which still
-// uses the auth helper directly) and re-route the API-route check through
-// the same mock for consistency. Suspension is treated as never-set in
-// these regression tests; admin behavior is covered by src/tests/admin/*.
+// Routes go through requireApiSession (auth + suspension check) which
+// throws AppError on failure. The tests reuse the same
+// `auth.api.getSession` mock and forward through here. Suspension is
+// treated as never-set in these regression tests; admin-side behavior
+// is covered by src/tests/admin/*.
 vi.mock("@/lib/auth-server", async () => {
     const { auth } = await import("@/lib/auth");
-    const { NextResponse } = await import("next/server");
+    const { AppError, ErrorCode } = await import("@/lib/errors");
     return {
-        getApiSession: async (request: Request) => {
+        requireApiSession: async (request: Request) => {
             const session = await auth.api.getSession({
                 headers: request.headers,
             });
             if (!session?.user) {
-                return {
-                    session: null,
-                    response: NextResponse.json(
-                        { error: "Unauthorized" },
-                        { status: 401 },
-                    ),
-                };
+                throw new AppError(
+                    ErrorCode.AUTH_SESSION_MISSING,
+                    "Unauthorized",
+                    401,
+                );
             }
-            return { session };
+            return session;
         },
     };
 });

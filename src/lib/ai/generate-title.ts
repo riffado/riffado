@@ -3,6 +3,7 @@ import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
 import { decrypt } from "@/lib/encryption";
+import { decryptJsonField } from "@/lib/encryption/fields";
 import {
     getDefaultPromptConfig,
     getPromptById,
@@ -22,11 +23,14 @@ export async function generateTitleFromTranscription(
             .where(eq(userSettings.userId, userId))
             .limit(1);
 
-        // Get prompt config
+        // Get prompt config. `titleGenerationPrompt` is jsonb-envelope
+        // encrypted at rest; legacy plaintext rows pass through verbatim.
         let promptConfig: PromptConfiguration = getDefaultPromptConfig();
         if (userSettingsRow?.titleGenerationPrompt) {
             const config =
-                userSettingsRow.titleGenerationPrompt as PromptConfiguration;
+                decryptJsonField<PromptConfiguration>(
+                    userSettingsRow.titleGenerationPrompt,
+                ) ?? getDefaultPromptConfig();
             promptConfig = {
                 selectedPrompt: config.selectedPrompt || "default",
                 customPrompts: config.customPrompts || [],

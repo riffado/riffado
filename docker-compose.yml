@@ -7,7 +7,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # Default preserved for backward compat with existing self-host
+      # deploys. The one-line installer (scripts/install.sh) generates a
+      # random POSTGRES_PASSWORD and writes it to .env. Existing operators
+      # can rotate by setting POSTGRES_PASSWORD in .env, recreating the
+      # `db` volume, and restoring from a backup.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: openplaud
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -32,7 +37,7 @@ services:
       - "3000:3000"
     environment:
       # Database
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/openplaud
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/openplaud
 
       # Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}

@@ -2,46 +2,34 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
-import { getApiSession } from "@/lib/auth-server";
+import { requireApiSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { apiHandler } from "@/lib/errors";
 
 // GET - Get storage usage and info
-export async function GET(request: Request) {
-    try {
-        const sessionResult = await getApiSession(request);
-        if (!sessionResult.session) return sessionResult.response;
-        const session = sessionResult.session;
+export const GET = apiHandler(async (request: Request) => {
+    const session = await requireApiSession(request);
 
-        const storageType = env.DEFAULT_STORAGE_TYPE;
+    const storageType = env.DEFAULT_STORAGE_TYPE;
 
-        // Calculate storage usage
-        const userRecordings = await db
-            .select({ filesize: recordings.filesize })
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.userId, session.user.id),
-                    isNull(recordings.deletedAt),
-                ),
-            );
-
-        const totalSize = userRecordings.reduce(
-            (sum, r) => sum + r.filesize,
-            0,
+    // Calculate storage usage
+    const userRecordings = await db
+        .select({ filesize: recordings.filesize })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
         );
-        const totalRecordings = userRecordings.length;
 
-        return NextResponse.json({
-            storageType,
-            totalSize,
-            totalRecordings,
-            totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
-        });
-    } catch (error) {
-        console.error("Error fetching storage info:", error);
-        return NextResponse.json(
-            { error: "Failed to fetch storage info" },
-            { status: 500 },
-        );
-    }
-}
+    const totalSize = userRecordings.reduce((sum, r) => sum + r.filesize, 0);
+    const totalRecordings = userRecordings.length;
+
+    return NextResponse.json({
+        storageType,
+        totalSize,
+        totalRecordings,
+        totalSizeMB: (totalSize / (1024 * 1024)).toFixed(2),
+    });
+});

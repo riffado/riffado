@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { auth } from "./auth";
+import { AppError, ErrorCode } from "./errors";
 
 /**
  * Get the current session on the server
@@ -58,36 +58,36 @@ export async function redirectIfAuthenticated() {
 }
 
 /**
- * API-route variant of requireAuth. Use in /api/* route handlers that operate
- * on user-owned data. Returns a discriminated result so the caller stays in
- * its existing try/catch shape:
+ * API-route variant of requireAuth. Use in /api/* route handlers that
+ * operate on user-owned data. Throws an AppError on failure so the
+ * surrounding `apiHandler` wrapper produces the unified error envelope.
  *
- *     const auth = await getApiSession(request);
- *     if (!auth.session) return auth.response;
- *     const session = auth.session;
+ *     export const GET = apiHandler(async (request) => {
+ *         const session = await requireApiSession(request);
+ *         // ...use session.user.id
+ *     });
  *
- * On unauthenticated requests returns a 401. On suspended users returns 403
- * with code ACCOUNT_SUSPENDED so the client can render the suspension state.
- * The check costs one indexed PK lookup; on self-host the column is always
- * null so the branch never triggers. This is the same boundary requireAuth()
- * applies for server pages -- factoring both onto the same suspension column
- * keeps enforcement consistent across the app.
+ * Failure modes:
+ *   - No session             -> AppError(AUTH_SESSION_MISSING, 401)
+ *   - User row vanished      -> treated as authenticated; the next
+ *                                 query that touches user-owned data
+ *                                 will 404 naturally.
+ *   - users.suspendedAt set  -> AppError(ACCOUNT_SUSPENDED, 403)
+ *
+ * The suspension check costs one indexed PK lookup. On self-host the
+ * column is always null because the admin gate that sets it is locked
+ * behind IS_HOSTED, so this is a no-op fast path there.
  */
-export async function getApiSession(
+export async function requireApiSession(
     request: Request,
-): Promise<
-    | { session: NonNullable<Awaited<ReturnType<typeof getSession>>> }
-    | { session: null; response: NextResponse }
-> {
+): Promise<NonNullable<Awaited<ReturnType<typeof getSession>>>> {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session?.user) {
-        return {
-            session: null,
-            response: NextResponse.json(
-                { error: "Unauthorized", code: "UNAUTHORIZED" },
-                { status: 401 },
-            ),
-        };
+        throw new AppError(
+            ErrorCode.AUTH_SESSION_MISSING,
+            "Unauthorized",
+            401,
+        );
     }
 
     const [u] = await db
@@ -97,17 +97,12 @@ export async function getApiSession(
         .limit(1);
 
     if (u?.suspendedAt) {
-        return {
-            session: null,
-            response: NextResponse.json(
-                {
-                    error: "Account suspended",
-                    code: "ACCOUNT_SUSPENDED",
-                },
-                { status: 403 },
-            ),
-        };
+        throw new AppError(
+            ErrorCode.ACCOUNT_SUSPENDED,
+            "Account suspended",
+            403,
+        );
     }
 
-    return { session };
+    return session;
 }

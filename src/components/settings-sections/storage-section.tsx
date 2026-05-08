@@ -7,49 +7,124 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { formatBytes } from "@/lib/format-bytes";
 
-export function StorageSection() {
+interface StorageSectionProps {
+    isHosted?: boolean;
+}
+
+export function StorageSection({ isHosted = false }: StorageSectionProps) {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoDeleteRecordings, setAutoDeleteRecordings] = useState(false);
     const [retentionDays, setRetentionDays] = useState<number | null>(null);
     const [storageUsage, setStorageUsage] = useState<{
         storageType: string;
-        totalSizeMB: string;
+        totalSize: number;
         totalRecordings: number;
     } | null>(null);
     const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+    // Tracks a retention-days edit that was scheduled but not yet sent.
+    // Used to flush the pending save on unmount so closing the settings
+    // dialog inside the debounce window doesn't drop the user's edit.
+    const pendingRetentionRef = useRef<number | null | undefined>(undefined);
 
     useEffect(() => {
+        const controller = new AbortController();
+        let cancelled = false;
+
         const fetchSettings = async () => {
             try {
-                const response = await fetch("/api/settings/user");
+                const response = await fetch("/api/settings/user", {
+                    signal: controller.signal,
+                });
+                if (cancelled) return;
                 if (response.ok) {
                     const data = await response.json();
+                    if (cancelled) return;
                     setAutoDeleteRecordings(data.autoDeleteRecordings ?? false);
                     setRetentionDays(data.retentionDays ?? null);
                 }
             } catch (error) {
+                if (cancelled) return;
+                if ((error as { name?: string })?.name === "AbortError") return;
                 console.error("Failed to fetch settings:", error);
             } finally {
-                setIsLoadingSettings(false);
+                if (!cancelled) setIsLoadingSettings(false);
             }
         };
         fetchSettings();
 
-        fetch("/api/settings/storage")
-            .then((res) => res.json())
-            .then((data) => setStorageUsage(data))
-            .catch(() => setStorageUsage(null));
+        fetch("/api/settings/storage", { signal: controller.signal })
+            .then(async (res) => {
+                if (!res.ok) return null;
+                const data = await res.json();
+                if (
+                    typeof data?.totalSize === "number" &&
+                    typeof data?.totalRecordings === "number" &&
+                    typeof data?.storageType === "string"
+                ) {
+                    return data as {
+                        storageType: string;
+                        totalSize: number;
+                        totalRecordings: number;
+                    };
+                }
+                return null;
+            })
+            .then((data) => {
+                if (cancelled) return;
+                setStorageUsage(data);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                if ((err as { name?: string })?.name === "AbortError") return;
+                setStorageUsage(null);
+            });
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+        };
     }, [setIsLoadingSettings]);
 
     useEffect(() => {
         return () => {
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = undefined;
+            }
+            const pending = pendingRetentionRef.current;
+            if (pending !== undefined) {
+                pendingRetentionRef.current = undefined;
+                // Fire-and-forget so a pending edit isn't lost when the
+                // settings dialog closes inside the debounce window. We can't
+                // use handleStorageSettingChange here because it touches
+                // unmounted React state on rollback; we accept the trade-off
+                // of no error toast in this rare edge case.
+                void fetch("/api/settings/user", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ retentionDays: pending }),
+                }).catch(() => {});
             }
         };
     }, []);
+
+    const cancelPendingRetentionSave = () => {
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = undefined;
+        }
+        pendingRetentionRef.current = undefined;
+    };
+
+    const flushPendingRetentionSave = () => {
+        const pending = pendingRetentionRef.current;
+        cancelPendingRetentionSave();
+        if (pending === undefined) return;
+        handleStorageSettingChange({ retentionDays: pending });
+    };
 
     const handleStorageSettingChange = async (updates: {
         autoDeleteRecordings?: boolean;
@@ -103,36 +178,41 @@ export function StorageSection() {
                 <HardDrive className="w-5 h-5" />
                 Storage
             </h2>
-            <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                    <span className="text-muted-foreground">Type</span>
-                    <span className="font-medium">
-                        {storageUsage?.storageType || "Local"}
-                    </span>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border bg-card p-4">
+                        <div className="text-xs text-muted-foreground">
+                            Total Size
+                        </div>
+                        <div className="text-2xl font-semibold tabular-nums mt-1">
+                            {typeof storageUsage?.totalSize === "number"
+                                ? formatBytes(storageUsage.totalSize)
+                                : "—"}
+                        </div>
+                    </div>
+                    <div className="rounded-lg border bg-card p-4">
+                        <div className="text-xs text-muted-foreground">
+                            Recordings
+                        </div>
+                        <div className="text-2xl font-semibold tabular-nums mt-1">
+                            {typeof storageUsage?.totalRecordings === "number"
+                                ? storageUsage.totalRecordings
+                                : "—"}
+                        </div>
+                    </div>
                 </div>
-                {storageUsage && (
-                    <>
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                                Total Size
-                            </span>
-                            <span className="font-medium">
-                                {storageUsage.totalSizeMB} MB
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-muted-foreground">
-                                Recordings
-                            </span>
-                            <span className="font-medium">
-                                {storageUsage.totalRecordings}
-                            </span>
-                        </div>
-                    </>
+                {!isHosted && (
+                    <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Type</span>
+                        <span className="font-medium">
+                            {storageUsage?.storageType || "Local"}
+                        </span>
+                    </div>
                 )}
                 <p className="text-xs text-muted-foreground pt-2 border-t">
-                    Storage is configured at the instance level via environment
-                    variables.
+                    {isHosted
+                        ? "Storage for your account on OpenPlaud Hosted. Manage what's kept with auto-delete below."
+                        : "Storage is configured at the instance level via environment variables."}
                 </p>
             </div>
 
@@ -151,6 +231,10 @@ export function StorageSection() {
                         id="auto-delete"
                         checked={autoDeleteRecordings}
                         onCheckedChange={(checked) => {
+                            // The toggle settles retentionDays itself, so any
+                            // debounced retention edit is now stale and must
+                            // not be flushed on unmount.
+                            cancelPendingRetentionSave();
                             setAutoDeleteRecordings(checked);
                             if (!checked) {
                                 setRetentionDays(null);
@@ -172,32 +256,51 @@ export function StorageSection() {
                         <Input
                             id="retention-days"
                             type="number"
+                            inputMode="numeric"
                             min={1}
                             max={365}
+                            step={1}
                             value={retentionDays || ""}
                             onChange={(e) => {
-                                const value = parseInt(e.target.value, 10);
-                                if (
-                                    !Number.isNaN(value) &&
-                                    value >= 1 &&
-                                    value <= 365
-                                ) {
-                                    setRetentionDays(value);
+                                const raw = e.target.value;
+                                if (raw === "") {
+                                    setRetentionDays(null);
                                     if (saveTimeoutRef.current) {
                                         clearTimeout(saveTimeoutRef.current);
+                                        saveTimeoutRef.current = undefined;
                                     }
-                                    saveTimeoutRef.current = setTimeout(() => {
-                                        handleStorageSettingChange({
-                                            retentionDays: value,
-                                        });
-                                    }, 500);
-                                } else if (e.target.value === "") {
-                                    setRetentionDays(null);
+                                    pendingRetentionRef.current = undefined;
                                     handleStorageSettingChange({
                                         retentionDays: null,
                                     });
+                                    return;
                                 }
+                                const value = Number(raw);
+                                if (
+                                    !Number.isInteger(value) ||
+                                    value < 1 ||
+                                    value > 365
+                                ) {
+                                    // Reject non-integer or out-of-range
+                                    // values silently. Previously parseInt
+                                    // would silently floor "1.5" to 1 and
+                                    // save it; we now require an integer.
+                                    return;
+                                }
+                                setRetentionDays(value);
+                                if (saveTimeoutRef.current) {
+                                    clearTimeout(saveTimeoutRef.current);
+                                }
+                                pendingRetentionRef.current = value;
+                                saveTimeoutRef.current = setTimeout(() => {
+                                    saveTimeoutRef.current = undefined;
+                                    pendingRetentionRef.current = undefined;
+                                    handleStorageSettingChange({
+                                        retentionDays: value,
+                                    });
+                                }, 500);
                             }}
+                            onBlur={flushPendingRetentionSave}
                             placeholder="30"
                         />
                         <p className="text-xs text-muted-foreground">

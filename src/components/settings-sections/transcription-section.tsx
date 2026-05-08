@@ -384,28 +384,6 @@ export function TranscriptionSection() {
                     </div>
                 )}
             </div>
-
-            <div className="pt-4 border-t">
-                <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Status</span>
-                        <span
-                            className={`font-medium ${
-                                autoTranscribe
-                                    ? "text-primary"
-                                    : "text-muted-foreground"
-                            }`}
-                        >
-                            {autoTranscribe ? "Enabled" : "Disabled"}
-                        </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground pt-2">
-                        When enabled, new recordings will be automatically
-                        transcribed using your default transcription provider
-                        after syncing.
-                    </p>
-                </div>
-            </div>
         </div>
     );
 }

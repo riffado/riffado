@@ -1,3 +1,4 @@
+import { AppError, ErrorCode } from "@/lib/errors";
 import type {
     PlaudApiError,
     PlaudDeviceListResponse,
@@ -22,6 +23,36 @@ const INITIAL_RETRY_DELAY = 1000; // 1 second
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Map a Plaud HTTP failure to a structured `AppError`.
+ *
+ *   - 401 → PLAUD_INVALID_TOKEN (token revoked/expired — reconnect path)
+ *   - 4xx → PLAUD_API_ERROR (user-actionable, surfaced as 400)
+ *   - 5xx → PLAUD_UPSTREAM_ERROR (Plaud's problem, surfaced as 502; we
+ *           only end up here after MAX_RETRIES of exponential backoff)
+ */
+function plaudHttpError(status: number, msg: string): AppError {
+    if (status === 401) {
+        return new AppError(
+            ErrorCode.PLAUD_INVALID_TOKEN,
+            "Plaud rejected the access token. Reconnect your Plaud account.",
+            401,
+            { plaudStatus: status, plaudMessage: msg },
+        );
+    }
+    if (status >= 500) {
+        return new AppError(
+            ErrorCode.PLAUD_UPSTREAM_ERROR,
+            "Plaud is temporarily unavailable. Please try again later.",
+            502,
+            { plaudStatus: status, plaudMessage: msg },
+        );
+    }
+    return new AppError(ErrorCode.PLAUD_API_ERROR, msg, 400, {
+        plaudStatus: status,
+    });
 }
 
 /**
@@ -145,18 +176,31 @@ export class PlaudClient {
                 },
             });
 
-            if (response.status === 429 && retryCount < MAX_RETRIES) {
+            if (response.status === 429) {
+                if (retryCount < MAX_RETRIES) {
+                    const retryAfter = response.headers.get("Retry-After");
+                    const delay = retryAfter
+                        ? Number.parseInt(retryAfter, 10) * 1000
+                        : INITIAL_RETRY_DELAY * 2 ** retryCount; // Exponential backoff
+                    await sleep(delay);
+                    return this.request<T>(endpoint, options, retryCount + 1);
+                }
                 const retryAfter = response.headers.get("Retry-After");
-                const delay = retryAfter
-                    ? Number.parseInt(retryAfter, 10) * 1000
-                    : INITIAL_RETRY_DELAY * 2 ** retryCount; // Exponential backoff
-                await sleep(delay);
-                return this.request<T>(endpoint, options, retryCount + 1);
+                throw new AppError(
+                    ErrorCode.PLAUD_RATE_LIMITED,
+                    "Too many requests to Plaud. Please try again later.",
+                    429,
+                    retryAfter
+                        ? { retryAfter: Number.parseInt(retryAfter, 10) }
+                        : undefined,
+                );
             }
 
             if (!response.ok) {
-                const error = (await response.json()) as PlaudApiError;
-                const errorMessage = `Plaud API error (${response.status}): ${error.msg || response.statusText}`;
+                const error = (await response
+                    .json()
+                    .catch(() => ({}) as PlaudApiError)) as PlaudApiError;
+                const upstreamMsg = error.msg || response.statusText;
 
                 if (
                     response.status >= 500 &&
@@ -168,7 +212,7 @@ export class PlaudClient {
                     return this.request<T>(endpoint, options, retryCount + 1);
                 }
 
-                throw new Error(errorMessage);
+                throw plaudHttpError(response.status, upstreamMsg);
             }
 
             return (await response.json()) as T;
@@ -183,11 +227,17 @@ export class PlaudClient {
                 return this.request<T>(endpoint, options, retryCount + 1);
             }
 
-            if (error instanceof Error) {
-                throw error;
-            }
-            throw new Error(
-                `Failed to make request to Plaud API: ${String(error)}`,
+            if (error instanceof AppError) throw error;
+            // Plain Error here means: fetch threw past our retry budget
+            // (network blow-up, DNS failure, AbortError) or response.json()
+            // failed parsing an unexpected body. Either way, this is an
+            // upstream / infra problem — surface it as PLAUD_UPSTREAM_ERROR
+            // (502) rather than letting apiHandler downgrade it to a generic
+            // INTERNAL_ERROR (500), which would mislead clients.
+            throw new AppError(
+                ErrorCode.PLAUD_UPSTREAM_ERROR,
+                "Failed to communicate with Plaud. Please try again later.",
+                502,
             );
         }
     }
@@ -263,16 +313,25 @@ export class PlaudClient {
 
             const response = await fetch(downloadUrl);
             if (!response.ok) {
-                throw new Error(
-                    `Failed to download file: ${response.statusText}`,
+                throw new AppError(
+                    ErrorCode.PLAUD_UPSTREAM_ERROR,
+                    "Failed to download recording from Plaud. Please try again later.",
+                    502,
+                    { plaudStatus: response.status },
                 );
             }
 
             const arrayBuffer = await response.arrayBuffer();
             return Buffer.from(arrayBuffer);
         } catch (error) {
-            throw new Error(
-                `Failed to download recording: ${error instanceof Error ? error.message : String(error)}`,
+            // Pass through structured AppErrors (from getTempUrl's request()
+            // call, or our own throw above). Wrap anything else — typically
+            // a network blow-up before fetch returns — as PLAUD_UPSTREAM_ERROR.
+            if (error instanceof AppError) throw error;
+            throw new AppError(
+                ErrorCode.PLAUD_UPSTREAM_ERROR,
+                "Failed to download recording from Plaud. Please try again later.",
+                502,
             );
         }
     }

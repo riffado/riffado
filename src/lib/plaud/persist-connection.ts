@@ -17,8 +17,10 @@
  *      scoped by (userId, serialNumber) so we never touch another user's
  *      row (the schema enforces uniqueness on that pair).
  *
- * Errors prefixed with "Plaud API error:" are user-actionable and should be
- * mapped to 400 by callers; everything else is a 500.
+ * Errors bubble out as structured `AppError`s carrying their own status
+ * code and `code` value (PLAUD_INVALID_TOKEN / PLAUD_API_ERROR /
+ * PLAUD_UPSTREAM_ERROR / ...). Callers wrap routes in `apiHandler` so
+ * the right status reaches the client without any string matching.
  */
 
 import { and, eq, sql } from "drizzle-orm";
@@ -78,8 +80,8 @@ export async function persistPlaudConnection({
     // Re-throw the underlying error verbatim. Wrapping it (e.g. into
     // "token validation failed") flattens the auth-vs-server distinction:
     // a Plaud 5xx after our retry budget would surface as 400 "fix your
-    // token" advice. Callers use isUserActionablePlaudError() to map 4xx
-    // to 400 and everything else to 500.
+    // token" advice. PlaudClient throws structured AppErrors so the
+    // statusCode is honoured by apiHandler at the route boundary.
     const client = new PlaudClient(accessToken, apiBase, resolvedWorkspaceId);
     let deviceList: PlaudDeviceListResponse;
     try {

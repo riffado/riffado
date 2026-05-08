@@ -27,6 +27,7 @@ import {
     type Mock,
     vi,
 } from "vitest";
+import { ErrorCode as ErrorCodeRef } from "@/lib/errors";
 import { PlaudClient } from "@/lib/plaud/client";
 
 const originalFetch = global.fetch;
@@ -289,6 +290,45 @@ describe("issue #66: workspace token (WT) is required on EU recording endpoints"
         );
         expect(authHeaderFromCall(mockFetch.mock.calls[3])).toBe(
             `Bearer ${WT}`,
+        );
+    });
+});
+
+// ── 401 from mint propagates as PLAUD_INVALID_TOKEN ─────────────────────
+//
+// Regression for cubic P1 review on PR #97: a 401 from
+// mintPlaudWorkspaceToken must NOT be classified `stale=true`. If it
+// were, resolveWorkspaceToken would swallow the auth-typed error and
+// fall through to a relist + remint round-trip, and any non-auth
+// failure on that relist would mask the original PLAUD_INVALID_TOKEN
+// signal that the route layer needs to trigger reconnect UI.
+describe("resolveWorkspaceToken: 401 mint propagates as PLAUD_INVALID_TOKEN", () => {
+    it("throws PLAUD_INVALID_TOKEN (401) from cached-mint without relisting", async () => {
+        // Cache hit → mint → 401. Must propagate verbatim, NOT trigger a
+        // /team-app/workspaces/list relist.
+        mockFetch.mockResolvedValueOnce(
+            mockResponse({
+                ok: false,
+                status: 401,
+                body: { status: 401, msg: "bad token" },
+            }),
+        );
+
+        const { resolveWorkspaceToken } = await import("@/lib/plaud/workspace");
+        const err = await resolveWorkspaceToken(
+            UT,
+            API_BASE,
+            "ws_cached",
+        ).catch((e) => e);
+
+        expect(err).toMatchObject({
+            code: ErrorCodeRef.PLAUD_INVALID_TOKEN,
+            statusCode: 401,
+        });
+        // Single fetch — the mint call — no relist round-trip.
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        expect(urlFromCall(mockFetch.mock.calls[0])).toContain(
+            "/user-app/auth/workspace/token/ws_cached",
         );
     });
 });

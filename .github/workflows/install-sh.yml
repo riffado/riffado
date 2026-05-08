@@ -1,0 +1,76 @@
+name: Install Script
+
+# Integration test for the one-line installer. Runs on PRs that touch the
+# installer surface so a regression in `scripts/install.sh` or its routes
+# fails CI before it reaches openplaud.com.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/install.sh'
+      - 'src/lib/install-script.ts'
+      - 'src/app/install.sh/**'
+      - 'src/app/[version]/install.sh/**'
+      - 'docker-compose.yml'
+      - '.env.example'
+      - '.github/workflows/install-sh.yml'
+  pull_request:
+    paths:
+      - 'scripts/install.sh'
+      - 'src/lib/install-script.ts'
+      - 'src/app/install.sh/**'
+      - 'src/app/[version]/install.sh/**'
+      - 'docker-compose.yml'
+      - '.env.example'
+      - '.github/workflows/install-sh.yml'
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          # Lint with `sh` posture — install.sh must run on /bin/sh, not
+          # bash. Treat warnings as errors.
+          shellcheck -s sh -S warning scripts/install.sh
+
+  install-pinned:
+    # End-to-end install against a published image. This is the regression
+    # check: does today's installer still bring up an older known-good
+    # release? Bump PINNED_VERSION whenever a new stable release lands so
+    # the test stays meaningful.
+    name: Install (pinned)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PINNED_VERSION: v0.3.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render install.sh with pinned version
+        run: |
+          mkdir -p /tmp/installer
+          sed "s|{{VERSION}}|${PINNED_VERSION}|g" scripts/install.sh > /tmp/installer/install.sh
+          chmod +x /tmp/installer/install.sh
+
+      - name: Run installer non-interactively
+        run: |
+          # No tty + no /dev/tty makes the installer take all defaults.
+          # Override $HOME so the install dir is predictable.
+          HOME=/tmp/run sh /tmp/installer/install.sh < /dev/null
+
+      - name: Verify health
+        run: |
+          curl -fsS http://localhost:3000/api/health
+          docker compose -f /tmp/run/openplaud/docker-compose.yml ps
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose -f /tmp/run/openplaud/docker-compose.yml logs --no-color || true

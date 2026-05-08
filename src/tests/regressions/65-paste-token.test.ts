@@ -55,27 +55,26 @@ vi.mock("@/lib/auth", () => ({
     },
 }));
 
-// Routes use getApiSession from auth-server now (suspension-aware). Mirror
-// the auth.api.getSession mock through it so existing test setups keep
-// working without each test having to add suspension fixtures.
+// Routes use requireApiSession from auth-server (suspension-aware,
+// throws AppError on failure). Forward the existing
+// auth.api.getSession mock through it so test setups keep working
+// without each test having to add suspension fixtures.
 vi.mock("@/lib/auth-server", async () => {
     const { auth } = await import("@/lib/auth");
-    const { NextResponse } = await import("next/server");
+    const { AppError, ErrorCode } = await import("@/lib/errors");
     return {
-        getApiSession: async (request: Request) => {
+        requireApiSession: async (request: Request) => {
             const session = await auth.api.getSession({
                 headers: request.headers,
             });
             if (!session?.user) {
-                return {
-                    session: null,
-                    response: NextResponse.json(
-                        { error: "Unauthorized" },
-                        { status: 401 },
-                    ),
-                };
+                throw new AppError(
+                    ErrorCode.AUTH_SESSION_MISSING,
+                    "Unauthorized",
+                    401,
+                );
             }
-            return { session };
+            return session;
         },
     };
 });
@@ -83,10 +82,8 @@ vi.mock("@/lib/auth-server", async () => {
 import { POST } from "@/app/api/plaud/auth/connect-token/route";
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
-import {
-    decodeAccessTokenExpiry,
-    isUserActionablePlaudError,
-} from "@/lib/plaud/auth";
+import { ErrorCode } from "@/lib/errors";
+import { decodeAccessTokenExpiry, plaudVerifyOtp } from "@/lib/plaud/auth";
 
 const originalFetch = global.fetch;
 let mockFetch: Mock;
@@ -174,75 +171,35 @@ describe("decodeAccessTokenExpiry", () => {
 
 // ── /api/plaud/auth/connect-token validation surface ────────────────────────
 
-// ── isUserActionablePlaudError (post-review fix for cubic P1) ──────────────────
+// ── Structured Plaud errors (replaces isUserActionablePlaudError) ───────────
 //
-// The previous matcher returned true for any "Plaud API error" prefix,
-// which surfaced 5xx-after-retries as a 400 "fix your token" message and
-// misled users when Plaud was the broken party. Lock in the narrower
-// 4xx-only contract so we don't regress.
-describe("isUserActionablePlaudError", () => {
-    it("returns true for 4xx Plaud HTTP errors (auth/permission/bad input)", () => {
-        expect(
-            isUserActionablePlaudError("Plaud API error (400): bad request"),
-        ).toBe(true);
-        expect(
-            isUserActionablePlaudError("Plaud API error (401): bad token"),
-        ).toBe(true);
-        expect(
-            isUserActionablePlaudError(
-                "Plaud API error (403): forbidden workspace",
-            ),
-        ).toBe(true);
-        expect(
-            isUserActionablePlaudError("Plaud API error (404): not found"),
-        ).toBe(true);
-    });
-
-    it("returns false for 5xx Plaud HTTP errors (Plaud or our infra is broken)", () => {
-        expect(
-            isUserActionablePlaudError("Plaud API error (500): server error"),
-        ).toBe(false);
-        expect(
-            isUserActionablePlaudError("Plaud API error (502): bad gateway"),
-        ).toBe(false);
-        expect(
-            isUserActionablePlaudError(
-                "Plaud API error (503): service unavailable",
-            ),
-        ).toBe(false);
-    });
-
-    it("returns true for bare 'Plaud API error' (Plaud business-level failures)", () => {
-        // Plaud's OTP + workspace helpers throw without an HTTP status
-        // because Plaud returns 200 with `status: -N` for these. They're
-        // user-actionable by definition — narrowing here silently broke
-        // the OTP error UX ("invalid verification code" → 500 instead of
-        // 400).
-        expect(isUserActionablePlaudError("Plaud API error: invalid OTP")).toBe(
-            true,
-        );
-        expect(
-            isUserActionablePlaudError(
-                "Plaud API error: failed to send verification code",
-            ),
-        ).toBe(true);
-        expect(
-            isUserActionablePlaudError(
-                "Plaud API error: no workspaces returned",
-            ),
-        ).toBe(true);
-    });
-
-    it("returns true for our own 'Invalid API base' SSRF rejection", () => {
-        expect(isUserActionablePlaudError("Invalid API base")).toBe(true);
-    });
-
-    it("returns false for unrelated error messages", () => {
-        expect(isUserActionablePlaudError("ECONNRESET")).toBe(false);
-        expect(isUserActionablePlaudError("database connection failed")).toBe(
-            false,
-        );
-        expect(isUserActionablePlaudError("")).toBe(false);
+// Resolved cubic P1: 5xx Plaud failures used to surface as 400
+// "fix your token" because the route inferred user-actionability from
+// the error message string. Plaud helpers now throw `AppError` carrying
+// `code` + `statusCode`; the route's `apiHandler` honours the status
+// verbatim. Lock that down here.
+describe("plaudVerifyOtp throws structured AppError", () => {
+    it("throws PLAUD_OTP_INVALID (400) when Plaud returns a status:-N body with no token", async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: () =>
+                Promise.resolve({
+                    status: -1,
+                    msg: "Invalid verification code",
+                }),
+        });
+        const err = await plaudVerifyOtp(
+            "000000",
+            "otp.token",
+            "https://api.plaud.ai",
+        ).catch((e) => e);
+        expect(err).toMatchObject({
+            code: ErrorCode.PLAUD_OTP_INVALID,
+            statusCode: 400,
+            message: "Invalid verification code",
+        });
     });
 });
 
@@ -293,7 +250,9 @@ describe("POST /api/plaud/auth/connect-token (validation)", () => {
             }),
         );
         expect(res.status).toBe(400);
-        expect((await res.json()).error).toMatch(/Invalid API base/);
+        const body = await res.json();
+        expect(body.error).toMatch(/Invalid API base/);
+        expect(body.code).toBe(ErrorCode.PLAUD_INVALID_API_BASE);
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -303,8 +262,10 @@ describe("POST /api/plaud/auth/connect-token (validation)", () => {
         authedSession();
 
         // Failure on /user/me (best-effort) → fetchPlaudUserMeEmail returns
-        // null. Then listPlaudWorkspaces → 500 → swallowed. Then
-        // listDevices → 401 → throws → 400 user-facing error.
+        // null. Then listPlaudWorkspaces → 401 → swallowed. Then
+        // listDevices → 401 → PlaudClient throws AppError(PLAUD_INVALID_TOKEN,
+        // 401) → apiHandler returns 401 to the user ("reconnect Plaud",
+        // not "fix your input").
         mockFetch.mockResolvedValue({
             ok: false,
             status: 401,
@@ -320,7 +281,7 @@ describe("POST /api/plaud/auth/connect-token (validation)", () => {
             }),
         );
 
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(401);
         // The Plaud request used the unwrapped token (no double "Bearer ").
         const calls = mockFetch.mock.calls;
         expect(calls.length).toBeGreaterThan(0);

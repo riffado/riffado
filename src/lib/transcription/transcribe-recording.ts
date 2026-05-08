@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { decrypt } from "@/lib/encryption";
+import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
@@ -94,9 +95,12 @@ export async function transcribeRecording(
         const contentType = recording.storagePath.endsWith(".mp3")
             ? "audio/mpeg"
             : "audio/opus";
+        // `recording.filename` is encrypted at rest; decrypt before passing
+        // to the transcription provider as a filename hint.
+        const decryptedFilename = decryptText(recording.filename);
         const audioFile = new File(
             [new Uint8Array(audioBuffer)],
-            recording.filename,
+            decryptedFilename,
             {
                 type: contentType,
             },
@@ -137,11 +141,13 @@ export async function transcribeRecording(
             };
         }
 
+        // Encrypt the transcript before persisting.
+        const encryptedTranscriptionText = encryptText(transcriptionText);
         if (existingTranscription) {
             await db
                 .update(transcriptions)
                 .set({
-                    text: transcriptionText,
+                    text: encryptedTranscriptionText,
                     detectedLanguage,
                     transcriptionType: "server",
                     provider: credentials.provider,
@@ -152,7 +158,7 @@ export async function transcribeRecording(
             await db.insert(transcriptions).values({
                 recordingId,
                 userId,
-                text: transcriptionText,
+                text: encryptedTranscriptionText,
                 detectedLanguage,
                 transcriptionType: "server",
                 provider: credentials.provider,
@@ -168,10 +174,13 @@ export async function transcribeRecording(
                 );
 
                 if (generatedTitle) {
+                    // Encrypt the generated title before storing it as the
+                    // recording's filename. The plaintext is still available
+                    // below for the optional sync-to-Plaud push.
                     await db
                         .update(recordings)
                         .set({
-                            filename: generatedTitle,
+                            filename: encryptText(generatedTitle),
                             updatedAt: new Date(),
                         })
                         .where(eq(recordings.id, recordingId));

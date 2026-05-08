@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getApiErrorMessage } from "@/lib/api-errors";
 
 interface UseAutoSyncOptions {
     /**
@@ -140,8 +141,10 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                         onSuccessRef.current?.(0);
                     }
                 } else {
-                    const error = await response.json();
-                    const errorMessage = error.error || "Sync failed";
+                    const errorMessage = await getApiErrorMessage(
+                        response,
+                        "Sync failed",
+                    );
 
                     setStatus((prev) => ({
                         ...prev,

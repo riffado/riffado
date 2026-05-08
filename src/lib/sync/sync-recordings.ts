@@ -1,6 +1,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
+import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
@@ -131,7 +132,11 @@ async function processRecording(
             userId: context.userId,
             deviceSn: plaudRecording.serial_number,
             plaudFileId: plaudRecording.id,
-            filename: plaudRecording.filename,
+            // Filename comes from Plaud as plaintext and may carry topic
+            // info; encrypt at rest. Notification surfaces below receive
+            // the original `plaudRecording.filename` directly, which is
+            // the right contract — the encrypted form never leaves the DB.
+            filename: encryptText(plaudRecording.filename),
             duration: plaudRecording.duration,
             startTime: new Date(plaudRecording.start_time),
             endTime: new Date(plaudRecording.end_time),

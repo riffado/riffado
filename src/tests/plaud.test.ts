@@ -310,15 +310,22 @@ describe("PlaudClient", () => {
                 json: () => Promise.resolve(errorResponse),
             });
 
+            // Now throws a structured AppError(PLAUD_API_ERROR, msg="Invalid request", 400)
             await expect(client.listDevices()).rejects.toThrow(
-                "Plaud API error (400): Invalid request",
+                "Invalid request",
             );
         });
 
-        it("should throw error when fetch fails", async () => {
-            mockFetch.mockRejectedValueOnce(new Error("Network error"));
+        it("should throw PLAUD_UPSTREAM_ERROR when fetch fails past retry budget", async () => {
+            // Plain fetch failures (network blow-up, DNS, AbortError) past
+            // our retry budget surface as PLAUD_UPSTREAM_ERROR (502) so
+            // apiHandler doesn't downgrade them to a generic INTERNAL_ERROR
+            // (500). The original message stays in server logs only.
+            mockFetch.mockRejectedValue(new Error("Network error"));
 
-            await expect(client.listDevices()).rejects.toThrow("Network error");
+            await expect(client.listDevices()).rejects.toThrow(
+                /Failed to communicate with Plaud/,
+            );
         });
     });
 });

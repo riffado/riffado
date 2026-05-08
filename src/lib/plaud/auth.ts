@@ -12,6 +12,7 @@
  * token eventually expires, users re-authenticate via the reconnect UI.
  */
 
+import { AppError, ErrorCode } from "@/lib/errors";
 import { DEFAULT_PLAUD_API_BASE } from "./client";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -70,15 +71,22 @@ export async function plaudSendCode(
     // Region mismatch → retry against the correct regional server
     if (body.status === -302 && body.data?.domains?.api) {
         if (_redirectCount >= MAX_REGION_REDIRECTS) {
-            throw new Error("Plaud API error: too many region redirects");
+            throw new AppError(
+                ErrorCode.PLAUD_REGION_REDIRECT_LOOP,
+                "Too many region redirects from Plaud. Please try again later.",
+                502,
+            );
         }
         const regionalBase = body.data.domains.api.replace(/\/+$/, "");
         return plaudSendCode(email, regionalBase, _redirectCount + 1);
     }
 
     if (body.status !== 0 || !body.token) {
-        throw new Error(
-            `Plaud API error: ${body.msg || "failed to send verification code"}`,
+        throw new AppError(
+            ErrorCode.PLAUD_API_ERROR,
+            body.msg || "Failed to send verification code",
+            400,
+            { plaudStatus: body.status },
         );
     }
 
@@ -108,48 +116,15 @@ export async function plaudVerifyOtp(
         body.access_token ?? body.data?.access_token ?? undefined;
 
     if (!accessToken) {
-        throw new Error(
-            `Plaud API error: ${body.msg || "invalid verification code"}`,
+        throw new AppError(
+            ErrorCode.PLAUD_OTP_INVALID,
+            body.msg || "Invalid verification code",
+            400,
+            { plaudStatus: body.status },
         );
     }
 
     return { accessToken };
-}
-
-// ── Error classification ─────────────────────────────────────────────────
-
-/**
- * Decide whether a Plaud-related error message is the user's responsibility
- * (return verbatim with HTTP 400) or our / Plaud's responsibility (surface
- * as 500 so the user retries instead of being told to fix their token).
- *
- * Two shapes we throw:
- *
- *   - `Plaud API error (NNN): ...` — HTTP-level failure from
- *     PlaudClient.request or the workspace helpers. Status carries the
- *     verdict: 4xx is the user (bad token / forbidden / etc.), 5xx is
- *     Plaud (or our infra) — don't tell users to "fix their token" when
- *     Plaud is the broken party.
- *
- *   - `Plaud API error: ...` (no parenthesised status) — business-level
- *     failure where Plaud returned HTTP 200 with a `status: -N` body, or
- *     a workspace helper rejected on its own. These are user-actionable
- *     by definition ("invalid verification code", "failed to send code",
- *     "no workspaces returned", ...). Pre-narrowing this would silently
- *     break the OTP error UX.
- *
- *   - The literal `Invalid API base` from our SSRF guard.
- */
-export function isUserActionablePlaudError(message: string): boolean {
-    if (message === "Invalid API base") return true;
-    if (!message.startsWith("Plaud API error")) return false;
-    const m = /^Plaud API error \((\d{3})\):/.exec(message);
-    if (m) {
-        const status = Number.parseInt(m[1], 10);
-        return status >= 400 && status < 500;
-    }
-    // Bare `Plaud API error: ...` — business-level failure, user-actionable.
-    return true;
 }
 
 // ── JWT helpers (UX-only; not security boundaries) ────────────────────────

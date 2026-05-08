@@ -4,6 +4,7 @@ import { RecordingWorkstation } from "@/components/recordings/recording-workstat
 import { db } from "@/db";
 import { recordings, transcriptions } from "@/db/schema";
 import { requireAuth } from "@/lib/auth-server";
+import { decryptText } from "@/lib/encryption/fields";
 
 interface RecordingDetailPageProps {
     params: Promise<{ id: string }>;
@@ -40,16 +41,19 @@ export default async function RecordingDetailPage({
         .where(eq(transcriptions.recordingId, id))
         .limit(1);
 
+    // Content fields are encrypted at rest; decrypt server-side before
+    // handing off to the client component.
     return (
         <RecordingWorkstation
             recording={{
                 ...recording,
+                filename: decryptText(recording.filename),
                 startTime: recording.startTime.toISOString(),
             }}
             transcription={
                 transcription
                     ? {
-                          text: transcription.text,
+                          text: decryptText(transcription.text),
                           detectedLanguage:
                               transcription.detectedLanguage || undefined,
                           transcriptionType: transcription.transcriptionType,

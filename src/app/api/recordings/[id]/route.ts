@@ -2,70 +2,102 @@ import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { aiEnhancements, recordings, transcriptions } from "@/db/schema";
-import { getApiSession } from "@/lib/auth-server";
+import { requireApiSession } from "@/lib/auth-server";
+import { decryptText } from "@/lib/encryption/fields";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 
-export async function GET(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    try {
-        const sessionResult = await getApiSession(request);
-        if (!sessionResult.session) return sessionResult.response;
-        const session = sessionResult.session;
+type IdContext = { params: Promise<{ id: string }> };
 
-        const { id } = await params;
+export const GET = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
 
-        const [recording] = await db
-            .select()
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.id, id),
-                    eq(recordings.userId, session.user.id),
-                    isNull(recordings.deletedAt),
-                ),
-            )
-            .limit(1);
+    const { id } = await (context as IdContext).params;
 
-        if (!recording) {
-            return NextResponse.json(
-                { error: "Recording not found" },
-                { status: 404 },
-            );
-        }
+    const [recording] = await db
+        .select()
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
 
-        // Get transcription if exists
-        const [transcription] = await db
-            .select()
-            .from(transcriptions)
-            .where(eq(transcriptions.recordingId, id))
-            .limit(1);
-
-        return NextResponse.json({
-            recording,
-            transcription: transcription || null,
-        });
-    } catch (error) {
-        console.error("Error fetching recording:", error);
-        return NextResponse.json(
-            { error: "Failed to fetch recording" },
-            { status: 500 },
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
         );
     }
-}
+
+    // Get transcription if exists. Defense-in-depth: scope by userId
+    // even though the parent recording lookup already filtered. If a row
+    // ever ends up with mismatched (recordingId, userId) due to a bug or
+    // a partially-failed delete, this prevents cross-tenant reads.
+    const [transcription] = await db
+        .select()
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.recordingId, id),
+                eq(transcriptions.userId, session.user.id),
+            ),
+        )
+        .limit(1);
+
+    // Decrypt content fields before returning to the client. The DB
+    // holds ciphertext (or, during the deploy → backfill window, legacy
+    // plaintext); the client always sees plaintext.
+    return NextResponse.json({
+        recording: {
+            ...recording,
+            filename: decryptText(recording.filename),
+        },
+        transcription: transcription
+            ? { ...transcription, text: decryptText(transcription.text) }
+            : null,
+    });
+});
 
 /**
  * Storage providers throw on any deleteFile error including "object not
  * present". Detect the not-found case so retries after a half-failed delete
- * still tombstone cleanly. We match on common substrings rather than typed
- * error classes so this works across the local-fs adapter (ENOENT) and the
- * S3 adapter (NoSuchKey / NotFound / 404).
+ * still tombstone cleanly.
+ *
+ * Prefer typed signals over message matching:
+ *   - Node fs: `error.code === "ENOENT"`
+ *   - AWS SDK v3: `error.name` is `"NoSuchKey"` or `"NotFound"`, or
+ *     `error.$metadata?.httpStatusCode === 404`
+ *
+ * Fall back to a narrow substring match for adapters that wrap their
+ * underlying error (rare, but the local-fs adapter has done it before).
+ * The fallback is anchored to known not-found phrases rather than the
+ * raw `\b404\b` regex, which previously could match `request_id=...404abc`
+ * style strings inside otherwise-unrelated 5xx errors.
  */
 function isStorageNotFoundError(error: unknown): boolean {
-    const message =
-        error instanceof Error ? error.message : String(error ?? "");
-    return /ENOENT|NoSuchKey|NotFound|\b404\b/i.test(message);
+    if (!error || typeof error !== "object") return false;
+    const e = error as {
+        code?: unknown;
+        name?: unknown;
+        message?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
+    };
+    if (e.code === "ENOENT") return true;
+    if (e.name === "NoSuchKey" || e.name === "NotFound") return true;
+    if (e.$metadata?.httpStatusCode === 404) return true;
+    if (typeof e.message === "string") {
+        // Narrow substring fallback only — anchored to phrases adapters
+        // actually emit, not bare 404 anywhere in the string.
+        return /(ENOENT|NoSuchKey|NotFound|no such file or directory)/i.test(
+            e.message,
+        );
+    }
+    return false;
 }
 
 /**
@@ -88,96 +120,83 @@ function isStorageNotFoundError(error: unknown): boolean {
  * resurrect the recording. This endpoint does NOT delete the file on
  * Plaud's servers — Plaud remains the upstream source of truth.
  */
-export async function DELETE(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
+export const DELETE = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
+
+    const { id } = await (context as IdContext).params;
+    const userId = session.user.id;
+
+    const [recording] = await db
+        .select()
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, userId),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
+
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
+
+    // 1. Storage delete first. Treat "already gone" as success; surface
+    //    every other error so the user can retry.
     try {
-        const sessionResult = await getApiSession(request);
-        if (!sessionResult.session) return sessionResult.response;
-        const session = sessionResult.session;
+        const storage = await createUserStorageProvider(userId);
+        await storage.deleteFile(recording.storagePath);
+    } catch (storageError) {
+        if (!isStorageNotFoundError(storageError)) {
+            console.error(
+                `Failed to delete storage file for recording ${id}:`,
+                storageError,
+            );
+            throw new AppError(
+                ErrorCode.STORAGE_ERROR,
+                "Failed to delete recording audio. Please retry.",
+                500,
+            );
+        }
+        // Object already absent — continue with tombstone.
+    }
 
-        const { id } = await params;
-        const userId = session.user.id;
+    // 2. Atomic DB writes: child rows + tombstone in one transaction.
+    await db.transaction(async (tx) => {
+        await tx
+            .delete(transcriptions)
+            .where(
+                and(
+                    eq(transcriptions.recordingId, id),
+                    eq(transcriptions.userId, userId),
+                ),
+            );
 
-        const [recording] = await db
-            .select()
-            .from(recordings)
+        await tx
+            .delete(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.recordingId, id),
+                    eq(aiEnhancements.userId, userId),
+                ),
+            );
+
+        await tx
+            .update(recordings)
+            .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(
                 and(
                     eq(recordings.id, id),
                     eq(recordings.userId, userId),
                     isNull(recordings.deletedAt),
                 ),
-            )
-            .limit(1);
-
-        if (!recording) {
-            return NextResponse.json(
-                { error: "Recording not found" },
-                { status: 404 },
             );
-        }
+    });
 
-        // 1. Storage delete first. Treat "already gone" as success; surface
-        //    every other error so the user can retry.
-        try {
-            const storage = await createUserStorageProvider(userId);
-            await storage.deleteFile(recording.storagePath);
-        } catch (storageError) {
-            if (!isStorageNotFoundError(storageError)) {
-                console.error(
-                    `Failed to delete storage file for recording ${id}:`,
-                    storageError,
-                );
-                return NextResponse.json(
-                    {
-                        error: "Failed to delete recording audio. Please retry.",
-                    },
-                    { status: 500 },
-                );
-            }
-            // Object already absent — continue with tombstone.
-        }
-
-        // 2. Atomic DB writes: child rows + tombstone in one transaction.
-        await db.transaction(async (tx) => {
-            await tx
-                .delete(transcriptions)
-                .where(
-                    and(
-                        eq(transcriptions.recordingId, id),
-                        eq(transcriptions.userId, userId),
-                    ),
-                );
-
-            await tx
-                .delete(aiEnhancements)
-                .where(
-                    and(
-                        eq(aiEnhancements.recordingId, id),
-                        eq(aiEnhancements.userId, userId),
-                    ),
-                );
-
-            await tx
-                .update(recordings)
-                .set({ deletedAt: new Date(), updatedAt: new Date() })
-                .where(
-                    and(
-                        eq(recordings.id, id),
-                        eq(recordings.userId, userId),
-                        isNull(recordings.deletedAt),
-                    ),
-                );
-        });
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Error deleting recording:", error);
-        return NextResponse.json(
-            { error: "Failed to delete recording" },
-            { status: 500 },
-        );
-    }
-}
+    return NextResponse.json({ success: true });
+});
