@@ -19,6 +19,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { findPreset, getVisiblePresets } from "@/lib/ai/provider-presets";
 
 interface AddProviderDialogProps {
     open: boolean;
@@ -32,62 +33,13 @@ interface AddProviderDialogProps {
     isHosted?: boolean;
 }
 
-const LOCAL_PRESET_NAMES = new Set(["LM Studio", "Ollama"]);
-
-const providerPresets = [
-    {
-        name: "OpenAI",
-        baseUrl: "",
-        placeholder: "sk-...",
-        defaultModel: "whisper-1",
-    },
-    {
-        name: "Groq",
-        baseUrl: "https://api.groq.com/openai/v1",
-        placeholder: "gsk_...",
-        defaultModel: "whisper-large-v3-turbo",
-    },
-    {
-        name: "Together AI",
-        baseUrl: "https://api.together.xyz/v1",
-        placeholder: "...",
-        defaultModel: "whisper-large-v3",
-    },
-    {
-        name: "OpenRouter",
-        baseUrl: "https://openrouter.ai/api/v1",
-        placeholder: "sk-or-...",
-        defaultModel: "whisper-1",
-    },
-    {
-        name: "LM Studio",
-        baseUrl: "http://localhost:1234/v1",
-        placeholder: "lm-studio",
-        defaultModel: "",
-    },
-    {
-        name: "Ollama",
-        baseUrl: "http://localhost:11434/v1",
-        placeholder: "ollama",
-        defaultModel: "",
-    },
-    {
-        name: "Custom",
-        baseUrl: "",
-        placeholder: "Your API key",
-        defaultModel: "",
-    },
-];
-
 export function AddProviderDialog({
     open,
     onOpenChange,
     onSuccess,
     isHosted = false,
 }: AddProviderDialogProps) {
-    const visiblePresets = isHosted
-        ? providerPresets.filter((p) => !LOCAL_PRESET_NAMES.has(p.name))
-        : providerPresets;
+    const visiblePresets = getVisiblePresets({ isHosted });
     const [provider, setProvider] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -98,7 +50,7 @@ export function AddProviderDialog({
 
     const handleProviderChange = (value: string) => {
         setProvider(value);
-        const preset = providerPresets.find((p) => p.name === value);
+        const preset = findPreset(value);
         if (preset) {
             setBaseUrl(preset.baseUrl);
             setDefaultModel(preset.defaultModel);
@@ -154,7 +106,7 @@ export function AddProviderDialog({
         }
     };
 
-    const selectedPreset = providerPresets.find((p) => p.name === provider);
+    const selectedPreset = findPreset(provider);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
