@@ -42,7 +42,7 @@ export function UserActions({
             });
             if (res.status === 404) {
                 toast.error("Admin session expired. Reauth and try again.");
-                router.replace("/admin/reauth?next=/admin/users/" + userId);
+                router.replace(`/admin/reauth?next=/admin/users/${userId}`);
                 return;
             }
             if (!res.ok) {

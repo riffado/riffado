@@ -5,11 +5,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 /**
- * Triggers the CSV export endpoint after collecting a reason. We can't use a
- * plain anchor with download attribute because the endpoint requires a
- * `reason` query param and (more importantly) is treated as a mutation: a
- * stale elevated cookie should bounce to /admin/reauth, not silently 404
- * the download.
+ * Triggers the CSV export endpoint after collecting a reason. POSTs the
+ * reason in a JSON body so it never lands in URL query strings (access
+ * logs, browser history, referer). The endpoint is treated as a mutation,
+ * so a stale elevated cookie bounces to /admin/reauth.
  */
 export function ExportCsvButton() {
     const [busy, setBusy] = useState(false);
@@ -24,10 +23,20 @@ export function ExportCsvButton() {
         }
         setBusy(true);
         try {
-            const url = `/api/admin/pricing-snapshot/export.csv?reason=${encodeURIComponent(
-                reason,
-            )}`;
-            const res = await fetch(url);
+            let res: Response;
+            try {
+                res = await fetch("/api/admin/pricing-snapshot/export.csv", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ reason }),
+                });
+            } catch (networkErr) {
+                console.error("[admin] CSV export network error", networkErr);
+                toast.error(
+                    "Network error. Check your connection and try again.",
+                );
+                return;
+            }
             if (res.status === 404) {
                 toast.error("Admin session expired. Reauth and try again.");
                 window.location.href =

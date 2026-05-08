@@ -3,35 +3,37 @@ import { NextResponse } from "next/server";
 import { unsuspendUser } from "@/lib/admin/actions";
 import { requireAdminMutation } from "@/lib/admin/guard";
 import { clientIpFromHeaders } from "@/lib/admin/ip-allowlist";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
-export async function POST(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
     const admin = await requireAdminMutation({
         route: "/api/admin/actions/unsuspend",
         method: "POST",
     });
-    const body = await request
-        .json()
-        .catch(() => ({}) as Record<string, unknown>);
+    const parsed = await request.json().catch(() => null);
+    const body =
+        parsed && typeof parsed === "object"
+            ? (parsed as Record<string, unknown>)
+            : {};
     const userId = typeof body.userId === "string" ? body.userId : null;
     const reason = typeof body.reason === "string" ? body.reason : "";
     if (!userId) {
-        return NextResponse.json({ error: "userId required" }, { status: 400 });
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "userId required",
+            400,
+            { field: "userId" },
+        );
     }
 
-    try {
-        const result = await unsuspendUser(
-            {
-                adminUserId: admin.user.id,
-                ip: clientIpFromHeaders(await nextHeaders()),
-                reason,
-            },
-            userId,
-        );
-        return NextResponse.json(result);
-    } catch (err) {
-        return NextResponse.json(
-            { error: err instanceof Error ? err.message : "failed" },
-            { status: 400 },
-        );
-    }
-}
+    const result = await unsuspendUser(
+        {
+            adminUserId: admin.user.id,
+            adminUserEmail: admin.user.email,
+            ip: clientIpFromHeaders(await nextHeaders()),
+            reason,
+        },
+        userId,
+    );
+    return NextResponse.json(result);
+});

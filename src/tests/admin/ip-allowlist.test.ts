@@ -46,6 +46,27 @@ describe("ipMatchesAllowlist", () => {
     it("rejects malformed IP", () => {
         expect(ipMatchesAllowlist("not-an-ip", ["10.0.0.0/24"])).toBe(false);
     });
+
+    // Regression guards for cubic review feedback (PR #105) -----------------
+    it("rejects entries with empty mask (e.g. '10.0.0.0/') instead of treating as /0", () => {
+        // Previously parsed bits=0 and matched everything in IPv4 family.
+        expect(ipMatchesAllowlist("203.0.113.5", ["10.0.0.0/"])).toBe(false);
+    });
+
+    it("rejects entries with non-digit mask (e.g. '10.0.0.0/abc')", () => {
+        expect(ipMatchesAllowlist("10.0.0.5", ["10.0.0.0/abc"])).toBe(false);
+    });
+
+    it("rejects entries with multiple slashes", () => {
+        expect(ipMatchesAllowlist("10.0.0.5", ["10.0.0.0/24/extra"])).toBe(
+            false,
+        );
+    });
+
+    it("rejects IPv6 addresses with multiple '::' segments", () => {
+        // RFC 4291 forbids more than one `::` per address.
+        expect(ipMatchesAllowlist("1::2::3", ["::/0"])).toBe(false);
+    });
 });
 
 describe("clientIpFromHeaders", () => {

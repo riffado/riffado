@@ -1,4 +1,15 @@
-import { and, count, desc, eq, gte, isNull, lt, sql, sum } from "drizzle-orm";
+import {
+    and,
+    count,
+    countDistinct,
+    desc,
+    eq,
+    gte,
+    isNull,
+    lt,
+    sql,
+    sum,
+} from "drizzle-orm";
 import { db } from "@/db";
 import {
     adminActionLog,
@@ -33,12 +44,16 @@ export async function fleetOverview() {
     const d30 = new Date(now - 30 * DAY_MS);
 
     const [userTotal] = await db.select({ n: count() }).from(users);
+    // Some legacy deployments allow more than one plaud_connections row per
+    // user; counting rows would overcount the active-user metric. Use
+    // countDistinct(userId) so the value tracks distinct people, not
+    // connection rows.
     const [activeIn7] = await db
-        .select({ n: count() })
+        .select({ n: countDistinct(plaudConnections.userId) })
         .from(plaudConnections)
         .where(gte(plaudConnections.lastSync, d7));
     const [activeIn30] = await db
-        .select({ n: count() })
+        .select({ n: countDistinct(plaudConnections.userId) })
         .from(plaudConnections)
         .where(gte(plaudConnections.lastSync, d30));
 
@@ -303,6 +318,9 @@ export async function getUserDetail(
         .limit(1);
     if (!u) return null;
 
+    // Legacy deployments may have multiple plaud_connections per user.
+    // Pick the most-recently-updated one deterministically so the detail
+    // view is reproducible across reloads.
     const [pc] = await db
         .select({
             id: plaudConnections.id,
@@ -312,6 +330,7 @@ export async function getUserDetail(
         })
         .from(plaudConnections)
         .where(eq(plaudConnections.userId, userId))
+        .orderBy(desc(plaudConnections.updatedAt))
         .limit(1);
 
     const [recAgg] = await db

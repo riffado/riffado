@@ -46,7 +46,7 @@ export function RecordingDeleteButton({
             if (res.status === 404) {
                 toast.error("Admin session expired. Reauth and try again.");
                 router.replace(
-                    "/admin/reauth?next=" + window.location.pathname,
+                    `/admin/reauth?next=${window.location.pathname}`,
                 );
                 return;
             }

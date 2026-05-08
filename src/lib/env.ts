@@ -109,10 +109,14 @@ export const envSchema = z.object({
     // after password reprompt before the dashboard forces another reauth.
     // Default 30. Mutations require the cookie to be issued within the last
     // ADMIN_MUTATION_TTL_MINUTES (default 10) -- a tighter window than reads.
+    // TTLs validated as strict positive integers. The leading regex
+    // rejects malformed values (`parseInt("30abc")` would silently coerce
+    // to 30); the .pipe(z.number()...) clamps to a sane range.
     ADMIN_REAUTH_TTL_MINUTES: z
         .string()
+        .regex(/^\d+$/, "ADMIN_REAUTH_TTL_MINUTES must be a positive integer")
         .optional()
-        .transform((val) => (val ? parseInt(val, 10) : 30))
+        .transform((val) => (val ? Number(val) : 30))
         .pipe(
             z
                 .number()
@@ -122,8 +126,9 @@ export const envSchema = z.object({
         ),
     ADMIN_MUTATION_TTL_MINUTES: z
         .string()
+        .regex(/^\d+$/, "ADMIN_MUTATION_TTL_MINUTES must be a positive integer")
         .optional()
-        .transform((val) => (val ? parseInt(val, 10) : 10))
+        .transform((val) => (val ? Number(val) : 10))
         .pipe(z.number().int().positive().max(60)),
 });
 

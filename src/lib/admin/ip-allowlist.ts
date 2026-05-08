@@ -37,7 +37,11 @@ function ipv6ToBigInt(ip: string): bigint | null {
         const lo = v4 & 0xffff;
         s = `${v4Match[1]}${hi.toString(16)}:${lo.toString(16)}`;
     }
+    // RFC 4291: a valid IPv6 address contains AT MOST ONE `::`. Reject
+    // anything with two or more (e.g. `1::2::3`) so spurious empty groups
+    // can't slip through after the split/filter below.
     const doubleColon = s.indexOf("::");
+    if (doubleColon !== s.lastIndexOf("::")) return null;
     let groups: string[];
     if (doubleColon !== -1) {
         const left = s.slice(0, doubleColon).split(":").filter(Boolean);
@@ -71,9 +75,25 @@ interface ParsedCidr {
 }
 
 function parseCidr(entry: string): ParsedCidr | null {
-    const [ipPart, bitsPart] = entry.includes("/")
-        ? entry.split("/")
-        : [entry, undefined];
+    // Reject malformed entries up front:
+    //   - more than one `/`         (e.g. "10.0.0.0/24/extra")
+    //   - empty bits portion        (e.g. "10.0.0.0/")
+    //   - non-digit bits portion    (e.g. "10.0.0.0/abc")
+    // A bare "10.0.0.0/" previously parsed as bits=0 (Number("") === 0),
+    // which silently allowed all IPs in that family.
+    const slashCount = (entry.match(/\//g) ?? []).length;
+    if (slashCount > 1) return null;
+    let ipPart: string;
+    let bitsPart: string | undefined;
+    if (slashCount === 1) {
+        const [ip, b] = entry.split("/");
+        if (b === "" || !/^\d+$/.test(b)) return null;
+        ipPart = ip;
+        bitsPart = b;
+    } else {
+        ipPart = entry;
+        bitsPart = undefined;
+    }
     if (isV4(ipPart)) {
         const ipInt = ipv4ToInt(ipPart);
         if (ipInt === null) return null;

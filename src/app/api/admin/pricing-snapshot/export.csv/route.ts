@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { logCsvExport } from "@/lib/admin/actions";
 import { requireAdminMutation } from "@/lib/admin/guard";
 import { clientIpFromHeaders } from "@/lib/admin/ip-allowlist";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 /**
  * Per-user cost snapshot CSV. Includes email + storage + recording counts +
@@ -12,21 +13,28 @@ import { clientIpFromHeaders } from "@/lib/admin/ip-allowlist";
  * 10-minute elevated-cookie window) because it lifts bulk PII off the system
  * in a single download.
  *
- * Reason text is required (sent as `reason` query param) and gets logged to
- * admin_action_log via logCsvExport so we have an audit trail.
+ * POST + JSON body (`{ reason }`) so the audit reason never lands in URL
+ * query string -- access logs / browser history / referer headers would
+ * otherwise capture it. Logged to admin_action_log via logCsvExport.
  */
-export async function GET(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
     const admin = await requireAdminMutation({
         route: "/api/admin/pricing-snapshot/export.csv",
-        method: "GET",
+        method: "POST",
     });
 
-    const url = new URL(request.url);
-    const reason = url.searchParams.get("reason") ?? "";
+    const parsed = await request.json().catch(() => null);
+    const body =
+        parsed && typeof parsed === "object"
+            ? (parsed as Record<string, unknown>)
+            : {};
+    const reason = typeof body.reason === "string" ? body.reason : "";
     if (reason.trim().length < 4) {
-        return NextResponse.json(
-            { error: "reason query param required (min 4 chars)" },
-            { status: 400 },
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "reason required (min 4 chars)",
+            400,
+            { field: "reason" },
         );
     }
 
@@ -72,6 +80,7 @@ export async function GET(request: Request) {
     await logCsvExport(
         {
             adminUserId: admin.user.id,
+            adminUserEmail: admin.user.email,
             ip: clientIpFromHeaders(await nextHeaders()),
             reason,
         },
@@ -127,4 +136,4 @@ export async function GET(request: Request) {
             "Cache-Control": "no-store, private",
         },
     });
-}
+});

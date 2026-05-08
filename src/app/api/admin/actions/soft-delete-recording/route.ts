@@ -3,39 +3,38 @@ import { NextResponse } from "next/server";
 import { softDeleteRecording } from "@/lib/admin/actions";
 import { requireAdminMutation } from "@/lib/admin/guard";
 import { clientIpFromHeaders } from "@/lib/admin/ip-allowlist";
+import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
-export async function POST(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
     const admin = await requireAdminMutation({
         route: "/api/admin/actions/soft-delete-recording",
         method: "POST",
     });
-    const body = await request
-        .json()
-        .catch(() => ({}) as Record<string, unknown>);
+    const parsed = await request.json().catch(() => null);
+    const body =
+        parsed && typeof parsed === "object"
+            ? (parsed as Record<string, unknown>)
+            : {};
     const recordingId =
         typeof body.recordingId === "string" ? body.recordingId : null;
     const reason = typeof body.reason === "string" ? body.reason : "";
     if (!recordingId) {
-        return NextResponse.json(
-            { error: "recordingId required" },
-            { status: 400 },
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "recordingId required",
+            400,
+            { field: "recordingId" },
         );
     }
 
-    try {
-        const result = await softDeleteRecording(
-            {
-                adminUserId: admin.user.id,
-                ip: clientIpFromHeaders(await nextHeaders()),
-                reason,
-            },
-            recordingId,
-        );
-        return NextResponse.json(result);
-    } catch (err) {
-        return NextResponse.json(
-            { error: err instanceof Error ? err.message : "failed" },
-            { status: 400 },
-        );
-    }
-}
+    const result = await softDeleteRecording(
+        {
+            adminUserId: admin.user.id,
+            adminUserEmail: admin.user.email,
+            ip: clientIpFromHeaders(await nextHeaders()),
+            reason,
+        },
+        recordingId,
+    );
+    return NextResponse.json(result);
+});

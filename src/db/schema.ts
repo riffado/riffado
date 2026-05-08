@@ -42,9 +42,15 @@ export const adminAuditLog = pgTable(
         id: text("id")
             .primaryKey()
             .$defaultFn(() => nanoid()),
-        adminUserId: text("admin_user_id")
-            .notNull()
-            .references(() => users.id, { onDelete: "cascade" }),
+        // Audit retention: keep the row even if the admin's user record is
+        // later deleted. `adminUserEmail` snapshots the email at log time so
+        // the trail remains attributable post-deletion. `adminUserId` becomes
+        // null on user delete (set null), so the FK relationship survives a
+        // user purge without erasing history.
+        adminUserId: text("admin_user_id").references(() => users.id, {
+            onDelete: "set null",
+        }),
+        adminUserEmail: text("admin_user_email").notNull(),
         route: text("route").notNull(),
         method: varchar("method", { length: 10 }).notNull(),
         ip: text("ip"),
@@ -71,9 +77,14 @@ export const adminActionLog = pgTable(
         id: text("id")
             .primaryKey()
             .$defaultFn(() => nanoid()),
-        adminUserId: text("admin_user_id")
-            .notNull()
-            .references(() => users.id, { onDelete: "cascade" }),
+        // Same retention model as admin_audit_log: actor user-id becomes
+        // null on delete; email snapshot keeps the row attributable.
+        // targetUserId already has no FK to allow logging actions on
+        // already-deleted target users.
+        adminUserId: text("admin_user_id").references(() => users.id, {
+            onDelete: "set null",
+        }),
+        adminUserEmail: text("admin_user_email").notNull(),
         action: varchar("action", { length: 64 }).notNull(),
         targetUserId: text("target_user_id"),
         targetResourceId: text("target_resource_id"),

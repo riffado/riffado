@@ -1,7 +1,19 @@
+import { headers as nextHeaders } from "next/headers";
 import { redirect } from "next/navigation";
 import { Toaster } from "@/components/ui/sonner";
 import { requireAdminPage } from "@/lib/admin/guard";
 import { AdminNav } from "./_components/admin-nav";
+
+function sanitizeAdminPath(p: string | null | undefined): string {
+    // Only `/admin` exact or `/admin/<sub>` prefixes are valid; anything
+    // else (or a missing header) collapses to `/admin`. This keeps the
+    // audit label honest and prevents a forged `?next=` from bouncing
+    // through to non-admin paths after reauth.
+    if (!p) return "/admin";
+    if (p === "/admin") return p;
+    if (p.startsWith("/admin/") && !p.includes("..")) return p;
+    return "/admin";
+}
 
 /**
  * Admin layout. Runs the gate on every render (server component, no caching).
@@ -25,9 +37,16 @@ export default async function AdminLayout({
 }: {
     children: React.ReactNode;
 }) {
+    // Middleware sets `x-pathname` for every /admin/* request so the
+    // layout audit row records the actual page (not a collapsed
+    // "/admin") and the reauth bounce returns the user to the page they
+    // asked for, not the dashboard root.
+    const hdrs = await nextHeaders();
+    const pathname = sanitizeAdminPath(hdrs.get("x-pathname"));
     const result = await requireAdminPage({
-        route: "/admin",
+        route: pathname,
         method: "GET",
+        returnTo: pathname,
     });
 
     if (result.mode === "reauth") {

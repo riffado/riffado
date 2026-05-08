@@ -132,11 +132,15 @@ async function evaluateAdminGate(
     // Mutation handlers additionally require the tighter window.
     if (opts.mutation && !isWithinMutationTtl(payload)) return null;
 
-    // Audit the access. We deliberately do not block on the insert -- audit
-    // failures must never lock an admin out, so we log + continue.
+    // Audit the access. The insert IS awaited so the row is durable
+    // before the request proceeds (an unaudited admin read is a worse
+    // outcome than ~1ms of added latency). The catch ensures a transient
+    // DB hiccup on the audit table never locks an admin out -- we log
+    // and continue, accepting a missed row in that rare case.
     try {
         await db.insert(adminAuditLog).values({
             adminUserId: session.user.id,
+            adminUserEmail: email,
             route: opts.route,
             method: opts.method,
             ip: clientIpFromHeaders(hdrs),

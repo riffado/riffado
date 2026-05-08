@@ -16,10 +16,35 @@ import { ReauthForm } from "./reauth-form";
  * The actual password verification + cookie issuance happens in
  * /api/admin/reauth -- this page just renders the form.
  */
+/**
+ * Validate `?next=` and collapse to `/admin` on anything suspicious.
+ * Defends against:
+ *   - repeated params: Next.js exposes them as `string | string[]` --
+ *     a non-string trip-wires here.
+ *   - protocol-relative / absolute URLs: must start with `/`.
+ *   - traversal segments (`/admin/../..`): URL.pathname normalizes them
+ *     so we re-validate the normalized form.
+ *   - paths outside the admin tree.
+ */
+function sanitizeNext(raw: unknown): string {
+    if (typeof raw !== "string") return "/admin";
+    if (!raw.startsWith("/") || raw.startsWith("//")) return "/admin";
+    if (raw.includes("\\")) return "/admin";
+    let normalized: string;
+    try {
+        normalized = new URL(raw, "https://placeholder.invalid").pathname;
+    } catch {
+        return "/admin";
+    }
+    if (normalized === "/admin") return normalized;
+    if (normalized.startsWith("/admin/")) return normalized;
+    return "/admin";
+}
+
 export default async function AdminReauthPage({
     searchParams,
 }: {
-    searchParams: Promise<{ next?: string }>;
+    searchParams: Promise<{ next?: string | string[] }>;
 }) {
     if (!env.IS_HOSTED) notFound();
     if (env.ADMIN_EMAILS.length === 0) notFound();
@@ -35,15 +60,10 @@ export default async function AdminReauthPage({
     if (!isAdminEmail(session.user.email)) notFound();
 
     const sp = await searchParams;
-    // Restrict next-redirect to /admin or /admin/* so the cookie isn't used
-    // to bounce through to arbitrary URLs. `.startsWith("/admin")` alone
-    // would permit "/admin../foo" -- require the exact root or a trailing
-    // slash.
-    const rawNext = sp.next ?? "/admin";
-    const next =
-        rawNext === "/admin" || rawNext.startsWith("/admin/")
-            ? rawNext
-            : "/admin";
+    // Repeated params surface as string[]; pick the first entry, then run
+    // through sanitizeNext for the actual safety check.
+    const rawNext = Array.isArray(sp.next) ? sp.next[0] : sp.next;
+    const next = sanitizeNext(rawNext);
 
     return (
         <div className="min-h-[60vh] flex items-center justify-center p-6">
