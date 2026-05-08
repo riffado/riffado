@@ -52,3 +52,6 @@ next-env.d.ts
 /storage
 /audio
 plans/
+
+# bun (we use pnpm; bun is only a runtime for scripts/tests)
+bun.lock
