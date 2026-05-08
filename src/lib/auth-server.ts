@@ -83,11 +83,7 @@ export async function requireApiSession(
 ): Promise<NonNullable<Awaited<ReturnType<typeof getSession>>>> {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session?.user) {
-        throw new AppError(
-            ErrorCode.AUTH_SESSION_MISSING,
-            "Unauthorized",
-            401,
-        );
+        throw new AppError(ErrorCode.AUTH_SESSION_MISSING, "Unauthorized", 401);
     }
 
     const [u] = await db
