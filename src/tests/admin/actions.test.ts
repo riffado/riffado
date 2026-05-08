@@ -44,6 +44,7 @@ function makeChainable(result: unknown[]) {
     chain.where = vi.fn().mockReturnValue(chain);
     chain.limit = vi.fn().mockReturnValue(chain);
     chain.orderBy = vi.fn().mockReturnValue(chain);
+    chain.for = vi.fn().mockReturnValue(chain);
     chain.set = vi.fn().mockReturnValue(chain);
     chain.values = vi.fn().mockResolvedValue(undefined);
     // Drizzle queries are explicitly thenable so awaits resolve

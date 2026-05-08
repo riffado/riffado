@@ -84,6 +84,10 @@ export async function suspendUser(
 ): Promise<{ ok: true; suspendedAt: Date; alreadySuspended: boolean }> {
     assertReason(ctx.reason);
     return db.transaction(async (tx) => {
+        // FOR UPDATE serializes concurrent suspend/unsuspend transactions
+        // on the same user. Without it, two parallel suspend requests can
+        // both read suspendedAt=null, both update, and both write a
+        // `suspend_user` audit row instead of one + one `_noop`.
         const [u] = await tx
             .select({
                 id: users.id,
@@ -93,6 +97,7 @@ export async function suspendUser(
             })
             .from(users)
             .where(eq(users.id, targetUserId))
+            .for("update")
             .limit(1);
         if (!u) {
             throw new AppError(ErrorCode.NOT_FOUND, "User not found", 404);
@@ -143,6 +148,9 @@ export async function unsuspendUser(
 ): Promise<{ ok: true }> {
     assertReason(ctx.reason);
     return db.transaction(async (tx) => {
+        // Same row lock as suspendUser: serializes concurrent toggles so
+        // the before-state captured in the audit row reflects what we
+        // actually replaced.
         const [u] = await tx
             .select({
                 suspendedAt: users.suspendedAt,
@@ -150,6 +158,7 @@ export async function unsuspendUser(
             })
             .from(users)
             .where(eq(users.id, targetUserId))
+            .for("update")
             .limit(1);
         if (!u) {
             throw new AppError(ErrorCode.NOT_FOUND, "User not found", 404);
@@ -232,6 +241,11 @@ export async function softDeleteRecording(
 ): Promise<{ ok: true }> {
     assertReason(ctx.reason);
     return db.transaction(async (tx) => {
+        // Row lock so two concurrent admin soft-deletes (or an admin
+        // soft-delete racing the user-initiated DELETE handler, which
+        // also takes FOR UPDATE on this row -- see
+        // src/app/api/recordings/[id]/route.ts) cannot both write a
+        // tombstone audit row.
         const [r] = await tx
             .select({
                 id: recordings.id,
@@ -246,6 +260,7 @@ export async function softDeleteRecording(
                     isNull(recordings.deletedAt),
                 ),
             )
+            .for("update")
             .limit(1);
         if (!r) {
             throw new AppError(
