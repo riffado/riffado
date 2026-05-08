@@ -1,41 +1,15 @@
 "use client";
 
-import {
-    ChevronDown,
-    ChevronUp,
-    FileText,
-    Languages,
-    ListChecks,
-    Loader2,
-    RefreshCw,
-    Sparkles,
-    Trash2,
-} from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { FileText, Languages, RefreshCw, Sparkles } from "lucide-react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { SUMMARY_PRESETS } from "@/lib/ai/summary-presets";
 import type { Recording } from "@/types/recording";
+import { SummaryTabs } from "./summary-tabs";
 
 interface Transcription {
     text?: string;
     language?: string;
-}
-
-interface SummaryData {
-    summary: string | null;
-    keyPoints: string[] | null;
-    actionItems: string[] | null;
-    provider?: string;
-    model?: string;
 }
 
 interface TranscriptionPanelProps {
@@ -51,96 +25,16 @@ export function TranscriptionPanel({
     isTranscribing,
     onTranscribe,
 }: TranscriptionPanelProps) {
-    const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
-    const [isSummarizing, setIsSummarizing] = useState(false);
-    const [summaryExpanded, setSummaryExpanded] = useState(true);
-    const [summaryPreset, setSummaryPreset] = useState("general");
-    // Key to force re-fetch summary (e.g. after transcription text changes)
     const [summaryFetchKey, setSummaryFetchKey] = useState(0);
     const transcriptionTextRef = React.useRef(transcription?.text);
 
-    // Detect when transcription text actually changes → invalidate summary
     if (transcription?.text !== transcriptionTextRef.current) {
         transcriptionTextRef.current = transcription?.text;
-        // will trigger the useEffect below on next render
         setSummaryFetchKey((k) => k + 1);
-        setSummaryData(null);
     }
-
-    // Fetch existing summary when recording changes
-    // biome-ignore lint/correctness/useExhaustiveDependencies: summaryFetchKey is an intentional re-fetch signal
-    useEffect(() => {
-        setSummaryData(null);
-        if (!recording?.id) return;
-
-        const controller = new AbortController();
-        fetch(`/api/recordings/${recording.id}/summary`, {
-            signal: controller.signal,
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.summary) {
-                    setSummaryData(data);
-                }
-            })
-            .catch(() => {});
-
-        return () => controller.abort();
-    }, [recording?.id, summaryFetchKey]);
-
-    const handleSummarize = useCallback(async () => {
-        setIsSummarizing(true);
-        try {
-            const response = await fetch(
-                `/api/recordings/${recording.id}/summary`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ preset: summaryPreset }),
-                },
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                setSummaryData(data);
-                toast.success("Summary generated");
-            } else {
-                const error = await response.json();
-                toast.error(error.error || "Summary generation failed");
-            }
-        } catch {
-            toast.error("Failed to generate summary");
-        } finally {
-            setIsSummarizing(false);
-        }
-    }, [recording.id, summaryPreset]);
-
-    const handleDeleteSummary = useCallback(async () => {
-        // Optimistic delete
-        const previous = summaryData;
-        setSummaryData(null);
-
-        try {
-            const response = await fetch(
-                `/api/recordings/${recording.id}/summary`,
-                { method: "DELETE" },
-            );
-
-            if (response.ok) {
-                toast.success("Summary deleted");
-            } else {
-                setSummaryData(previous);
-                toast.error("Failed to delete summary");
-            }
-        } catch {
-            setSummaryData(previous);
-            toast.error("Failed to delete summary");
-        }
-    }, [recording.id, summaryData]);
 
     return (
         <div className="space-y-4">
-            {/* Transcription Card */}
             <Card>
                 <CardHeader>
                     <div className="flex items-center justify-between">
@@ -224,198 +118,11 @@ export function TranscriptionPanel({
                 </CardContent>
             </Card>
 
-            {/* Summary Card — only show when transcription exists */}
             {transcription?.text && (
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2">
-                                <ListChecks className="w-5 h-5" />
-                                Summary
-                            </CardTitle>
-                            <div className="flex items-center gap-2">
-                                {!isSummarizing && (
-                                    <Select
-                                        value={summaryPreset}
-                                        onValueChange={setSummaryPreset}
-                                    >
-                                        <SelectTrigger className="w-[160px] h-8 text-xs">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {Object.values(SUMMARY_PRESETS).map(
-                                                (preset) => (
-                                                    <SelectItem
-                                                        key={preset.id}
-                                                        value={preset.id}
-                                                    >
-                                                        {preset.name}
-                                                    </SelectItem>
-                                                ),
-                                            )}
-                                        </SelectContent>
-                                    </Select>
-                                )}
-                                <Button
-                                    onClick={handleSummarize}
-                                    size="sm"
-                                    variant={
-                                        summaryData ? "outline" : "default"
-                                    }
-                                    disabled={isSummarizing}
-                                >
-                                    {isSummarizing ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                            Generating...
-                                        </>
-                                    ) : summaryData ? (
-                                        <>
-                                            <RefreshCw className="w-4 h-4 mr-2" />
-                                            Re-generate
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="w-4 h-4 mr-2" />
-                                            Summarize
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {isSummarizing ? (
-                            <div className="flex flex-col items-center justify-center py-8">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-                                <p className="text-sm text-muted-foreground">
-                                    Generating summary...
-                                </p>
-                            </div>
-                        ) : summaryData?.summary ? (
-                            <div className="space-y-4">
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        setSummaryExpanded(!summaryExpanded)
-                                    }
-                                    className="flex items-center gap-1 text-sm font-medium hover:text-primary transition-colors"
-                                >
-                                    {summaryExpanded ? (
-                                        <ChevronUp className="w-4 h-4" />
-                                    ) : (
-                                        <ChevronDown className="w-4 h-4" />
-                                    )}
-                                    {summaryExpanded
-                                        ? "Collapse"
-                                        : "Expand summary"}
-                                </button>
-
-                                {summaryExpanded && (
-                                    <div className="space-y-4">
-                                        {/* Summary text */}
-                                        <div className="bg-muted rounded-lg p-4">
-                                            <p className="text-sm leading-relaxed">
-                                                {summaryData.summary}
-                                            </p>
-                                        </div>
-
-                                        {/* Key points */}
-                                        {summaryData.keyPoints &&
-                                            summaryData.keyPoints.length >
-                                                0 && (
-                                                <div>
-                                                    <h4 className="text-sm font-medium mb-2">
-                                                        Key Points
-                                                    </h4>
-                                                    <ul className="space-y-1">
-                                                        {summaryData.keyPoints.map(
-                                                            (point) => {
-                                                                const key = `kp-${point.slice(0, 32)}`;
-                                                                return (
-                                                                    <li
-                                                                        key={
-                                                                            key
-                                                                        }
-                                                                        className="text-sm text-muted-foreground flex items-start gap-2"
-                                                                    >
-                                                                        <span className="text-primary mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                                                                        {point}
-                                                                    </li>
-                                                                );
-                                                            },
-                                                        )}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                        {/* Action items */}
-                                        {summaryData.actionItems &&
-                                            summaryData.actionItems.length >
-                                                0 && (
-                                                <div>
-                                                    <h4 className="text-sm font-medium mb-2">
-                                                        Action Items
-                                                    </h4>
-                                                    <ul className="space-y-1">
-                                                        {summaryData.actionItems.map(
-                                                            (item) => {
-                                                                const key = `ai-${item.slice(0, 32)}`;
-                                                                return (
-                                                                    <li
-                                                                        key={
-                                                                            key
-                                                                        }
-                                                                        className="text-sm text-muted-foreground flex items-start gap-2"
-                                                                    >
-                                                                        <ListChecks className="w-3.5 h-3.5 mt-0.5 text-primary shrink-0" />
-                                                                        {item}
-                                                                    </li>
-                                                                );
-                                                            },
-                                                        )}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                        {/* Meta + Delete */}
-                                        <div className="flex items-center justify-between pt-2 border-t">
-                                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                                {summaryData.provider && (
-                                                    <span className="px-2 py-0.5 rounded bg-muted">
-                                                        {summaryData.provider}
-                                                    </span>
-                                                )}
-                                                {summaryData.model && (
-                                                    <span className="px-2 py-0.5 rounded bg-muted font-mono">
-                                                        {summaryData.model}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <Button
-                                                onClick={handleDeleteSummary}
-                                                size="sm"
-                                                variant="ghost"
-                                                className="text-destructive hover:text-destructive"
-                                            >
-                                                <Trash2 className="w-4 h-4 mr-1" />
-                                                Delete
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <ListChecks className="w-10 h-10 text-muted-foreground mb-3" />
-                                <p className="text-sm text-muted-foreground">
-                                    No summary yet. Click "Summarize" to
-                                    generate one.
-                                </p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                <SummaryTabs
+                    recordingId={recording.id}
+                    fetchKey={summaryFetchKey}
+                />
             )}
         </div>
     );

@@ -225,11 +225,18 @@ export const aiEnhancements = pgTable(
         keyPoints: jsonb("key_points"), // Array of key points
         provider: varchar("provider", { length: 100 }).notNull(), // e.g., 'openai', 'anthropic-via-openrouter'
         model: varchar("model", { length: 100 }).notNull(), // e.g., 'gpt-4o', 'claude-3.5-sonnet'
+        presetId: varchar("preset_id", { length: 100 })
+            .notNull()
+            .default("general"), // Which prompt preset was used
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => ({
-        // Each user can have at most one enhancement per recording
-        userRecordingUnique: unique().on(table.recordingId, table.userId),
+        // Index for looking up all summaries for a recording
+        recordingIdIdx: index("ai_enhancements_recording_id_idx").on(
+            table.recordingId,
+        ),
+        // Index for user-scoped queries
+        userIdIdx: index("ai_enhancements_user_id_idx").on(table.userId),
     }),
 );
 
