@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-09
+
 ### Added
+- Switch and disconnect Plaud account from Settings — new "Plaud Account" section shows the connected email + region, with **Switch account** (clears the connection and reopens the connect dialog) and **Disconnect** actions. Legacy connections without a stored email render as "Connected (email unknown)". Recordings are unaffected by either action ([#63](https://github.com/openplaud/openplaud/issues/63)).
 - Hosted-only admin dashboard at `/admin` with cost-attribution views (per-user storage, server transcription minutes, Plaud sync freshness, signup timeseries, pricing-snapshot CDFs) and a small set of audited operator actions (suspend / unsuspend user, force-disconnect Plaud, soft-delete recording). Gated by `IS_HOSTED=true` + `ADMIN_EMAILS` allowlist + signed elevated-session cookie (password reprompt) + optional `ADMIN_IP_ALLOWLIST`. Self-host instances 404 every admin route. Reads logged to `admin_audit_log`; mutations logged to `admin_action_log` with required reason text. Admins never see transcript text, summary text, audio, or decrypted secrets.
 - `users.suspendedAt` / `users.suspendedReason` columns supporting cooperative account suspension. Suspended users are redirected to `/suspended` on next request and skipped by the sync worker on next claim. Set/cleared exclusively by the admin suspend action; unused on self-host.
 - One-line self-host installer: `curl -fsSL https://openplaud.com/install.sh | sh`. Detects OS, verifies Docker + Compose v2, downloads `docker-compose.yml` and `env.example` from the matching GitHub release, generates `BETTER_AUTH_SECRET` / `ENCRYPTION_KEY` / `POSTGRES_PASSWORD`, starts the stack, and waits on `/api/health`. Version-pinned form available at `https://openplaud.com/vX.Y.Z/install.sh`. Source: [`scripts/install.sh`](scripts/install.sh) ([#95](https://github.com/openplaud/openplaud/issues/95)).
@@ -98,7 +101,8 @@
 - Environment variable validation
 - Path traversal protection
 
-[unreleased]: https://github.com/openplaud/openplaud/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/openplaud/openplaud/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/openplaud/openplaud/releases/tag/v0.4.0
 [0.3.0]: https://github.com/openplaud/openplaud/releases/tag/v0.3.0
 [0.2.0]: https://github.com/openplaud/openplaud/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openplaud/openplaud/releases/tag/v0.1.0

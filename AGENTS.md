@@ -237,7 +237,6 @@ When designing or reviewing any feature, assume hosted is real and check both mo
 OpenPlaud has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
 
 - Plaud refresh-token handling was removed in `bed9cd3` — Plaud issues only long-lived access tokens (~300 day JWT). Do not re-add refresh-token plumbing.
-- "Switch Plaud account" flow referenced on the landing page is not wired up yet.
 
 ### Target UX comparisons
 
