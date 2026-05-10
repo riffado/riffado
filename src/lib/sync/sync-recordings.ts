@@ -193,6 +193,19 @@ async function processRecording(
             });
 
             if (!updated) {
+                // Concurrent DELETE tombstoned the recording while we
+                // were downloading/uploading. The just-uploaded blob
+                // would otherwise be orphaned because we're no longer
+                // writing the recordings row that references it. Best
+                // effort cleanup; storage "already gone" is acceptable.
+                try {
+                    await storage.deleteFile(storageKey);
+                } catch (cleanupError) {
+                    console.error(
+                        `Failed to clean up orphaned storage object ${storageKey} after concurrent delete:`,
+                        cleanupError,
+                    );
+                }
                 return { status: "skipped" };
             }
 
