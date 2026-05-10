@@ -41,9 +41,39 @@ const DAY_MS = 86_400_000;
 export async function fleetOverview() {
     const now = Date.now();
     const d7 = new Date(now - 7 * DAY_MS);
+    const d14 = new Date(now - 14 * DAY_MS);
     const d30 = new Date(now - 30 * DAY_MS);
 
     const [userTotal] = await db.select({ n: count() }).from(users);
+
+    // New signups: current 7d window vs prior 7d window (days 7-14 ago).
+    const [signups7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.createdAt, d7));
+    const [signupsPrior7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(and(gte(users.createdAt, d14), lt(users.createdAt, d7)));
+    const [signups30] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.createdAt, d30));
+
+    // New Plaud connections (the real activation event after signup).
+    const [plaudConn7] = await db
+        .select({ n: count() })
+        .from(plaudConnections)
+        .where(gte(plaudConnections.createdAt, d7));
+    const [plaudConnPrior7] = await db
+        .select({ n: count() })
+        .from(plaudConnections)
+        .where(
+            and(
+                gte(plaudConnections.createdAt, d14),
+                lt(plaudConnections.createdAt, d7),
+            ),
+        );
     // Some legacy deployments allow more than one plaud_connections row per
     // user; counting rows would overcount the active-user metric. Use
     // countDistinct(userId) so the value tracks distinct people, not
@@ -63,6 +93,18 @@ export async function fleetOverview() {
         // drizzle: isNotNull is the inverse of isNull; here we want suspended only
         .where(sql`${users.suspendedAt} is not null`);
 
+    // Suspensions performed in the current 7d window vs prior 7d window.
+    // Abuse-spike signal -- the cumulative "Suspended" count never
+    // meaningfully decreases, so the trend lives in the delta.
+    const [suspensions7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.suspendedAt, d7));
+    const [suspensionsPrior7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(and(gte(users.suspendedAt, d14), lt(users.suspendedAt, d7)));
+
     const [recordingTotal] = await db
         .select({ n: count() })
         .from(recordings)
@@ -72,6 +114,17 @@ export async function fleetOverview() {
         .select({ b: sum(recordings.filesize) })
         .from(recordings)
         .where(isNull(recordings.deletedAt));
+
+    // Storage backend split. Hosted cares about S3 spend; self-host cares
+    // about local disk pressure. One row per distinct storageType.
+    const storageByTypeRows = await db
+        .select({
+            type: recordings.storageType,
+            b: sum(recordings.filesize),
+        })
+        .from(recordings)
+        .where(isNull(recordings.deletedAt))
+        .groupBy(recordings.storageType);
 
     const transcriptionByType = await db
         .select({
@@ -91,11 +144,31 @@ export async function fleetOverview() {
         .where(
             and(isNull(recordings.deletedAt), gte(recordings.createdAt, d7)),
         );
+    const [recordingsPrior7] = await db
+        .select({ n: count() })
+        .from(recordings)
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
+        );
     const [bytesLast7] = await db
         .select({ b: sum(recordings.filesize) })
         .from(recordings)
         .where(
             and(isNull(recordings.deletedAt), gte(recordings.createdAt, d7)),
+        );
+    const [bytesPrior7] = await db
+        .select({ b: sum(recordings.filesize) })
+        .from(recordings)
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
         );
 
     const [transcriptionsLast30] = await db
@@ -108,20 +181,138 @@ export async function fleetOverview() {
             ),
         );
 
+    // Server transcriptions 7d + prior 7d. The 30d figure is too coarse to
+    // spot a spike; 7d WoW is what we actually look at.
+    const [serverTx7] = await db
+        .select({ n: count() })
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d7),
+            ),
+        );
+    const [serverTxPrior7] = await db
+        .select({ n: count() })
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d14),
+                lt(transcriptions.createdAt, d7),
+            ),
+        );
+
+    // Server audio MINUTES transcribed 7d + prior 7d. Whisper bills by
+    // minute, not by row count -- this is the real cost driver. Joined to
+    // recordings to get duration; we do not select any recording PII.
+    const [serverAudioMs7] = await db
+        .select({ ms: sum(recordings.duration) })
+        .from(transcriptions)
+        .innerJoin(recordings, eq(recordings.id, transcriptions.recordingId))
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d7),
+            ),
+        );
+    const [serverAudioMsPrior7] = await db
+        .select({ ms: sum(recordings.duration) })
+        .from(transcriptions)
+        .innerJoin(recordings, eq(recordings.id, transcriptions.recordingId))
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d14),
+                lt(transcriptions.createdAt, d7),
+            ),
+        );
+
+    // AI enhancements 7d + prior 7d.
+    const [enhancements7] = await db
+        .select({ n: count() })
+        .from(aiEnhancements)
+        .where(gte(aiEnhancements.createdAt, d7));
+    const [enhancementsPrior7] = await db
+        .select({ n: count() })
+        .from(aiEnhancements)
+        .where(
+            and(
+                gte(aiEnhancements.createdAt, d14),
+                lt(aiEnhancements.createdAt, d7),
+            ),
+        );
+
+    // Transcription coverage. Anti-join via leftJoin + isNull -- the
+    // canonical Drizzle pattern for "parent rows with no matching child."
+    // A recording may have multiple transcription rows, but rows that have
+    // *no* match yield exactly one (null) join row, so count(recordings.id)
+    // is safe here. Excludes tombstoned recordings to match the rest of
+    // this file's conventions.
+    const [missingTxAll] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(and(isNull(recordings.deletedAt), isNull(transcriptions.id)));
+    const [missingTx7] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                isNull(transcriptions.id),
+                gte(recordings.createdAt, d7),
+            ),
+        );
+    const [missingTxPrior7] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                isNull(transcriptions.id),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
+        );
+
     return {
         userTotal: userTotal?.n ?? 0,
         activeUsers7d: activeIn7?.n ?? 0,
         activeUsers30d: activeIn30?.n ?? 0,
         suspendedUsers: suspended?.n ?? 0,
+        signupsLast7: signups7?.n ?? 0,
+        signupsPrior7: signupsPrior7?.n ?? 0,
+        signupsLast30: signups30?.n ?? 0,
+        plaudConnectionsLast7: plaudConn7?.n ?? 0,
+        plaudConnectionsPrior7: plaudConnPrior7?.n ?? 0,
         recordingTotal: recordingTotal?.n ?? 0,
         storageBytes: Number(storageBytes?.b ?? 0),
         bytesLast7: Number(bytesLast7?.b ?? 0),
+        bytesPrior7: Number(bytesPrior7?.b ?? 0),
         recordingsLast7: recordingsLast7?.n ?? 0,
+        recordingsPrior7: recordingsPrior7?.n ?? 0,
         transcriptionByType: Object.fromEntries(
             transcriptionByType.map((r) => [r.type, r.n]),
         ) as Record<string, number>,
         serverTranscriptionsLast30: transcriptionsLast30?.n ?? 0,
+        serverTranscriptionsLast7: serverTx7?.n ?? 0,
+        serverTranscriptionsPrior7: serverTxPrior7?.n ?? 0,
+        serverAudioMsLast7: Number(serverAudioMs7?.ms ?? 0),
+        serverAudioMsPrior7: Number(serverAudioMsPrior7?.ms ?? 0),
         enhancementTotal: enhancementTotal?.n ?? 0,
+        enhancementsLast7: enhancements7?.n ?? 0,
+        enhancementsPrior7: enhancementsPrior7?.n ?? 0,
+        suspensionsLast7: suspensions7?.n ?? 0,
+        suspensionsPrior7: suspensionsPrior7?.n ?? 0,
+        storageByType: Object.fromEntries(
+            storageByTypeRows.map((r) => [r.type, Number(r.b ?? 0)]),
+        ) as Record<string, number>,
+        recordingsWithoutTranscriptionTotal: missingTxAll?.n ?? 0,
+        recordingsWithoutTranscriptionLast7: missingTx7?.n ?? 0,
+        recordingsWithoutTranscriptionPrior7: missingTxPrior7?.n ?? 0,
     };
 }
 
