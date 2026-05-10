@@ -45,8 +45,8 @@ export async function fleetOverview() {
     // on Date. Postgres accepts ISO strings for timestamp/timestamptz
     // comparisons, so this is wire-compatible.
     const now = Date.now();
-    const d7 = new Date(now - 7 * DAY_MS).toISOString();
-    const d30 = new Date(now - 30 * DAY_MS).toISOString();
+    const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamptz`;
+    const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamptz`;
 
     const [userTotal] = await db.select({ n: count() }).from(users);
     // Some legacy deployments allow more than one plaud_connections row per
