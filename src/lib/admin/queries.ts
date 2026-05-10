@@ -45,8 +45,14 @@ export async function fleetOverview() {
     // on Date. Postgres accepts ISO strings for timestamp/timestamptz
     // comparisons, so this is wire-compatible.
     const now = Date.now();
-    const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamptz`;
-    const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamptz`;
+    // Cast to plain `timestamp` (not `timestamptz`) because every column we
+    // compare against is `timestamp` (TZ-naive) in schema.ts. Mixing the two
+    // forces an implicit session-TZ conversion, which would shift the 7/30-day
+    // cutoffs on any non-UTC Postgres session. ISO strings cast to `timestamp`
+    // discard the `Z` offset and use the UTC local components -- identical to
+    // what drizzle does when binding a Date to a `timestamp` column.
+    const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamp`;
+    const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamp`;
 
     const [userTotal] = await db.select({ n: count() }).from(users);
     // Some legacy deployments allow more than one plaud_connections row per
@@ -143,7 +149,7 @@ export async function signupsByDay(days = 90) {
             n: count(),
         })
         .from(users)
-        .where(gte(users.createdAt, sql`${since}::timestamptz`))
+        .where(gte(users.createdAt, sql`${since}::timestamp`))
         .groupBy(dayExpr)
         .orderBy(dayExpr);
     return rows;
@@ -590,7 +596,7 @@ export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
     const rows = await db.execute<{ n: number }>(sql`
         with deleted as (
             delete from ${adminAuditLog}
-            where ${adminAuditLog.createdAt} < ${cutoff}::timestamptz
+            where ${adminAuditLog.createdAt} < ${cutoff}::timestamp
             returning 1
         )
         select count(*)::int as n from deleted
