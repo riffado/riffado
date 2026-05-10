@@ -5,6 +5,7 @@ import {
     desc,
     eq,
     gte,
+    isNotNull,
     isNull,
     lt,
     sql,
@@ -39,11 +40,51 @@ import {
 const DAY_MS = 86_400_000;
 
 export async function fleetOverview() {
+    // ISO strings, not Date objects: Next.js's `queryWithCache` hasher
+    // walks bound params and calls `Buffer.byteLength` on them, which throws
+    // on Date. Postgres accepts ISO strings for timestamp/timestamptz
+    // comparisons, so this is wire-compatible.
     const now = Date.now();
-    const d7 = new Date(now - 7 * DAY_MS);
-    const d30 = new Date(now - 30 * DAY_MS);
+    // Cast to plain `timestamp` (not `timestamptz`) because every column we
+    // compare against is `timestamp` (TZ-naive) in schema.ts. Mixing the two
+    // forces an implicit session-TZ conversion, which would shift the 7/30-day
+    // cutoffs on any non-UTC Postgres session. ISO strings cast to `timestamp`
+    // discard the `Z` offset and use the UTC local components -- identical to
+    // what drizzle does when binding a Date to a `timestamp` column.
+    const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamp`;
+    const d14 = sql`${new Date(now - 14 * DAY_MS).toISOString()}::timestamp`;
+    const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamp`;
 
     const [userTotal] = await db.select({ n: count() }).from(users);
+
+    // New signups: current 7d window vs prior 7d window (days 7-14 ago).
+    const [signups7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.createdAt, d7));
+    const [signupsPrior7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(and(gte(users.createdAt, d14), lt(users.createdAt, d7)));
+    const [signups30] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.createdAt, d30));
+
+    // New Plaud connections (the real activation event after signup).
+    const [plaudConn7] = await db
+        .select({ n: count() })
+        .from(plaudConnections)
+        .where(gte(plaudConnections.createdAt, d7));
+    const [plaudConnPrior7] = await db
+        .select({ n: count() })
+        .from(plaudConnections)
+        .where(
+            and(
+                gte(plaudConnections.createdAt, d14),
+                lt(plaudConnections.createdAt, d7),
+            ),
+        );
     // Some legacy deployments allow more than one plaud_connections row per
     // user; counting rows would overcount the active-user metric. Use
     // countDistinct(userId) so the value tracks distinct people, not
@@ -60,8 +101,19 @@ export async function fleetOverview() {
     const [suspended] = await db
         .select({ n: count() })
         .from(users)
-        // drizzle: isNotNull is the inverse of isNull; here we want suspended only
-        .where(sql`${users.suspendedAt} is not null`);
+        .where(isNotNull(users.suspendedAt));
+
+    // Suspensions performed in the current 7d window vs prior 7d window.
+    // Abuse-spike signal -- the cumulative "Suspended" count never
+    // meaningfully decreases, so the trend lives in the delta.
+    const [suspensions7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(gte(users.suspendedAt, d7));
+    const [suspensionsPrior7] = await db
+        .select({ n: count() })
+        .from(users)
+        .where(and(gte(users.suspendedAt, d14), lt(users.suspendedAt, d7)));
 
     const [recordingTotal] = await db
         .select({ n: count() })
@@ -72,6 +124,17 @@ export async function fleetOverview() {
         .select({ b: sum(recordings.filesize) })
         .from(recordings)
         .where(isNull(recordings.deletedAt));
+
+    // Storage backend split. Hosted cares about S3 spend; self-host cares
+    // about local disk pressure. One row per distinct storageType.
+    const storageByTypeRows = await db
+        .select({
+            type: recordings.storageType,
+            b: sum(recordings.filesize),
+        })
+        .from(recordings)
+        .where(isNull(recordings.deletedAt))
+        .groupBy(recordings.storageType);
 
     const transcriptionByType = await db
         .select({
@@ -91,11 +154,31 @@ export async function fleetOverview() {
         .where(
             and(isNull(recordings.deletedAt), gte(recordings.createdAt, d7)),
         );
+    const [recordingsPrior7] = await db
+        .select({ n: count() })
+        .from(recordings)
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
+        );
     const [bytesLast7] = await db
         .select({ b: sum(recordings.filesize) })
         .from(recordings)
         .where(
             and(isNull(recordings.deletedAt), gte(recordings.createdAt, d7)),
+        );
+    const [bytesPrior7] = await db
+        .select({ b: sum(recordings.filesize) })
+        .from(recordings)
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
         );
 
     const [transcriptionsLast30] = await db
@@ -108,36 +191,158 @@ export async function fleetOverview() {
             ),
         );
 
+    // Server transcriptions 7d + prior 7d. The 30d figure is too coarse to
+    // spot a spike; 7d WoW is what we actually look at.
+    const [serverTx7] = await db
+        .select({ n: count() })
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d7),
+            ),
+        );
+    const [serverTxPrior7] = await db
+        .select({ n: count() })
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d14),
+                lt(transcriptions.createdAt, d7),
+            ),
+        );
+
+    // Server audio MINUTES transcribed 7d + prior 7d. Whisper bills by
+    // minute, not by row count -- this is the real cost driver. Joined to
+    // recordings to get duration; we do not select any recording PII.
+    const [serverAudioMs7] = await db
+        .select({ ms: sum(recordings.duration) })
+        .from(transcriptions)
+        .innerJoin(recordings, eq(recordings.id, transcriptions.recordingId))
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d7),
+            ),
+        );
+    const [serverAudioMsPrior7] = await db
+        .select({ ms: sum(recordings.duration) })
+        .from(transcriptions)
+        .innerJoin(recordings, eq(recordings.id, transcriptions.recordingId))
+        .where(
+            and(
+                eq(transcriptions.transcriptionType, "server"),
+                gte(transcriptions.createdAt, d14),
+                lt(transcriptions.createdAt, d7),
+            ),
+        );
+
+    // AI enhancements 7d + prior 7d.
+    const [enhancements7] = await db
+        .select({ n: count() })
+        .from(aiEnhancements)
+        .where(gte(aiEnhancements.createdAt, d7));
+    const [enhancementsPrior7] = await db
+        .select({ n: count() })
+        .from(aiEnhancements)
+        .where(
+            and(
+                gte(aiEnhancements.createdAt, d14),
+                lt(aiEnhancements.createdAt, d7),
+            ),
+        );
+
+    // Transcription coverage. Anti-join via leftJoin + isNull -- the
+    // canonical Drizzle pattern for "parent rows with no matching child."
+    // A recording may have multiple transcription rows, but rows that have
+    // *no* match yield exactly one (null) join row, so count(recordings.id)
+    // is safe here. Excludes tombstoned recordings to match the rest of
+    // this file's conventions.
+    const [missingTxAll] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(and(isNull(recordings.deletedAt), isNull(transcriptions.id)));
+    const [missingTx7] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                isNull(transcriptions.id),
+                gte(recordings.createdAt, d7),
+            ),
+        );
+    const [missingTxPrior7] = await db
+        .select({ n: count(recordings.id) })
+        .from(recordings)
+        .leftJoin(transcriptions, eq(transcriptions.recordingId, recordings.id))
+        .where(
+            and(
+                isNull(recordings.deletedAt),
+                isNull(transcriptions.id),
+                gte(recordings.createdAt, d14),
+                lt(recordings.createdAt, d7),
+            ),
+        );
+
     return {
         userTotal: userTotal?.n ?? 0,
         activeUsers7d: activeIn7?.n ?? 0,
         activeUsers30d: activeIn30?.n ?? 0,
         suspendedUsers: suspended?.n ?? 0,
+        signupsLast7: signups7?.n ?? 0,
+        signupsPrior7: signupsPrior7?.n ?? 0,
+        signupsLast30: signups30?.n ?? 0,
+        plaudConnectionsLast7: plaudConn7?.n ?? 0,
+        plaudConnectionsPrior7: plaudConnPrior7?.n ?? 0,
         recordingTotal: recordingTotal?.n ?? 0,
         storageBytes: Number(storageBytes?.b ?? 0),
         bytesLast7: Number(bytesLast7?.b ?? 0),
+        bytesPrior7: Number(bytesPrior7?.b ?? 0),
         recordingsLast7: recordingsLast7?.n ?? 0,
+        recordingsPrior7: recordingsPrior7?.n ?? 0,
         transcriptionByType: Object.fromEntries(
             transcriptionByType.map((r) => [r.type, r.n]),
         ) as Record<string, number>,
         serverTranscriptionsLast30: transcriptionsLast30?.n ?? 0,
+        serverTranscriptionsLast7: serverTx7?.n ?? 0,
+        serverTranscriptionsPrior7: serverTxPrior7?.n ?? 0,
+        serverAudioMsLast7: Number(serverAudioMs7?.ms ?? 0),
+        serverAudioMsPrior7: Number(serverAudioMsPrior7?.ms ?? 0),
         enhancementTotal: enhancementTotal?.n ?? 0,
+        enhancementsLast7: enhancements7?.n ?? 0,
+        enhancementsPrior7: enhancementsPrior7?.n ?? 0,
+        suspensionsLast7: suspensions7?.n ?? 0,
+        suspensionsPrior7: suspensionsPrior7?.n ?? 0,
+        storageByType: Object.fromEntries(
+            storageByTypeRows.map((r) => [r.type, Number(r.b ?? 0)]),
+        ) as Record<string, number>,
+        recordingsWithoutTranscriptionTotal: missingTxAll?.n ?? 0,
+        recordingsWithoutTranscriptionLast7: missingTx7?.n ?? 0,
+        recordingsWithoutTranscriptionPrior7: missingTxPrior7?.n ?? 0,
     };
 }
 
 export type FleetOverview = Awaited<ReturnType<typeof fleetOverview>>;
 
 export async function signupsByDay(days = 90) {
-    const since = new Date(Date.now() - days * DAY_MS);
+    // Date -> ISO string for cache-hasher compatibility (see fleetOverview).
+    // Bucket in UTC so days are stable regardless of the Postgres session TZ;
+    // a server in non-UTC would otherwise shift bucket boundaries.
+    const since = new Date(Date.now() - days * DAY_MS).toISOString();
+    const dayExpr = sql<string>`to_char(${users.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
     const rows = await db
         .select({
-            day: sql<string>`to_char(${users.createdAt}, 'YYYY-MM-DD')`,
+            day: dayExpr,
             n: count(),
         })
         .from(users)
-        .where(gte(users.createdAt, since))
-        .groupBy(sql`to_char(${users.createdAt}, 'YYYY-MM-DD')`)
-        .orderBy(sql`to_char(${users.createdAt}, 'YYYY-MM-DD')`);
+        .where(gte(users.createdAt, sql`${since}::timestamp`))
+        .groupBy(dayExpr)
+        .orderBy(dayExpr);
     return rows;
 }
 
@@ -170,7 +375,7 @@ export async function listUsers(opts: {
         | "server_tx_desc"
         | "last_sync_desc";
 }): Promise<{ rows: UserListRow[]; total: number }> {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const search = (opts.q ?? "").trim().toLowerCase();
 
     // Subqueries for per-user aggregates. We compute everything in a single
@@ -191,8 +396,11 @@ export async function listUsers(opts: {
         }
     })();
 
+    // ilike (case-insensitive LIKE) so this can hit a plain B-tree on email
+    // via a trigram index if one is added later. `lower(email) like lower(?)`
+    // would force an expression index to be useful.
     const whereClause = search
-        ? sql`where lower(u.email) like ${`%${search}%`}`
+        ? sql`where u.email ilike ${`%${search}%`}`
         : sql``;
 
     const result = await db.execute<{
@@ -404,6 +612,10 @@ export async function getUserDetail(
 /**
  * Storage histogram in fixed buckets (MB):
  *   0-100, 100-1000, 1000-5000, 5000+
+ *
+ * Joined from `users` (not from a `recordings` aggregate) so users with no
+ * live recordings are counted in the 0-100MB bucket. Aggregating off
+ * `recordings` would silently drop them and bias the histogram high.
  */
 export async function storageHistogram() {
     const rows = await db.execute<{
@@ -411,17 +623,18 @@ export async function storageHistogram() {
         n: number;
     }>(sql`
         with per_user as (
-            select user_id, coalesce(sum(filesize), 0)::bigint as bytes
-            from recordings
-            where deleted_at is null
-            group by user_id
+            select u.id as user_id,
+                   coalesce(sum(r.filesize) filter (where r.deleted_at is null), 0)::bigint as bytes
+            from users u
+            left join recordings r on r.user_id = u.id
+            group by u.id
         )
         select bucket, count(*)::int as n
         from (
             select case
                 when bytes < 100*1024*1024 then '0-100MB'
-                when bytes < 1024*1024*1024 then '100MB-1GB'
-                when bytes < 5*1024*1024*1024 then '1-5GB'
+                when bytes < 1024::bigint*1024*1024 then '100MB-1GB'
+                when bytes < 5::bigint*1024*1024*1024 then '1-5GB'
                 else '5GB+'
             end as bucket
             from per_user
@@ -469,7 +682,7 @@ export async function transcriptionByProvider() {
 }
 
 export async function topServerTranscriptionUsers(limit = 50) {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const rows = await db.execute<{
         user_id: string;
         email: string;
@@ -493,10 +706,10 @@ export async function topServerTranscriptionUsers(limit = 50) {
  * plaudConnections.lastSync age + plaud-connected users.
  */
 export async function syncHealth() {
-    const now = new Date();
-    const h1 = new Date(now.getTime() - 1 * 3600_000);
-    const d1 = new Date(now.getTime() - 24 * 3600_000);
-    const d7 = new Date(now.getTime() - 7 * DAY_MS);
+    const now = Date.now();
+    const h1 = new Date(now - 1 * 3600_000).toISOString();
+    const d1 = new Date(now - 24 * 3600_000).toISOString();
+    const d7 = new Date(now - 7 * DAY_MS).toISOString();
 
     const buckets = await db.execute<{ bucket: string; n: number }>(sql`
         select bucket, count(*)::int as n from (
@@ -520,19 +733,22 @@ export async function syncHealth() {
  * client-side.
  */
 export async function pricingSnapshot() {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
+    // Left-join from `users` so users with zero live recordings appear as 0
+    // in the CDF instead of being dropped. Aggregating off `recordings`
+    // alone would bias every percentile high.
     const storage = await db.execute<{ bytes: number }>(sql`
-        select coalesce(sum(filesize), 0)::bigint as bytes
-        from recordings
-        where deleted_at is null
-        group by user_id
+        select coalesce(sum(r.filesize) filter (where r.deleted_at is null), 0)::bigint as bytes
+        from users u
+        left join recordings r on r.user_id = u.id
+        group by u.id
         order by bytes asc
     `);
     const recordingCounts = await db.execute<{ n: number }>(sql`
-        select count(*)::int as n
-        from recordings
-        where deleted_at is null
-        group by user_id
+        select (count(r.id) filter (where r.deleted_at is null))::int as n
+        from users u
+        left join recordings r on r.user_id = u.id
+        group by u.id
         order by n asc
     `);
     const serverTx = await db.execute<{ n: number }>(sql`
@@ -562,14 +778,21 @@ export async function pricingSnapshot() {
  * compute a count, defeating the purpose of pruning.
  */
 export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
-    const cutoff = new Date(Date.now() - olderThanDays * DAY_MS);
-    const [{ n }] = await db
-        .select({ n: count() })
-        .from(adminAuditLog)
-        .where(lt(adminAuditLog.createdAt, cutoff));
-    if (n === 0) return 0;
-    await db.delete(adminAuditLog).where(lt(adminAuditLog.createdAt, cutoff));
-    return n;
+    // Single statement, atomic count: avoids the count-then-delete race
+    // where rows inserted between the two would understate the returned
+    // count. The CTE deletes and `select count(*)` reads from its result,
+    // so we get exact affected-row count without `.returning()` allocating
+    // one row per deleted record.
+    const cutoff = new Date(Date.now() - olderThanDays * DAY_MS).toISOString();
+    const rows = await db.execute<{ n: number }>(sql`
+        with deleted as (
+            delete from ${adminAuditLog}
+            where ${adminAuditLog.createdAt} < ${cutoff}::timestamp
+            returning 1
+        )
+        select count(*)::int as n from deleted
+    `);
+    return Number(rows[0]?.n ?? 0);
 }
 
 // Re-export so the mutation log table is reachable via this module's public
