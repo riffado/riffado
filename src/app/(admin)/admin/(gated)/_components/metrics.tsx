@@ -127,6 +127,9 @@ export function formatHours(ms: number): string {
     const hours = ms / 3_600_000;
     if (hours < 1) {
         const minutes = Math.round(ms / 60_000);
+        // Edge case: 59m31s+ rounds to 60min -- roll over to 1.0h instead
+        // of rendering the nonsensical "60m".
+        if (minutes >= 60) return "1.0h";
         return `${minutes}m`;
     }
     if (hours < 100) return `${hours.toFixed(1)}h`;

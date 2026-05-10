@@ -216,20 +216,29 @@ export default async function AdminOverviewPage() {
                             // prior-7d cohort, expressed as percentage points
                             // (×100). Drops here = transcription pipeline
                             // silently failing on fresh recordings.
+                            //
+                            // If either cohort is empty, the comparison is
+                            // undefined (a 0-recording week has no "coverage
+                            // rate"). Hide the delta entirely rather than
+                            // pretending coverage is 0% on that side -- that
+                            // would render misleading swings like "+95pp"
+                            // on a brand-new instance.
+                            if (
+                                stats.recordingsLast7 === 0 ||
+                                stats.recordingsPrior7 === 0
+                            ) {
+                                return undefined;
+                            }
                             const cur =
-                                stats.recordingsLast7 > 0
-                                    ? ((stats.recordingsLast7 -
-                                          stats.recordingsWithoutTranscriptionLast7) /
-                                          stats.recordingsLast7) *
-                                      10000
-                                    : 0;
+                                ((stats.recordingsLast7 -
+                                    stats.recordingsWithoutTranscriptionLast7) /
+                                    stats.recordingsLast7) *
+                                10000;
                             const prior =
-                                stats.recordingsPrior7 > 0
-                                    ? ((stats.recordingsPrior7 -
-                                          stats.recordingsWithoutTranscriptionPrior7) /
-                                          stats.recordingsPrior7) *
-                                      10000
-                                    : 0;
+                                ((stats.recordingsPrior7 -
+                                    stats.recordingsWithoutTranscriptionPrior7) /
+                                    stats.recordingsPrior7) *
+                                10000;
                             return {
                                 current: Math.round(cur),
                                 prior: Math.round(prior),
