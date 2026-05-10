@@ -5,6 +5,7 @@ import {
     desc,
     eq,
     gte,
+    isNotNull,
     isNull,
     lt,
     sql,
@@ -39,9 +40,19 @@ import {
 const DAY_MS = 86_400_000;
 
 export async function fleetOverview() {
+    // ISO strings, not Date objects: Next.js's `queryWithCache` hasher
+    // walks bound params and calls `Buffer.byteLength` on them, which throws
+    // on Date. Postgres accepts ISO strings for timestamp/timestamptz
+    // comparisons, so this is wire-compatible.
     const now = Date.now();
-    const d7 = new Date(now - 7 * DAY_MS);
-    const d30 = new Date(now - 30 * DAY_MS);
+    // Cast to plain `timestamp` (not `timestamptz`) because every column we
+    // compare against is `timestamp` (TZ-naive) in schema.ts. Mixing the two
+    // forces an implicit session-TZ conversion, which would shift the 7/30-day
+    // cutoffs on any non-UTC Postgres session. ISO strings cast to `timestamp`
+    // discard the `Z` offset and use the UTC local components -- identical to
+    // what drizzle does when binding a Date to a `timestamp` column.
+    const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamp`;
+    const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamp`;
 
     const [userTotal] = await db.select({ n: count() }).from(users);
     // Some legacy deployments allow more than one plaud_connections row per
@@ -60,8 +71,7 @@ export async function fleetOverview() {
     const [suspended] = await db
         .select({ n: count() })
         .from(users)
-        // drizzle: isNotNull is the inverse of isNull; here we want suspended only
-        .where(sql`${users.suspendedAt} is not null`);
+        .where(isNotNull(users.suspendedAt));
 
     const [recordingTotal] = await db
         .select({ n: count() })
@@ -128,16 +138,20 @@ export async function fleetOverview() {
 export type FleetOverview = Awaited<ReturnType<typeof fleetOverview>>;
 
 export async function signupsByDay(days = 90) {
-    const since = new Date(Date.now() - days * DAY_MS);
+    // Date -> ISO string for cache-hasher compatibility (see fleetOverview).
+    // Bucket in UTC so days are stable regardless of the Postgres session TZ;
+    // a server in non-UTC would otherwise shift bucket boundaries.
+    const since = new Date(Date.now() - days * DAY_MS).toISOString();
+    const dayExpr = sql<string>`to_char(${users.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
     const rows = await db
         .select({
-            day: sql<string>`to_char(${users.createdAt}, 'YYYY-MM-DD')`,
+            day: dayExpr,
             n: count(),
         })
         .from(users)
-        .where(gte(users.createdAt, since))
-        .groupBy(sql`to_char(${users.createdAt}, 'YYYY-MM-DD')`)
-        .orderBy(sql`to_char(${users.createdAt}, 'YYYY-MM-DD')`);
+        .where(gte(users.createdAt, sql`${since}::timestamp`))
+        .groupBy(dayExpr)
+        .orderBy(dayExpr);
     return rows;
 }
 
@@ -170,7 +184,7 @@ export async function listUsers(opts: {
         | "server_tx_desc"
         | "last_sync_desc";
 }): Promise<{ rows: UserListRow[]; total: number }> {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const search = (opts.q ?? "").trim().toLowerCase();
 
     // Subqueries for per-user aggregates. We compute everything in a single
@@ -191,8 +205,11 @@ export async function listUsers(opts: {
         }
     })();
 
+    // ilike (case-insensitive LIKE) so this can hit a plain B-tree on email
+    // via a trigram index if one is added later. `lower(email) like lower(?)`
+    // would force an expression index to be useful.
     const whereClause = search
-        ? sql`where lower(u.email) like ${`%${search}%`}`
+        ? sql`where u.email ilike ${`%${search}%`}`
         : sql``;
 
     const result = await db.execute<{
@@ -404,6 +421,10 @@ export async function getUserDetail(
 /**
  * Storage histogram in fixed buckets (MB):
  *   0-100, 100-1000, 1000-5000, 5000+
+ *
+ * Joined from `users` (not from a `recordings` aggregate) so users with no
+ * live recordings are counted in the 0-100MB bucket. Aggregating off
+ * `recordings` would silently drop them and bias the histogram high.
  */
 export async function storageHistogram() {
     const rows = await db.execute<{
@@ -411,17 +432,18 @@ export async function storageHistogram() {
         n: number;
     }>(sql`
         with per_user as (
-            select user_id, coalesce(sum(filesize), 0)::bigint as bytes
-            from recordings
-            where deleted_at is null
-            group by user_id
+            select u.id as user_id,
+                   coalesce(sum(r.filesize) filter (where r.deleted_at is null), 0)::bigint as bytes
+            from users u
+            left join recordings r on r.user_id = u.id
+            group by u.id
         )
         select bucket, count(*)::int as n
         from (
             select case
                 when bytes < 100*1024*1024 then '0-100MB'
-                when bytes < 1024*1024*1024 then '100MB-1GB'
-                when bytes < 5*1024*1024*1024 then '1-5GB'
+                when bytes < 1024::bigint*1024*1024 then '100MB-1GB'
+                when bytes < 5::bigint*1024*1024*1024 then '1-5GB'
                 else '5GB+'
             end as bucket
             from per_user
@@ -469,7 +491,7 @@ export async function transcriptionByProvider() {
 }
 
 export async function topServerTranscriptionUsers(limit = 50) {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const rows = await db.execute<{
         user_id: string;
         email: string;
@@ -493,10 +515,10 @@ export async function topServerTranscriptionUsers(limit = 50) {
  * plaudConnections.lastSync age + plaud-connected users.
  */
 export async function syncHealth() {
-    const now = new Date();
-    const h1 = new Date(now.getTime() - 1 * 3600_000);
-    const d1 = new Date(now.getTime() - 24 * 3600_000);
-    const d7 = new Date(now.getTime() - 7 * DAY_MS);
+    const now = Date.now();
+    const h1 = new Date(now - 1 * 3600_000).toISOString();
+    const d1 = new Date(now - 24 * 3600_000).toISOString();
+    const d7 = new Date(now - 7 * DAY_MS).toISOString();
 
     const buckets = await db.execute<{ bucket: string; n: number }>(sql`
         select bucket, count(*)::int as n from (
@@ -520,19 +542,22 @@ export async function syncHealth() {
  * client-side.
  */
 export async function pricingSnapshot() {
-    const since30 = new Date(Date.now() - 30 * DAY_MS);
+    const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
+    // Left-join from `users` so users with zero live recordings appear as 0
+    // in the CDF instead of being dropped. Aggregating off `recordings`
+    // alone would bias every percentile high.
     const storage = await db.execute<{ bytes: number }>(sql`
-        select coalesce(sum(filesize), 0)::bigint as bytes
-        from recordings
-        where deleted_at is null
-        group by user_id
+        select coalesce(sum(r.filesize) filter (where r.deleted_at is null), 0)::bigint as bytes
+        from users u
+        left join recordings r on r.user_id = u.id
+        group by u.id
         order by bytes asc
     `);
     const recordingCounts = await db.execute<{ n: number }>(sql`
-        select count(*)::int as n
-        from recordings
-        where deleted_at is null
-        group by user_id
+        select (count(r.id) filter (where r.deleted_at is null))::int as n
+        from users u
+        left join recordings r on r.user_id = u.id
+        group by u.id
         order by n asc
     `);
     const serverTx = await db.execute<{ n: number }>(sql`
@@ -562,14 +587,21 @@ export async function pricingSnapshot() {
  * compute a count, defeating the purpose of pruning.
  */
 export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
-    const cutoff = new Date(Date.now() - olderThanDays * DAY_MS);
-    const [{ n }] = await db
-        .select({ n: count() })
-        .from(adminAuditLog)
-        .where(lt(adminAuditLog.createdAt, cutoff));
-    if (n === 0) return 0;
-    await db.delete(adminAuditLog).where(lt(adminAuditLog.createdAt, cutoff));
-    return n;
+    // Single statement, atomic count: avoids the count-then-delete race
+    // where rows inserted between the two would understate the returned
+    // count. The CTE deletes and `select count(*)` reads from its result,
+    // so we get exact affected-row count without `.returning()` allocating
+    // one row per deleted record.
+    const cutoff = new Date(Date.now() - olderThanDays * DAY_MS).toISOString();
+    const rows = await db.execute<{ n: number }>(sql`
+        with deleted as (
+            delete from ${adminAuditLog}
+            where ${adminAuditLog.createdAt} < ${cutoff}::timestamp
+            returning 1
+        )
+        select count(*)::int as n from deleted
+    `);
+    return Number(rows[0]?.n ?? 0);
 }
 
 // Re-export so the mutation log table is reachable via this module's public
