@@ -17,7 +17,7 @@ import { Slider } from "@/components/ui/slider";
 import { useWaveform } from "@/hooks/use-waveform";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDateTime } from "@/lib/format-date";
-import { formatDuration } from "@/lib/format-duration";
+import { formatDuration, formatTimeLike } from "@/lib/format-duration";
 import type { Recording } from "@/types/recording";
 
 interface RecordingPlayerProps {
@@ -394,18 +394,21 @@ export function RecordingPlayer({
                         )}
                     </Button>
 
-                    {/* Fixed-width time label, monospace so digit width
-                        is stable as currentTime advances. Sits next to
-                        play so the eye can pair them without scanning. */}
+                    {/* Fixed-width time label, monospace + tabular-nums
+                        so digit width is stable, and `formatTimeLike`
+                        pads currentTime to match duration's segment
+                        structure so the whole `M:SS / H:MM:SS` line
+                        never resizes mid-playback. Sits next to play so
+                        the eye can pair them without scanning. */}
                     <span
                         className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
                         aria-live="off"
                     >
                         <span className="text-foreground">
-                            {formatTime(currentTime)}
+                            {formatTimeLike(currentTime, duration)}
                         </span>
                         <span className="mx-1 opacity-40">/</span>
-                        <span>{formatTime(duration)}</span>
+                        <span>{formatTimeLike(duration, duration)}</span>
                     </span>
 
                     {/* Waveform takes whatever's left, with min-w-0 so
