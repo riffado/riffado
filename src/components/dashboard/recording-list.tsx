@@ -2,16 +2,12 @@
 
 import {
     ArrowDownAZ,
-    Clock,
-    FileText,
-    HardDrive,
     Loader2,
     Mic,
     MoreHorizontal,
     Play,
     Rows3,
     Search,
-    Sparkles,
     Trash2,
     X,
 } from "lucide-react";
@@ -93,6 +89,31 @@ const formatDuration = formatDurationMs;
 
 function formatSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Pull a single-line plaintext snippet out of a transcript for the
+// list row preview. Transcripts come in two shapes:
+//   - Plaintext (legacy / Whisper passthrough): leave as-is.
+//   - JSON-ish with embedded timestamps / speaker labels: strip the
+//     structural noise so the first line of "real" content surfaces.
+// We intentionally keep this dumb — the snippet is a hint, not a
+// document. Anything richer belongs in the workstation transcript pane.
+function transcriptSnippet(
+    text: string | undefined,
+    maxChars = 140,
+): string | null {
+    if (!text) return null;
+    const stripped = text
+        // Drop bracketed metadata like [00:00:00] or [Speaker 1]
+        .replace(/\[[^\]]+\]/g, " ")
+        // Drop bare timecodes (00:00, 00:00:00)
+        .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
+        // Collapse whitespace and newlines
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!stripped) return null;
+    if (stripped.length <= maxChars) return stripped;
+    return `${stripped.slice(0, maxChars - 1).trimEnd()}\u2026`;
 }
 
 export const RecordingList = forwardRef<
@@ -274,6 +295,16 @@ export const RecordingList = forwardRef<
                             ref={searchRef}
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
+                            onKeyDown={(e) => {
+                                // Enter opens the top filtered result.
+                                // Without this, finding-then-opening takes
+                                // a separate mouse click — the most common
+                                // search outcome should be one keystroke.
+                                if (e.key === "Enter" && filtered.length > 0) {
+                                    e.preventDefault();
+                                    onSelect(filtered[0]);
+                                }
+                            }}
                             placeholder="Search recordings, transcripts..."
                             className="h-9 pl-8 pr-8"
                             aria-label="Search recordings"
@@ -412,7 +443,14 @@ export const RecordingList = forwardRef<
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
                         >
                             {group.label && (
-                                <div className="sticky top-0 z-10 border-b border-t bg-background/95 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                                // Quiet group header. Sits flush against the
+                                // following row — no top border, no internal
+                                // padding besides the text's own line-height,
+                                // so the only visible vertical space is the
+                                // previous row's bottom padding. Sticky + bg
+                                // keep it readable when the user scrolls past
+                                // a group boundary.
+                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                     {group.label}
                                 </div>
                             )}
@@ -423,16 +461,25 @@ export const RecordingList = forwardRef<
                                     const inFlight = inFlightActions.get(
                                         recording.id,
                                     );
-                                    const hasTranscript =
-                                        recording.hasTranscript ||
-                                        transcriptions.has(recording.id);
-                                    const hasSummary = !!recording.hasSummary;
+                                    const transcript = transcriptions.get(
+                                        recording.id,
+                                    );
+                                    const snippet = transcriptSnippet(
+                                        transcript?.text,
+                                    );
                                     return (
                                         <div
                                             key={recording.id}
                                             className={cn(
                                                 "group/row relative",
-                                                isSelected && "bg-accent",
+                                                // Selected row: 2px primary
+                                                // left rail + slightly
+                                                // stronger bg. The rail is
+                                                // an inset box-shadow so it
+                                                // doesn't shift content.
+                                                isSelected
+                                                    ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
+                                                    : null,
                                             )}
                                         >
                                             <button
@@ -456,84 +503,86 @@ export const RecordingList = forwardRef<
                                                     rowPadding,
                                                 )}
                                             >
-                                                <div className="flex items-start gap-3">
-                                                    <Play className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <h3 className="truncate text-sm font-medium">
-                                                                {
-                                                                    recording.filename
-                                                                }
-                                                            </h3>
-                                                            <div className="ml-auto flex shrink-0 items-center gap-1">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="truncate text-sm font-medium">
+                                                            {recording.filename}
+                                                        </h3>
+                                                        {/*
+                                                          Status — only
+                                                          non-OK states
+                                                          render. A row
+                                                          with a transcript
+                                                          + summary is
+                                                          silent on purpose.
+                                                        */}
+                                                        {inFlight && (
+                                                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
+                                                                <Loader2
+                                                                    className="size-3 animate-spin"
+                                                                    aria-hidden="true"
+                                                                />
                                                                 {inFlight ===
-                                                                    "transcribing" && (
-                                                                    <Loader2
-                                                                        className="size-3.5 animate-spin text-primary"
-                                                                        aria-label="Transcribing"
-                                                                    />
-                                                                )}
-                                                                {inFlight ===
-                                                                    "summarizing" && (
-                                                                    <Loader2
-                                                                        className="size-3.5 animate-spin text-primary"
-                                                                        aria-label="Summarizing"
-                                                                    />
-                                                                )}
-                                                                {!inFlight &&
-                                                                    hasTranscript && (
-                                                                        <FileText
-                                                                            className="size-3.5 text-primary"
-                                                                            aria-label="Has transcript"
-                                                                        />
-                                                                    )}
-                                                                {!inFlight &&
-                                                                    hasSummary && (
-                                                                        <Sparkles
-                                                                            className="size-3.5 text-primary"
-                                                                            aria-label="Has summary"
-                                                                        />
-                                                                    )}
-                                                            </div>
-                                                        </div>
-                                                        {!isCompact && (
-                                                            <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <Clock className="size-3" />
-                                                                    {formatDuration(
-                                                                        recording.duration,
-                                                                    )}
-                                                                </span>
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <HardDrive className="size-3" />
-                                                                    {formatSize(
-                                                                        recording.filesize,
-                                                                    )}
-                                                                </span>
-                                                                <span>
-                                                                    {formatDateTime(
-                                                                        recording.startTime,
-                                                                        dateTimeFormat,
-                                                                    )}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                        {isCompact && (
-                                                            <p className="mt-0.5 text-xs text-muted-foreground">
-                                                                {formatDuration(
-                                                                    recording.duration,
-                                                                )}{" "}
-                                                                ·{" "}
-                                                                {formatDateTime(
-                                                                    recording.startTime,
-                                                                    dateTimeFormat,
-                                                                )}
-                                                            </p>
+                                                                "transcribing"
+                                                                    ? "Transcribing"
+                                                                    : "Summarizing"}
+                                                            </span>
                                                         )}
                                                     </div>
+                                                    {/*
+                                                      Subtitle: transcript
+                                                      snippet when present
+                                                      (the actual content
+                                                      of the recording),
+                                                      otherwise duration +
+                                                      timestamp. Single
+                                                      line, truncated.
+                                                    */}
+                                                    {snippet ? (
+                                                        <p
+                                                            className={cn(
+                                                                "truncate text-xs text-muted-foreground",
+                                                                isCompact
+                                                                    ? "mt-0.5"
+                                                                    : "mt-1",
+                                                            )}
+                                                        >
+                                                            {snippet}
+                                                        </p>
+                                                    ) : (
+                                                        <p
+                                                            className={cn(
+                                                                "text-xs text-muted-foreground",
+                                                                isCompact
+                                                                    ? "mt-0.5"
+                                                                    : "mt-1",
+                                                            )}
+                                                        >
+                                                            {formatDuration(
+                                                                recording.duration,
+                                                            )}
+                                                            {" \u00b7 "}
+                                                            {formatDateTime(
+                                                                recording.startTime,
+                                                                dateTimeFormat,
+                                                            )}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </button>
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+                                            {/*
+                                              Visibility: hidden by default,
+                                              revealed on row hover OR when
+                                              focus is inside the trigger OR
+                                              while the menu is open. The
+                                              `has-[[data-state=open]]` check
+                                              keeps the kebab visible after
+                                              click — Radix portals the menu,
+                                              so focus leaves this subtree
+                                              and `focus-within` alone would
+                                              drop the trigger to opacity-0.
+                                            */}
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger
                                                         asChild

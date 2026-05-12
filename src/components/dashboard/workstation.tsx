@@ -1,6 +1,6 @@
 "use client";
 
-import { Command, Mic, RefreshCw, Upload } from "lucide-react";
+import { ArrowLeft, Command, Mic, RefreshCw, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import {
     showSyncCompleteNotification,
 } from "@/lib/notifications/browser";
 import { SYNC_CONFIG } from "@/lib/sync-config";
+import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
 interface TranscriptionData {
@@ -62,6 +63,12 @@ interface WorkstationProps {
      * trusted client-side — the actual /admin gate runs server-side.
      */
     isAdmin?: boolean;
+    /**
+     * Logged-in user's email. Passed down to the avatar menu for the
+     * identity block. Server-supplied — never derive from any client
+     * state, which would risk a stale or attacker-influenced value.
+     */
+    userEmail?: string | null;
     initialSettings: InitialSettings;
 }
 
@@ -69,6 +76,7 @@ export function Workstation({
     recordings,
     transcriptions,
     isAdmin = false,
+    userEmail = null,
     initialSettings,
 }: WorkstationProps) {
     const router = useRouter();
@@ -87,6 +95,10 @@ export function Workstation({
         Map<string, "transcribing" | "summarizing">
     >(new Map());
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+    // On <lg viewports the list and detail panes can't coexist — we
+    // toggle between them instead of stacking. Desktop ignores this
+    // state entirely (both panes render via the grid).
+    const [mobileView, setMobileView] = useState<"list" | "detail">("list");
     const [providers, setProviders] = useState<
         Array<{
             id: string;
@@ -99,7 +111,7 @@ export function Workstation({
         }>
     >([]);
 
-    const { setTheme } = useTheme(initialSettings.theme);
+    const { theme, setTheme } = useTheme(initialSettings.theme);
 
     const listRef = useRef<RecordingListHandle>(null);
 
@@ -201,29 +213,43 @@ export function Workstation({
         [],
     );
 
+    // Trigger transcription for a specific recording id. Used by:
+    //   - the per-recording "Transcribe" button in TranscriptionPanel
+    //     (via `handleTranscribe`, which always targets the currently
+    //     selected recording for backwards compatibility), and
+    //   - the command palette's per-row "Transcribe X" quick actions,
+    //     which need to dispatch against an arbitrary recording without
+    //     having to first change the selection.
+    const transcribeById = useCallback(
+        async (id: string) => {
+            markAction(id, "transcribing");
+            setIsTranscribing(true);
+            try {
+                const response = await fetch(
+                    `/api/recordings/${id}/transcribe`,
+                    { method: "POST" },
+                );
+                if (response.ok) {
+                    toast.success("Transcription complete");
+                    router.refresh();
+                } else {
+                    const error = await response.json();
+                    toast.error(error.error || "Transcription failed");
+                }
+            } catch {
+                toast.error("Failed to transcribe recording");
+            } finally {
+                setIsTranscribing(false);
+                markAction(id, null);
+            }
+        },
+        [router, markAction],
+    );
+
     const handleTranscribe = useCallback(async () => {
         if (!currentRecording) return;
-        const id = currentRecording.id;
-        markAction(id, "transcribing");
-        setIsTranscribing(true);
-        try {
-            const response = await fetch(`/api/recordings/${id}/transcribe`, {
-                method: "POST",
-            });
-            if (response.ok) {
-                toast.success("Transcription complete");
-                router.refresh();
-            } else {
-                const error = await response.json();
-                toast.error(error.error || "Transcription failed");
-            }
-        } catch {
-            toast.error("Failed to transcribe recording");
-        } finally {
-            setIsTranscribing(false);
-            markAction(id, null);
-        }
-    }, [currentRecording, router, markAction]);
+        await transcribeById(currentRecording.id);
+    }, [currentRecording, transcribeById]);
 
     const handleUpload = useCallback(
         async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -326,17 +352,27 @@ export function Workstation({
         <>
             <div className="bg-background">
                 <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <div className="sticky top-0 z-30 -mx-4 mb-6 flex flex-col gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-baseline gap-3">
-                            <h1 className="text-2xl font-bold leading-tight md:text-3xl">
+                    {/*
+                      Header: title on the left, actions on the right,
+                      always one row. On mobile the title shrinks and the
+                      buttons collapse to icon-only (see the per-button
+                      `sm:` overrides below), so the whole bar fits in
+                      ~360px. `min-w-0` on the title block lets it
+                      truncate before pushing buttons off-screen.
+                    */}
+                    <div className="sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+                        <div className="flex min-w-0 items-baseline gap-3">
+                            <h1 className="truncate text-xl font-bold leading-tight sm:text-2xl md:text-3xl">
                                 Recordings
                             </h1>
-                            <p className="text-sm text-muted-foreground">
-                                {visibleRecordings.length} recording
-                                {visibleRecordings.length !== 1 ? "s" : ""}
-                            </p>
+                            {/*
+                              Recording count lives in the list pane's own
+                              meta row ("N of N recordings") — showing it
+                              again in the page header is duplicative on
+                              every breakpoint, so the count is gone here.
+                            */}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="ml-auto flex shrink-0 items-center gap-2">
                             <SyncStatus
                                 lastSyncTime={lastSyncTime}
                                 nextSyncTime={nextSyncTime}
@@ -364,16 +400,25 @@ export function Workstation({
                                 variant="outline"
                                 size="sm"
                                 className="h-9"
+                                aria-label={
+                                    isAutoSyncing
+                                        ? "Syncing device"
+                                        : "Sync device"
+                                }
                             >
                                 {isAutoSyncing ? (
                                     <>
-                                        <RefreshCw className="mr-2 size-4 animate-spin" />
-                                        Syncing...
+                                        <RefreshCw className="size-4 animate-spin sm:mr-2" />
+                                        <span className="hidden sm:inline">
+                                            Syncing...
+                                        </span>
                                     </>
                                 ) : (
                                     <>
-                                        <RefreshCw className="mr-2 size-4" />
-                                        Sync Device
+                                        <RefreshCw className="size-4 sm:mr-2" />
+                                        <span className="hidden sm:inline">
+                                            Sync Device
+                                        </span>
                                     </>
                                 )}
                             </Button>
@@ -390,13 +435,23 @@ export function Workstation({
                                 variant="outline"
                                 size="sm"
                                 className="h-9"
+                                aria-label={
+                                    isUploading
+                                        ? "Uploading audio"
+                                        : "Upload audio"
+                                }
                             >
-                                <Upload className="mr-2 size-4" />
-                                {isUploading ? "Uploading..." : "Upload Audio"}
+                                <Upload className="size-4 sm:mr-2" />
+                                <span className="hidden sm:inline">
+                                    {isUploading
+                                        ? "Uploading..."
+                                        : "Upload Audio"}
+                                </span>
                             </Button>
                             <UserMenu
                                 isAdmin={isAdmin}
                                 initialTheme={initialSettings.theme}
+                                userEmail={userEmail}
                                 onOpenSettings={() => setSettingsOpen(true)}
                                 onOpenShortcuts={() => setShortcutsOpen(true)}
                             />
@@ -444,7 +499,22 @@ export function Workstation({
                         </Card>
                     ) : (
                         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                            <div className="lg:col-span-1">
+                            {/*
+                              Mobile master/detail: on <lg, only one pane
+                              renders at a time. `mobileView === "detail"`
+                              hides the list (via `hidden`) while keeping
+                              its state mounted, so scroll position,
+                              search query, and selection survive the
+                              back-navigation. The `lg:block` override
+                              brings the list back on desktop where both
+                              panes coexist.
+                            */}
+                            <div
+                                className={cn(
+                                    "lg:col-span-1 lg:block",
+                                    mobileView === "detail" && "hidden",
+                                )}
+                            >
                                 <RecordingList
                                     ref={listRef}
                                     recordings={visibleRecordings}
@@ -452,7 +522,13 @@ export function Workstation({
                                     currentRecording={currentRecording}
                                     pendingUploads={pendingUploads}
                                     inFlightActions={inFlightActions}
-                                    onSelect={setCurrentRecording}
+                                    onSelect={(r) => {
+                                        setCurrentRecording(r);
+                                        // Tapping a row on mobile reveals
+                                        // the detail pane. Desktop ignores
+                                        // this state.
+                                        setMobileView("detail");
+                                    }}
                                     onDelete={handleDelete}
                                     initialDateTimeFormat={
                                         initialSettings.dateTimeFormat
@@ -467,7 +543,42 @@ export function Workstation({
                                 />
                             </div>
 
-                            <div className="space-y-6 lg:col-span-2">
+                            {/*
+                              On lg+: pin the detail pane just below the
+                              sticky page header so the list is the only
+                              thing that scrolls vertically. `self-start`
+                              opts the grid item out of the default
+                              `stretch` alignment that would otherwise
+                              defeat `position: sticky`. Max-height clamps
+                              the pane to the viewport minus the header
+                              + a little breathing room, and any content
+                              that overflows (e.g. long transcripts)
+                              scrolls internally instead of pushing the
+                              list down. Below lg the layout stacks, so
+                              the sticky behavior is intentionally off.
+                            */}
+                            <div
+                                className={cn(
+                                    "space-y-6 lg:sticky lg:top-[4.5rem] lg:col-span-2 lg:block lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:pr-1",
+                                    mobileView === "list" && "hidden",
+                                )}
+                            >
+                                {/*
+                                  Mobile back affordance. Returns to the
+                                  list view without dropping the selected
+                                  recording — reopening shows the same
+                                  detail. Hidden on lg+ where both panes
+                                  are visible at once.
+                                */}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setMobileView("list")}
+                                    className="-ml-2 h-9 gap-1 px-2 lg:hidden"
+                                >
+                                    <ArrowLeft className="size-4" />
+                                    Back to recordings
+                                </Button>
                                 {currentRecording ? (
                                     <>
                                         <RecordingPlayer
@@ -532,12 +643,21 @@ export function Workstation({
                 open={paletteOpen}
                 onOpenChange={setPaletteOpen}
                 recordings={visibleRecordings}
-                onSelectRecording={setCurrentRecording}
+                transcriptions={transcriptions}
+                currentRecording={currentRecording}
+                inFlightActions={inFlightActions}
+                currentTheme={theme}
+                dateTimeFormat={initialSettings.dateTimeFormat}
+                onSelectRecording={(r) => {
+                    setCurrentRecording(r);
+                    setMobileView("detail");
+                }}
                 onSync={handleSync}
                 onUpload={triggerUpload}
                 onOpenSettings={() => setSettingsOpen(true)}
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
+                onTranscribeRecording={transcribeById}
             />
 
             <ShortcutsDialog

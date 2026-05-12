@@ -3,6 +3,9 @@
 import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsCard } from "@/components/settings/settings-card";
+import { ToggleRow } from "@/components/settings/toggle-row";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -11,7 +14,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 
 const syncIntervalPresets = [
@@ -136,23 +138,17 @@ export function SyncSection() {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-                <RefreshCw className="w-5 h-5" />
-                Sync Settings
-            </h2>
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label htmlFor="auto-sync" className="text-base">
-                            Enable auto-sync
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Automatically sync recordings from your Plaud device
-                            at regular intervals
-                        </p>
-                    </div>
-                    <Switch
+            <SettingsSectionHeader
+                title="Sync"
+                description="When and how OpenPlaud pulls new recordings from your Plaud device."
+                icon={RefreshCw}
+            />
+            <div className="space-y-3">
+                <SettingsCard title="Auto-sync">
+                    <ToggleRow
                         id="auto-sync"
+                        label="Enable auto-sync"
+                        description="Automatically sync recordings from your Plaud device at regular intervals."
                         checked={autoSyncEnabled}
                         onCheckedChange={(checked) => {
                             setAutoSyncEnabled(checked);
@@ -162,61 +158,49 @@ export function SyncSection() {
                         }}
                         disabled={isSavingSettings}
                     />
-                </div>
 
-                {autoSyncEnabled && (
-                    <>
-                        <div className="space-y-2">
-                            <Label htmlFor="sync-interval">Sync interval</Label>
-                            <Select
-                                value={syncInterval.toString()}
-                                onValueChange={(value) => {
-                                    const interval = parseInt(value, 10);
-                                    setSyncInterval(interval);
-                                    handleSyncSettingChange({
-                                        syncInterval: interval,
-                                    });
-                                }}
-                                disabled={isSavingSettings}
-                            >
-                                <SelectTrigger
-                                    id="sync-interval"
-                                    className="w-full"
-                                >
-                                    <SelectValue>
-                                        {getSyncIntervalLabel(syncInterval)}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {syncIntervalPresets.map((preset) => (
-                                        <SelectItem
-                                            key={preset.value}
-                                            value={preset.value.toString()}
-                                        >
-                                            {preset.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground">
-                                How often to automatically sync recordings
-                            </p>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5 flex-1">
-                                <Label
-                                    htmlFor="sync-on-mount"
-                                    className="text-base"
-                                >
-                                    Sync on app load
+                    {autoSyncEnabled && (
+                        <div className="mt-3 space-y-3 border-t pt-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="sync-interval">
+                                    Sync interval
                                 </Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Automatically sync when the app first loads
-                                </p>
+                                <Select
+                                    value={syncInterval.toString()}
+                                    onValueChange={(value) => {
+                                        const interval = parseInt(value, 10);
+                                        setSyncInterval(interval);
+                                        handleSyncSettingChange({
+                                            syncInterval: interval,
+                                        });
+                                    }}
+                                    disabled={isSavingSettings}
+                                >
+                                    <SelectTrigger
+                                        id="sync-interval"
+                                        className="w-full"
+                                    >
+                                        <SelectValue>
+                                            {getSyncIntervalLabel(syncInterval)}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {syncIntervalPresets.map((preset) => (
+                                            <SelectItem
+                                                key={preset.value}
+                                                value={preset.value.toString()}
+                                            >
+                                                {preset.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                            <Switch
+
+                            <ToggleRow
                                 id="sync-on-mount"
+                                label="Sync on app load"
+                                description="Automatically sync when the app first loads."
                                 checked={syncOnMount}
                                 onCheckedChange={(checked) => {
                                     setSyncOnMount(checked);
@@ -226,22 +210,11 @@ export function SyncSection() {
                                 }}
                                 disabled={isSavingSettings}
                             />
-                        </div>
 
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5 flex-1">
-                                <Label
-                                    htmlFor="sync-on-visibility"
-                                    className="text-base"
-                                >
-                                    Sync on tab visibility
-                                </Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Sync when you return to the app tab
-                                </p>
-                            </div>
-                            <Switch
+                            <ToggleRow
                                 id="sync-on-visibility"
+                                label="Sync on tab visibility"
+                                description="Sync when you return to the app tab."
                                 checked={syncOnVisibilityChange}
                                 onCheckedChange={(checked) => {
                                     setSyncOnVisibilityChange(checked);
@@ -252,23 +225,14 @@ export function SyncSection() {
                                 disabled={isSavingSettings}
                             />
                         </div>
-                    </>
-                )}
+                    )}
+                </SettingsCard>
 
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5 flex-1">
-                        <Label
-                            htmlFor="sync-notifications"
-                            className="text-base"
-                        >
-                            Show sync notifications
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Display notifications when sync completes
-                        </p>
-                    </div>
-                    <Switch
+                <SettingsCard title="Notifications">
+                    <ToggleRow
                         id="sync-notifications"
+                        label="Show sync notifications"
+                        description="Display notifications when sync completes."
                         checked={syncNotifications}
                         onCheckedChange={(checked) => {
                             setSyncNotifications(checked);
@@ -278,7 +242,7 @@ export function SyncSection() {
                         }}
                         disabled={isSavingSettings}
                     />
-                </div>
+                </SettingsCard>
             </div>
         </div>
     );

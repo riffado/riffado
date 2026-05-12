@@ -3,6 +3,7 @@
 import { HardDrive } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -174,10 +175,11 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-                <HardDrive className="w-5 h-5" />
-                Storage
-            </h2>
+            <SettingsSectionHeader
+                title="Storage"
+                description="Where OpenPlaud keeps the audio files behind your recordings."
+                icon={HardDrive}
+            />
             <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border bg-card p-4">

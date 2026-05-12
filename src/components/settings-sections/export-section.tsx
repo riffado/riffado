@@ -3,6 +3,7 @@
 import { Download, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -176,10 +177,11 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Download className="w-5 h-5" />
-                Export/Backup Settings
-            </h2>
+            <SettingsSectionHeader
+                title="Export & Backup"
+                description="Take your data with you — recordings, transcripts, and summaries."
+                icon={Download}
+            />
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="export-format">Default export format</Label>

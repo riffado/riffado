@@ -1,26 +1,82 @@
-/* cmdk styling — scoped to the dashboard command palette.
- * Plain CSS (no @apply) so this works regardless of how the
- * Tailwind v4 build is wired up.
+/*
+ * cmdk styling — scoped to the dashboard command palette.
+ *
+ * Plain CSS (no @apply) so this works regardless of how the Tailwind
+ * v4 build is wired up. Keep selectors low-specificity and rely on
+ * cmdk's data-attributes for state.
  */
-.command-palette [cmdk-group-heading] {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted-foreground);
+
+/* Root: column layout so input / list / footer stack cleanly.
+ *
+ * `min-width: 0` is critical here — the palette is a grid item of
+ * the shadcn `DialogContent` (which uses `display: grid` under the
+ * hood). Grid items, like flex items, default to `min-width: auto`
+ * (= min-content). Without `min-width: 0` on this element, the
+ * whole shrink chain we set up downstream is moot: the grid
+ * container happily lets us grow as wide as our widest unbreakable
+ * string. */
+.command-palette {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
+/* Group headings — small, uppercase, recede. */
+.command-palette [cmdk-group-heading] {
+    padding: 0.75rem 0.75rem 0.375rem;
+    font-size: 0.6875rem; /* 11px */
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted-foreground);
+    opacity: 0.75;
+}
+
+/* First group's heading sits right under the input — tighter top pad. */
+.command-palette [cmdk-group]:first-child [cmdk-group-heading] {
+    padding-top: 0.5rem;
+}
+
+/* Items: two-line capable. `min-width: 0` is the linchpin — without
+ * it, flex items inside this row (icon, body, accessory) inherit a
+ * min-width of `auto` (= content's min-content size), which means an
+ * unbreakable string in the title or subtitle pushes the row wider
+ * than its container. With `min-width: 0` here AND on `.cmd-body` /
+ * `.cmd-title` / `.cmd-subtitle`, every link in the shrink chain is
+ * free to compress and the `text-overflow: ellipsis` rules fire as
+ * intended at any container width. */
 .command-palette [cmdk-item] {
     display: flex;
     align-items: center;
+    gap: 0.625rem;
+    min-width: 0;
+    width: 100%;
+    /* `overflow: hidden` is the forcing function: even if a deeply
+     * nested text element somehow refuses to truncate (long unicode
+     * runs without natural break points are the usual culprit), it
+     * can't escape the row's own box. The ellipsis rules on title /
+     * subtitle still trigger when the chain works — this is the
+     * worst-case backstop. */
+    overflow: hidden;
     cursor: pointer;
     user-select: none;
-    border-radius: 0.375rem;
-    padding: 0.5rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.625rem;
     font-size: 0.875rem;
+    line-height: 1.25rem;
     outline: none;
-    transition: background-color 120ms ease;
+    transition: background-color 100ms ease;
+}
+
+/* Same shrink-chain fix at the list and group levels so the row's
+ * 100% width always resolves to the dialog's content width rather
+ * than something wider. */
+.command-palette [cmdk-list],
+.command-palette [cmdk-group] {
+    min-width: 0;
+    width: 100%;
 }
 
 .command-palette [cmdk-item][data-selected="true"] {
@@ -34,5 +90,192 @@
 }
 
 .command-palette [cmdk-group] + [cmdk-group] {
-    margin-top: 0.5rem;
+    margin-top: 0.125rem;
+}
+
+/* Item body: title + optional subtitle on a second line. Same
+ * `overflow: hidden` rationale as `[cmdk-item]` — belt-and-suspenders
+ * so a misbehaving child can never push the body wider than the
+ * row's content slot. */
+.command-palette .cmd-body {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.0625rem;
+    overflow: hidden;
+}
+
+.command-palette .cmd-title {
+    /* `display: block` + `min-width: 0` together let this element
+     * shrink below the intrinsic width of an unbreakable string and
+     * actually trigger the ellipsis. `<span>` is inline by default,
+     * and inline elements ignore `text-overflow: ellipsis` because
+     * they don't have a constrained width. */
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.command-palette .cmd-subtitle {
+    /* Same display + width rationale as `.cmd-title`. */
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+/* Right-aligned accessory slot (kbd hint, status text, badge). */
+.command-palette .cmd-accessory {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.375rem;
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+/* Inline kbd chip — matches the rest of the dashboard's kbd styling. */
+.command-palette kbd.cmd-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.375rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--border);
+    background: var(--muted);
+    font-family:
+        ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.6875rem;
+    line-height: 1;
+    color: var(--muted-foreground);
+}
+
+/* Inline row action button (e.g. "Transcribe" on rows without a
+ * transcript). Sized to match the pill so the row height stays
+ * constant regardless of which accessory is rendered. */
+.command-palette .cmd-row-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1875rem 0.5rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+    background: var(--background);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+        background-color 100ms ease,
+        border-color 100ms ease;
+}
+
+.command-palette .cmd-row-action:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.command-palette .cmd-row-action:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+}
+
+/* "Active" / "Now playing" pill — subtle, primary-tinted. */
+.command-palette .cmd-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    background: color-mix(in oklch, var(--primary) 12%, transparent);
+    color: var(--primary);
+}
+
+/* Footer: sticky hint bar at the bottom of the palette. */
+.command-palette .cmd-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    color: var(--muted-foreground);
+    background: var(--background);
+}
+
+.command-palette .cmd-footer-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.command-palette .cmd-footer-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Empty state — generous padding, two-line copy. */
+.command-palette [cmdk-empty] {
+    padding: 2rem 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+}
+
+.command-palette .cmd-empty-hint {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+/* Trailing "+ N more" hint when the recording list is capped. */
+.command-palette .cmd-more-hint {
+    padding: 0.5rem 0.75rem 0.75rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    text-align: center;
+}
+
+/* Input row: leading icon, trailing ⌘K hint, soft border. */
+.command-palette .cmd-input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0.875rem;
+}
+
+.command-palette .cmd-input-row svg.cmd-input-icon {
+    flex-shrink: 0;
+    color: var(--muted-foreground);
+}
+
+.command-palette [cmdk-input] {
+    flex: 1 1 auto;
+    background: transparent;
+    border: none;
+    padding: 0.875rem 0;
+    font-size: 0.9375rem;
+    outline: none;
+    color: var(--foreground);
+}
+
+.command-palette [cmdk-input]::placeholder {
+    color: var(--muted-foreground);
 }

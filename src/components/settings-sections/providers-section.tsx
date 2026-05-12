@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AddProviderDialog } from "@/components/settings/add-provider-dialog";
 import { EditProviderDialog } from "@/components/settings/edit-provider-dialog";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -234,10 +235,11 @@ export function ProvidersSection({
         <>
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold flex items-center gap-2">
-                        <Bot className="w-5 h-5" />
-                        AI Settings
-                    </h2>
+                    <SettingsSectionHeader
+                        title="AI Providers"
+                        description="Connect transcription and summary providers. Anything OpenAI-compatible works."
+                        icon={Bot}
+                    />
                     {aiSubSection === "providers" && (
                         <Button
                             onClick={() => setIsAddProviderOpen(true)}

@@ -95,7 +95,11 @@ function SidebarMenuButton({
     return (
         <Comp
             className={cn(
-                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                // focus-visible (not focus) so the ring is only shown for
+                // keyboard navigation; mouse users don't get a stuck
+                // outline after clicking. The ring uses theme tokens so
+                // it inherits dark mode + custom themes automatically.
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                 isActive
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-accent hover:text-accent-foreground",

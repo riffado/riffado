@@ -122,6 +122,7 @@ export default async function DashboardPage() {
             recordings={recordingsData}
             transcriptions={transcriptionMap}
             isAdmin={isAdminEmail(session.user.email)}
+            userEmail={session.user.email ?? null}
             initialSettings={initialSettings}
         />
     );

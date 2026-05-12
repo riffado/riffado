@@ -3,6 +3,7 @@
 import { Check, Clipboard, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -145,22 +146,23 @@ export function ApiKeysSection() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <KeyRound className="w-5 h-5" />
-                    API Keys
-                </h2>
-                <Button
-                    size="sm"
-                    onClick={() => {
-                        setCreatedKey(null);
-                        setIsCreateOpen(true);
-                    }}
-                >
-                    <Plus className="w-4 h-4" />
-                    Create Key
-                </Button>
-            </div>
+            <SettingsSectionHeader
+                title="API Keys"
+                description="Personal access tokens for the OpenPlaud public API."
+                icon={KeyRound}
+                action={
+                    <Button
+                        size="sm"
+                        onClick={() => {
+                            setCreatedKey(null);
+                            setIsCreateOpen(true);
+                        }}
+                    >
+                        <Plus className="size-4" />
+                        Create Key
+                    </Button>
+                }
+            />
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-8">

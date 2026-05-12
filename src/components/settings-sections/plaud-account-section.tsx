@@ -4,6 +4,7 @@ import { CheckCircle2, Link2Off, Mic, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -145,10 +146,11 @@ export function PlaudAccountSection() {
     return (
         <div className="space-y-6">
             <div>
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Mic className="w-5 h-5" />
-                    Plaud Account
-                </h2>
+                <SettingsSectionHeader
+                    title="Plaud Account"
+                    description="Your connection to the Plaud cloud used to pull recordings."
+                    icon={Mic}
+                />
                 <p className="text-sm text-muted-foreground mt-1">
                     The Plaud account OpenPlaud pulls recordings from. Switching
                     accounts keeps your existing recordings — only future syncs

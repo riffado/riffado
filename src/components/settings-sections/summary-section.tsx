@@ -3,6 +3,7 @@
 import { ListChecks } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -108,10 +109,11 @@ export function SummarySection() {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-                <ListChecks className="w-5 h-5" />
-                Summary Settings
-            </h2>
+            <SettingsSectionHeader
+                title="Summary"
+                description="Prompt presets and provider used when generating recording summaries."
+                icon={ListChecks}
+            />
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="summary-preset">

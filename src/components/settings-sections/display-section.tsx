@@ -3,6 +3,7 @@
 import { Monitor } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -169,10 +170,11 @@ export function DisplaySection() {
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Monitor className="w-5 h-5" />
-                Display Settings
-            </h2>
+            <SettingsSectionHeader
+                title="Display"
+                description="How dates, lists, and the overall UI present themselves."
+                icon={Monitor}
+            />
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="date-time-format">Date/time format</Label>

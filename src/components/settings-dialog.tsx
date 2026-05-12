@@ -18,13 +18,6 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import {
     Dialog,
     DialogContent,
     DialogDescription,
@@ -69,49 +62,73 @@ interface SettingsDialogProps {
 
 import type { SettingsSection } from "@/types/settings";
 
-const settingsNav = [
-    { name: "AI", id: "providers" as SettingsSection, icon: Bot },
+type NavItem = {
+    name: string;
+    id: SettingsSection;
+    icon: typeof Bot;
+};
+
+// Grouped navigation. The grouping is presentational only; iteration
+// code below flattens via `settingsNav` so keyboard nav, hash routing,
+// and localStorage continue to operate on a flat indexed list.
+const settingsNavGroups: { label: string; items: NavItem[] }[] = [
     {
-        name: "API Keys",
-        id: "api-keys" as SettingsSection,
-        icon: KeyRound,
-    },
-    { name: "Webhooks", id: "webhooks" as SettingsSection, icon: Webhook },
-    {
-        name: "Transcription",
-        id: "transcription" as SettingsSection,
-        icon: FileText,
+        label: "AI",
+        items: [
+            { name: "Providers", id: "providers", icon: Bot },
+            { name: "Transcription", id: "transcription", icon: FileText },
+            { name: "Summary", id: "summary", icon: ListChecks },
+        ],
     },
     {
-        name: "Summary",
-        id: "summary" as SettingsSection,
-        icon: ListChecks,
+        label: "Plaud",
+        items: [
+            { name: "Plaud Account", id: "plaud-account", icon: Mic },
+            { name: "Sync", id: "sync", icon: RefreshCw },
+        ],
     },
     {
-        name: "Plaud Account",
-        id: "plaud-account" as SettingsSection,
-        icon: Mic,
+        label: "Personalize",
+        items: [
+            { name: "Playback", id: "playback", icon: Play },
+            { name: "Display", id: "display", icon: Monitor },
+            { name: "Notifications", id: "notifications", icon: Bell },
+        ],
     },
-    { name: "Sync", id: "sync" as SettingsSection, icon: RefreshCw },
-    { name: "Playback", id: "playback" as SettingsSection, icon: Play },
-    { name: "Display", id: "display" as SettingsSection, icon: Monitor },
     {
-        name: "Notifications",
-        id: "notifications" as SettingsSection,
-        icon: Bell,
+        label: "Data",
+        items: [
+            { name: "Storage", id: "storage", icon: HardDrive },
+            { name: "Export/Backup", id: "export", icon: Download },
+        ],
     },
-    { name: "Export/Backup", id: "export" as SettingsSection, icon: Download },
-    { name: "Storage", id: "storage" as SettingsSection, icon: HardDrive },
+    {
+        label: "Integrations",
+        items: [
+            { name: "API Keys", id: "api-keys", icon: KeyRound },
+            { name: "Webhooks", id: "webhooks", icon: Webhook },
+        ],
+    },
     ...(process.env.NODE_ENV !== "production"
         ? [
               {
-                  name: "Developer Tools",
-                  id: "dev" as SettingsSection,
-                  icon: Wrench,
+                  label: "Advanced",
+                  items: [
+                      {
+                          name: "Developer Tools",
+                          id: "dev" as SettingsSection,
+                          icon: Wrench,
+                      },
+                  ],
               },
           ]
         : []),
 ];
+
+// Flat list derived from the groups — keep this the single source of
+// truth for keyboard nav / hash routing / localStorage. Changing the
+// group structure above must not break index-based iteration.
+const settingsNav: NavItem[] = settingsNavGroups.flatMap((g) => g.items);
 
 const STORAGE_KEY = "settings-last-section";
 
@@ -284,80 +301,108 @@ export function SettingsDialog({
                             <h2 className="text-lg font-semibold">Settings</h2>
                         </div>
                         <SidebarContent className="min-h-0">
-                            <SidebarGroup>
-                                <SidebarGroupContent>
-                                    <SidebarMenu
-                                        role="navigation"
-                                        aria-label="Settings sections"
+                            <SidebarMenu
+                                role="navigation"
+                                aria-label="Settings sections"
+                                className="space-y-4"
+                            >
+                                {settingsNavGroups.map((group) => (
+                                    <SidebarGroup
+                                        key={group.label}
+                                        className="space-y-1"
                                     >
-                                        {settingsNav.map((item, index) => (
-                                            <SidebarMenuItem key={item.id}>
-                                                <SidebarMenuButton
-                                                    data-settings-nav={
-                                                        index === 0
-                                                            ? "first"
-                                                            : undefined
-                                                    }
-                                                    isActive={
-                                                        activeSection ===
-                                                        item.id
-                                                    }
-                                                    data-keyboard-selected={
-                                                        keyboardSelectedIndex ===
-                                                        index
-                                                    }
-                                                    onClick={() =>
-                                                        handleSectionChange(
-                                                            item.id,
-                                                        )
-                                                    }
-                                                    aria-label={`${item.name} settings`}
-                                                    aria-current={
-                                                        activeSection ===
-                                                        item.id
-                                                            ? "page"
-                                                            : undefined
-                                                    }
-                                                    className={
-                                                        item.id === "dev"
-                                                            ? "transition-all duration-200 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 data-[active=true]:bg-red-500/10 data-[active=true]:text-red-700 dark:data-[active=true]:text-red-300"
-                                                            : "transition-all duration-200"
-                                                    }
-                                                >
-                                                    <item.icon
-                                                        className="w-4 h-4"
-                                                        aria-hidden="true"
-                                                    />
-                                                    <span>{item.name}</span>
-                                                </SidebarMenuButton>
-                                            </SidebarMenuItem>
-                                        ))}
-                                    </SidebarMenu>
-                                </SidebarGroupContent>
-                            </SidebarGroup>
+                                        <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                                            {group.label}
+                                        </div>
+                                        <SidebarGroupContent>
+                                            {group.items.map((item) => {
+                                                // Resolve the item's flat
+                                                // index so keyboard nav
+                                                // (which still indexes a
+                                                // flat list) stays in
+                                                // sync with what's
+                                                // rendered.
+                                                const flatIndex =
+                                                    settingsNav.findIndex(
+                                                        (n) => n.id === item.id,
+                                                    );
+                                                return (
+                                                    <SidebarMenuItem
+                                                        key={item.id}
+                                                    >
+                                                        <SidebarMenuButton
+                                                            data-settings-nav={
+                                                                flatIndex === 0
+                                                                    ? "first"
+                                                                    : undefined
+                                                            }
+                                                            isActive={
+                                                                activeSection ===
+                                                                item.id
+                                                            }
+                                                            data-keyboard-selected={
+                                                                keyboardSelectedIndex ===
+                                                                flatIndex
+                                                            }
+                                                            onClick={() =>
+                                                                handleSectionChange(
+                                                                    item.id,
+                                                                )
+                                                            }
+                                                            aria-label={`${item.name} settings`}
+                                                            aria-current={
+                                                                activeSection ===
+                                                                item.id
+                                                                    ? "page"
+                                                                    : undefined
+                                                            }
+                                                            className={
+                                                                item.id ===
+                                                                "dev"
+                                                                    ? "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 data-[active=true]:bg-red-500/10 data-[active=true]:text-red-700 dark:data-[active=true]:text-red-300"
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            <item.icon
+                                                                className="size-4"
+                                                                aria-hidden="true"
+                                                            />
+                                                            <span>
+                                                                {item.name}
+                                                            </span>
+                                                        </SidebarMenuButton>
+                                                    </SidebarMenuItem>
+                                                );
+                                            })}
+                                        </SidebarGroupContent>
+                                    </SidebarGroup>
+                                ))}
+                            </SidebarMenu>
                         </SidebarContent>
                     </Sidebar>
 
                     <main className="flex h-[600px] flex-1 flex-col overflow-hidden">
-                        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                            <div className="flex items-center gap-2 flex-1">
-                                <Breadcrumb>
-                                    <BreadcrumbList>
-                                        <BreadcrumbItem className="hidden md:block">
-                                            <BreadcrumbPage>
-                                                Settings
-                                            </BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                        <BreadcrumbSeparator className="hidden md:block" />
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>
-                                                {activeNavItem?.name ||
-                                                    "Settings"}
-                                            </BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </BreadcrumbList>
-                                </Breadcrumb>
-                            </div>
+                        {/*
+                          Desktop: header bar is intentionally empty
+                          — the sidebar's active item plus the section
+                          h2 inside each pane communicate "where am I";
+                          a third breadcrumb on top was redundant. The
+                          h-16 + border-b stays so the rule lines up
+                          with the sidebar's "Settings" header.
+                          Mobile: the section picker lives here because
+                          the sidebar is hidden below md.
+                        */}
+                        <header className="flex h-16 shrink-0 items-center justify-end gap-2 border-b px-4 md:justify-end">
+                            {/*
+                              Desktop: the sidebar's selected item is the
+                              source of truth for "where am I" — a header
+                              label here would just duplicate the section's
+                              own SectionHeader and the highlighted nav row.
+                              The h-16 + border-b shell stays so the rule
+                              lines up with the sidebar's "Settings" header.
+                              Mobile: the section picker fills this slot
+                              since the sidebar is hidden below md.
+                            */}
                             <div className="md:hidden">
                                 <Select
                                     value={activeSection}
