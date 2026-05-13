@@ -15,7 +15,7 @@ export const baseOptions: BaseLayoutProps = {
     githubUrl: "https://github.com/openplaud/openplaud",
 };
 
-// Sidebar tabs that split the docs into two top-level sections.
+// Sidebar tabs that split the docs into three top-level sections.
 // `url` matches the `baseUrl` + folder name in `content/docs/`. Adding a
 // new top-level section is two edits: a new folder under `content/docs/`
 // and a new entry here.

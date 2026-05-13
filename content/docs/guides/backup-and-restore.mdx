@@ -9,9 +9,9 @@ different jobs:
 - **`/api/backup`** — a complete JSON archive of every recording row
   and transcript that belongs to you. Built for full disaster
   recovery and migration off the instance.
-- **`/api/export`** — single-recording transcripts in human-readable
-  formats (`txt`, `srt`, `vtt`) or a `json` dump. Built for sharing
-  individual transcripts, not for backup.
+- **`/api/export`** — every recording's transcript flattened into one
+  human-readable file (`txt`, `srt`, `vtt`) or a `json` dump. Built
+  for handing transcripts to other tools, not for backup.
 
 The audio files themselves live in your configured storage backend
 (local volume or S3 bucket) and are backed up the same way you'd back
@@ -19,8 +19,8 @@ up any other binary blob.
 
 ## Backup the database state
 
-**Settings → Export → Create backup** (or `POST /api/backup`) produces
-a single JSON file:
+**Settings → Export/Backup → Create Backup** (or `POST /api/backup`)
+produces a single JSON file:
 
 ```json
 {
@@ -68,20 +68,21 @@ The path layout inside the bucket / directory is
 `{userId}/{filename}.mp3`, with `(2)`, `(3)`,&nbsp;… suffixes appended
 on collisions.
 
-## Single-recording export
+## Bulk transcript export
 
-`GET /api/export?format=<fmt>` returns transcripts in one of:
+`GET /api/export?format=<fmt>` flattens every one of your recordings
+into a single file:
 
 | Format | Content                                                  |
 | ------ | -------------------------------------------------------- |
 | `json` | One JSON document with every recording + transcript      |
 | `txt`  | Plaintext, one block per recording (filename, time, text)|
-| `srt`  | SubRip subtitles                                         |
-| `vtt`  | WebVTT subtitles                                         |
+| `srt`  | SubRip subtitles, all recordings concatenated            |
+| `vtt`  | WebVTT subtitles, all recordings concatenated            |
 
-The default format is whatever you set as **Settings → Export →
-Default export format**, falling back to `json`. Per-recording UI
-buttons populate the `?format=` query param for you.
+The default format is whatever you set as **Settings → Export/Backup
+→ Default export format**, falling back to `json`. The **Export All**
+button in that same panel calls this endpoint.
 
 ## Restore
 

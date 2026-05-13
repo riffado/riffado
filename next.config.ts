@@ -57,7 +57,8 @@ const nextConfig: NextConfig = {
 };
 
 // Fumadocs MDX integration. `createMDX()` reads `source.config.ts`, emits
-// compiled content into `.source/`, and registers the `.mdx` webpack loader.
+// compiled content into `src/.source/` (see `outDir` below), and registers
+// the `.mdx` webpack loader.
 // The wrapper is a no-op for non-MDX routes — self-host and hosted builds are
 // identical with or without docs content present.
 // `outDir` is set under `src/` so the existing `@/*` -> `./src/*` tsconfig
