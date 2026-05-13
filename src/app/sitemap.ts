@@ -8,15 +8,20 @@ import { source } from "@/lib/source";
 // hosted, extend this with explicit entries rather than letting it sniff
 // the file system.
 //
-// `APP_URL` is required in non-build runtimes (see `src/lib/env.ts`).
-// During `next build` the env validator allows it to be unset; the
-// fallback keeps the build from crashing -- crawlers will see whatever
-// the deployed runtime emits.
-const BASE_URL = env.APP_URL ?? "https://openplaud.com";
+// `APP_URL` is required at runtime (see `src/lib/env.ts`) but allowed
+// to be unset at build time so `next build` doesn't depend on production
+// secrets. Forcing this route dynamic means `env.APP_URL` is read on the
+// first request from the actual deployed environment -- if we let it stay
+// static, a self-host Docker image built without APP_URL would ship a
+// sitemap pinned to the `https://openplaud.com` fallback below. The
+// fallback only kicks in for the genuinely-missing-at-runtime case (which
+// the env validator already prevents in practice).
+export const dynamic = "force-dynamic";
 
 export default function sitemap(): MetadataRoute.Sitemap {
+    const baseUrl = env.APP_URL ?? "https://openplaud.com";
     return source.getPages().map((page) => ({
-        url: `${BASE_URL}${page.url}`,
+        url: `${baseUrl}${page.url}`,
         // `lastModified` from the fumadocs-mdx `lastModified` plugin (see
         // `source.config.ts`). Undefined in Docker builds where `.git` is
         // absent, in which case crawlers fall back to their own heuristics.
