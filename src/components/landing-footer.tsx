@@ -34,9 +34,6 @@ type FooterColumn = {
     links: FooterLink[];
 };
 
-// Docs link points at the README for now; swap to `/docs` once that
-// route lands (issue/PR pending). Never ship a known-broken link on
-// a marketing surface.
 const COLUMNS: FooterColumn[] = [
     {
         title: "Product",
@@ -59,11 +56,7 @@ const COLUMNS: FooterColumn[] = [
     {
         title: "Resources",
         links: [
-            {
-                label: "Documentation",
-                href: "https://github.com/openplaud/openplaud#readme",
-                external: true,
-            },
+            { label: "Documentation", href: "/docs" },
             { label: "Install script", href: "/install" },
             {
                 label: "Discussions",

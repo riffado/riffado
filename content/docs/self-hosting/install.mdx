@@ -1,0 +1,38 @@
+---
+title: Install
+description: Install OpenPlaud on your own infrastructure with Docker Compose.
+---
+
+## Prerequisites
+
+- Docker and Docker Compose
+- A Plaud account with at least one device
+- An OpenAI-compatible API key (OpenAI, Groq, OpenRouter, Ollama, LM Studio,
+  or any other compatible endpoint). Optional — browser-based transcription
+  via Transformers.js works without an API key.
+
+## Install
+
+The one-line installer pulls the published `docker-compose.yml`, prompts for
+the values it needs, and starts the stack:
+
+```bash
+curl -fsSL https://openplaud.com/install.sh | bash
+```
+
+Pin to a specific release:
+
+```bash
+curl -fsSL https://openplaud.com/v0.4.2/install.sh | bash
+```
+
+Once the containers are healthy, open `http://localhost:3000` and create an
+account. You'll be walked through connecting your Plaud account and picking
+a transcription provider.
+
+## Next
+
+- See **[Encryption at rest](/docs/reference/encryption-at-rest)** for how
+  sensitive fields are stored.
+- The README in the repository has a fuller feature tour and configuration
+  reference while these docs are being built out.

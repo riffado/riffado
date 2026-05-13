@@ -1,0 +1,80 @@
+---
+title: Environment variables
+description: Every env var that OpenPlaud reads, what it does, and what it defaults to.
+---
+
+OpenPlaud validates every environment variable through a Zod schema in
+`src/lib/env.ts` at process start. A misconfigured env crashes the
+server with a precise error message rather than booting into a broken
+state — that's intentional. Read this page as the source of truth for
+the self-host install.
+
+## Required at runtime
+
+These must be set whenever the server actually runs (dev or prod).
+They're optional at the **build** layer so `next build` doesn't depend
+on production secrets.
+
+| Variable                    | Type     | Notes                                                                  |
+| --------------------------- | -------- | ---------------------------------------------------------------------- |
+| `DATABASE_URL`              | string   | Postgres connection string                                             |
+| `BETTER_AUTH_SECRET`        | string   | At least 32 chars; signs session cookies                               |
+| `APP_URL`                   | URL      | Public origin (e.g. `https://openplaud.example.com`)                   |
+| `ENCRYPTION_KEY`            | hex(64)  | Exactly 64 hex chars (32 bytes); see [Encryption](../reference/encryption-at-rest)|
+
+## Optional knobs
+
+| Variable                            | Default                            | Effect                                                                                                              |
+| ----------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `DISABLE_REGISTRATION`              | `false`                            | When `true`, sign-up is rejected server-side and the `/register` page is disabled. Existing users keep working.     |
+| `DISABLE_UPDATE_CHECK`              | `false`                            | When `true`, the footer never calls `api.github.com` to check for new release tags.                                 |
+| `OPENPLAUD_VERSION`                 | `latest`                           | Read by Docker Compose, not the app. Sets which image tag Compose pulls.                                            |
+| `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`   | `false`                            | When `true`, webhook URLs must be HTTPS and resolve to public IPs. Useful when your instance is exposed to others.  |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS`    | `false`                            | When `true`, trust `X-Forwarded-For` for rate-limit buckets. Only safe behind a reverse proxy that overwrites the header. |
+| `API_TOKEN_HASH_SECRET`             | falls back to `BETTER_AUTH_SECRET` | At least 32 chars. HMAC key for personal API token hashing. Set independently if you want token-hash rotation without rotating session secrets. |
+
+Setting `RATE_LIMIT_TRUST_PROXY_HEADERS=true` without a proxy that
+overwrites forwarding headers lets clients forge their own IPs and
+defeats rate limiting. If you're not sure your proxy strips/overwrites
+these headers, leave the value unset.
+
+## Storage
+
+| Variable                | Default     | Effect                                                              |
+| ----------------------- | ----------- | ------------------------------------------------------------------- |
+| `DEFAULT_STORAGE_TYPE`  | `local`     | `local` or `s3`. The default new users get; per-user override in UI.|
+| `LOCAL_STORAGE_PATH`    | `./storage` | Filesystem path when `DEFAULT_STORAGE_TYPE=local`.                  |
+| `S3_ENDPOINT`           | —           | Endpoint URL. Blank for AWS S3.                                     |
+| `S3_BUCKET`             | —           | Bucket name.                                                        |
+| `S3_REGION`             | —           | Region (`auto` on R2).                                              |
+| `S3_ACCESS_KEY_ID`      | —           |                                                                     |
+| `S3_SECRET_ACCESS_KEY`  | —           |                                                                     |
+
+See [S3-compatible storage](./storage-s3) for per-provider
+config templates.
+
+## SMTP (email notifications)
+
+| Variable        | Default                | Effect                                                                                |
+| --------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| `SMTP_HOST`     | —                      | When unset, email backend is disabled cleanly.                                        |
+| `SMTP_PORT`     | 465 if secure, else 587| Integer.                                                                              |
+| `SMTP_SECURE`   | `false`                | `true` => implicit TLS (port 465). `false` => STARTTLS (port 587).                    |
+| `SMTP_USER`     | —                      |                                                                                       |
+| `SMTP_PASSWORD` | —                      |                                                                                       |
+| `SMTP_FROM`     | —                      | Either `user@example.com` or `Name <user@example.com>`. Validated.                    |
+
+## When values are missing
+
+At server boot, the env loader does two passes:
+
+1. **Schema validation** — types, formats, ranges. Failures produce a
+   multi-line `Environment validation failed:` error listing the
+   problem fields.
+2. **Runtime presence checks** — required-at-runtime vars
+   (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `APP_URL`, `ENCRYPTION_KEY`)
+   are confirmed non-empty and strong enough. These checks are skipped
+   during `next build` (phase `phase-production-build`) so the
+   front-end build doesn't depend on server-only secrets.
+
+If a value is wrong, the server refuses to start. That's the contract.

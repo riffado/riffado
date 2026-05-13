@@ -1,0 +1,70 @@
+---
+title: Notifications
+description: Bark push notifications, browser notifications, and email — backends and configuration.
+---
+
+OpenPlaud can notify you when a recording finishes syncing or a
+transcription completes. Three backends ship in the box: Bark
+(iOS push), browser notifications (Web Notifications API), and email
+(SMTP). Each backend is independent; you can enable any combination.
+
+Notifications never block the sync loop — each backend uses a hard
+timeout (three seconds for Bark, similar for email) and failures are
+logged, not retried into a queue.
+
+## Bark (iOS push)
+
+[Bark](https://github.com/Finb/Bark) is a free, self-hostable iOS push
+service. You install the Bark app, it gives you a personal push URL,
+and you paste that URL into OpenPlaud.
+
+**Settings → Notifications → Bark push URL.** Paste the URL Bark gave
+you (looks like `https://api.day.app/<your-key>`). The URL is stored
+per-user.
+
+OpenPlaud sends notifications with `level: "timeSensitive"` so they
+break through Focus modes on iOS. Failure is silent in the sense that
+sync continues — check the server logs if you expected a notification
+that didn't arrive.
+
+## Browser notifications
+
+Browser notifications use the standard Web Notifications API and work
+out of the box on Chrome, Firefox, Safari, and Edge once you grant
+permission.
+
+**Settings → Notifications → Browser notifications → Enable.** The
+browser prompts you for permission; OpenPlaud remembers the per-user
+toggle in the database.
+
+These only fire while the OpenPlaud tab is open in at least one
+browser. For background delivery, use Bark or email.
+
+## Email
+
+On the hosted instance at openplaud.com, email is already configured
+for you — just enable it. On a self-host instance, the operator has
+to wire up SMTP first; see
+[Email (SMTP) setup](../self-hosting/email-smtp).
+
+**Settings → Notifications → Email → Enable.** OpenPlaud will send a
+message to your account email when a recording finishes syncing or a
+transcription completes.
+
+To verify it works without waiting for a real event, hit
+**Settings → Notifications → Email → Send test email**. If your
+self-host operator hasn't configured SMTP, the backend short-circuits
+cleanly and logs a "SMTP not configured" warning on the server — no
+mail goes out and no error surfaces in the UI.
+
+## Picking a backend
+
+| Need                             | Use                  |
+| -------------------------------- | -------------------- |
+| Push to phone, away from desk    | Bark                 |
+| Notification while OpenPlaud open| Browser              |
+| Audit trail of completions       | Email                |
+| Multi-user team alerting         | Email                |
+
+Bark and browser are good for personal use. Email is the right choice
+when you want a persistent inbox record of every sync result.

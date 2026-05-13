@@ -1,0 +1,84 @@
+---
+title: Upgrading
+description: Pull a new image, restart the stack, and pick the right tag for your risk tolerance.
+---
+
+OpenPlaud ships as a single Docker image on GitHub Container Registry.
+Upgrades are an image pull and a restart; migrations run automatically
+on container start.
+
+## Standard upgrade
+
+From the directory that holds your `docker-compose.yml` and `.env`:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+The application container starts, runs any pending database migrations
+in the same process before opening the HTTP listener, and reports
+healthy via `/api/health` once ready. There is no separate "migration
+container" — failure to migrate is failure to start, which is the
+behaviour you want.
+
+## Picking a tag
+
+`OPENPLAUD_VERSION` in your `.env` controls which image tag Compose
+pulls.
+
+| Tag             | What you get                              | Use when                                |
+| --------------- | ----------------------------------------- | --------------------------------------- |
+| `latest`        | Newest stable release                     | Default; most users                     |
+| `0.4.2`, `0.4`  | Specific version / minor line             | Production; pin for reproducibility     |
+| `dev`           | Rolling build from `main`                 | Bleeding edge; accept occasional breakage |
+
+`main` is a **rolling integration branch** and may be broken at any
+commit. Stable deploys come from tagged releases. Do **not** deploy by
+cloning the repo and building from `main`; use the tagged images
+above. See [BRANCHING.md](https://github.com/openplaud/openplaud/blob/main/BRANCHING.md)
+for the branching model.
+
+## Update badge
+
+The footer shows a small "Update available" badge when a newer release
+tag is available on GitHub. The badge is purely informational — it
+does not auto-update anything.
+
+The check calls `api.github.com` once per session. If your instance
+shouldn't phone home at all, set `DISABLE_UPDATE_CHECK=true` in your
+`.env` and the badge disappears unconditionally.
+
+## Rolling back
+
+To roll back, set `OPENPLAUD_VERSION` to the previous tag and re-run
+the upgrade command:
+
+```bash
+# In .env
+OPENPLAUD_VERSION=0.4.1
+```
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+This works because OpenPlaud's database migrations are
+**additive by default** — dropping columns is treated as a deliberate
+breaking change with a CHANGELOG migration note. If you're rolling
+back across a release that explicitly dropped state (rare; called out
+loudly in CHANGELOG), check the release notes first.
+
+## Backing up before an upgrade
+
+Two things to back up before a major-version upgrade:
+
+1. The Postgres volume (whichever path your compose file binds to
+   `postgres:/var/lib/postgresql/data`).
+2. The audio volume (`/app/audio` in the app container) — or your S3
+   bucket if you've migrated to remote storage.
+
+You can also create a logical export via **Settings → Backup → Create
+backup**, which produces a JSON archive of recordings + transcripts.
+That export is **plaintext** by design (it's your data), so store it
+with the same care you'd give your unencrypted database. See
+[Backup and restore](../guides/backup-and-restore).

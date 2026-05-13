@@ -1,0 +1,109 @@
+---
+title: Backup and restore
+description: Export your recordings, transcripts, and audio so you can leave at any time.
+---
+
+OpenPlaud has two separate export paths, deliberately. They serve
+different jobs:
+
+- **`/api/backup`** — a complete JSON archive of every recording row
+  and transcript that belongs to you. Built for full disaster
+  recovery and migration off the instance.
+- **`/api/export`** — single-recording transcripts in human-readable
+  formats (`txt`, `srt`, `vtt`) or a `json` dump. Built for sharing
+  individual transcripts, not for backup.
+
+The audio files themselves live in your configured storage backend
+(local volume or S3 bucket) and are backed up the same way you'd back
+up any other binary blob.
+
+## Backup the database state
+
+**Settings → Export → Create backup** (or `POST /api/backup`) produces
+a single JSON file:
+
+```json
+{
+  "version": "1.0",
+  "createdAt": "2026-05-13T12:00:00.000Z",
+  "userId": "...",
+  "recordings": [
+    {
+      "id": "...",
+      "filename": "Team standup",
+      "duration": 1820,
+      "startTime": "...",
+      "endTime": "...",
+      "filesize": 1234567,
+      "deviceSn": "...",
+      "transcription": {
+        "text": "Plaintext transcript text...",
+        "provider": "...",
+        "model": "..."
+      }
+    }
+  ]
+}
+```
+
+The archive is **plaintext**. OpenPlaud's at-rest encryption decrypts
+all fields before serialization because the backup is *your* export of
+your own data — you own it from this point. Treat the file the same
+way you'd treat an unencrypted database dump: store it encrypted,
+restrict access, don't email it.
+
+The backup does **not** include audio files. Back those up separately.
+
+## Backup the audio files
+
+- **Local storage backend.** The Docker volume that mounts at
+  `/app/audio` inside the container holds every audio file. Snapshot
+  it the same way you snapshot any other volume — `restic`, `rsync`,
+  ZFS snapshots, your choice.
+- **S3 backend.** Whichever bucket you configured already lives
+  outside the instance. Enable versioning, cross-region replication,
+  or a lifecycle copy job on the bucket itself.
+
+The path layout inside the bucket / directory is
+`{userId}/{filename}.mp3`, with `(2)`, `(3)`,&nbsp;… suffixes appended
+on collisions.
+
+## Single-recording export
+
+`GET /api/export?format=<fmt>` returns transcripts in one of:
+
+| Format | Content                                                  |
+| ------ | -------------------------------------------------------- |
+| `json` | One JSON document with every recording + transcript      |
+| `txt`  | Plaintext, one block per recording (filename, time, text)|
+| `srt`  | SubRip subtitles                                         |
+| `vtt`  | WebVTT subtitles                                         |
+
+The default format is whatever you set as **Settings → Export →
+Default export format**, falling back to `json`. Per-recording UI
+buttons populate the `?format=` query param for you.
+
+## Restore
+
+There is no `POST /api/backup/restore` endpoint today. The backup file
+is the export half of the contract — it lets you leave the instance
+with your data intact, which is what "export parity" guarantees. If
+you need to import a backup into a fresh instance, the supported path
+is a Postgres-level restore (the snapshot of the database volume), not
+a JSON re-import.
+
+If you need a programmatic re-import — for migrating between
+self-host instances, for instance — file an issue with the use case.
+It's a deliberate gap, not an oversight, and the right shape depends
+on the use case.
+
+## What's encrypted vs. what's plaintext
+
+A reminder, because this trips people up:
+
+- **In the database**, sensitive fields are encrypted at rest with
+  AES-256-GCM (see [Encryption at rest](../reference/encryption-at-rest)).
+- **In a backup file produced by `/api/backup`**, those fields are
+  decrypted before serialization. Your responsibility from there.
+- **Audio files in storage** are *not* encrypted by OpenPlaud's
+  app-layer encryption — use bucket-level SSE if you need that.

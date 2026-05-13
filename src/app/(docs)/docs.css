@@ -1,0 +1,76 @@
+/*
+ * Map Fumadocs UI's design tokens onto OpenPlaud's existing palette so the
+ * docs surface inherits the audiophile color scheme defined in
+ * `src/app/globals.css`. Imported AFTER `fumadocs-ui/style.css` in
+ * `src/app/(docs)/layout.tsx` so these overrides win.
+ *
+ * Fumadocs exposes ~20 `--color-fd-*` tokens. We remap only the ones that
+ * meaningfully affect layout chrome (background, surfaces, text, borders,
+ * primary accents). Status colors (success/warning/error/info/idea) and the
+ * code-diff symbols are left at Fumadocs defaults -- they're tuned for
+ * MDX callouts and don't clash with the theme.
+ *
+ * `.dark` rules live next to their light counterparts so the dark-mode
+ * fork is visible at a glance. The Fumadocs root sets `.dark` on `<html>`
+ * via the same `next-themes` provider used app-wide (see
+ * `src/components/theme-provider.tsx`), so a single class flip switches
+ * both surfaces together.
+ */
+
+:root {
+    --color-fd-background: var(--background);
+    --color-fd-foreground: var(--foreground);
+    --color-fd-muted: var(--muted);
+    --color-fd-muted-foreground: var(--muted-foreground);
+    --color-fd-popover: var(--popover);
+    --color-fd-popover-foreground: var(--popover-foreground);
+    --color-fd-card: var(--card);
+    --color-fd-card-foreground: var(--card-foreground);
+    --color-fd-border: var(--border);
+    --color-fd-primary: var(--primary);
+    --color-fd-primary-foreground: var(--primary-foreground);
+    --color-fd-secondary: var(--secondary);
+    --color-fd-secondary-foreground: var(--secondary-foreground);
+    --color-fd-accent: var(--accent);
+    --color-fd-accent-foreground: var(--accent-foreground);
+    --color-fd-ring: var(--ring);
+}
+
+/*
+ * Fumadocs' page footer renders a previous/next nav as a grid that flips
+ * between `grid-cols-2` (both neighbors exist) and `grid-cols-1` (only
+ * one). On the docs index there's no previous sibling, so the lone
+ * "next" card stretches to 100% width. Cap the solo card to the same
+ * width it would have in the two-column layout (`50% - gap/2`, where
+ * `gap-4` resolves to `calc(var(--spacing) * 4)` in Fumadocs' grid) and
+ * align it to the side that matches its arrow direction. Brittle to an
+ * upstream rename of `.text-end` but the rest of `docs.css` already
+ * relies on Fumadocs' class names, so the coupling is consistent.
+ */
+.grid.grid-cols-1.gap-4 > a.text-end {
+    max-width: calc(50% - var(--spacing) * 2);
+    margin-inline-start: auto;
+}
+.grid.grid-cols-1.gap-4 > a:not(.text-end) {
+    max-width: calc(50% - var(--spacing) * 2);
+    margin-inline-end: auto;
+}
+
+.dark {
+    --color-fd-background: var(--background);
+    --color-fd-foreground: var(--foreground);
+    --color-fd-muted: var(--muted);
+    --color-fd-muted-foreground: var(--muted-foreground);
+    --color-fd-popover: var(--popover);
+    --color-fd-popover-foreground: var(--popover-foreground);
+    --color-fd-card: var(--card);
+    --color-fd-card-foreground: var(--card-foreground);
+    --color-fd-border: var(--border);
+    --color-fd-primary: var(--primary);
+    --color-fd-primary-foreground: var(--primary-foreground);
+    --color-fd-secondary: var(--secondary);
+    --color-fd-secondary-foreground: var(--secondary-foreground);
+    --color-fd-accent: var(--accent);
+    --color-fd-accent-foreground: var(--accent-foreground);
+    --color-fd-ring: var(--ring);
+}

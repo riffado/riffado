@@ -1,0 +1,160 @@
+---
+title: Security model
+description: Authentication, encryption at rest, API tokens, and trust boundaries.
+---
+
+This page sketches the full picture. The deep dive on database
+encryption lives in
+[Encryption at rest](./encryption-at-rest); cross-link there for the
+column-level details.
+
+## Authentication
+
+Two ways to authenticate to OpenPlaud's HTTP surface:
+
+1. **Browser session** (Better Auth). Email + password, with the
+   session cookie signed by `BETTER_AUTH_SECRET`. Used by every page
+   under `(app)`, the dashboard, and the internal `/api/*` routes.
+2. **Personal API key** (`op_<24 chars>`). Used by external
+   integrations against the `/api/v1/*` surface. Sent as a Bearer
+   token. Read-only scope.
+
+Rate limit buckets default to the request's direct client IP. If your
+instance sits behind a reverse proxy that overwrites
+`X-Forwarded-For`, set `RATE_LIMIT_TRUST_PROXY_HEADERS=true` so the
+bucket key uses the original client IP. Don't set it without a proxy
+that actually overwrites the header — clients can forge it and your
+rate limiter is then ornamental.
+
+## Encryption at rest
+
+Sensitive fields are encrypted with AES-256-GCM, keyed off
+`ENCRYPTION_KEY` (a required 64-char hex string).
+
+| Field                                   | Why                                    |
+| --------------------------------------- | -------------------------------------- |
+| `recordings.filename`                   | Often carries AI-generated titles      |
+| `transcriptions.text`                   | Full transcript                        |
+| `ai_enhancements.summary`               | LLM summary                            |
+| `ai_enhancements.key_points`            | Stored under `{ "c": "v1:..." }`       |
+| `ai_enhancements.action_items`          | Same envelope                          |
+| `user_settings.summary_prompt`          | May carry user context                 |
+| `user_settings.title_generation_prompt` | Same                                   |
+| `plaud_connections.bearer_token`        | Plaud OAuth-equivalent token           |
+| `api_credentials.api_key`               | Configured AI provider key             |
+| `storage_config.s3_config`              | S3 access + secret                     |
+| `webhook_endpoints.url`                 | User-configured webhook target         |
+| `webhook_endpoints.secret`              | The `whsec_…` signing secret           |
+
+**Out of scope** for the app-layer encryption:
+
+- Audio files on disk or in S3. Use bucket-level SSE on S3, or full-
+  disk encryption on the host, if you need that.
+- Postgres on disk. Use disk encryption or a managed DB that does it
+  for you.
+- The decryption-at-request-time path — the server holds the key and
+  decrypts content when it needs to run AI on it. This is unavoidable
+  while server-side transcription and summarization are part of the
+  product. If you require true zero-knowledge, see below.
+
+See [Encryption at rest](./encryption-at-rest) for ciphertext format,
+versioning prefix (`v1:`), and the backfill script.
+
+## API token hashing
+
+Personal API keys are HMAC-SHA256-hashed before being stored. The
+HMAC key is `API_TOKEN_HASH_SECRET` if set, otherwise
+`BETTER_AUTH_SECRET`. A database breach does not leak usable tokens
+(an attacker would still need the HMAC key, which lives only in the
+runtime environment).
+
+Two important consequences:
+
+- We never use plain SHA-256 for tokens. The high-entropy random key
+  doesn't fix that on its own — without an HMAC, a precomputed
+  table over the `op_` keyspace would be feasible at scale.
+- We never reuse `ENCRYPTION_KEY` as the HMAC key. That key is
+  reserved for AES-GCM at-rest encryption. Mixing key uses is a
+  cryptographic smell with no upside.
+
+## Webhook signatures
+
+Outbound webhook deliveries are signed:
+
+- Header: `X-OpenPlaud-Signature: t=<unix>,v1=<hex hmac>`
+- Algorithm: HMAC-SHA256 of `${timestamp}.${rawBody}` with the
+  endpoint's per-secret.
+- Replay window: ±5 minutes.
+
+Receivers must verify in constant time (timing-safe compare) — see
+[Automation API and webhooks](../guides/automation-and-webhooks) for
+a reference Node implementation.
+
+## Webhook target hardening
+
+By default, webhook URLs may use `http://` or `https://` and may point
+at anything the OpenPlaud container can reach (Docker-bridge service
+names, RFC1918 IPs, public hosts). Credentials embedded in the URL are
+rejected.
+
+If your instance is exposed to other people — multi-user self-host
+deployment, anyone you don't fully trust signing up — set
+`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true`. With that flag, webhook URLs
+must use HTTPS, resolve to a public IP, and not embed credentials.
+Loopback, RFC1918, link-local, ULA, multicast, and IPv6 documentation
+prefixes are all rejected. This stops your instance from being used as
+an SSRF relay against its own private network.
+
+## Per-user query isolation
+
+Every database query that touches user-scoped data carries
+`where(eq(table.userId, session.user.id))`. The codebase treats this
+as a hard requirement on **every** query, every time — not "I'll add
+it later," not "it's an internal endpoint." Code review enforces it
+on every PR.
+
+`/api/v1/*` routes get the user id from the personal API key after
+authentication; internal routes get it from the session. Either way,
+the same userId-scoped queries run.
+
+## Account suspension
+
+Suspended users (`users.suspendedAt` is non-null) are rejected
+**before** any feature code runs:
+
+- Session-authenticated requests get `403 ACCOUNT_SUSPENDED` from the
+  session check.
+- API-key-authenticated requests get the same code from the
+  `authenticateRequest` path.
+
+The check sits next to the auth lookup, not behind a per-route
+middleware, so it can't be forgotten on a new route.
+
+## Trust boundaries OpenPlaud does *not* own
+
+Some risks live outside the app entirely and we name them rather than
+pretending we cover them:
+
+- **Your AI provider.** Plaintext audio and plaintext transcripts go
+  to whichever provider you configured. The privacy of that data
+  depends on the provider's policy and infrastructure. If you don't
+  trust them, run a local provider (Ollama / LM Studio) on the same
+  machine as your OpenPlaud instance.
+- **A compromised application server.** The server holds
+  `ENCRYPTION_KEY` and decrypts data on demand. At-rest encryption
+  protects DB breaches, not RCE.
+- **A compromised `ENCRYPTION_KEY`.** Treat the key like a database
+  master credential. Lose it and encrypted content becomes
+  unrecoverable.
+
+## Compliance claims
+
+OpenPlaud does not claim HIPAA, SOC2, or attorney-client privilege.
+Those claims belong to your AI provider (which may itself be
+HIPAA-eligible) and your own self-host setup, which you fully
+control.
+
+## Reporting a vulnerability
+
+See [SECURITY.md](https://github.com/openplaud/openplaud/blob/main/SECURITY.md)
+in the repository for disclosure instructions.

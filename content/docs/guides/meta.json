@@ -1,0 +1,10 @@
+{
+    "title": "Guides",
+    "pages": [
+        "connect-plaud-account",
+        "ai-providers",
+        "notifications",
+        "automation-and-webhooks",
+        "backup-and-restore"
+    ]
+}

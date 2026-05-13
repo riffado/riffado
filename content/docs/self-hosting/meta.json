@@ -1,0 +1,11 @@
+{
+    "title": "Self Hosting",
+    "pages": [
+        "index",
+        "install",
+        "environment-variables",
+        "storage-s3",
+        "email-smtp",
+        "upgrading"
+    ]
+}

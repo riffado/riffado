@@ -27,6 +27,7 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
+        "postinstall": "fumadocs-mdx source.config.ts src/.source",
         "start": "next start",
         "test": "vitest run",
         "test:watch": "vitest",
@@ -59,6 +60,9 @@
         "cmdk": "^1.1.1",
         "date-fns": "^4.1.0",
         "drizzle-orm": "^0.44.7",
+        "fumadocs-core": "^16.8.10",
+        "fumadocs-mdx": "^15.0.4",
+        "fumadocs-ui": "^16.8.10",
         "lucide-react": "^0.554.0",
         "music-metadata": "^11.12.3",
         "nanoid": "^5.1.6",
@@ -80,6 +84,7 @@
     "devDependencies": {
         "@biomejs/biome": "^2.3.7",
         "@tailwindcss/postcss": "^4",
+        "@types/mdx": "^2.0.13",
         "@types/node": "^20",
         "@types/nodemailer": "^7.0.4",
         "@types/react": "^19",

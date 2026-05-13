@@ -1,0 +1,145 @@
+---
+title: Automation API and webhooks
+description: Personal API keys, signed webhook deliveries, and using the /api/v1surface from external tools.
+---
+
+OpenPlaud exposes a small, stable automation surface for external
+tools — Zapier-style integrations, n8n flows, your own scripts. Two
+moving parts:
+
+- **Personal API keys** authenticate read access to the `/api/v1/*`
+  surface.
+- **Webhook endpoints** push events at your own server when something
+  interesting happens (a new recording, a finished transcription).
+
+For the full endpoint reference and code samples, see
+[Public API](../reference/public-api).
+
+## Personal API keys
+
+**Settings → Developer → API keys → Create API key.** Give it a name,
+optionally an expiry, and copy the key shown once. The key is shown
+exactly once — store it in your password manager or the secret manager
+of whatever tool will use it.
+
+Format: `op_<24 url-safe chars>` (e.g. `op_K7vR8x...`). Keys carry
+read-only scope today; writes are not part of the public surface.
+
+You authenticate by sending the key as a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer op_K7vR8x..." \
+  https://your-openplaud-host/api/v1/recordings
+```
+
+Internally, OpenPlaud stores an HMAC-SHA256 hash of the key (keyed off
+`API_TOKEN_HASH_SECRET`, falling back to `BETTER_AUTH_SECRET`) rather
+than the key itself. A database breach does not leak usable tokens. The
+key prefix (first 12 characters) is stored in plaintext so the UI can
+show you "which key was that?" without being able to reconstruct it.
+
+**Revoking a key** is a soft revoke — the row is marked `revokedAt` and
+authentication starts rejecting it immediately. You can also set an
+`expiresAt` at creation time; expired keys are rejected the same way.
+
+## Webhook endpoints
+
+**Settings → Developer → Webhooks → Create webhook.** Provide:
+
+- **URL** the endpoint to POST events to.
+- **Events** one or more of the supported event types (see below).
+- **Description** optional, for your own bookkeeping.
+
+You get back a signing secret of the form `whsec_<32 chars>`. The
+secret is shown once and stored encrypted at rest. Use it to verify
+incoming requests.
+
+### Supported events
+
+| Event                       | When it fires                                  |
+| --------------------------- | ---------------------------------------------- |
+| `recording.synced`          | A new recording finished syncing from Plaud    |
+| `recording.updated`         | An existing recording's metadata changed       |
+| `recording.deleted`         | A recording was soft-deleted                   |
+| `transcription.completed`   | Transcription finished successfully            |
+| `transcription.failed`      | Transcription failed (final, after retries)    |
+
+### Delivery shape
+
+Each delivery is a `POST` to your URL with a JSON body and these
+headers:
+
+| Header                  | Meaning                                                 |
+| ----------------------- | ------------------------------------------------------- |
+| `X-OpenPlaud-Event`     | The event name (e.g. `recording.synced`)                |
+| `X-OpenPlaud-Delivery`  | Unique delivery id, useful for idempotent receivers     |
+| `X-OpenPlaud-Timestamp` | Unix seconds, also embedded in the signature payload    |
+| `X-OpenPlaud-Signature` | `t=<timestamp>,v1=<hex hmac>` — see below               |
+
+The body always contains the event name, the affected recording id,
+and a serialized recording payload matching the
+[`/api/v1/recordings/{id}`](../reference/public-api) shape.
+
+### Verifying signatures
+
+Signature header format: `t=1700000000,v1=<hex>`.
+
+The signed payload is `${timestamp}.${rawBody}` and the algorithm is
+HMAC-SHA256 with your `whsec_…` secret. Reject deliveries where:
+
+- The `t=` value is more than **five minutes** away from the receiver's
+  clock (replay protection).
+- The recomputed `v1` digest does not match in constant time.
+
+Reference Node.js receiver:
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verify(secret, header, rawBody, toleranceSeconds = 300) {
+  const parts = new Map(
+    header.split(",").map((p) => p.split("=")),
+  );
+  const t = Number(parts.get("t"));
+  const sig = parts.get("v1");
+  if (!Number.isFinite(t) || !sig) return false;
+  if (Math.abs(Date.now() / 1000 - t) > toleranceSeconds) return false;
+
+  const expected = createHmac("sha256", secret)
+    .update(`${t}.${rawBody}`)
+    .digest("hex");
+
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(sig, "hex");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+The exact same algorithm lives in `src/lib/webhooks/signature.ts`.
+
+### Allowed URLs
+
+By default, webhook URLs may use `http://` or `https://` and may point
+at any host the OpenPlaud container can reach. Docker-bridge service
+hostnames work (`http://n8n:5678/...`), so do private-network IPs.
+Credentials embedded in the URL are rejected.
+
+If you want stricter validation — HTTPS only, public-IP destinations
+only, RFC1918/loopback/link-local/ULA explicitly rejected — set
+`WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true` in your `.env`. Useful if your
+OpenPlaud instance is exposed to other people and you don't want it to
+be usable as an SSRF relay against your private network.
+
+### Retry behaviour
+
+Webhook deliveries are queued and processed by a background worker. A
+non-2xx response or network failure schedules an exponential-backoff
+retry. After the worker exhausts retries the delivery is marked failed
+and visible in **Settings → Developer → Webhooks → Recent deliveries**.
+
+## What writes look like
+
+There aren't any public write endpoints yet. The current `/api/v1/*`
+surface is read-only by design: list recordings, get a recording, get
+its transcript, stream its audio. If you need to push data *in*, run
+the OpenPlaud UI or sync the source Plaud account.

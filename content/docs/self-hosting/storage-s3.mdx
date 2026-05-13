@@ -1,0 +1,124 @@
+---
+title: S3-compatible storage
+description: Configure AWS S3, Cloudflare R2, MinIO, Backblaze B2, or any S3-compatible service.
+---
+
+By default, OpenPlaud stores audio on the local filesystem (Docker
+volume mounted at `/app/audio`). That's the right default — zero setup,
+works offline, lives entirely under your control. Switch to S3 when you
+want offsite durability, lower per-byte cost, or to share storage
+between multiple instances.
+
+OpenPlaud talks to any service that implements the S3 wire protocol —
+AWS S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, Wasabi,
+and so on.
+
+## Configuring S3
+
+You can configure storage in two ways:
+
+1. **Per-user, via the Settings UI** — `Settings → Storage`. Each user
+   on a self-host instance can point at a different bucket. Credentials
+   are encrypted at rest.
+2. **Instance-wide, via environment variables** — set the
+   `DEFAULT_STORAGE_TYPE=s3` plus the `S3_*` vars listed below. Useful
+   when you want every new account to default to a shared bucket.
+
+The env-var config is the **default** that new users get. The UI config
+overrides it per user. See
+[Environment variables](./environment-variables) for the full
+list.
+
+## Provider settings
+
+### AWS S3
+
+```bash
+S3_ENDPOINT=        # leave blank
+S3_BUCKET=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=YOUR_KEY
+S3_SECRET_ACCESS_KEY=YOUR_SECRET
+```
+
+### Cloudflare R2
+
+```bash
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_BUCKET=openplaud
+S3_REGION=auto
+S3_ACCESS_KEY_ID=YOUR_KEY
+S3_SECRET_ACCESS_KEY=YOUR_SECRET
+```
+
+R2 has 10 GB free storage and no egress fees, which makes it a good
+default for personal self-host instances.
+
+### MinIO (self-hosted)
+
+```bash
+S3_ENDPOINT=http://minio:9000
+S3_BUCKET=openplaud
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+```
+
+If MinIO runs in the same Docker network as OpenPlaud, the endpoint is
+the service hostname (`http://minio:9000`), not `localhost`.
+
+### Backblaze B2
+
+```bash
+S3_ENDPOINT=https://s3.<region>.backblazeb2.com
+S3_BUCKET=your-bucket-name
+S3_REGION=<region>
+S3_ACCESS_KEY_ID=YOUR_KEY
+S3_SECRET_ACCESS_KEY=YOUR_SECRET
+```
+
+B2 is the cheapest option for long-term cold storage.
+
+### DigitalOcean Spaces
+
+```bash
+S3_ENDPOINT=https://<region>.digitaloceanspaces.com
+S3_BUCKET=your-space-name
+S3_REGION=<region>
+S3_ACCESS_KEY_ID=YOUR_KEY
+S3_SECRET_ACCESS_KEY=YOUR_SECRET
+```
+
+## Test the connection
+
+The Settings UI exposes a **Test connection** button that calls
+`testConnection()` on the storage provider — a cheap round-trip that
+will surface bucket-permission and credentials issues before you flip
+the active backend.
+
+## Encryption at the storage layer
+
+OpenPlaud's at-rest encryption applies to **database** fields, not audio
+objects in storage. For S3, prefer **bucket-level server-side
+encryption** (SSE-S3, SSE-KMS, or the equivalent on your provider). Per-
+object app-layer encryption is a heavier change and not implemented
+today.
+
+See [Encryption at rest](../reference/encryption-at-rest) for the
+explicit scope of the database-layer encryption.
+
+## Migrating between backends
+
+OpenPlaud does not ship a built-in "move all audio from local to S3"
+tool. The supported flow today:
+
+1. Stop sync (so no new files are written).
+2. Mirror the local audio directory to your bucket using `aws s3 sync`,
+   `rclone`, or the equivalent.
+3. Switch the storage config in Settings.
+4. Re-enable sync.
+
+Recording rows store the storage key directly; the layout is the same
+across backends (`{userId}/{filename}.mp3`, with `(2)`, `(3)`,&nbsp;…
+suffixes on collisions), so a straight mirror of the local audio
+directory into the bucket is enough.

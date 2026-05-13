@@ -66,6 +66,12 @@ export function Footer() {
                         >
                             {APP_VERSION_TAG}
                         </Link>
+                        <Link
+                            href="/docs"
+                            className="hover:text-foreground transition-colors"
+                        >
+                            Docs
+                        </Link>
                         {env.IS_HOSTED ? (
                             <Link
                                 href="mailto:support@openplaud.com"

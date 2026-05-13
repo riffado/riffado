@@ -1,0 +1,61 @@
+---
+title: OpenPlaud Docs
+description: Open-source transcription and summarization for Plaud Note devices.
+---
+
+OpenPlaud replaces Plaud's subscription with software you can use either
+way: sign up at [openplaud.com](https://openplaud.com) for the hosted
+instance, or run the same codebase on your own infrastructure with
+Docker Compose. Bring any OpenAI-compatible API key, keep your
+recordings, leave whenever you want.
+
+## For everyone
+
+These guides apply whether you're on hosted or self-host — they're
+about using OpenPlaud as a product.
+
+- **[Connect your Plaud account](/docs/guides/connect-plaud-account)** —
+  email-and-code login, plus the Google/Apple workaround.
+- **[AI providers](/docs/guides/ai-providers)** — wire up OpenAI, Groq,
+  OpenRouter, Ollama, LM Studio, or anything else OpenAI-compatible.
+- **[Notifications](/docs/guides/notifications)** — Bark, browser, and
+  email backends.
+- **[Automation API and webhooks](/docs/guides/automation-and-webhooks)** —
+  personal API keys and signed webhook deliveries.
+- **[Backup and restore](/docs/guides/backup-and-restore)** — export
+  every recording, transcript, and audio file so you can leave.
+
+## For self-hosters
+
+You run the stack yourself with `docker compose up`. These pages cover
+install, configuration, and ongoing operation.
+
+- **[Install](/docs/self-hosting/install)** — one-line Docker Compose
+  installer.
+- **[Environment variables](/docs/self-hosting/environment-variables)** —
+  every knob OpenPlaud reads at boot.
+- **[S3-compatible storage](/docs/self-hosting/storage-s3)** — AWS,
+  R2, MinIO, B2, and friends.
+- **[Email (SMTP) setup](/docs/self-hosting/email-smtp)** — wire up
+  outbound mail for the email notification backend.
+- **[Upgrading](/docs/self-hosting/upgrading)** — image tags, the
+  upgrade command, and what to back up first.
+
+## Reference
+
+Concepts, contracts, and the public API surface.
+
+- **[Public API](/docs/reference/public-api)** — the stable read surface
+  for external integrations.
+- **[Architecture](/docs/reference/architecture)** — how the pieces fit
+  together.
+- **[Security model](/docs/reference/security-model)** — authentication,
+  tokens, and trust boundaries.
+- **[Encryption at rest](/docs/reference/encryption-at-rest)** — what's
+  encrypted in the database, what isn't, and how to rotate keys.
+
+## How it ships
+
+OpenPlaud is AGPL-3.0 software. The hosted instance at openplaud.com is
+multi-tenant SaaS we operate; self-host deployments run the same image
+under your control. Both modes are first-class.

@@ -1,0 +1,240 @@
+---
+title: Public API
+description: The /api/v1/* read surface — authentication, endpoints, errors, rate limits.
+---
+
+The `/api/v1/*` surface is OpenPlaud's public, stable, read-only API.
+Personal API keys authenticate it; integrations like Zapier, n8n, and
+your own scripts call into it.
+
+For creating keys and configuring webhooks, see
+[Automation API and webhooks](../guides/automation-and-webhooks).
+
+## Base URL
+
+`https://<your-openplaud-host>/api/v1`
+
+That's whatever you set `APP_URL` to in your `.env`.
+
+## Authentication
+
+Send your personal API key as a Bearer token:
+
+```http
+Authorization: Bearer op_K7vR8x...
+```
+
+Keys are 27 characters: `op_` + 24 URL-safe random characters. Keys
+carry read-only scope today. Revoked or expired keys are rejected with
+`401 UNAUTHORIZED`. Tokens are HMAC-hashed at rest.
+
+## Rate limits
+
+Two buckets enforced on every `/api/v1/*` request:
+
+- **Per IP** — 1,200 requests/minute. Rejects unauth'd flooders.
+- **Per authenticated user** — 600 requests/minute.
+
+Limit responses are JSON with a `Retry-After` header and these
+RateLimit headers:
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 17
+X-RateLimit-Limit: 600
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1700000017
+```
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "code": "RATE_LIMITED",
+  "details": { "retryAfter": 17, "limit": 600, "remaining": 0, "resetAt": 1700000017 }
+}
+```
+
+## Error envelope
+
+Every error response follows the same shape:
+
+```json
+{
+  "error": "Human-readable message",
+  "code": "MACHINE_READABLE_CODE",
+  "details": { "field": "limit" }
+}
+```
+
+Common codes you should handle:
+
+| Code                     | HTTP | Meaning                                              |
+| ------------------------ | ---- | ---------------------------------------------------- |
+| `UNAUTHORIZED`           | 401  | Missing, malformed, revoked, or expired key          |
+| `FORBIDDEN`              | 403  | Authenticated but not allowed                        |
+| `ACCOUNT_SUSPENDED`      | 403  | User account is suspended                            |
+| `INVALID_INPUT`          | 400  | A query param or body field failed validation        |
+| `RECORDING_NOT_FOUND`    | 404  | Recording id doesn't exist (or isn't yours)          |
+| `NOT_FOUND`              | 404  | Generic — e.g. transcript not yet produced           |
+| `RATE_LIMITED`           | 429  | Hit one of the buckets above                         |
+
+The `error` field is safe to display. Never parse `error`; branch on
+`code`.
+
+## Endpoints
+
+### List recordings
+
+```http
+GET /api/v1/recordings
+```
+
+Query parameters (all optional):
+
+| Param               | Type           | Notes                                              |
+| ------------------- | -------------- | -------------------------------------------------- |
+| `limit`             | int (1–100)    | Page size. Default 50.                             |
+| `cursor`            | opaque string  | From a previous response's `next_cursor`.          |
+| `created_since`     | ISO timestamp  | Filter to recordings created at or after this time.|
+| `updated_since`     | ISO timestamp  | Filter to recordings updated at or after this time.|
+| `has_transcription` | `true`/`false` | Filter on transcription presence.                  |
+
+```bash
+curl -H "Authorization: Bearer op_K7vR8x..." \
+  "https://your-host/api/v1/recordings?limit=20&has_transcription=true"
+```
+
+```js
+const res = await fetch(
+  "https://your-host/api/v1/recordings?limit=20",
+  { headers: { Authorization: `Bearer ${process.env.OPENPLAUD_KEY}` } },
+);
+const { data, next_cursor, has_more } = await res.json();
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "...",
+      "title": "Team standup",
+      "created_at": "2026-05-13T12:00:00.000Z",
+      "updated_at": "2026-05-13T12:00:00.000Z",
+      "recorded_at": "2026-05-13T11:30:00.000Z",
+      "duration_ms": 1820000,
+      "filesize_bytes": 1234567,
+      "device": { "serial_number": "...", "name": "Plaud Note", "model": "..." },
+      "has_transcription": true,
+      "has_summary": false,
+      "links": {
+        "self": "/api/v1/recordings/...",
+        "transcript": "/api/v1/recordings/.../transcript",
+        "audio": "/api/v1/recordings/.../audio"
+      }
+    }
+  ],
+  "next_cursor": "eyJ1cGRhdGVkQXQiOi...",
+  "has_more": true
+}
+```
+
+Pagination is **cursor-based, descending by `updated_at`**. When
+`has_more` is `true`, pass `next_cursor` back in the next request.
+When it's `false`, you've reached the end.
+
+### Get a recording
+
+```http
+GET /api/v1/recordings/{id}
+```
+
+```bash
+curl -H "Authorization: Bearer op_..." \
+  https://your-host/api/v1/recordings/01J...
+```
+
+Returns the same shape as a list item, plus `transcript` and `summary`
+inline when they exist. Returns `404 RECORDING_NOT_FOUND` if the
+recording doesn't exist or isn't yours.
+
+### Get a transcript
+
+```http
+GET /api/v1/recordings/{id}/transcript
+```
+
+```bash
+curl -H "Authorization: Bearer op_..." \
+  https://your-host/api/v1/recordings/01J.../transcript
+```
+
+```json
+{
+  "language": "en",
+  "text": "Full plaintext transcript...",
+  "provider": "groq",
+  "model": "whisper-large-v3",
+  "created_at": "2026-05-13T12:01:23.000Z"
+}
+```
+
+Returns `404 NOT_FOUND` if the recording exists but no transcription
+has been produced for it yet. Listen for `transcription.completed`
+webhooks to know when to retry.
+
+### Stream audio
+
+```http
+GET /api/v1/recordings/{id}/audio
+```
+
+```bash
+curl -L -H "Authorization: Bearer op_..." \
+  -o recording.mp3 \
+  https://your-host/api/v1/recordings/01J.../audio
+```
+
+Supports HTTP `Range` requests (RFC 7233):
+
+```bash
+curl -L -H "Authorization: Bearer op_..." \
+  -H "Range: bytes=0-65535" \
+  -o head.mp3 \
+  https://your-host/api/v1/recordings/01J.../audio
+```
+
+- For recordings on **local storage**, the response is the audio bytes
+  with `Content-Type` derived from the file extension and
+  `Cache-Control: private, max-age=300`. Range requests return `206`
+  with `Content-Range`.
+- For recordings on **S3 storage**, the response is a `302` redirect
+  to a 5-minute pre-signed URL. Follow the redirect (`curl -L`); your
+  HTTP client will fetch the audio directly from S3 with no extra
+  egress through OpenPlaud.
+
+`416` with a `Content-Range: bytes */<size>` header is returned only
+for unsatisfiable starts (past EOF or `start > end`). Oversized `end`
+values are clamped to `fileSize - 1` per RFC 7233.
+
+## What about writes?
+
+There are no public write endpoints. The `/api/v1/*` surface is
+read-only by design today. If you need to push data *in*, run the
+OpenPlaud UI or sync the source Plaud account via the configured
+sync loop.
+
+## Stability
+
+The `/api/v1/*` surface is a versioned public contract. Once shipped:
+
+- Existing endpoints don't get breaking changes — fields are added,
+  not repurposed.
+- Error `code` values are stable. New codes get added; old ones don't
+  get renamed.
+- Removals or breaking changes go through a deprecation cycle with a
+  CHANGELOG note.
+
+If you need a new field, capability, or endpoint, file an issue. The
+shape gets discussed there before it ships.

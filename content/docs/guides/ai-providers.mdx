@@ -1,0 +1,83 @@
+---
+title: AI providers
+description: Configure OpenAI-compatible transcription and summarization providers.
+---
+
+OpenPlaud uses the OpenAI SDK with a configurable `baseURL`. Any provider
+that exposes an OpenAI-compatible API works: OpenAI itself, Groq,
+OpenRouter, Together, Azure OpenAI, LM Studio, Ollama, and anything else
+that speaks the same wire format.
+
+You can configure multiple providers and pick which one runs
+transcription and which runs summarization on a per-recording basis.
+
+## Adding a provider
+
+**Settings → AI providers → Add provider** opens a dialog with a preset
+list. Each preset pre-fills `baseURL`, default model, and a hint about
+which API surface the transcription worker should use:
+
+- **Whisper-style** (`/v1/audio/transcriptions`, multipart upload) — the
+  classic OpenAI Whisper surface. Used by OpenAI, Groq Whisper, Together
+  Whisper, LM Studio, Ollama.
+- **Chat-style** (`/v1/chat/completions` with an `input_audio` content
+  part) — for providers that expose audio-input LLMs instead of a
+  dedicated transcription endpoint. Used by OpenRouter routing
+  Gemini / GPT-audio / Voxtral.
+
+Pick a preset, paste your API key, choose a default model, save. Repeat
+for additional providers.
+
+## Preset reference
+
+| Preset      | Base URL                                     | Notes                                                            |
+| ----------- | -------------------------------------------- | ---------------------------------------------------------------- |
+| OpenAI      | *(blank, defaults to api.openai.com)*        | Production quality; `whisper-1`, `gpt-4o-transcribe`             |
+| Groq        | `https://api.groq.com/openai/v1`             | Free Whisper API, very fast                                      |
+| OpenRouter  | `https://openrouter.ai/api/v1`               | Chat-style transcription; many summarization models in one key   |
+| Together AI | `https://api.together.xyz/v1`                | Cost-effective, broad model selection                            |
+| Azure       | `https://<resource>.openai.azure.com/...`    | Enterprise compliance, deployment-scoped URLs                    |
+| LM Studio   | `http://localhost:1234/v1`                   | Local, 100% offline                                              |
+| Ollama      | `http://localhost:11434/v1`                  | Local, easy model management                                     |
+| Custom      | *(freeform)*                                 | Anything else OpenAI-compatible                                  |
+
+LM Studio and Ollama presets default to `http://localhost`. From inside
+a Docker container, `localhost` is the container itself, not the host
+machine — use `http://host.docker.internal:<port>` on Mac/Windows, or
+the Docker bridge IP on Linux, to reach an AI server running on the
+host. If you run Ollama in the same Docker network as OpenPlaud, use the
+service hostname (`http://ollama:11434/v1`).
+
+## Choosing models
+
+The preset list ships with a curated set of known transcription model
+ids per provider. When the API exposes structured capability metadata
+(today only OpenRouter), the Add/Edit dialog can fetch the live list of
+audio-capable models for you. For everyone else, the curated list drives
+the dropdown and a **Custom…** option lets you type an id by hand for
+new releases that ship before our next version bump.
+
+Summarization is more forgiving — any chat model that follows the
+OpenAI `chat/completions` shape works. Pick something fast and cheap
+(e.g. `gpt-4o-mini`, `llama-3.1-70b-versatile`) unless you have a
+specific reason to use a larger model.
+
+## What gets sent to the provider
+
+Plaintext audio (for transcription) and plaintext transcript text
+(for summarization). The trust boundary is the provider you picked.
+OpenPlaud's at-rest encryption protects the database, not the network
+hop to your AI provider — see
+[Encryption at rest](../reference/encryption-at-rest) for the explicit
+list of what that layer does and does not cover.
+
+If you need to minimise that trust boundary, run a local provider (LM
+Studio or Ollama) on the same machine as a self-host instance. Both
+transcription and summarization stay on your hardware.
+
+## Switching the active provider
+
+On any recording, the workstation panel exposes a transcription provider
+picker and a summary provider picker. Changes apply immediately; you can
+re-run a transcription with a different provider if the first result was
+poor.

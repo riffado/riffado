@@ -1,0 +1,125 @@
+---
+title: Architecture
+description: How the pieces fit together — Next.js app, Postgres, sync worker, pluggable storage and AI.
+---
+
+OpenPlaud is a single Next.js application backed by Postgres. There's
+no separate API service, no separate worker container, no message
+queue. Everything runs in one process; horizontal scaling means
+running more copies of that process behind a load balancer.
+
+## The runtime
+
+- **Web + API + worker** — all one Next.js process. The sync worker,
+  the transcription worker, and the webhook delivery worker are
+  background tasks inside the same process.
+- **Postgres** — the only stateful dependency. Better Auth uses it
+  for sessions, Drizzle ORM for everything else.
+- **Storage** — local filesystem or any S3-compatible bucket. Audio
+  files only; metadata is in Postgres.
+- **AI providers** — external HTTPS calls to whatever OpenAI-compatible
+  endpoints the user configured. Per-user, per-provider.
+
+## Tech stack
+
+| Layer        | Choice                                                  |
+| ------------ | ------------------------------------------------------- |
+| Framework    | Next.js (App Router)                                    |
+| Language     | TypeScript                                              |
+| Styling      | Tailwind CSS                                            |
+| Auth         | Better Auth                                             |
+| DB           | Postgres                                                |
+| ORM          | Drizzle                                                 |
+| AI           | OpenAI SDK with configurable `baseURL`                  |
+| Storage      | Local FS or any S3-compatible API                       |
+| Audio        | Wavesurfer.js for the player                            |
+| Test runner  | Bun                                                     |
+| Docs site    | Fumadocs (you're reading the output)                    |
+
+## Sync is pull-based
+
+Plaud has no push API. OpenPlaud's sync worker
+(`src/lib/sync/sync-recordings.ts`) is a pull loop:
+
+1. List recordings from the connected Plaud account (paginated).
+2. For each one, compare `plaudFileId` + `version_ms` to the database.
+   New rows get inserted; updated rows get refreshed; unchanged rows
+   are skipped.
+3. Download the audio file once per new recording, encode the storage
+   key, hand off to the configured storage provider.
+4. Emit `recording.synced` to any webhook endpoints subscribed.
+5. The sync loop is **idempotent**. Interrupted runs resume on the
+   next tick without producing duplicates.
+
+There is no Plaud webhook ingestion path because Plaud does not offer
+one. If they ever do, the loop becomes a thin shim.
+
+## Pluggable storage
+
+`StorageProvider` (`src/lib/storage/types.ts`) is the abstraction:
+`uploadFile`, `downloadFile`, `getSignedUrl`, `deleteFile`,
+`testConnection`. Two adapters ship today — `local-storage.ts` and
+`s3-storage.ts` — selected via the `createStorageProvider()` factory
+in `src/lib/storage/factory.ts`.
+
+Feature code never branches on storage type. The factory does that
+once; everywhere else gets a `StorageProvider`. Adding a new adapter
+is a five-step edit; see the README "Extension Points" section for the
+exact checklist.
+
+## Pluggable AI
+
+OpenPlaud doesn't have a per-provider abstraction class. Instead, the
+OpenAI SDK is configured with a per-user `baseURL` and the same SDK
+calls work against OpenAI, Groq, OpenRouter, Ollama, LM Studio, and
+anything else that speaks the OpenAI wire protocol.
+
+Two transcription "styles" coexist:
+
+- **Whisper-style** — `POST /v1/audio/transcriptions` with multipart
+  audio. The classic OpenAI surface.
+- **Chat-style** — `POST /v1/chat/completions` with an `input_audio`
+  content part. Used by providers that expose audio-input LLMs
+  instead of a dedicated transcription endpoint (today: OpenRouter
+  routing Gemini, GPT-audio, Voxtral).
+
+A `transcriptionStyle` field on each provider preset
+(`src/lib/ai/provider-presets.ts`) tells the worker which surface to
+hit. Adding a new provider with non-standard auth (e.g. AWS Bedrock
+SigV4) means writing an adapter that fronts the provider behind an
+OpenAI-compatible surface, **not** branching on provider name in
+feature code.
+
+## Transcription
+
+Transcription happens server-side via whichever OpenAI-compatible
+provider the user configured. Per-recording choice of provider and
+model, changeable from the workstation panel. See
+[AI providers](../guides/ai-providers).
+
+## Routes
+
+- `src/app/(app)/` — authenticated routes (dashboard, recordings,
+  settings, workstation).
+- `src/app/(auth)/` — login, register, OTP screens.
+- `src/app/(docs)/` — this docs site.
+- `src/app/api/` — internal routes (session-authenticated).
+- `src/app/api/v1/` — public, key-authenticated, stable read surface.
+  See [Public API](./public-api).
+
+## Multi-process safety
+
+Background workers are safe to run with multiple OpenPlaud processes
+against the same database. The sync worker, transcription worker, and
+webhook worker all claim work at the database level with
+`SELECT … FOR UPDATE SKIP LOCKED` rather than relying on an in-memory
+`running` flag. The in-memory flags are advisory only. The default
+Docker Compose deployment runs a single app container against one
+Postgres, but the code doesn't depend on that.
+
+## Where to look next
+
+- [Public API](./public-api) — the stable external surface.
+- [Security model](./security-model) — encryption, auth tokens, and
+  what's enforced where.
+- [Environment variables](../self-hosting/environment-variables) — every knob the self-host instance reads at boot.
