@@ -55,4 +55,56 @@ describe("provider-presets", () => {
             expect(findPreset("Nope")).toBeUndefined();
         });
     });
+
+    describe("knownTranscriptionModels", () => {
+        it("OpenAI includes whisper-1 plus the gpt-4o-transcribe family", () => {
+            const models = findPreset("OpenAI")?.knownTranscriptionModels;
+            expect(models).toEqual([
+                "whisper-1",
+                "gpt-4o-transcribe",
+                "gpt-4o-mini-transcribe",
+                "gpt-4o-transcribe-diarize",
+            ]);
+        });
+
+        it("Groq lists current Whisper Large v3 models (no distil)", () => {
+            const models = findPreset("Groq")?.knownTranscriptionModels;
+            expect(models).toEqual([
+                "whisper-large-v3-turbo",
+                "whisper-large-v3",
+            ]);
+        });
+
+        it("Together AI uses the correct prefixed Whisper id", () => {
+            // Regression: the preset default used to be `whisper-large-v3`
+            // (no prefix), which 404s on Together AI. Their actual id is
+            // `openai/whisper-large-v3` per the audio section of
+            // docs.together.ai/docs/serverless-models.
+            const preset = findPreset("Together AI");
+            expect(preset?.defaultModel).toBe("openai/whisper-large-v3");
+            expect(preset?.knownTranscriptionModels).toEqual([
+                "openai/whisper-large-v3",
+                "nvidia/parakeet-tdt-0.6b-v3",
+            ]);
+        });
+
+        it("local + custom presets have no curated list (freeform input)", () => {
+            expect(
+                findPreset("LM Studio")?.knownTranscriptionModels,
+            ).toBeUndefined();
+            expect(
+                findPreset("Ollama")?.knownTranscriptionModels,
+            ).toBeUndefined();
+            expect(
+                findPreset("Custom")?.knownTranscriptionModels,
+            ).toBeUndefined();
+        });
+
+        it("every defaultModel appears in its preset's known list when one exists", () => {
+            for (const p of PROVIDER_PRESETS) {
+                if (!p.knownTranscriptionModels) continue;
+                expect(p.knownTranscriptionModels).toContain(p.defaultModel);
+            }
+        });
+    });
 });

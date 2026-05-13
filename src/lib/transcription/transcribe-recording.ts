@@ -9,10 +9,12 @@ import {
     userSettings,
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
+import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import {
     getResponseFormat,
     parseTranscriptionResponse,
@@ -114,17 +116,41 @@ export async function transcribeRecording(
 
         const model = credentials.defaultModel || "whisper-1";
 
-        const responseFormat = getResponseFormat(model);
+        // Chat-style providers (OpenRouter today) don't implement
+        // `/v1/audio/transcriptions` — calling that path returns a 404
+        // with a non-JSON body that crashes the OpenAI SDK's response
+        // parser (issue #122). Route those through chat-completions
+        // with an `input_audio` content part instead.
+        const transcriptionStyle = getTranscriptionStyle(credentials.provider);
 
-        const transcription = await openai.audio.transcriptions.create({
-            file: audioFile,
-            model,
-            response_format: responseFormat,
-            ...(defaultLanguage ? { language: defaultLanguage } : {}),
-        });
+        let transcriptionText: string;
+        let detectedLanguage: string | null;
 
-        const { text: transcriptionText, detectedLanguage } =
-            parseTranscriptionResponse(transcription, responseFormat);
+        if (transcriptionStyle === "chat") {
+            const result = await chatTranscribe({
+                client: openai,
+                model,
+                audioBuffer,
+                contentType,
+                language: defaultLanguage,
+            });
+            transcriptionText = result.text;
+            detectedLanguage = result.detectedLanguage;
+        } else {
+            const responseFormat = getResponseFormat(model);
+            const transcription = await openai.audio.transcriptions.create({
+                file: audioFile,
+                model,
+                response_format: responseFormat,
+                ...(defaultLanguage ? { language: defaultLanguage } : {}),
+            });
+            const parsed = parseTranscriptionResponse(
+                transcription,
+                responseFormat,
+            );
+            transcriptionText = parsed.text;
+            detectedLanguage = parsed.detectedLanguage;
+        }
 
         const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
         try {

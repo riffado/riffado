@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
+import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
 import {
     Dialog,
     DialogContent,
@@ -178,20 +179,14 @@ export function AddProviderDialog({
                         )}
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="defaultModel">
-                            Default Model (Optional)
-                        </Label>
-                        <Input
-                            id="defaultModel"
-                            type="text"
-                            placeholder="whisper-1, gpt-4o, etc."
-                            value={defaultModel}
-                            onChange={(e) => setDefaultModel(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                    </div>
+                    <TranscriptionModelPicker
+                        preset={selectedPreset}
+                        apiKey={apiKey}
+                        baseUrl={baseUrl}
+                        value={defaultModel}
+                        onChange={setDefaultModel}
+                        disabled={isLoading}
+                    />
 
                     <Panel variant="inset" className="space-y-2 text-sm">
                         <label className="flex items-center gap-2 cursor-pointer">
