@@ -18,9 +18,17 @@ jobs:
       contents: write
 
     steps:
+      # Check out the tag the workflow is publishing for, not the
+      # branch the dispatch came from. On `push: tags: v*` this is the
+      # tag commit by default; on `workflow_dispatch` `actions/checkout`
+      # otherwise defaults to the dispatch branch (typically `main`),
+      # which would make the tag/package.json gate below read main's
+      # package.json instead of the tag's. Either way, pin to the input
+      # tag when present.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Determine tag
