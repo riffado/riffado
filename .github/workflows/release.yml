@@ -18,9 +18,17 @@ jobs:
       contents: write
 
     steps:
+      # Check out the tag the workflow is publishing for, not the
+      # branch the dispatch came from. On `push: tags: v*` this is the
+      # tag commit by default; on `workflow_dispatch` `actions/checkout`
+      # otherwise defaults to the dispatch branch (typically `main`),
+      # which would make the tag/package.json gate below read main's
+      # package.json instead of the tag's. Either way, pin to the input
+      # tag when present.
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
           fetch-depth: 0
 
       - name: Determine tag
@@ -41,6 +49,25 @@ jobs:
             PREV=$(git rev-list --max-parents=0 HEAD)
           fi
           echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+
+      # Hard gate: refuse to publish if package.json doesn't match the tag.
+      # This is the structural fix for the drift that produced issue #123
+      # (tag v0.4.1 published while main still said 0.2.0). The normal
+      # release path can't trip this -- scripts/release.ts bumps before
+      # tagging -- but a manual tag, a bad rebase, or a hand-edited
+      # package.json all can. Fail loud rather than ship a mislabeled
+      # GitHub Release.
+      - name: Verify package.json matches tag
+        env:
+          TAG: ${{ steps.tag.outputs.current }}
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          EXPECTED="${TAG#v}"
+          if [ "$PKG_VERSION" != "$EXPECTED" ]; then
+            echo "::error file=package.json::package.json version ($PKG_VERSION) does not match tag ($TAG). Push the release bump commit to main before tagging."
+            exit 1
+          fi
 
       # Pull release notes straight from CHANGELOG.md. The maintainer-curated
       # `## [X.Y.Z]` section is the single source of truth -- the workflow

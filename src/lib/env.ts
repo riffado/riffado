@@ -36,6 +36,18 @@ export const envSchema = z.object({
         .optional()
         .transform((val) => val === "true"),
 
+    // Disable the self-host update-available check (GitHub releases API).
+    // When `true`, the footer never reaches out to api.github.com to look
+    // for a newer release tag. Useful for instances with strict egress
+    // controls or operators who don't want any phone-home behavior.
+    // Defaults to `false` (check enabled). Inert when IS_HOSTED=true --
+    // the hosted instance hides the badge unconditionally because the
+    // operator (us) controls deploys.
+    DISABLE_UPDATE_CHECK: z
+        .string()
+        .optional()
+        .transform((val) => val === "true"),
+
     // Server-required values are optional at schema level so that `next build`
     // (phase-production-build) doesn't depend on server-only secrets.
     DATABASE_URL: z.string().optional(),
@@ -176,6 +188,7 @@ function validateEnv(): Env {
         const parsed = envSchema.parse({
             IS_HOSTED: process.env.IS_HOSTED,
             DISABLE_REGISTRATION: process.env.DISABLE_REGISTRATION,
+            DISABLE_UPDATE_CHECK: process.env.DISABLE_UPDATE_CHECK,
             DATABASE_URL: process.env.DATABASE_URL,
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
             API_TOKEN_HASH_SECRET: process.env.API_TOKEN_HASH_SECRET,

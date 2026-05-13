@@ -1,6 +1,6 @@
 {
     "name": "openplaud",
-    "version": "0.2.0",
+    "version": "0.4.2",
     "description": "Self-hosted AI transcription interface for Plaud Note devices",
     "author": "OpenPlaud Contributors",
     "license": "AGPL-3.0",

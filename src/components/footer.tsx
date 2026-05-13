@@ -1,9 +1,10 @@
-"use client";
-
 import { Heart } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Github } from "@/components/icons/icons";
 import { Logo } from "@/components/icons/logo";
+import { UpdateBadge } from "@/components/update-badge";
+import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
 
 export function Footer() {
     const currentYear = new Date().getFullYear();
@@ -74,6 +75,21 @@ export function Footer() {
                         >
                             <Github className="size-4 text-muted-foreground/50 hover:text-muted-foreground transition-colors" />
                         </Link>
+                        <Link
+                            href={APP_RELEASE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors font-mono uppercase tracking-wider"
+                            aria-label={`Release notes for OpenPlaud ${APP_VERSION_TAG}`}
+                        >
+                            {APP_VERSION_TAG}
+                        </Link>
+                        {/* Self-host-only update notice. Suspended with a null
+                            fallback so a cold GitHub-API cache doesn't block
+                            the rest of the footer from streaming. */}
+                        <Suspense fallback={null}>
+                            <UpdateBadge />
+                        </Suspense>
                         <div className="flex gap-1">
                             {[...Array(3)].map((_, i) => (
                                 <div

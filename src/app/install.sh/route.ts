@@ -3,7 +3,7 @@ import {
     INSTALL_SCRIPT_HEADERS,
     renderInstallScript,
 } from "@/lib/install-script";
-import packageJson from "../../../package.json" with { type: "json" };
+import { APP_VERSION_TAG } from "@/lib/version";
 
 // Always-latest installer entry point. Shape:
 //   curl -fsSL https://openplaud.com/install.sh | sh
@@ -16,10 +16,8 @@ import packageJson from "../../../package.json" with { type: "json" };
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const FALLBACK_VERSION = `v${packageJson.version}`;
-
 export async function GET() {
-    const tag = (await fetchLatestReleaseTag()) ?? FALLBACK_VERSION;
+    const tag = (await fetchLatestReleaseTag()) ?? APP_VERSION_TAG;
     const script = await renderInstallScript(tag);
     return new Response(script, { headers: INSTALL_SCRIPT_HEADERS });
 }
