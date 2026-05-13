@@ -169,6 +169,12 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
     });
 
     it("bumps recording updatedAt inside the manual transcription transaction", async () => {
+        // The manual route now delegates to the shared `transcribeRecording`
+        // worker (issue #101 consolidation), so the select chain is:
+        //   1. recording lookup
+        //   2. existing transcription (none — manual re-transcribe path)
+        //   3. credentials (default transcription provider)
+        //   4. user settings
         (db.select as Mock)
             .mockReturnValueOnce(
                 selectRows([
@@ -181,6 +187,7 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
                     },
                 ]),
             )
+            .mockReturnValueOnce(selectRows([]))
             .mockReturnValueOnce(
                 selectRows([
                     {
@@ -189,6 +196,16 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
                         apiKey: "encrypted-key",
                         baseUrl: null,
                         defaultModel: "whisper-1",
+                    },
+                ]),
+            )
+            .mockReturnValueOnce(
+                selectRows([
+                    {
+                        autoGenerateTitle: false,
+                        syncTitleToPlaud: false,
+                        transcriptionQuality: "balanced",
+                        defaultTranscriptionLanguage: null,
                     },
                 ]),
             );

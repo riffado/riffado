@@ -1,9 +1,10 @@
 import type {
+    TranscriptionCreateParamsNonStreaming,
     TranscriptionDiarized,
     TranscriptionVerbose,
 } from "openai/resources/audio/transcriptions";
 
-type ResponseFormat = "diarized_json" | "json" | "verbose_json";
+export type ResponseFormat = "diarized_json" | "json" | "verbose_json";
 
 /**
  * Pick the correct `response_format` for a given transcription model.
@@ -48,4 +49,38 @@ export function parseTranscriptionResponse(
     const text =
         typeof transcription === "string" ? transcription : (plain.text ?? "");
     return { text, detectedLanguage: null };
+}
+
+/**
+ * Build the parameter object passed to `openai.audio.transcriptions.create`.
+ *
+ * Centralised so the sync-worker path and the manual
+ * `/api/recordings/[id]/transcribe` route cannot drift on required
+ * parameters (issue #101 — `gpt-4o-transcribe-diarize` requires
+ * `chunking_strategy`; OpenAI returns HTTP 400 without it).
+ *
+ * Rules encoded here:
+ *  - When `response_format === "diarized_json"` we send
+ *    `chunking_strategy: "auto"`. OpenAI rejects diarize requests that
+ *    omit this field (documented as required for inputs >30s, in
+ *    practice rejected for all diarize calls regardless of length).
+ *  - `language` is only included when set. The SDK accepts it alongside
+ *    diarize.
+ */
+export function buildTranscriptionParams(args: {
+    file: File;
+    model: string;
+    responseFormat: ResponseFormat;
+    language?: string;
+}): TranscriptionCreateParamsNonStreaming {
+    const { file, model, responseFormat, language } = args;
+    return {
+        file,
+        model,
+        response_format: responseFormat,
+        ...(responseFormat === "diarized_json"
+            ? { chunking_strategy: "auto" as const }
+            : {}),
+        ...(language ? { language } : {}),
+    };
 }

@@ -14,17 +14,48 @@ import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import {
+    buildTranscriptionParams,
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { emitEvent } from "@/lib/webhooks/emit";
 
+/**
+ * Discriminator for typed error handling at the route boundary. Internal
+ * sync callers can ignore it; the manual
+ * `/api/recordings/[id]/transcribe` route maps these to HTTP status codes.
+ */
+export type TranscribeErrorCode =
+    | "RECORDING_NOT_FOUND"
+    | "NO_TRANSCRIPTION_PROVIDER"
+    | "RECORDING_DELETED"
+    | "TRANSCRIPTION_FAILED";
+
+export interface TranscribeOptions {
+    /** Use a specific provider (by id, user-scoped) instead of the user's default. */
+    providerId?: string;
+    /** Override the provider's default model for this single call. */
+    model?: string;
+}
+
+export interface TranscribeResult {
+    success: boolean;
+    error?: string;
+    errorCode?: TranscribeErrorCode;
+    /** Present on success. Plaintext transcript. */
+    text?: string;
+    /** Present on success when the provider returned a language. */
+    detectedLanguage?: string | null;
+}
+
 export async function transcribeRecording(
     userId: string,
     recordingId: string,
-): Promise<{ success: boolean; error?: string }> {
+    opts: TranscribeOptions = {},
+): Promise<TranscribeResult> {
     try {
         const [recording] = await db
             .select()
@@ -44,7 +75,11 @@ export async function transcribeRecording(
             .limit(1);
 
         if (!recording) {
-            return { success: false, error: "Recording not found" };
+            return {
+                success: false,
+                error: "Recording not found",
+                errorCode: "RECORDING_NOT_FOUND",
+            };
         }
 
         const [existingTranscription] = await db
@@ -59,22 +94,48 @@ export async function transcribeRecording(
             .limit(1);
 
         if (existingTranscription?.text) {
-            return { success: true };
+            // Idempotent: a prior run already produced a transcript. The
+            // manual re-transcribe path purges the transcription row
+            // before calling us, so this short-circuit only fires when a
+            // duplicate auto-transcribe was scheduled.
+            return {
+                success: true,
+                text: decryptText(existingTranscription.text),
+                detectedLanguage: existingTranscription.detectedLanguage,
+            };
         }
 
-        const [credentials] = await db
-            .select()
-            .from(apiCredentials)
-            .where(
-                and(
-                    eq(apiCredentials.userId, userId),
-                    eq(apiCredentials.isDefaultTranscription, true),
-                ),
-            )
-            .limit(1);
+        // Provider selection: explicit `providerId` (manual override
+        // from the route, user-scoped lookup by id) takes precedence
+        // over the user's default transcription provider.
+        const [credentials] = opts.providerId
+            ? await db
+                  .select()
+                  .from(apiCredentials)
+                  .where(
+                      and(
+                          eq(apiCredentials.id, opts.providerId),
+                          eq(apiCredentials.userId, userId),
+                      ),
+                  )
+                  .limit(1)
+            : await db
+                  .select()
+                  .from(apiCredentials)
+                  .where(
+                      and(
+                          eq(apiCredentials.userId, userId),
+                          eq(apiCredentials.isDefaultTranscription, true),
+                      ),
+                  )
+                  .limit(1);
 
         if (!credentials) {
-            return { success: false, error: "No transcription API configured" };
+            return {
+                success: false,
+                error: "No transcription API configured",
+                errorCode: "NO_TRANSCRIPTION_PROVIDER",
+            };
         }
 
         const [settings] = await db
@@ -100,21 +161,16 @@ export async function transcribeRecording(
         const storage = await createUserStorageProvider(userId);
         const audioBuffer = await storage.downloadFile(recording.storagePath);
 
-        const contentType = recording.storagePath.endsWith(".mp3")
-            ? "audio/mpeg"
-            : "audio/opus";
         // `recording.filename` is encrypted at rest; decrypt before passing
         // to the transcription provider as a filename hint.
         const decryptedFilename = decryptText(recording.filename);
-        const audioFile = new File(
-            [new Uint8Array(audioBuffer)],
+        const { file: audioFile, contentType } = buildAudioFile(
+            audioBuffer,
+            recording.storagePath,
             decryptedFilename,
-            {
-                type: contentType,
-            },
         );
 
-        const model = credentials.defaultModel || "whisper-1";
+        const model = opts.model || credentials.defaultModel || "whisper-1";
 
         // Chat-style providers (OpenRouter today) don't implement
         // `/v1/audio/transcriptions` — calling that path returns a 404
@@ -138,12 +194,14 @@ export async function transcribeRecording(
             detectedLanguage = result.detectedLanguage;
         } else {
             const responseFormat = getResponseFormat(model);
-            const transcription = await openai.audio.transcriptions.create({
-                file: audioFile,
-                model,
-                response_format: responseFormat,
-                ...(defaultLanguage ? { language: defaultLanguage } : {}),
-            });
+            const transcription = await openai.audio.transcriptions.create(
+                buildTranscriptionParams({
+                    file: audioFile,
+                    model,
+                    responseFormat,
+                    language: defaultLanguage,
+                }),
+            );
             const parsed = parseTranscriptionResponse(
                 transcription,
                 responseFormat,
@@ -185,6 +243,9 @@ export async function transcribeRecording(
                 const encryptedTranscriptionText =
                     encryptText(transcriptionText);
 
+                // Persist the *actual* model used (which may differ from
+                // the provider default when the manual route supplied an
+                // override). Mirrors what the OpenAI request really ran.
                 if (currentTranscription) {
                     await tx
                         .update(transcriptions)
@@ -193,7 +254,7 @@ export async function transcribeRecording(
                             detectedLanguage,
                             transcriptionType: "server",
                             provider: credentials.provider,
-                            model: credentials.defaultModel || "whisper-1",
+                            model,
                         })
                         .where(
                             and(
@@ -209,7 +270,7 @@ export async function transcribeRecording(
                         detectedLanguage,
                         transcriptionType: "server",
                         provider: credentials.provider,
-                        model: credentials.defaultModel || "whisper-1",
+                        model,
                     });
                 }
 
@@ -229,6 +290,7 @@ export async function transcribeRecording(
                 return {
                     success: false,
                     error: "Recording was deleted before transcription finished",
+                    errorCode: "RECORDING_DELETED",
                 };
             }
             throw txError;
@@ -317,7 +379,11 @@ export async function transcribeRecording(
 
         await emitEvent("transcription.completed", userId, recordingId);
 
-        return { success: true };
+        return {
+            success: true,
+            text: transcriptionText,
+            detectedLanguage,
+        };
     } catch (error) {
         console.error("Error transcribing recording:", error);
         await emitEvent("transcription.failed", userId, recordingId, {
@@ -327,6 +393,7 @@ export async function transcribeRecording(
             success: false,
             error:
                 error instanceof Error ? error.message : "Transcription failed",
+            errorCode: "TRANSCRIPTION_FAILED",
         };
     }
 }
