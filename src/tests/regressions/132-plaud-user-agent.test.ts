@@ -186,11 +186,12 @@ describe("issue #132: every Plaud API fetch sends User-Agent", () => {
     });
 
     it("client.ts: PlaudClient.request sends UA on recording endpoints", async () => {
-        // Two-step flow: workspace token mint (WT not needed for this
-        // assertion — we just need the request to reach /file/simple/web),
-        // then the actual recording fetch. We force the UT-fallback path
-        // by failing the mint, which keeps the test focused on the second
-        // fetch (the one inside PlaudClient.request).
+        // Two-step flow. With no cached workspaceId, the client first calls
+        // /team-app/workspaces/list (covered above); we 500 that call to
+        // force the UT-fallback path so the second fetch is the recordings
+        // call itself — which is what this test asserts against.
+        // (Mint is never attempted on this path because the list step
+        // throws before resolveWorkspaceToken reaches mintPlaudWorkspaceToken.)
         mockFetch
             .mockResolvedValueOnce(
                 mockJson({ status: 500 }, { ok: false, status: 500 }),
