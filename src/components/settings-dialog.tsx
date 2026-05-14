@@ -132,10 +132,12 @@ const settingsNav: NavItem[] = settingsNavGroups.flatMap((g) => g.items);
 
 const STORAGE_KEY = "settings-last-section";
 
+const EMPTY_PROVIDERS: Provider[] = [];
+
 export function SettingsDialog({
     open,
     onOpenChange,
-    initialProviders = [],
+    initialProviders = EMPTY_PROVIDERS,
     onReRunOnboarding,
     isHosted = false,
 }: SettingsDialogProps) {
@@ -442,7 +444,7 @@ export function SettingsDialog({
                                                 value={item.id}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <item.icon className="w-4 h-4" />
+                                                    <item.icon className="size-4" />
                                                     <span>{item.name}</span>
                                                 </div>
                                             </SelectItem>

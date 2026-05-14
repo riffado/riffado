@@ -40,7 +40,7 @@ const OnboardingDialogContent = React.forwardRef<
         >
             {children}
             <DialogPrimitive.Close className="group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none">
-                <X className="h-4 w-4 opacity-60 transition-opacity group-hover:opacity-100" />
+                <X className="size-4 opacity-60 transition-opacity group-hover:opacity-100" />
                 <span className="sr-only">Close</span>
             </DialogPrimitive.Close>
         </DialogPrimitive.Content>

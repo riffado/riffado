@@ -9,7 +9,7 @@ export function BackButton() {
 
     return (
         <MetalButton onClick={() => router.push("/dashboard")} size="icon">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="size-4" />
         </MetalButton>
     );
 }

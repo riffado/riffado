@@ -204,7 +204,7 @@ export function TranscriptionSection({
                             className="w-full md:w-auto"
                         >
                             {isProcessing
-                                ? "Processing..."
+                                ? "Processing…"
                                 : transcription
                                   ? "Re-transcribe"
                                   : "Transcribe"}
@@ -276,17 +276,17 @@ export function TranscriptionSection({
                                 >
                                     {isSummarizing ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />
-                                            Generating...
+                                            <Loader2 className="size-4 mr-2 animate-spin inline" />
+                                            Generating…
                                         </>
                                     ) : summaryData ? (
                                         <>
-                                            <RefreshCw className="w-4 h-4 mr-2 inline" />
+                                            <RefreshCw className="size-4 mr-2 inline" />
                                             Re-generate
                                         </>
                                     ) : (
                                         <>
-                                            <Sparkles className="w-4 h-4 mr-2 inline" />
+                                            <Sparkles className="size-4 mr-2 inline" />
                                             Summarize
                                         </>
                                     )}
@@ -296,9 +296,9 @@ export function TranscriptionSection({
 
                         {isSummarizing ? (
                             <Panel variant="inset" className="text-center py-8">
-                                <Loader2 className="w-8 h-8 animate-spin text-accent-cyan mx-auto mb-4" />
+                                <Loader2 className="size-8 animate-spin text-accent-cyan mx-auto mb-4" />
                                 <p className="text-muted-foreground">
-                                    Generating summary...
+                                    Generating summary…
                                 </p>
                             </Panel>
                         ) : summaryData?.summary ? (
@@ -311,9 +311,9 @@ export function TranscriptionSection({
                                     className="flex items-center gap-1 text-sm font-medium hover:text-accent-cyan transition-colors"
                                 >
                                     {summaryExpanded ? (
-                                        <ChevronUp className="w-4 h-4" />
+                                        <ChevronUp className="size-4" />
                                     ) : (
-                                        <ChevronDown className="w-4 h-4" />
+                                        <ChevronDown className="size-4" />
                                     )}
                                     {summaryExpanded
                                         ? "Collapse"
@@ -346,7 +346,7 @@ export function TranscriptionSection({
                                                                         }
                                                                         className="text-sm text-muted-foreground flex items-start gap-2"
                                                                     >
-                                                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent-cyan shrink-0" />
+                                                                        <span className="mt-1.5 size-1.5 rounded-full bg-accent-cyan shrink-0" />
                                                                         {point}
                                                                     </li>
                                                                 );
@@ -374,7 +374,7 @@ export function TranscriptionSection({
                                                                         }
                                                                         className="text-sm text-muted-foreground flex items-start gap-2"
                                                                     >
-                                                                        <ListChecks className="w-3.5 h-3.5 mt-0.5 text-accent-cyan shrink-0" />
+                                                                        <ListChecks className="size-3.5 mt-0.5 text-accent-cyan shrink-0" />
                                                                         {item}
                                                                     </li>
                                                                 );
@@ -402,7 +402,7 @@ export function TranscriptionSection({
                                                 variant="cyan"
                                                 className="text-xs"
                                             >
-                                                <Trash2 className="w-3.5 h-3.5 mr-1 inline" />
+                                                <Trash2 className="size-3.5 mr-1 inline" />
                                                 Delete
                                             </MetalButton>
                                         </div>
@@ -411,7 +411,7 @@ export function TranscriptionSection({
                             </div>
                         ) : (
                             <Panel variant="inset" className="text-center py-8">
-                                <ListChecks className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+                                <ListChecks className="size-10 text-muted-foreground mx-auto mb-3" />
                                 <p className="text-sm text-muted-foreground">
                                     No summary yet. Click &quot;Summarize&quot;
                                     to generate one.

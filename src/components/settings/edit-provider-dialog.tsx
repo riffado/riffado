@@ -214,7 +214,7 @@ export function EditProviderDialog({
                         </Select>
                         {legacyLocalProvider && (
                             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                                <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
                                 <span>
                                     {legacyLocalProvider} isn&apos;t usable on
                                     the hosted app — we can&apos;t reach your
@@ -245,7 +245,7 @@ export function EditProviderDialog({
                             className="font-mono text-sm"
                         />
                         <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Shield className="w-3.5 h-3.5 shrink-0" />
+                            <Shield className="size-3.5 shrink-0" />
                             <span>
                                 For security, the saved API key is never shown.
                                 Leave this blank to keep your current key, or

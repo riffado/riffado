@@ -79,7 +79,7 @@ export function WebhooksSection() {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingWebhook, setEditingWebhook] =
         useState<WebhookEndpoint | null>(null);
-    const [form, setForm] = useState(emptyForm());
+    const [form, setForm] = useState(() => emptyForm());
     const [createdSecret, setCreatedSecret] = useState<string | null>(null);
     const [deliveryWebhook, setDeliveryWebhook] =
         useState<WebhookEndpoint | null>(null);
@@ -248,14 +248,14 @@ export function WebhooksSection() {
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                    <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
                 </div>
             ) : webhooks.length === 0 ? (
                 <div className="text-center py-12 border rounded-lg">
-                    <Webhook className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                    <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No webhooks</h3>
                     <Button size="sm" onClick={() => openEditor(null)}>
-                        <Plus className="w-4 h-4" />
+                        <Plus className="size-4" />
                         Add Webhook
                     </Button>
                 </div>
@@ -329,7 +329,7 @@ export function WebhooksSection() {
                                         onClick={() => openEditor(webhook)}
                                         aria-label="Edit webhook"
                                     >
-                                        <Pencil className="w-4 h-4" />
+                                        <Pencil className="size-4" />
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -337,7 +337,7 @@ export function WebhooksSection() {
                                         onClick={() => handleDelete(webhook.id)}
                                         aria-label="Delete webhook"
                                     >
-                                        <Trash2 className="w-4 h-4 text-destructive" />
+                                        <Trash2 className="size-4 text-destructive" />
                                     </Button>
                                 </div>
                             </div>
@@ -366,7 +366,7 @@ export function WebhooksSection() {
                                     className="flex-1"
                                     onClick={copySecret}
                                 >
-                                    <Clipboard className="w-4 h-4" />
+                                    <Clipboard className="size-4" />
                                     Copy
                                 </Button>
                                 <Button
@@ -377,7 +377,7 @@ export function WebhooksSection() {
                                         setIsEditorOpen(false);
                                     }}
                                 >
-                                    <Check className="w-4 h-4" />
+                                    <Check className="size-4" />
                                     Saved
                                 </Button>
                             </div>
@@ -539,7 +539,7 @@ export function WebhooksSection() {
                                         }
                                         onClick={() => redeliver(delivery.id)}
                                     >
-                                        <RotateCcw className="w-4 h-4" />
+                                        <RotateCcw className="size-4" />
                                         Redeliver
                                     </Button>
                                 </div>

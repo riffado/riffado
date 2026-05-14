@@ -145,7 +145,7 @@ export function TranscriptionPanel({
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
-                            <FileText className="w-5 h-5" />
+                            <FileText className="size-5" />
                             Transcription
                         </CardTitle>
                         <div className="flex items-center gap-2">
@@ -156,7 +156,7 @@ export function TranscriptionPanel({
                                     variant="outline"
                                     disabled={isTranscribing}
                                 >
-                                    <RefreshCw className="w-4 h-4 mr-2" />
+                                    <RefreshCw className="size-4 mr-2" />
                                     Re-transcribe
                                 </Button>
                             )}
@@ -166,7 +166,7 @@ export function TranscriptionPanel({
                                     size="sm"
                                     disabled={isTranscribing}
                                 >
-                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    <Sparkles className="size-4 mr-2" />
                                     Transcribe
                                 </Button>
                             )}
@@ -176,9 +176,9 @@ export function TranscriptionPanel({
                 <CardContent>
                     {isTranscribing ? (
                         <div className="flex flex-col items-center justify-center py-12">
-                            <div className="animate-spin w-8 h-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
+                            <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                             <p className="text-sm text-muted-foreground">
-                                Transcribing audio...
+                                Transcribing audio…
                             </p>
                         </div>
                     ) : transcription?.text ? (
@@ -191,7 +191,7 @@ export function TranscriptionPanel({
                             <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
                                 {transcription.language && (
                                     <div className="flex items-center gap-1">
-                                        <Languages className="w-3 h-3" />
+                                        <Languages className="size-3" />
                                         <span>
                                             Language: {transcription.language}
                                         </span>
@@ -211,7 +211,7 @@ export function TranscriptionPanel({
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <FileText className="w-10 h-10 text-muted-foreground mb-3" />
+                            <FileText className="size-10 text-muted-foreground mb-3" />
                             <p className="text-sm text-muted-foreground">
                                 No transcription yet — use the Transcribe button
                                 above.
@@ -227,7 +227,7 @@ export function TranscriptionPanel({
                     <CardHeader>
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
-                                <ListChecks className="w-5 h-5" />
+                                <ListChecks className="size-5" />
                                 Summary
                             </CardTitle>
                             <div className="flex items-center gap-2">
@@ -263,17 +263,17 @@ export function TranscriptionPanel({
                                 >
                                     {isSummarizing ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                            Generating...
+                                            <Loader2 className="size-4 mr-2 animate-spin" />
+                                            Generating…
                                         </>
                                     ) : summaryData ? (
                                         <>
-                                            <RefreshCw className="w-4 h-4 mr-2" />
+                                            <RefreshCw className="size-4 mr-2" />
                                             Re-generate
                                         </>
                                     ) : (
                                         <>
-                                            <Sparkles className="w-4 h-4 mr-2" />
+                                            <Sparkles className="size-4 mr-2" />
                                             Summarize
                                         </>
                                     )}
@@ -284,9 +284,9 @@ export function TranscriptionPanel({
                     <CardContent>
                         {isSummarizing ? (
                             <div className="flex flex-col items-center justify-center py-8">
-                                <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+                                <Loader2 className="size-8 animate-spin text-primary mb-4" />
                                 <p className="text-sm text-muted-foreground">
-                                    Generating summary...
+                                    Generating summary…
                                 </p>
                             </div>
                         ) : summaryData?.summary ? (
@@ -299,9 +299,9 @@ export function TranscriptionPanel({
                                     className="flex items-center gap-1 text-sm font-medium hover:text-primary transition-colors"
                                 >
                                     {summaryExpanded ? (
-                                        <ChevronUp className="w-4 h-4" />
+                                        <ChevronUp className="size-4" />
                                     ) : (
-                                        <ChevronDown className="w-4 h-4" />
+                                        <ChevronDown className="size-4" />
                                     )}
                                     {summaryExpanded
                                         ? "Collapse"
@@ -336,7 +336,7 @@ export function TranscriptionPanel({
                                                                         }
                                                                         className="text-sm text-muted-foreground flex items-start gap-2"
                                                                     >
-                                                                        <span className="text-primary mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                                                                        <span className="text-primary mt-1.5 size-1.5 rounded-full bg-primary shrink-0" />
                                                                         {point}
                                                                     </li>
                                                                 );
@@ -365,7 +365,7 @@ export function TranscriptionPanel({
                                                                         }
                                                                         className="text-sm text-muted-foreground flex items-start gap-2"
                                                                     >
-                                                                        <ListChecks className="w-3.5 h-3.5 mt-0.5 text-primary shrink-0" />
+                                                                        <ListChecks className="size-3.5 mt-0.5 text-primary shrink-0" />
                                                                         {item}
                                                                     </li>
                                                                 );
@@ -395,7 +395,7 @@ export function TranscriptionPanel({
                                                 variant="ghost"
                                                 className="text-destructive hover:text-destructive"
                                             >
-                                                <Trash2 className="w-4 h-4 mr-1" />
+                                                <Trash2 className="size-4 mr-1" />
                                                 Delete
                                             </Button>
                                         </div>
@@ -404,7 +404,7 @@ export function TranscriptionPanel({
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <ListChecks className="w-10 h-10 text-muted-foreground mb-3" />
+                                <ListChecks className="size-10 text-muted-foreground mb-3" />
                                 <p className="text-sm text-muted-foreground">
                                     No summary yet. Click "Summarize" to
                                     generate one.

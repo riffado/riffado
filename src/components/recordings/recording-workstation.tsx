@@ -110,7 +110,7 @@ export function RecordingWorkstation({
                         variant="outline"
                         size="icon"
                     >
-                        <ArrowLeft className="w-4 h-4" />
+                        <ArrowLeft className="size-4" />
                     </Button>
                     <div className="flex-1 min-w-0">
                         <h1 className="text-3xl font-bold truncate">
@@ -127,7 +127,7 @@ export function RecordingWorkstation({
                         aria-label="Delete recording"
                         title="Delete recording"
                     >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="size-4" />
                     </Button>
                 </div>
 
@@ -233,7 +233,7 @@ export function RecordingWorkstation({
                         >
                             {isDeleting ? (
                                 <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    <Loader2 className="size-4 mr-2 animate-spin" />
                                     Deleting…
                                 </>
                             ) : (

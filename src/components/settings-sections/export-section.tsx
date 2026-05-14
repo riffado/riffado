@@ -170,7 +170,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
     if (isLoadingSettings) {
         return (
             <div className="flex items-center justify-center py-8">
-                <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
             </div>
         );
     }
@@ -316,7 +316,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         variant="outline"
                         className="w-full"
                     >
-                        <RefreshCw className="w-4 h-4 mr-2" />
+                        <RefreshCw className="size-4 mr-2" />
                         Re-run Onboarding
                     </Button>
                     <p className="text-xs text-muted-foreground">
@@ -331,12 +331,12 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         >
                             {isExporting ? (
                                 <>
-                                    <div className="animate-spin w-4 h-4 mr-2 border-2 border-primary border-t-transparent rounded-full" />
-                                    Exporting...
+                                    <div className="animate-spin size-4 mr-2 border-2 border-primary border-t-transparent rounded-full" />
+                                    Exporting…
                                 </>
                             ) : (
                                 <>
-                                    <Download className="w-4 h-4 mr-2" />
+                                    <Download className="size-4 mr-2" />
                                     Export All
                                 </>
                             )}
@@ -349,12 +349,12 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         >
                             {isBackingUp ? (
                                 <>
-                                    <div className="animate-spin w-4 h-4 mr-2 border-2 border-primary border-t-transparent rounded-full" />
-                                    Creating...
+                                    <div className="animate-spin size-4 mr-2 border-2 border-primary border-t-transparent rounded-full" />
+                                    Creating…
                                 </>
                             ) : (
                                 <>
-                                    <Download className="w-4 h-4 mr-2" />
+                                    <Download className="size-4 mr-2" />
                                     Create Backup
                                 </>
                             )}

@@ -82,9 +82,9 @@ export function DevSection() {
                         variant="outline"
                     >
                         {isLoadingPlaud ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="size-4 animate-spin" />
                         ) : (
-                            <RefreshCw className="w-4 h-4" />
+                            <RefreshCw className="size-4" />
                         )}
                         <span className="ml-2">Probe</span>
                     </Button>
@@ -100,9 +100,9 @@ export function DevSection() {
                             <>
                                 <div className="flex items-center gap-2">
                                     {plaudInfo.reachable ? (
-                                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                        <CheckCircle2 className="size-4 text-green-500" />
                                     ) : (
-                                        <XCircle className="w-4 h-4 text-red-500" />
+                                        <XCircle className="size-4 text-red-500" />
                                     )}
                                     <span>
                                         {plaudInfo.reachable

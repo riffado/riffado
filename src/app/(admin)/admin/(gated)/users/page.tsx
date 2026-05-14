@@ -65,7 +65,7 @@ export default async function AdminUsersPage({
                 <select
                     name="sort"
                     defaultValue={sort}
-                    className="border rounded px-2 py-2 text-sm bg-background"
+                    className="border rounded p-2 text-sm bg-background"
                 >
                     {SORTS.map((s) => (
                         <option key={s.key} value={s.key}>

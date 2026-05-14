@@ -135,7 +135,7 @@ export function PlaudAccountSection() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-8">
-                <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
             </div>
         );
     }
@@ -162,7 +162,7 @@ export function PlaudAccountSection() {
                 <Card className="py-4">
                     <CardContent className="space-y-4">
                         <div className="flex items-start gap-3">
-                            <CheckCircle2 className="w-5 h-5 text-primary mt-0.5 shrink-0" />
+                            <CheckCircle2 className="size-5 text-primary mt-0.5 shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium truncate">
                                     {currentEmail ? (
@@ -196,7 +196,7 @@ export function PlaudAccountSection() {
                                 variant="outline"
                                 onClick={() => setConfirmOpen("switch")}
                             >
-                                <RefreshCw className="w-4 h-4 mr-2" />
+                                <RefreshCw className="size-4 mr-2" />
                                 Switch account
                             </Button>
                             <Button
@@ -204,7 +204,7 @@ export function PlaudAccountSection() {
                                 onClick={() => setConfirmOpen("disconnect")}
                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
-                                <Link2Off className="w-4 h-4 mr-2" />
+                                <Link2Off className="size-4 mr-2" />
                                 Disconnect
                             </Button>
                         </div>

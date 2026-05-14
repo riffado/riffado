@@ -160,8 +160,8 @@ export function OnboardingDialog({
                     {step === "welcome" && (
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
-                                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Mic className="w-8 h-8 text-primary" />
+                                <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Mic className="size-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
                                     Your AI-Powered Recording Hub
@@ -177,7 +177,7 @@ export function OnboardingDialog({
                                 <Card className="gap-0 py-4">
                                     <CardHeader>
                                         <CardTitle className="text-base flex items-center gap-2">
-                                            <Mic className="w-4 h-4" />
+                                            <Mic className="size-4" />
                                             Connect Your Account
                                         </CardTitle>
                                     </CardHeader>
@@ -192,7 +192,7 @@ export function OnboardingDialog({
                                 <Card className="gap-0 py-4">
                                     <CardHeader>
                                         <CardTitle className="text-base flex items-center gap-2">
-                                            <Bot className="w-4 h-4" />
+                                            <Bot className="size-4" />
                                             Set Up AI Provider
                                         </CardTitle>
                                     </CardHeader>
@@ -207,7 +207,7 @@ export function OnboardingDialog({
                                 <Card className="gap-0 py-4">
                                     <CardHeader>
                                         <CardTitle className="text-base flex items-center gap-2">
-                                            <Sparkles className="w-4 h-4" />
+                                            <Sparkles className="size-4" />
                                             Start Recording
                                         </CardTitle>
                                     </CardHeader>
@@ -225,8 +225,8 @@ export function OnboardingDialog({
                     {step === "plaud" && (
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
-                                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Mic className="w-8 h-8 text-primary" />
+                                <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Mic className="size-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
                                     Connect Your Plaud Account
@@ -241,7 +241,7 @@ export function OnboardingDialog({
                                 <Card className="border-primary/50 bg-primary/5 py-3">
                                     <CardContent className="px-4">
                                         <div className="flex items-center gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-primary" />
+                                            <CheckCircle2 className="size-5 text-primary" />
                                             <div className="flex-1">
                                                 <p className="font-medium">
                                                     Device Connected
@@ -281,8 +281,8 @@ export function OnboardingDialog({
                     {step === "ai-provider" && (
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
-                                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Bot className="w-8 h-8 text-primary" />
+                                <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Bot className="size-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
                                     Set Up AI Provider
@@ -297,7 +297,7 @@ export function OnboardingDialog({
                                 <Card className="border-primary/50 bg-primary/5 py-3">
                                     <CardContent>
                                         <div className="flex items-center gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-primary" />
+                                            <CheckCircle2 className="size-5 text-primary" />
                                             <div className="flex-1">
                                                 <p className="font-medium">
                                                     AI Provider Configured
@@ -338,8 +338,8 @@ export function OnboardingDialog({
                     {step === "complete" && (
                         <div className="space-y-6">
                             <div className="text-center space-y-2">
-                                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <CheckCircle2 className="w-8 h-8 text-primary" />
+                                <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <CheckCircle2 className="size-8 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
                                     You're All Set!
@@ -354,7 +354,7 @@ export function OnboardingDialog({
                                 <CardContent>
                                     <div className="space-y-3">
                                         <div className="flex items-start gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-primary mt-0.5" />
+                                            <CheckCircle2 className="size-5 text-primary mt-0.5" />
                                             <div>
                                                 <p className="font-medium">
                                                     Recordings sync
@@ -367,7 +367,7 @@ export function OnboardingDialog({
                                             </div>
                                         </div>
                                         <div className="flex items-start gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-primary mt-0.5" />
+                                            <CheckCircle2 className="size-5 text-primary mt-0.5" />
                                             <div>
                                                 <p className="font-medium">
                                                     AI-powered transcriptions
@@ -380,7 +380,7 @@ export function OnboardingDialog({
                                             </div>
                                         </div>
                                         <div className="flex items-start gap-3">
-                                            <CheckCircle2 className="w-5 h-5 text-primary mt-0.5" />
+                                            <CheckCircle2 className="size-5 text-primary mt-0.5" />
                                             <div>
                                                 <p className="font-medium">
                                                     Customize your experience
@@ -401,7 +401,7 @@ export function OnboardingDialog({
                         <div className="flex gap-2 flex-1">
                             {getPrevStep() && (
                                 <Button variant="outline" onClick={handlePrev}>
-                                    <ArrowLeft className="w-4 h-4 mr-2" />
+                                    <ArrowLeft className="size-4 mr-2" />
                                     Previous
                                 </Button>
                             )}
@@ -414,7 +414,7 @@ export function OnboardingDialog({
                                 return (
                                     <div
                                         key={stepNum}
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                                        className={`size-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
                                             completed || current
                                                 ? "bg-primary text-primary-foreground"
                                                 : "border-2 border-muted-foreground/30 text-muted-foreground"
@@ -442,13 +442,13 @@ export function OnboardingDialog({
                             {step === "complete" ? (
                                 <Button onClick={handleComplete}>
                                     Get Started
-                                    <ArrowRight className="w-4 h-4 ml-2" />
+                                    <ArrowRight className="size-4 ml-2" />
                                 </Button>
                             ) : (
                                 getNextStep() && (
                                     <Button onClick={handleNext}>
                                         Next
-                                        <ArrowRight className="w-4 h-4 ml-2" />
+                                        <ArrowRight className="size-4 ml-2" />
                                     </Button>
                                 )
                             )}

@@ -385,7 +385,7 @@ export function RecordingPlayer({
                         onClick={togglePlayPause}
                         size="lg"
                         aria-label={isPlaying ? "Pause" : "Play"}
-                        className="h-12 w-12 shrink-0 rounded-full"
+                        className="size-12 shrink-0 rounded-full"
                     >
                         {isPlaying ? (
                             <Pause className="size-5" />

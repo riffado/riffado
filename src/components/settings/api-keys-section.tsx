@@ -166,14 +166,14 @@ export function ApiKeysSection() {
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+                    <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
                 </div>
             ) : apiKeys.length === 0 ? (
                 <div className="text-center py-12 border rounded-lg">
-                    <KeyRound className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                    <KeyRound className="size-12 mx-auto mb-3 text-muted-foreground" />
                     <h3 className="font-semibold mb-2">No API keys</h3>
                     <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-                        <Plus className="w-4 h-4" />
+                        <Plus className="size-4" />
                         Create Key
                     </Button>
                 </div>
@@ -218,7 +218,7 @@ export function ApiKeysSection() {
                                 disabled={Boolean(apiKey.revokedAt)}
                                 aria-label={`Revoke ${apiKey.name}`}
                             >
-                                <Trash2 className="w-4 h-4 text-destructive" />
+                                <Trash2 className="size-4 text-destructive" />
                             </Button>
                         </div>
                     ))}
@@ -243,7 +243,7 @@ export function ApiKeysSection() {
                                     className="flex-1"
                                     onClick={copyCreatedKey}
                                 >
-                                    <Clipboard className="w-4 h-4" />
+                                    <Clipboard className="size-4" />
                                     Copy
                                 </Button>
                                 <Button
@@ -254,7 +254,7 @@ export function ApiKeysSection() {
                                         setIsCreateOpen(false);
                                     }}
                                 >
-                                    <Check className="w-4 h-4" />
+                                    <Check className="size-4" />
                                     Saved
                                 </Button>
                             </div>

@@ -419,7 +419,7 @@ export function Workstation({
                               Sync button is status-aware: its label is
                               the last-sync relative time, so the user
                               sees "Synced 2m ago" / "Retry sync" /
-                              "Syncing..." without a separate status
+                              "Syncing…" without a separate status
                               block. Tooltip carries next-sync ETA and
                               error detail.
                             */}
@@ -454,7 +454,7 @@ export function Workstation({
                                         <Upload className="size-4 sm:mr-2" />
                                         <span className="hidden sm:inline">
                                             {isUploading
-                                                ? "Uploading..."
+                                                ? "Uploading…"
                                                 : "Upload Audio"}
                                         </span>
                                     </Button>
@@ -493,7 +493,7 @@ export function Workstation({
                                         {isAutoSyncing ? (
                                             <>
                                                 <RefreshCw className="mr-2 size-4 animate-spin" />
-                                                Syncing...
+                                                Syncing…
                                             </>
                                         ) : (
                                             <>
