@@ -12,12 +12,14 @@ export const docs = defineDocs({
 
 export default defineConfig({
     // `lastModified` reads `git log` for each MDX file and exports a
-    // `lastModified` field on every page. The plugin no-ops cleanly when
-    // git history is missing, which is the case inside our Docker build
-    // (`.git` is in `.dockerignore`) -- self-hosters running the published
-    // image will see no timestamp. Dev and source-checkout builds get the
-    // real value. If we ever want timestamps in the image, drop `.git`
-    // from `.dockerignore`; cost is +a few MB of build context.
+    // `lastModified` field on every page. It requires BOTH the `git`
+    // binary on $PATH AND a `.git/` repo present at build time -- the
+    // plugin spawns `git` unconditionally and propagates any error.
+    // The Docker build satisfies both: the builder stage `apt-get`s
+    // git (see Dockerfile) and `.git/` is no longer dockerignored
+    // (see .dockerignore). The runner stage doesn't carry either, so
+    // the published image stays slim. Consumers: `src/app/sitemap.ts`
+    // (sitemap <lastmod>) and the docs page footer.
     plugins: [lastModified()],
     mdxOptions: {
         // Warm dual-theme shiki palette that lives close to the OpenPlaud

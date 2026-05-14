@@ -40,7 +40,12 @@ next-env.d.ts
 /drizzle
 
 # git
-.git
+# NOTE: `.git/` is intentionally NOT ignored. The `fumadocs-mdx`
+# `lastModified` plugin (see source.config.ts) shells out to `git log`
+# to stamp each MDX page with its last-commit time. Without history
+# present in the builder stage the plugin errors and `next build`
+# fails. `.git` only lands in the `builder` stage; the `runner` stage
+# does not copy it, so the published image is unaffected.
 .gitignore
 
 # IDE
