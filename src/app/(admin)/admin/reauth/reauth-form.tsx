@@ -55,6 +55,7 @@ export function ReauthForm({ email, next }: { email: string; next: string }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                // oxlint-disable-next-line jsx-a11y/no-autofocus -- intentional -- admin re-auth modal is gated; the whole point of this page is to type a password
                 autoFocus
             />
             {error ? <div className="text-sm text-red-600">{error}</div> : null}

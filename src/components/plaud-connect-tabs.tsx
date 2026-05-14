@@ -391,6 +391,7 @@ function EmailCodePane({
                         onChange={(e) => setEmail(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
                         disabled={isLoading}
+                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- intentional -- modal-entry input, focusing it is the whole UX point
                         autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
@@ -448,6 +449,7 @@ function EmailCodePane({
                     onKeyDown={(e) => e.key === "Enter" && handleVerify()}
                     disabled={isLoading}
                     className="font-mono text-lg tracking-[0.3em] text-center"
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- intentional -- OTP code input shown right after "we sent you a code"; user is expected to type immediately
                     autoFocus
                     autoComplete="one-time-code"
                 />
