@@ -1,8 +1,14 @@
 import { eq } from "drizzle-orm";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
+
+export const metadata: Metadata = {
+    title: "Account suspended — OpenPlaud",
+    robots: { index: false, follow: false },
+};
 
 /**
  * Page shown to suspended users. We deliberately tell them their account is

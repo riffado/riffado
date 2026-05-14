@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Deploy } from "@/components/landing/deploy";
 import { FAQ } from "@/components/landing/faq";
@@ -12,6 +13,12 @@ import { TheMath } from "@/components/landing/the-math";
 import { LandingFooter } from "@/components/landing-footer";
 import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+
+export const metadata: Metadata = {
+    title: "OpenPlaud — open-source companion app for Plaud devices",
+    description:
+        "Free, self-hostable web app for Plaud Note, Note Pro, and NotePin. Bring your own AI provider, keep your data, skip the subscription.",
+};
 
 export default async function HomePage() {
     const session = await getSession();
