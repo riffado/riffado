@@ -167,6 +167,7 @@ Entries go under `## [Unreleased]`. Subsections:
 - New entries ALWAYS go under `## [Unreleased]`.
 - Append to existing subsections; do not create duplicates.
 - NEVER modify already-released version sections (`## [0.1.0]`, etc.) — each is immutable once released.
+- **Hosted-only behavioral changes are not changelog material.** The CHANGELOG audience is self-hosters and contributors; hosted users don't read it. Internal hosted-ops work (admin dashboard tweaks, hosted-only UI fixes, hosted analytics plumbing, hosted marketing surfaces) belongs in commit history, not here. Exception: schema or env changes that ship to every self-host image, even if the feature only activates under `IS_HOSTED=true` — self-hosters still run the migration and still see the env var in `.env.example`, so it gets a one-line entry.
 
 ### Attribution format
 
