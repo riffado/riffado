@@ -4,23 +4,25 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { type Provider, SettingsDialog } from "@/components/settings-dialog";
 
+const EMPTY_PROVIDERS: Provider[] = [];
+
 interface SettingsPageContentProps {
     initialProviders?: Provider[];
     isHosted?: boolean;
 }
 
 export function SettingsPageContent({
-    initialProviders = [],
+    initialProviders = EMPTY_PROVIDERS,
     isHosted = false,
 }: SettingsPageContentProps) {
-    const router = useRouter();
+    const { push } = useRouter();
     const [open, setOpen] = useState(true);
 
     const handleOpenChange = (newOpen: boolean) => {
         setOpen(newOpen);
         if (!newOpen) {
             // Navigate back to dashboard when dialog closes
-            router.push("/dashboard");
+            push("/dashboard");
         }
     };
 

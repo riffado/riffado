@@ -20,9 +20,11 @@ interface NewRecordingEmailProps {
     settingsUrl: string;
 }
 
+const EMPTY_NAMES: string[] = [];
+
 export function NewRecordingEmail({
     count,
-    recordingNames = [],
+    recordingNames = EMPTY_NAMES,
     dashboardUrl,
     settingsUrl,
 }: NewRecordingEmailProps) {

@@ -118,8 +118,10 @@ export function formatBytes(b: number): string {
     return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
+
 export function formatNumber(n: number): string {
-    return new Intl.NumberFormat("en-US").format(n);
+    return NUMBER_FORMAT.format(n);
 }
 
 export function formatHours(ms: number): string {

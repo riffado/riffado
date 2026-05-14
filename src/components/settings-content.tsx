@@ -25,6 +25,8 @@ interface Provider {
     createdAt: Date;
 }
 
+const EMPTY_PROVIDERS: Provider[] = [];
+
 interface SettingsContentProps {
     activeSection: SettingsSection;
     initialProviders?: Provider[];
@@ -34,7 +36,7 @@ interface SettingsContentProps {
 
 export function SettingsContent({
     activeSection,
-    initialProviders = [],
+    initialProviders = EMPTY_PROVIDERS,
     onReRunOnboarding,
     isHosted = false,
 }: SettingsContentProps) {
