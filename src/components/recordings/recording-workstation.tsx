@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
+import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -117,7 +118,7 @@ export function RecordingWorkstation({
                             {recording.filename}
                         </h1>
                         <p className="text-muted-foreground text-sm mt-1">
-                            {new Date(recording.startTime).toLocaleString()}
+                            <LocalTime value={recording.startTime} />
                         </p>
                     </div>
                     <Button
@@ -191,9 +192,10 @@ export function RecordingWorkstation({
                                         Date
                                     </div>
                                     <div className="font-medium">
-                                        {new Date(
-                                            recording.startTime,
-                                        ).toLocaleDateString()}
+                                        <LocalTime
+                                            value={recording.startTime}
+                                            variant="date"
+                                        />
                                     </div>
                                 </div>
                             </div>

@@ -9,6 +9,13 @@ export function ThemeToggle({ className }: { className?: string }) {
     const { setTheme, resolvedTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
+    // useEffect+setState on mount is the next-themes-recommended pattern for
+    // SSR-safe theme reads. resolvedTheme is undefined on the server and on
+    // the first client render, so we paint a neutral placeholder until the
+    // store has settled. We can't use useSyncExternalStore here because
+    // next-themes doesn't expose its store -- only its hook. The placeholder
+    // branch below is the actual flicker-prevention; the lint warning about
+    // useEffect-on-mount is pattern-matching the shape, not the intent.
     useEffect(() => {
         setMounted(true);
     }, []);
