@@ -16,7 +16,7 @@ export function RecordingDeleteButton({
 }: {
     recordingId: string;
 }) {
-    const router = useRouter();
+    const { refresh, replace } = useRouter();
     const confirm = useConfirm();
     const [busy, setBusy] = useState(false);
 
@@ -55,7 +55,7 @@ export function RecordingDeleteButton({
                         toast.error(
                             "Admin session expired. Reauth and try again.",
                         );
-                        router.replace(
+                        replace(
                             `/admin/reauth?next=${window.location.pathname}`,
                         );
                         return;
@@ -65,7 +65,7 @@ export function RecordingDeleteButton({
                         throw new Error(j.error ?? `Failed (${res.status})`);
                     }
                     toast.success("Recording soft-deleted");
-                    router.refresh();
+                    refresh();
                 } finally {
                     setBusy(false);
                 }

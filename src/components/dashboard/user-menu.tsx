@@ -59,7 +59,7 @@ export function UserMenu({
     onOpenSettings,
     onOpenShortcuts,
 }: UserMenuProps) {
-    const router = useRouter();
+    const { push, refresh } = useRouter();
     const { theme, setTheme } = useTheme(initialTheme);
 
     const themeOptions = [
@@ -112,9 +112,7 @@ export function UserMenu({
                         <Kbd>?</Kbd>
                     </DropdownMenuItem>
                     {isAdmin && (
-                        <DropdownMenuItem
-                            onSelect={() => router.push("/admin")}
-                        >
+                        <DropdownMenuItem onSelect={() => push("/admin")}>
                             <Shield />
                             <span className="flex-1">Admin dashboard</span>
                         </DropdownMenuItem>
@@ -173,8 +171,8 @@ export function UserMenu({
                         variant="destructive"
                         onSelect={async () => {
                             await signOut();
-                            router.push("/");
-                            router.refresh();
+                            push("/");
+                            refresh();
                         }}
                     >
                         <LogOut />

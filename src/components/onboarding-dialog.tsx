@@ -35,7 +35,7 @@ export function OnboardingDialog({
     onOpenChange,
     onComplete,
 }: OnboardingDialogProps) {
-    const router = useRouter();
+    const { refresh } = useRouter();
     const [step, setStep] = useState<OnboardingStep>("welcome");
     const [hasPlaudConnection, setHasPlaudConnection] = useState(false);
     const [hasAiProvider, setHasAiProvider] = useState(false);
@@ -91,7 +91,7 @@ export function OnboardingDialog({
             });
             onComplete();
             onOpenChange(false);
-            router.refresh();
+            refresh();
         } catch {
             toast.error("Failed to complete onboarding");
         }

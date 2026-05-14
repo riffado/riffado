@@ -48,7 +48,7 @@ export function RecordingWorkstation({
     initialAutoPlayNext,
     scrubberStyle,
 }: RecordingWorkstationProps) {
-    const router = useRouter();
+    const { push, refresh } = useRouter();
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -65,7 +65,7 @@ export function RecordingWorkstation({
 
             if (response.ok) {
                 toast.success("Transcription complete");
-                router.refresh();
+                refresh();
             } else {
                 const error = await response.json();
                 toast.error(error.error || "Transcription failed");
@@ -75,7 +75,7 @@ export function RecordingWorkstation({
         } finally {
             setIsTranscribing(false);
         }
-    }, [recording.id, router]);
+    }, [recording.id, refresh]);
 
     const handleDelete = useCallback(async () => {
         setIsDeleting(true);
@@ -87,8 +87,8 @@ export function RecordingWorkstation({
             if (response.ok) {
                 toast.success("Recording deleted");
                 setDeleteDialogOpen(false);
-                router.push("/dashboard");
-                router.refresh();
+                push("/dashboard");
+                refresh();
             } else {
                 const error = await response.json().catch(() => ({}));
                 toast.error(error.error || "Failed to delete recording");
@@ -98,7 +98,7 @@ export function RecordingWorkstation({
             toast.error("Failed to delete recording");
             setIsDeleting(false);
         }
-    }, [recording.id, router]);
+    }, [recording.id, refresh, push]);
 
     return (
         <div className="bg-background">
@@ -106,7 +106,7 @@ export function RecordingWorkstation({
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-6">
                     <Button
-                        onClick={() => router.push("/dashboard")}
+                        onClick={() => push("/dashboard")}
                         variant="outline"
                         size="icon"
                     >

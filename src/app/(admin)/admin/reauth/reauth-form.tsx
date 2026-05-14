@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export function ReauthForm({ email, next }: { email: string; next: string }) {
-    const router = useRouter();
+    const { refresh, replace } = useRouter();
     const [password, setPassword] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export function ReauthForm({ email, next }: { email: string; next: string }) {
             if (res.status === 404) {
                 // Gate tripped (lost admin status, IP changed, etc.) -- bounce
                 // to the user dashboard rather than reveal the route.
-                router.replace("/dashboard");
+                replace("/dashboard");
                 return;
             }
             if (!res.ok) {
@@ -32,8 +32,8 @@ export function ReauthForm({ email, next }: { email: string; next: string }) {
                 setSubmitting(false);
                 return;
             }
-            router.replace(next);
-            router.refresh();
+            replace(next);
+            refresh();
         } catch {
             setError("Something went wrong");
             setSubmitting(false);

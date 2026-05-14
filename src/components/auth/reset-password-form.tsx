@@ -27,7 +27,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const router = useRouter();
+    const { push, refresh } = useRouter();
 
     // No token in URL, or better-auth signaled an error on the callback --
     // either the user navigated here directly, the token expired, or the
@@ -104,8 +104,8 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
             }
 
             toast.success("Password reset. You can sign in now.");
-            router.push("/login");
-            router.refresh();
+            push("/login");
+            refresh();
         } catch (err) {
             const message =
                 err instanceof Error

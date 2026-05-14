@@ -81,7 +81,7 @@ export function Workstation({
     initialSettings,
     isHosted,
 }: WorkstationProps) {
-    const router = useRouter();
+    const { refresh } = useRouter();
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
         recordings.length > 0 ? recordings[0] : null,
     );
@@ -144,7 +144,7 @@ export function Workstation({
     const isProcessing = anyTranscribing || isUploading;
 
     // Keep currentRecording in sync with the recordings prop (updated
-    // after router.refresh()). If the previously-selected recording is no
+    // after refresh()). If the previously-selected recording is no
     // longer present (e.g. just deleted), clear the selection.
     useEffect(() => {
         setCurrentRecording((prev) => {
@@ -246,7 +246,7 @@ export function Workstation({
                 );
                 if (response.ok) {
                     toast.success("Transcription complete");
-                    router.refresh();
+                    refresh();
                 } else {
                     const error = await response.json();
                     toast.error(error.error || "Transcription failed");
@@ -261,7 +261,7 @@ export function Workstation({
                 markAction(id, null);
             }
         },
-        [router, markAction],
+        [refresh, markAction],
     );
 
     const handleTranscribe = useCallback(async () => {
@@ -299,7 +299,7 @@ export function Workstation({
                 if (response.ok) {
                     const data = await response.json();
                     toast.success(`"${data.filename}" uploaded`);
-                    router.refresh();
+                    refresh();
                 } else {
                     const error = await response.json();
                     toast.error(error.error || "Upload failed");
@@ -313,7 +313,7 @@ export function Workstation({
                 );
             }
         },
-        [router],
+        [refresh],
     );
 
     const handleDelete = useCallback(
@@ -336,7 +336,7 @@ export function Workstation({
                 });
                 if (!res.ok) throw new Error("Delete failed");
                 toast.success("Recording deleted");
-                router.refresh();
+                refresh();
             } catch (err) {
                 // Rollback
                 setHiddenIds((prev) => {
@@ -348,7 +348,7 @@ export function Workstation({
                 throw err;
             }
         },
-        [currentRecording, visibleRecordings, router],
+        [currentRecording, visibleRecordings, refresh],
     );
 
     const triggerUpload = useCallback(() => {
@@ -698,7 +698,7 @@ export function Workstation({
                 onOpenChange={setOnboardingOpen}
                 onComplete={() => {
                     setOnboardingOpen(false);
-                    router.refresh();
+                    refresh();
                 }}
             />
         </>

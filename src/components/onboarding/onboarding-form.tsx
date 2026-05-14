@@ -13,7 +13,7 @@ const GITHUB_REPO = "https://github.com/openplaud/openplaud";
 
 export function OnboardingForm() {
     const [step, setStep] = useState<Step>("connect");
-    const router = useRouter();
+    const { push } = useRouter();
 
     return (
         <Panel className="w-full max-w-2xl space-y-6">
@@ -78,7 +78,7 @@ export function OnboardingForm() {
                         </p>
                     </div>
                     <MetalButton
-                        onClick={() => router.push("/dashboard")}
+                        onClick={() => push("/dashboard")}
                         variant="cyan"
                         className="w-full"
                     >

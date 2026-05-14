@@ -20,7 +20,7 @@ export function UserActions({
     suspended: boolean;
     plaudConnected: boolean;
 }) {
-    const router = useRouter();
+    const { refresh, replace } = useRouter();
     const [busy, setBusy] = useState<string | null>(null);
 
     async function run(
@@ -42,7 +42,7 @@ export function UserActions({
             });
             if (res.status === 404) {
                 toast.error("Admin session expired. Reauth and try again.");
-                router.replace(`/admin/reauth?next=/admin/users/${userId}`);
+                replace(`/admin/reauth?next=/admin/users/${userId}`);
                 return;
             }
             if (!res.ok) {
@@ -51,7 +51,7 @@ export function UserActions({
                 return;
             }
             toast.success(`${label} done`);
-            router.refresh();
+            refresh();
         } finally {
             setBusy(null);
         }

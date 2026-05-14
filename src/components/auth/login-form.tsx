@@ -38,7 +38,7 @@ export function LoginForm({
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const router = useRouter();
+    const { push, refresh } = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -58,8 +58,8 @@ export function LoginForm({
             }
 
             toast.success("Logged in successfully");
-            router.push("/dashboard");
-            router.refresh();
+            push("/dashboard");
+            refresh();
         } catch (error) {
             const message =
                 error instanceof Error
