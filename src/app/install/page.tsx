@@ -72,7 +72,7 @@ export default function InstallPage() {
                         <div className="inline-flex items-center rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground mb-6 font-mono">
                             Self-host
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
+                        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-6">
                             Install OpenPlaud
                         </h1>
                         <p className="text-lg text-muted-foreground leading-relaxed">
@@ -209,7 +209,7 @@ export default function InstallPage() {
                             >
                                 self-host instructions
                             </Link>{" "}
-                            in the README. The whole project is AGPL-3.0 —
+                            in the README. The whole project is AGPL-3.0,
                             inspect everything before you run it.
                         </p>
                     </div>

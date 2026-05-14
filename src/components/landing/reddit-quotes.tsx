@@ -44,7 +44,7 @@ export function RedditQuotes() {
                                     rel="noopener noreferrer"
                                     className="inline-block mt-4 text-sm text-muted-foreground hover:text-foreground transition-colors"
                                 >
-                                    — {q.sub}
+                                    from {q.sub}
                                 </a>
                             </li>
                         ))}

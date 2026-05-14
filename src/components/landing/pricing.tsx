@@ -57,7 +57,7 @@ export function Pricing() {
         <section id="pricing" className="py-24 md:py-32">
             <div className="container mx-auto px-4">
                 <div className="max-w-3xl mx-auto text-center mb-16">
-                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4">
                         Pick the version that fits you.
                     </h2>
                     <p className="text-muted-foreground text-lg leading-relaxed">

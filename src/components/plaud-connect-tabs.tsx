@@ -210,7 +210,7 @@ function ConnectorPane({
                     <span className="font-medium">OpenPlaud Connector</span>{" "}
                     browser extension. Sign in to Plaud the way you normally do
                     (Google, Apple, or email) and the connector hands the
-                    session back here — no copy-pasting.
+                    session back here, no copy-pasting.
                 </p>
                 <Button asChild className="w-full">
                     <a
@@ -248,9 +248,9 @@ function ConnectorPane({
     return (
         <div className="space-y-3">
             <p className="text-sm text-muted-foreground leading-relaxed">
-                Click below to sign in to Plaud in a new tab — use Google,
-                Apple, or email/password as you normally would. The connector
-                will return you here automatically.
+                Click below to sign in to Plaud in a new tab. Use Google, Apple,
+                or email/password as you normally would. The connector will
+                return you here automatically.
             </p>
             <Button
                 onClick={handleConnect}
@@ -660,8 +660,8 @@ function PasteTokenPane({
                         above.
                     </li>
                     <li>
-                        Pick the matching region from the dropdown — e.g. if the
-                        host was{" "}
+                        Pick the matching region from the dropdown. For example,
+                        if the host was{" "}
                         <span className="font-mono">api-euc1.plaud.ai</span>,
                         choose EU.
                     </li>

@@ -30,7 +30,7 @@ export function FAQ() {
         <section className="py-24 md:py-32 border-t border-border/40">
             <div className="container mx-auto px-4">
                 <div className="max-w-3xl mx-auto">
-                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-12">
+                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-12">
                         Questions people actually ask.
                     </h2>
                     <dl className="space-y-10">

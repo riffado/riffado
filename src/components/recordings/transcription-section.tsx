@@ -175,7 +175,9 @@ export function TranscriptionSection({
                 <div className="space-y-4">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h2 className="text-xl font-bold">Transcription</h2>
+                            <h2 className="text-xl font-semibold">
+                                Transcription
+                            </h2>
                             {detectedLanguage && (
                                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel-inset">
                                     <LEDIndicator
@@ -243,7 +245,9 @@ export function TranscriptionSection({
                     <div className="space-y-4">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                             <div className="flex items-center gap-3">
-                                <h2 className="text-xl font-bold">Summary</h2>
+                                <h2 className="text-xl font-semibold">
+                                    Summary
+                                </h2>
                             </div>
                             <div className="flex items-center gap-2">
                                 {!isSummarizing && (

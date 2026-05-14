@@ -213,7 +213,7 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-10 text-center">
                             <FileText className="size-10 text-muted-foreground mb-3" />
                             <p className="text-sm text-muted-foreground">
-                                No transcription yet — use the Transcribe button
+                                No transcription yet. Use the Transcribe button
                                 above.
                             </p>
                         </div>

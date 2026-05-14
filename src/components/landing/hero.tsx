@@ -11,7 +11,7 @@ export function Hero() {
 
             <div className="container mx-auto px-4">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h1 className="text-[clamp(2.5rem,6.5vw,5.5rem)] font-bold tracking-[-0.02em] leading-[1.02] mb-8 text-foreground">
+                    <h1 className="text-[clamp(2.5rem,6.5vw,5.5rem)] font-semibold tracking-[-0.02em] leading-[1.02] mb-8 text-foreground">
                         Plaud charges{" "}
                         <span className="text-muted-foreground/70 line-through decoration-[0.08em] decoration-muted-foreground/40">
                             $29.99
@@ -23,7 +23,7 @@ export function Hero() {
 
                     <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground leading-relaxed mb-10">
                         OpenPlaud connects to your Plaud Note and transcribes
-                        with your own AI keys — pennies per hour, instead of a
+                        with your own AI keys. Pennies per hour, instead of a
                         subscription. Self-host free, or hosted from{" "}
                         <span className="text-foreground font-medium">
                             $0/mo

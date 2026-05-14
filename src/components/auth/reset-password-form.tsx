@@ -39,7 +39,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                 <div className="flex items-center gap-3">
                     <Logo className="size-10 shrink-0" />
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">
+                        <h1 className="text-2xl font-semibold tracking-tight">
                             Invalid reset link
                         </h1>
                         <p className="text-sm text-muted-foreground">
@@ -122,7 +122,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
             <div className="flex items-center gap-3">
                 <Logo className="size-10 shrink-0" />
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">
+                    <h1 className="text-2xl font-semibold tracking-tight">
                         Set a new password
                     </h1>
                     <p className="text-sm text-muted-foreground">

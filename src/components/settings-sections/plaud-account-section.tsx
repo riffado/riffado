@@ -153,7 +153,7 @@ export function PlaudAccountSection() {
                 />
                 <p className="text-sm text-muted-foreground mt-1">
                     The Plaud account OpenPlaud pulls recordings from. Switching
-                    accounts keeps your existing recordings — only future syncs
+                    accounts keeps your existing recordings; only future syncs
                     change.
                 </p>
             </div>
@@ -249,7 +249,7 @@ export function PlaudAccountSection() {
                                         </span>{" "}
                                         and let you sign in with a different
                                         Plaud account. Your existing recordings
-                                        stay — only future syncs will come from
+                                        stay; only future syncs will come from
                                         the new account.
                                     </p>
                                 ) : (

@@ -14,7 +14,7 @@ export function Deploy() {
                             <Terminal className="mr-2 size-3" />
                             Self-host, if you want to
                         </div>
-                        <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
+                        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
                             Three commands. One container. Yours forever.
                         </h2>
                         <p className="text-zinc-400 text-lg leading-relaxed">

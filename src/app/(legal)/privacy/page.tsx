@@ -27,14 +27,14 @@ export default function PrivacyPage() {
         <>
             <h1>Privacy Policy</h1>
             <p>
-                <em>Last updated: TBD — this page is a placeholder.</em>
+                <em>Last updated: TBD. This page is a placeholder.</em>
             </p>
             <p>
                 OpenPlaud is open-source software you can run yourself (under
                 AGPL-3.0) or use through the hosted service at openplaud.com.
                 This page describes how the hosted service handles your data. If
                 you self-host, your data never touches our infrastructure and
-                this policy does not apply to you — see the{" "}
+                this policy does not apply to you. See the{" "}
                 <Link href="https://github.com/openplaud/openplaud#readme">
                     project README
                 </Link>{" "}

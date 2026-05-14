@@ -46,7 +46,7 @@ export default async function AdminUsersPage({
                 <div>
                     <h1 className="text-xl font-semibold">Users</h1>
                     <p className="text-sm text-muted-foreground">
-                        Cost-attribution view. PII surface — emails visible.
+                        Cost-attribution view. PII surface: emails visible.
                     </p>
                 </div>
                 <div className="text-sm text-muted-foreground">

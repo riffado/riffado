@@ -35,7 +35,7 @@ export function OnboardingForm() {
             {step === "connect" && (
                 <div className="space-y-4">
                     <div>
-                        <h2 className="text-xl font-bold">
+                        <h2 className="text-xl font-semibold">
                             Connect Your Plaud Account
                         </h2>
                         <p className="text-sm text-muted-foreground mt-1">
@@ -70,7 +70,9 @@ export function OnboardingForm() {
                         className="mx-auto"
                     />
                     <div>
-                        <h2 className="text-2xl font-bold">Setup Complete!</h2>
+                        <h2 className="text-2xl font-semibold">
+                            Setup Complete!
+                        </h2>
                         <p className="text-sm text-muted-foreground mt-1">
                             Your recordings will start syncing automatically
                         </p>
@@ -107,7 +109,7 @@ export function OnboardingForm() {
                             instance. No data leaves your server.
                         </p>
                         <p>
-                            This is open source software — every line is
+                            This is open source software. Every line is
                             available for inspection:{" "}
                             <a
                                 href={GITHUB_REPO}

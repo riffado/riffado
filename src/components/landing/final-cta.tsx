@@ -6,12 +6,12 @@ export function FinalCTA() {
     return (
         <section className="container mx-auto px-4 py-24 md:py-32">
             <div className="max-w-3xl mx-auto text-center">
-                <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
+                <h2 className="text-3xl md:text-5xl font-semibold tracking-tight mb-6">
                     Stop renting your own voice.
                 </h2>
                 <p className="text-muted-foreground text-lg leading-relaxed mb-10 max-w-xl mx-auto">
                     Your Plaud Note already works. OpenPlaud gives you the rest
-                    of it — transcription, search, export, and a choice about
+                    of it: transcription, search, export, and a choice about
                     where it all lives.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">

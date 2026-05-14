@@ -8,13 +8,13 @@ export function ForProfessionals() {
                     <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mb-4">
                         For professionals
                     </p>
-                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-6">
+                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6">
                         If your conversations stay in the room, your recordings
                         should too.
                     </h2>
                     <p className="text-muted-foreground text-lg leading-relaxed mb-12">
-                        Lawyers, journalists, consultants, researchers —
-                        OpenPlaud gives you the parts that matter: your
+                        Lawyers, journalists, consultants, researchers:
+                        OpenPlaud gives you the parts that matter. Your
                         recordings on infrastructure you control, the ability to
                         audit every line of code yourself, and a real choice of
                         AI provider, including ones that never leave your
@@ -46,12 +46,12 @@ export function ForProfessionals() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Plaud self-attests HIPAA compliance and will sign a
                             BAA. OpenPlaud doesn't make a compliance claim of
-                            its own — the claim belongs to your AI provider, not
+                            its own; the claim belongs to your AI provider, not
                             to us. If you handle protected information (health,
                             privileged legal, regulated financial), the right
                             path is to self-host OpenPlaud with a provider that
                             signs a BAA you've reviewed (OpenAI Enterprise,
-                            Azure Speech, Deepgram) — or use a local Whisper
+                            Azure Speech, Deepgram), or use a local Whisper
                             model that never leaves your machine. We won't
                             promise compliance we don't control. We'll give you
                             the tools to achieve it yourself.

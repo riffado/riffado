@@ -33,7 +33,7 @@ export default async function AdminUserDetailPage({
                     </div>
                     {user.suspendedAt ? (
                         <div className="mt-2 text-sm border border-red-500/30 bg-red-500/10 text-red-700 rounded px-3 py-2">
-                            Suspended {formatRelative(user.suspendedAt)} —{" "}
+                            Suspended {formatRelative(user.suspendedAt)}:{" "}
                             {user.suspendedReason ?? "no reason recorded"}
                         </div>
                     ) : null}

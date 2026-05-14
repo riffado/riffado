@@ -384,7 +384,7 @@ export function Workstation({
                     */}
                     <div className="sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
                         <div className="flex min-w-0 items-baseline gap-3">
-                            <h1 className="truncate text-xl font-bold leading-tight sm:text-2xl md:text-3xl">
+                            <h1 className="truncate text-xl font-semibold leading-tight sm:text-2xl md:text-3xl">
                                 Recordings
                             </h1>
                             {/*

@@ -29,7 +29,7 @@ export default function TermsPage() {
         <>
             <h1>Terms of Service</h1>
             <p>
-                <em>Last updated: TBD — this page is a placeholder.</em>
+                <em>Last updated: TBD. This page is a placeholder.</em>
             </p>
             <p>
                 These terms govern your use of the hosted OpenPlaud service at

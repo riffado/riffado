@@ -3,11 +3,11 @@ export function TheMath() {
         <section className="py-24 border-y border-border/40 bg-secondary/10">
             <div className="container mx-auto px-4">
                 <div className="max-w-3xl mx-auto">
-                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4">
                         Here's what you're actually paying for.
                     </h2>
                     <p className="text-muted-foreground text-lg leading-relaxed mb-12">
-                        Plaud doesn't transcribe your audio — OpenAI, Groq, and
+                        Plaud doesn't transcribe your audio. OpenAI, Groq, and
                         similar do. Plaud marks it up and wraps a subscription
                         around it. OpenPlaud lets you pay the provider directly.
                     </p>

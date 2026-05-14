@@ -113,7 +113,7 @@ export function RecordingWorkstation({
                         <ArrowLeft className="size-4" />
                     </Button>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-3xl font-bold truncate">
+                        <h1 className="text-3xl font-semibold truncate">
                             {recording.filename}
                         </h1>
                         <p className="text-muted-foreground text-sm mt-1">
