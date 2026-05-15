@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- Optional outbound proxy for Plaud API calls via Webshare residential proxies. When `WEBSHARE_API_KEY` is set, every request to `api*.plaud.ai` / `resource.plaud.ai` routes through a random valid proxy from the Webshare list, with automatic rotation on Cloudflare 403/407 responses. Unset (default) keeps the direct egress path. Required for hosted deployments on flagged datacenter ASNs where Cloudflare returns a 403 HTML challenge before requests reach Plaud's origin; not needed for residential / homelab self-hosts. No effect on non-Plaud outbound traffic. `scripts/plaud-egress-probe.sh` can validate proxy behavior end-to-end against a real account.
+- Optional outbound proxy for Plaud API calls via Webshare residential proxies. When `WEBSHARE_API_KEY` is set, every request to `api*.plaud.ai` / `resource.plaud.ai` routes through a random valid proxy from the Webshare list, with automatic rotation on Cloudflare 403/407 responses. Unset (default) keeps the direct egress path. Required for hosted deployments on flagged datacenter ASNs where Cloudflare returns a 403 HTML challenge before requests reach Plaud's origin; not needed for residential / homelab self-hosts. No effect on non-Plaud outbound traffic. `scripts/plaud-egress-probe.sh` can validate proxy behavior end-to-end against a real account ([#148](https://github.com/openplaud/openplaud/pull/148)).
 
 ## [0.5.0] - 2026-05-15
 
