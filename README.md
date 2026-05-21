@@ -9,8 +9,9 @@
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/typescript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/next.js-16-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://openplaud.com/discord)
 
-[Quick Start](#-quick-start) • [Features](#-features) • [Configuration](#-configuration-guide) • [Contributing](#-contributing) • [License](#-license)
+[Quick Start](#-quick-start) • [Features](#-features) • [Configuration](#-configuration-guide) • [Contributing](#-contributing) • [Discord](https://openplaud.com/discord) • [License](#-license)
 
 </div>
 
@@ -603,7 +604,8 @@ Made with ❤️ for Plaud Note users who want full control over their transcrip
 
 - 📖 [Documentation](docs/) - Detailed guides and API references
 - 🐛 [Issues](https://github.com/openplaud/openplaud/issues) - Bug reports and feature requests
-- 💬 [Discussions](https://github.com/openplaud/openplaud/discussions) - Community discussions
+- 💬 [Discussions](https://github.com/openplaud/openplaud/discussions) - Long-form community discussions
+- 💬 [Discord](https://openplaud.com/discord) - Real-time community chat
 - 📝 [Changelog](CHANGELOG.md) - Version history and release notes
 
 ## ⭐ Support the Project
