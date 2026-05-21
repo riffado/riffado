@@ -28,6 +28,11 @@ Marketing surfaces (landing page copy, README feature sections) are exempt — t
 - Always ask before removing functionality or code that appears to be intentional
 - Refactor freely and do not preserve backward compatibility on internal code unless the user explicitly asks. Internal code APIs are not a contract; only the **deploy surface** is (see below) — that one is sacred.
 
+### Comments
+
+JSDoc on exported APIs only. No narrative or strategy comments in source.
+Design rationale goes in the commit message.
+
 ## Commands
 
 - After code changes (not docs): `pnpm format-and-lint:fix && pnpm type-check`. Fix all errors and warnings before committing.

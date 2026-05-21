@@ -5,9 +5,6 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 const KEY_LENGTH = 32;
 
-/**
- * Get encryption key from environment variable
- */
 function getEncryptionKey(): Buffer {
     const keyHex = env.ENCRYPTION_KEY;
     if (!keyHex || keyHex.length !== 64) {
@@ -18,10 +15,7 @@ function getEncryptionKey(): Buffer {
     return Buffer.from(keyHex, "hex");
 }
 
-/**
- * Encrypt a string using AES-256-GCM
- * Returns: iv:authTag:encrypted (all hex-encoded, colon-separated)
- */
+/** AES-256-GCM encrypt. Returns `iv:authTag:ciphertext` (hex). */
 export function encrypt(plaintext: string): string {
     try {
         const key = getEncryptionKey();
@@ -32,8 +26,6 @@ export function encrypt(plaintext: string): string {
         encrypted += cipher.final("hex");
 
         const authTag = cipher.getAuthTag();
-
-        // Format: iv:authTag:encrypted (all hex)
         return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
     } catch (error) {
         throw new Error(
@@ -42,14 +34,11 @@ export function encrypt(plaintext: string): string {
     }
 }
 
-/**
- * Decrypt a string encrypted with encrypt()
- */
+/** Decrypt a value produced by `encrypt`. */
 export function decrypt(ciphertext: string): string {
     try {
         const key = getEncryptionKey();
 
-        // Parse format: iv:authTag:encrypted
         const parts = ciphertext.split(":");
         if (parts.length !== 3) {
             throw new Error("Invalid ciphertext format");
@@ -75,25 +64,16 @@ export function decrypt(ciphertext: string): string {
     }
 }
 
-/**
- * Encrypt a JSON object
- */
 export function encryptJSON<T>(data: T): string {
     return encrypt(JSON.stringify(data));
 }
 
-/**
- * Decrypt a JSON object
- */
 export function decryptJSON<T>(ciphertext: string): T {
     const decrypted = decrypt(ciphertext);
     return JSON.parse(decrypted) as T;
 }
 
-/**
- * Generate a secure encryption key (for documentation/setup)
- * This should be run once and stored in environment variables
- */
+/** Generate a random AES-256 key as hex. */
 export function generateEncryptionKey(): string {
     return randomBytes(KEY_LENGTH).toString("hex");
 }

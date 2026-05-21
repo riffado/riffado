@@ -1,11 +1,3 @@
-/**
- * User-Agent sent on every request to Plaud's API.
- *
- * Plaud's API endpoints sit behind Cloudflare's WAF, which 403s requests from
- * Node's default fetch (undici sends no User-Agent or `node`). Self-host
- * deploys behind datacenter IPs are particularly susceptible. A plain
- * modern-Chrome UA is sufficient to clear the challenge.
- */
 export const PLAUD_USER_AGENT =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -38,10 +30,7 @@ export const PLAUD_SERVERS = {
 export type PlaudServerKey = keyof typeof PLAUD_SERVERS;
 export const DEFAULT_SERVER_KEY: PlaudServerKey = "global";
 
-/**
- * Validate that a URL is a legitimate Plaud API server.
- * Must be HTTPS and on a plaud.ai subdomain.
- */
+/** HTTPS + plaud.ai-subdomain check. */
 export function isValidPlaudApiUrl(url: string): boolean {
     try {
         const parsed = new URL(url);
@@ -55,10 +44,6 @@ export function isValidPlaudApiUrl(url: string): boolean {
     }
 }
 
-/**
- * Find the server key for a stored apiBase URL.
- * Returns the key if it matches a known server, otherwise "custom".
- */
 export function serverKeyFromApiBase(apiBase: string): PlaudServerKey {
     const entry = (
         Object.entries(PLAUD_SERVERS) as [

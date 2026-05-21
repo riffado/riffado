@@ -1,7 +1,3 @@
-/**
- * Plaud API response types
- */
-
 export interface PlaudDevice {
     sn: string;
     name: string;
@@ -59,10 +55,6 @@ export interface PlaudApiError {
     msg: string;
 }
 
-/**
- * Plaud workspace metadata returned by /team-app/workspaces/list.
- * Personal accounts always have exactly one workspace with workspace_type="0".
- */
 export interface PlaudWorkspace {
     workspace_id: string;
     member_id: string;
@@ -85,16 +77,6 @@ export interface PlaudWorkspaceListResponse {
     type?: string;
 }
 
-/**
- * Plaud workspace token mint response from
- * POST /user-app/auth/workspace/token/<workspace_id>.
- *
- * Note: the response wraps the actual payload in a nested `data` object that
- * itself has `status: 0` mirroring the outer status. The workspace token (WT)
- * has JWT typ="WT" and is required by recording endpoints. We mint a fresh WT
- * from the UT on every PlaudClient instance; we don't persist it or its
- * refresh_token.
- */
 export interface PlaudWorkspaceTokenResponse {
     status: number;
     msg?: string;

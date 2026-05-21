@@ -11,15 +11,9 @@ import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 import { emitEvent } from "@/lib/webhooks/emit";
 import type { PlaudRecording } from "@/types/plaud";
 
-/**
- * Sync configuration constants
- */
 const SYNC_CONFIG = {
-    /** Number of recordings to fetch per API call */
     PAGE_SIZE: 50,
-    /** Number of recordings to download concurrently */
     BATCH_CONCURRENCY: 5,
-    /** Maximum pages to process in a single sync (prevents runaway) */
     MAX_PAGES: 20,
 } as const;
 
@@ -27,26 +21,13 @@ interface SyncResult {
     newRecordings: number;
     updatedRecordings: number;
     errors: string[];
-    /** IDs of recordings that need transcription */
     pendingTranscriptionIds: string[];
-    /**
-     * True when this call coalesced into an already-running sync in the
-     * same process. Counts/IDs reflect that in-flight run, not a fresh
-     * one. Multi-process correctness is handled by the rate limiter at
-     * the route boundary (see `enforcePlaudSyncRateLimit`); this flag is
-     * only set within a single Node worker.
-     */
+    /** True when this call coalesced into an already-running in-process sync. */
     inProgress?: boolean;
 }
 
-/**
- * Per-user in-flight sync promises. A second request for the same user
- * while a sync is running in the same process awaits the existing promise
- * rather than starting a parallel Plaud paginate + download pass. This is
- * the cheapest possible dedup layer; the per-user rate limit in the route
- * handler is the cross-process correctness backstop (AGENTS.md: in-memory
- * locks must not be the only correctness mechanism).
- */
+// Per-user in-flight dedup within one process. Cross-process correctness
+// is enforced by `enforcePlaudSyncRateLimit` at the route boundary.
 const inFlightSyncs = new Map<string, Promise<SyncResult>>();
 
 interface SyncContext {
@@ -58,10 +39,6 @@ interface SyncContext {
     barkPushUrl: string | null;
 }
 
-/**
- * Generate a unique storage key for a recording, appending (2), (3) etc.
- * if another recording with the same name already exists in the DB.
- */
 async function uniqueStorageKey(
     userId: string,
     baseName: string,
@@ -87,13 +64,9 @@ async function uniqueStorageKey(
             .limit(1);
         if (!existing) return key;
     }
-    // Absolute fallback: use the plaud ID
     return `${userId}/${plaudFileId}.${ext}`;
 }
 
-/**
- * Process a single recording - download and save to database
- */
 async function processRecording(
     plaudRecording: PlaudRecording,
     context: SyncContext,
@@ -119,7 +92,6 @@ async function processRecording(
 
         const versionKey = plaudRecording.version_ms.toString();
 
-        // Skip if already synced with same version
         if (
             existingRecording &&
             existingRecording.plaudVersion === versionKey
@@ -127,14 +99,11 @@ async function processRecording(
             return { status: "skipped" };
         }
 
-        // Tombstone: user soft-deleted this recording in OpenPlaud's UI.
-        // Do not re-download or update — sync is keyed on plaudFileId, and
-        // the row is retained specifically to suppress resurrection. See #56.
+        // Tombstone: suppress resurrection of user-deleted recordings (#56).
         if (existingRecording?.deletedAt) {
             return { status: "skipped" };
         }
 
-        // Download the audio file
         const audioBuffer = await plaudClient.downloadRecording(
             plaudRecording.id,
             false,
@@ -157,10 +126,6 @@ async function processRecording(
             userId: context.userId,
             deviceSn: plaudRecording.serial_number,
             plaudFileId: plaudRecording.id,
-            // Filename comes from Plaud as plaintext and may carry topic
-            // info; encrypt at rest. Notification surfaces below receive
-            // the original `plaudRecording.filename` directly, which is
-            // the right contract — the encrypted form never leaves the DB.
             filename: encryptText(plaudRecording.filename),
             duration: plaudRecording.duration,
             startTime: new Date(plaudRecording.start_time),
@@ -178,11 +143,8 @@ async function processRecording(
         };
 
         if (existingRecording) {
-            // The pre-download `select` happened before the slow
-            // download/upload above. A concurrent DELETE could have
-            // tombstoned the row in the meantime. Re-check under a row
-            // lock so we don't resurrect a deleted recording, and only
-            // emit `recording.updated` when we actually wrote.
+            // Re-check under FOR UPDATE: a concurrent DELETE may have
+            // tombstoned the row during the download/upload above.
             const updated = await db.transaction(async (tx) => {
                 const [locked] = await tx
                     .select({ deletedAt: recordings.deletedAt })
@@ -211,11 +173,7 @@ async function processRecording(
             });
 
             if (!updated) {
-                // Concurrent DELETE tombstoned the recording while we
-                // were downloading/uploading. The just-uploaded blob
-                // would otherwise be orphaned because we're no longer
-                // writing the recordings row that references it. Best
-                // effort cleanup; storage "already gone" is acceptable.
+                // Best-effort cleanup of the orphaned blob.
                 try {
                     await storage.deleteFile(storageKey);
                 } catch (cleanupError) {
@@ -239,9 +197,6 @@ async function processRecording(
             };
         }
 
-        // Insert new recording. Concurrent inserts of the same plaud_file_id
-        // by parallel sync runs are caught by the (user_id, plaud_file_id)
-        // unique constraint and surface as an error to the caller.
         const [newRecording] = await db
             .insert(recordings)
             .values(recordingData)
@@ -262,9 +217,6 @@ async function processRecording(
     }
 }
 
-/**
- * Process a batch of recordings concurrently
- */
 async function processBatch(
     batch: PlaudRecording[],
     context: SyncContext,
@@ -315,25 +267,13 @@ async function processBatch(
     };
 }
 
-/**
- * Sync recordings for a user with optimized batch processing
- *
- * Optimizations:
- * - Fetches recordings in pages (50 at a time)
- * - Downloads concurrently in batches (5 at a time)
- * - Queues transcription for after sync completes
- * - Stops early if no new recordings found
- * - In-process dedup: concurrent calls for the same user share one run
- */
+/** Paginated, batched sync. Coalesces concurrent same-user calls in-process. */
 export async function syncRecordingsForUser(
     userId: string,
 ): Promise<SyncResult> {
     const inFlight = inFlightSyncs.get(userId);
     if (inFlight) {
         const shared = await inFlight;
-        // Mark the coalesced response so the route handler / client can
-        // distinguish it from a fresh run. We deliberately do NOT mutate
-        // the in-flight result object (other awaiters share it).
         return { ...shared, inProgress: true };
     }
 
@@ -342,8 +282,6 @@ export async function syncRecordingsForUser(
     try {
         return await run;
     } finally {
-        // Always clear, even on throw, so a failed sync doesn't wedge the
-        // user out of future attempts.
         inFlightSyncs.delete(userId);
     }
 }
@@ -357,7 +295,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
     };
 
     try {
-        // Get connection
         const [connection] = await db
             .select()
             .from(plaudConnections)
@@ -369,7 +306,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             return result;
         }
 
-        // Get user settings
         const [settings] = await db
             .select()
             .from(userSettings)
@@ -385,11 +321,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             .where(eq(users.id, userId))
             .limit(1);
 
-        // Suspension check (cooperative). If an admin has suspended this user
-        // we exit before doing any work. In-flight syncs are not interrupted;
-        // this only stops the next claim. Self-host never sets suspendedAt
-        // because the admin gate is locked behind IS_HOSTED, so this branch
-        // is dead code there.
         if (user?.suspendedAt) {
             result.errors.push("User is suspended");
             return result;
@@ -413,7 +344,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
 
-        // Paginated sync - fetch newest first
         let page = 0;
         let hasMore = true;
         let consecutiveEmptyPages = 0;
@@ -423,9 +353,9 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             const recordingsResponse = await plaudClient.getRecordings(
                 skip,
                 SYNC_CONFIG.PAGE_SIZE,
-                0, // not trash
+                0,
                 "edit_time",
-                true, // descending (newest first)
+                true,
             );
 
             const plaudRecordings = recordingsResponse.data_file_list;
@@ -434,7 +364,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 break;
             }
 
-            // Process in concurrent batches
             for (
                 let i = 0;
                 i < plaudRecordings.length;
@@ -460,8 +389,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 allNewRecordingNames.push(...batchResult.newRecordingNames);
             }
 
-            // Early exit optimization: if we got fewer recordings than requested,
-            // or if we had no new/updated recordings for 2 pages, we're done
             if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
                 hasMore = false;
             } else if (
@@ -479,10 +406,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             page++;
         }
 
-        // Update last sync time, plus the workspaceId if it was resolved or
-        // changed during this run (cache-empty backfill or stale-cache rescue).
-        // Always scope user-owned UPDATEs by userId in addition to the
-        // primary key, per AGENTS.md "User-Scoped Queries" rule.
         const resolvedWorkspaceId = plaudClient.workspaceId;
         const workspaceIdChanged =
             !!resolvedWorkspaceId &&
@@ -502,7 +425,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 ),
             );
 
-        // Send notifications
         if (
             context.emailNotifications &&
             context.notificationEmail &&
@@ -540,12 +462,10 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             }
         }
 
-        // Queue transcription for new recordings (runs after sync response)
         if (
             context.autoTranscribe &&
             result.pendingTranscriptionIds.length > 0
         ) {
-            // Run transcription in background, don't await
             queueTranscriptions(userId, result.pendingTranscriptionIds).catch(
                 (error) => {
                     console.error("Background transcription failed:", error);
@@ -562,10 +482,6 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
     }
 }
 
-/**
- * Queue transcriptions to run in background
- * This is fire-and-forget to not block the sync response
- */
 async function queueTranscriptions(
     userId: string,
     recordingIds: string[],

@@ -1,19 +1,3 @@
-/**
- * Unit tests for the Plaud outbound proxy layer.
- *
- * What's pinned here:
- *   - `shouldProxyPlaud` only matches Plaud-owned hostnames over HTTPS.
- *   - `plaudFetch` falls through to direct fetch when Webshare isn't
- *     configured (the self-host default — must not regress).
- *   - With a Webshare list available, `plaudFetch` invokes `wreq-js`'s
- *     fingerprint-impersonating fetch with the selected proxy URL, a
- *     Chrome browser profile, and an OS hint.
- *   - A 403 response while proxied triggers exactly one rotation, after
- *     which the original response is returned (we don't loop forever
- *     and we don't blow past the rotation budget).
- *   - Non-Plaud URLs are never proxied even if Webshare is configured.
- */
-
 import {
     afterEach,
     beforeEach,
@@ -60,7 +44,7 @@ function okResponse(): Response {
 }
 
 function forbiddenResponse(): Response {
-    return new Response("<html>Cloudflare</html>", {
+    return new Response("<html>blocked</html>", {
         status: 403,
         headers: { "Content-Type": "text/html" },
     });
@@ -122,10 +106,8 @@ describe("shouldProxyPlaud", () => {
 
     it("skips resource.plaud.ai when PLAUD_PROXY_SCOPE=api-only", () => {
         mockEnv.PLAUD_PROXY_SCOPE = "api-only";
-        // API still proxied.
         expect(shouldProxyPlaud("https://api.plaud.ai/foo")).toBe(true);
         expect(shouldProxyPlaud("https://api-euc1.plaud.ai/foo")).toBe(true);
-        // Audio CDN bypassed.
         expect(shouldProxyPlaud("https://resource.plaud.ai/file.mp3")).toBe(
             false,
         );
@@ -155,20 +137,18 @@ describe("plaudFetch with Webshare configured", () => {
         mockEnv.WEBSHARE_API_KEY = "test-key";
     });
 
-    it("fetches the Webshare list with global fetch and routes the Plaud call through wreq-js", async () => {
+    it("fetches the Webshare list via global fetch and routes the Plaud call through the proxy", async () => {
         mockFetch.mockResolvedValueOnce(webshareList([sampleProxy]));
         mockWreq.fetch.mockResolvedValueOnce(okResponse());
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(200);
 
-        // Webshare list fetched via global fetch (NOT through wreq-js;
-        // we don't want to spoof Chrome at Webshare's API).
+        // The Webshare list endpoint itself is not in the proxy scope.
         expect(mockFetch).toHaveBeenCalledTimes(1);
         const [listUrl] = mockFetch.mock.calls[0];
         expect(String(listUrl)).toContain("proxy.webshare.io");
 
-        // Plaud call goes through wreq-js with proxy + browser profile.
         expect(mockWreq.fetch).toHaveBeenCalledTimes(1);
         const [plaudUrl, opts] = mockWreq.fetch.mock.calls[0];
         expect(String(plaudUrl)).toBe(PLAUD_API_URL);
@@ -190,23 +170,18 @@ describe("plaudFetch with Webshare configured", () => {
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(403);
-        // 1 list call (global) + 2 plaud attempts (wreq) = exactly 3
-        // total. Crucially NOT 4 — the budget is one rotation.
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockWreq.fetch).toHaveBeenCalledTimes(2);
     });
 
     it("returns a readable body when rotation is exhausted (no second proxy)", async () => {
-        // Pins the fix for cubic P1 (canceled-body bug): when only one
-        // proxy is available and it 403s, plaudFetch must surface the
-        // 403 Response with its body intact so the caller can parse it.
         mockFetch.mockResolvedValueOnce(webshareList([sampleProxy]));
         mockWreq.fetch.mockResolvedValueOnce(forbiddenResponse());
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(403);
         const text = await res.text();
-        expect(text).toContain("Cloudflare");
+        expect(text).toContain("blocked");
     });
 
     it("returns the success response after a rotation succeeds", async () => {
@@ -229,15 +204,12 @@ describe("plaudFetch with Webshare configured", () => {
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(200);
-        // Second call must hit global fetch (no impersonation), since
-        // there's no proxy to apply it through.
         expect(mockWreq.fetch).not.toHaveBeenCalled();
     });
 
     it("does not proxy non-Plaud URLs even when configured", async () => {
         mockFetch.mockResolvedValueOnce(okResponse());
         await plaudFetch("https://s3.amazonaws.com/some-bucket/file");
-        // Only the direct call; no Webshare list lookup, no wreq-js.
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockWreq.fetch).not.toHaveBeenCalled();
     });

@@ -84,13 +84,9 @@ export const envSchema = z.object({
     S3_SECRET_ACCESS_KEY: z.string().optional(),
 
     // Webshare residential-proxy API key. When set, Plaud-bound outbound
-    // requests (api*.plaud.ai, resource.plaud.ai) are routed through a
-    // random valid proxy from the Webshare list, with automatic rotation
-    // on Cloudflare 403/407 responses. Unset (default) keeps every call
-    // on the direct egress path — the right default for self-hosters on
-    // residential or homelab IPs that Cloudflare doesn't flag. Hosted
-    // deployments on flagged datacenter ASNs (Contabo, OVH, …) need this.
-    // See src/lib/plaud/proxy.ts for the rationale.
+    // requests route through the operator's Webshare proxy list with
+    // automatic rotation on 403/407. Unset (default) keeps every call
+    // on the direct egress path.
     WEBSHARE_API_KEY: z
         .string()
         .optional()

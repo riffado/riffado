@@ -5,38 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api-errors";
 
 interface UseAutoSyncOptions {
-    /**
-     * Sync interval in milliseconds
-     * @default 300000 (5 minutes)
-     */
     interval?: number;
-    /**
-     * Minimum time between syncs in milliseconds
-     * @default 60000 (1 minute)
-     */
     minInterval?: number;
-    /**
-     * Whether to sync on mount
-     * @default true
-     */
     syncOnMount?: boolean;
-    /**
-     * Whether to sync when tab becomes visible
-     * @default true
-     */
     syncOnVisibilityChange?: boolean;
-    /**
-     * Whether auto-sync is enabled
-     * @default true
-     */
     enabled?: boolean;
-    /**
-     * Callback when sync completes successfully
-     */
     onSuccess?: (newRecordings: number) => void;
-    /**
-     * Callback when sync fails
-     */
     onError?: (error: string) => void;
 }
 
@@ -52,24 +26,10 @@ interface SyncStatus {
 }
 
 const STORAGE_KEY = "openplaud_last_sync";
-/**
- * Cross-tab in-flight stamp. Multiple browser tabs running this hook will
- * each try to sync on mount / visibility-change; without coordination they
- * fan out into N concurrent server calls, each of which on hosted is one
- * round-trip through the Webshare residential proxy. The first tab to start
- * a sync writes a token here; sibling tabs see a recent stamp and skip
- * their own call. Self-expiring after IN_FLIGHT_TTL_MS so a crashed tab
- * can't permanently block sync for the rest.
- *
- * Stamp format: `${startedAtMs}:${token}` where token is a unique per-call
- * random string. The clearing side checks the current stored value still
- * matches its own token before deleting -- otherwise a TOCTOU race between
- * two tabs that both passed the read-then-write check could see the first
- * tab to finish wipe a stamp that another tab is still relying on.
- */
+// Cross-tab in-flight stamp. Format: `${startedAtMs}:${token}`. Clear
+// side checks token match to avoid a TOCTOU wipe between concurrent tabs.
 const IN_FLIGHT_KEY = "openplaud_sync_in_progress";
 const IN_FLIGHT_TTL_MS = 90_000;
-/** Floor between manual button taps. Stops rage-clicking before it hits the API. */
 const MANUAL_MIN_INTERVAL_MS = 5_000;
 
 function parseStamp(
@@ -77,10 +37,8 @@ function parseStamp(
 ): { startedAt: number; token: string } | null {
     if (!raw) return null;
     const sep = raw.indexOf(":");
-    // Back-compat with the previous bare-timestamp format: treat a numeric
-    // body as a stamp with an empty token. The mismatch-on-clear check
-    // below will then refuse to delete it (empty token never matches a
-    // real one), and TTL will expire it instead. Safer than racing.
+    // Back-compat with bare-timestamp values: empty token never matches
+    // on clear, so TTL expires them instead.
     const startedAtStr = sep === -1 ? raw : raw.slice(0, sep);
     const token = sep === -1 ? "" : raw.slice(sep + 1);
     const startedAt = Number.parseInt(startedAtStr, 10);
@@ -95,7 +53,6 @@ function readInFlightStamp(): number | null {
         if (Date.now() - parsed.startedAt > IN_FLIGHT_TTL_MS) return null;
         return parsed.startedAt;
     } catch {
-        // SSR / private mode / storage quota — fall through to no-stamp.
         return null;
     }
 }
@@ -103,37 +60,27 @@ function readInFlightStamp(): number | null {
 function writeInFlightStamp(token: string): void {
     try {
         localStorage.setItem(IN_FLIGHT_KEY, `${Date.now()}:${token}`);
-    } catch {
-        // Ignore — best-effort cross-tab signal.
-    }
+    } catch {}
 }
 
-/**
- * Remove the stamp ONLY if it still carries our token. Prevents one tab
- * from wiping another tab's active lock if both raced past the read check
- * (TOCTOU). A stamp written by a sibling tab is left alone so its own TTL
- * (or its own clear-on-finish) decides when to drop it.
- */
+// Only clear if token matches; prevents one tab wiping another tab's lock.
 function clearInFlightStampIfOwned(token: string): void {
     try {
         const parsed = parseStamp(localStorage.getItem(IN_FLIGHT_KEY));
         if (parsed && parsed.token === token) {
             localStorage.removeItem(IN_FLIGHT_KEY);
         }
-    } catch {
-        // Ignore.
-    }
+    } catch {}
 }
 
 function newSyncToken(): string {
-    // Math.random is plenty here -- this is a non-security collision tag.
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function useAutoSync(options: UseAutoSyncOptions = {}) {
     const {
-        interval = 5 * 60 * 1000, // 5 minutes default
-        minInterval = 60 * 1000, // 1 minute minimum
+        interval = 5 * 60 * 1000,
+        minInterval = 60 * 1000,
         syncOnMount = true,
         syncOnVisibilityChange = true,
         enabled = true,
@@ -155,13 +102,11 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
     const onSuccessRef = useRef(onSuccess);
     const onErrorRef = useRef(onError);
 
-    // Update callback refs
     useEffect(() => {
         onSuccessRef.current = onSuccess;
         onErrorRef.current = onError;
     }, [onSuccess, onError]);
 
-    // Load last sync time from localStorage
     useEffect(() => {
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
@@ -185,10 +130,6 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                     return;
                 }
             } else {
-                // Manual taps also honor a small floor so a rage-click
-                // can't shovel duplicate jobs at the proxy. The server
-                // rate limit (PLAUD_SYNC_RATE_LIMIT_PER_MINUTE) is the
-                // hard cap; this is the friendly client-side gate.
                 const timeSinceLastSync = now - lastSyncTimeRef.current;
                 if (timeSinceLastSync < MANUAL_MIN_INTERVAL_MS) {
                     const waitSeconds = Math.ceil(
@@ -201,8 +142,6 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                 }
             }
 
-            // Cross-tab coordination: if another tab in this browser is
-            // mid-sync, skip. Stamp self-expires after IN_FLIGHT_TTL_MS.
             if (readInFlightStamp() !== null) {
                 return;
             }
@@ -223,9 +162,6 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                     lastSyncTimeRef.current = syncTime.getTime();
                     localStorage.setItem(STORAGE_KEY, syncTime.toISOString());
 
-                    // Server coalesced this into a same-process in-flight
-                    // run. No new data was fetched on our behalf; render
-                    // as a quiet no-op so we don't double-toast or refresh.
                     if (result.inProgress) {
                         setStatus((prev) => ({
                             ...prev,

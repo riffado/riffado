@@ -74,7 +74,6 @@ export interface RecordingListHandle {
     prev: () => void;
 }
 
-// Persist a single user-settings field. Best-effort; UI already changed.
 function persistSetting(field: string, value: unknown) {
     fetch("/api/settings/user", {
         method: "PUT",
@@ -83,32 +82,20 @@ function persistSetting(field: string, value: unknown) {
     }).catch(() => {});
 }
 
-// Use the shared duration formatter so list rows automatically pick up
-// the H:MM:SS layout for hour-plus recordings.
 const formatDuration = formatDurationMs;
 
 function formatSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Pull a single-line plaintext snippet out of a transcript for the
-// list row preview. Transcripts come in two shapes:
-//   - Plaintext (legacy / Whisper passthrough): leave as-is.
-//   - JSON-ish with embedded timestamps / speaker labels: strip the
-//     structural noise so the first line of "real" content surfaces.
-// We intentionally keep this dumb — the snippet is a hint, not a
-// document. Anything richer belongs in the workstation transcript pane.
 function transcriptSnippet(
     text: string | undefined,
     maxChars = 140,
 ): string | null {
     if (!text) return null;
     const stripped = text
-        // Drop bracketed metadata like [00:00:00] or [Speaker 1]
         .replace(/\[[^\]]+\]/g, " ")
-        // Drop bare timecodes (00:00, 00:00:00)
         .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
-        // Collapse whitespace and newlines
         .replace(/\s+/g, " ")
         .trim();
     if (!stripped) return null;
@@ -150,7 +137,6 @@ export function RecordingList({
         persistSetting("listDensity", next);
     }, []);
 
-    // Filter (filename + transcript text), then sort.
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         const base = q
@@ -186,8 +172,6 @@ export function RecordingList({
 
     const visible = filtered.slice(0, visibleCount);
 
-    // Group adjacent rows by date bucket. Only meaningful when sorting
-    // by time; for "name" we render a single ungrouped block.
     const grouped = useMemo(() => {
         if (sortOrder === "name") {
             return [{ label: null as string | null, items: visible }];
@@ -218,7 +202,6 @@ export function RecordingList({
         );
     }, [filtered.length, initialChunkSize]);
 
-    // Infinite-scroll sentinel
     useEffect(() => {
         const el = sentinelRef.current;
         if (!el) return;
@@ -238,7 +221,6 @@ export function RecordingList({
         return () => observer.disconnect();
     }, [filtered.length, initialChunkSize]);
 
-    // Imperative API for parent-driven keyboard nav.
     useImperativeHandle(
         ref,
         () => ({
@@ -292,10 +274,6 @@ export function RecordingList({
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onKeyDown={(e) => {
-                                // Enter opens the top filtered result.
-                                // Without this, finding-then-opening takes
-                                // a separate mouse click — the most common
-                                // search outcome should be one keystroke.
                                 if (e.key === "Enter" && filtered.length > 0) {
                                     e.preventDefault();
                                     onSelect(filtered[0]);
@@ -439,13 +417,6 @@ export function RecordingList({
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
                         >
                             {group.label && (
-                                // Quiet group header. Sits flush against the
-                                // following row — no top border, no internal
-                                // padding besides the text's own line-height,
-                                // so the only visible vertical space is the
-                                // previous row's bottom padding. Sticky + bg
-                                // keep it readable when the user scrolls past
-                                // a group boundary.
                                 <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                     {group.label}
                                 </div>
@@ -468,11 +439,6 @@ export function RecordingList({
                                             key={recording.id}
                                             className={cn(
                                                 "group/row relative",
-                                                // Selected row: 2px primary
-                                                // left rail + slightly
-                                                // stronger bg. The rail is
-                                                // an inset box-shadow so it
-                                                // doesn't shift content.
                                                 isSelected
                                                     ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
                                                     : null,
@@ -504,14 +470,6 @@ export function RecordingList({
                                                         <h3 className="truncate text-sm font-medium">
                                                             {recording.filename}
                                                         </h3>
-                                                        {/*
-                                                          Status — only
-                                                          non-OK states
-                                                          render. A row
-                                                          with a transcript
-                                                          + summary is
-                                                          silent on purpose.
-                                                        */}
                                                         {inFlight && (
                                                             <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
                                                                 <Loader2
@@ -525,15 +483,6 @@ export function RecordingList({
                                                             </span>
                                                         )}
                                                     </div>
-                                                    {/*
-                                                      Subtitle: transcript
-                                                      snippet when present
-                                                      (the actual content
-                                                      of the recording),
-                                                      otherwise duration +
-                                                      timestamp. Single
-                                                      line, truncated.
-                                                    */}
                                                     {snippet ? (
                                                         <p
                                                             className={cn(
@@ -566,18 +515,6 @@ export function RecordingList({
                                                     )}
                                                 </div>
                                             </button>
-                                            {/*
-                                              Visibility: hidden by default,
-                                              revealed on row hover OR when
-                                              focus is inside the trigger OR
-                                              while the menu is open. The
-                                              `has-[[data-state=open]]` check
-                                              keeps the kebab visible after
-                                              click — Radix portals the menu,
-                                              so focus leaves this subtree
-                                              and `focus-within` alone would
-                                              drop the trigger to opacity-0.
-                                            */}
                                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger
@@ -609,36 +546,7 @@ export function RecordingList({
                                                         <DropdownMenuItem
                                                             variant="destructive"
                                                             onSelect={(e) => {
-                                                                // Keep the
-                                                                // dropdown
-                                                                // mounted
-                                                                // while the
-                                                                // confirm
-                                                                // dialog
-                                                                // opens —
-                                                                // Radix's
-                                                                // standard
-                                                                // dialog-from-menu
-                                                                // pattern
-                                                                // (without
-                                                                // this, the
-                                                                // menu's
-                                                                // close
-                                                                // animation
-                                                                // races the
-                                                                // dialog's
-                                                                // open and
-                                                                // focus
-                                                                // bounces
-                                                                // back to
-                                                                // the
-                                                                // trigger).
-                                                                // The
-                                                                // confirm's
-                                                                // overlay
-                                                                // dismisses
-                                                                // the menu
-                                                                // visually.
+                                                                // Keep menu mounted so confirm dialog can take focus.
                                                                 e.preventDefault();
                                                                 void confirm({
                                                                     title: "Delete this recording?",

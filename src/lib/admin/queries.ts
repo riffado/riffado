@@ -23,58 +23,19 @@ import {
     users,
 } from "@/db/schema";
 
-/**
- * All queries here return aggregates and metadata only. They MUST NOT select:
- *   - recordings.filename (treated as PII; surfaced only on user detail and
- *     even there only as count)
- *   - transcriptions.text
- *   - aiEnhancements.summary / actionItems / keyPoints
- *   - plaudConnections.bearerToken (encrypted at rest, decrypted only in
- *     PlaudClient construction)
- *   - apiCredentials.apiKey
- *
- * If you add a query, do NOT select those columns. The audit trail goes
- * through admin_audit_log via requireAdmin*; this file is purely read.
- */
+// MUST NOT select: recordings.filename, transcriptions.text,
+// aiEnhancements.summary/actionItems/keyPoints, plaudConnections.bearerToken,
+// apiCredentials.apiKey. Aggregates and metadata only.
 
 const DAY_MS = 86_400_000;
 
 export async function fleetOverview() {
-    // ISO strings, not Date objects: Next.js's `queryWithCache` hasher
-    // walks bound params and calls `Buffer.byteLength` on them, which throws
-    // on Date. Postgres accepts ISO strings for timestamp/timestamptz
-    // comparisons, so this is wire-compatible.
     const now = Date.now();
-    // Cast to plain `timestamp` (not `timestamptz`) because every column we
-    // compare against is `timestamp` (TZ-naive) in schema.ts. Mixing the two
-    // forces an implicit session-TZ conversion, which would shift the 7/30-day
-    // cutoffs on any non-UTC Postgres session. ISO strings cast to `timestamp`
-    // discard the `Z` offset and use the UTC local components -- identical to
-    // what drizzle does when binding a Date to a `timestamp` column.
+    // ISO strings cast to `timestamp` (TZ-naive, matching schema columns).
     const d7 = sql`${new Date(now - 7 * DAY_MS).toISOString()}::timestamp`;
     const d14 = sql`${new Date(now - 14 * DAY_MS).toISOString()}::timestamp`;
     const d30 = sql`${new Date(now - 30 * DAY_MS).toISOString()}::timestamp`;
 
-    // All 30 queries below are independent counts/sums. Race them in one
-    // Promise.all so the dashboard renders at the speed of the slowest
-    // aggregate (typically the storage sum), not the sum of every query.
-    //
-    // Each `.then(rows => rows[0])` extracts the single-row result so the
-    // destructure below stays readable. Group-by queries return arrays as
-    // usual.
-    //
-    // Notes:
-    // - countDistinct(userId) on plaud_connections because legacy deployments
-    //   may have multiple connection rows per user (would otherwise overcount
-    //   the active-user metric).
-    // - The missingTx* queries use leftJoin + isNull(transcriptions.id) as
-    //   the canonical Drizzle anti-join pattern ("parent rows with no
-    //   matching child"). A recording may have multiple transcription rows
-    //   but rows with NO match yield exactly one (null) join row, so
-    //   count(recordings.id) is safe.
-    // - Server audio MINUTES (joined transcriptions -> recordings on
-    //   recording_id) is the real Whisper cost driver; row count alone is
-    //   too coarse.
     const [
         userTotal,
         signups7,
@@ -395,9 +356,6 @@ export async function fleetOverview() {
 export type FleetOverview = Awaited<ReturnType<typeof fleetOverview>>;
 
 export async function signupsByDay(days = 90) {
-    // Date -> ISO string for cache-hasher compatibility (see fleetOverview).
-    // Bucket in UTC so days are stable regardless of the Postgres session TZ;
-    // a server in non-UTC would otherwise shift bucket boundaries.
     const since = new Date(Date.now() - days * DAY_MS).toISOString();
     const dayExpr = sql<string>`to_char(${users.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
     const rows = await db
@@ -423,13 +381,10 @@ export interface UserListRow {
     recordingCount: number;
     storageBytes: number;
     serverTranscriptions30d: number;
-    syncErrors7d: number; // placeholder = 0; no sync_errors table yet
+    syncErrors7d: number;
 }
 
-/**
- * Paginated user list with cost-attribution metrics. Returns at most `limit`
- * rows. Search filters by email (ILIKE %q%); empty q returns everyone.
- */
+/** Paginated user list with cost-attribution metrics. */
 export async function listUsers(opts: {
     limit: number;
     offset: number;
@@ -444,9 +399,6 @@ export async function listUsers(opts: {
     const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const search = (opts.q ?? "").trim().toLowerCase();
 
-    // Subqueries for per-user aggregates. We compute everything in a single
-    // round-trip via lateral-join-ish CTEs (drizzle doesn't have great CTE
-    // support yet, so we use a single SQL template).
     const sortClause = (() => {
         switch (opts.sort) {
             case "storage_desc":
@@ -462,9 +414,6 @@ export async function listUsers(opts: {
         }
     })();
 
-    // ilike (case-insensitive LIKE) so this can hit a plain B-tree on email
-    // via a trigram index if one is added later. `lower(email) like lower(?)`
-    // would force an expression index to be useful.
     const whereClause = search
         ? sql`where u.email ilike ${`%${search}%`}`
         : sql``;
@@ -571,15 +520,12 @@ export interface UserDetail {
         deviceSn: string;
         storageType: string;
         deletedAt: Date | null;
-        // never returned: filename, transcript text, summary
     }>;
 }
 
 export async function getUserDetail(
     userId: string,
 ): Promise<UserDetail | null> {
-    // Gate everything on the user existing -- saves six queries when an
-    // admin opens a stale detail link and the user was deleted.
     const [u] = await db
         .select({
             id: users.id,
@@ -594,11 +540,6 @@ export async function getUserDetail(
         .limit(1);
     if (!u) return null;
 
-    // Six independent reads, one round-trip per row. Run them in parallel
-    // so the detail page renders at the speed of the slowest query, not
-    // the sum of all of them. Legacy deployments may have multiple
-    // plaud_connections per user -- pick the most-recently-updated one
-    // deterministically so the detail view is reproducible across reloads.
     const [pc, recAgg, txByType, enhAgg, credAgg, recent] = await Promise.all([
         db
             .select({
@@ -683,14 +624,7 @@ export async function getUserDetail(
     };
 }
 
-/**
- * Storage histogram in fixed buckets (MB):
- *   0-100, 100-1000, 1000-5000, 5000+
- *
- * Joined from `users` (not from a `recordings` aggregate) so users with no
- * live recordings are counted in the 0-100MB bucket. Aggregating off
- * `recordings` would silently drop them and bias the histogram high.
- */
+/** Per-user storage histogram (MB buckets). */
 export async function storageHistogram() {
     const rows = await db.execute<{
         bucket: string;
@@ -775,10 +709,7 @@ export async function topServerTranscriptionUsers(limit = 50) {
     return rows;
 }
 
-/**
- * Sync health buckets. Without a dedicated sync_runs table we infer from
- * plaudConnections.lastSync age + plaud-connected users.
- */
+/** Sync health buckets inferred from plaudConnections.lastSync age. */
 export async function syncHealth() {
     const now = Date.now();
     const h1 = new Date(now - 1 * 3600_000).toISOString();
@@ -801,16 +732,9 @@ export async function syncHealth() {
     return buckets;
 }
 
-/**
- * Pricing snapshot CDFs -- per-user storage (MB), recordings, server-tx.
- * Returns sorted arrays of values so the page can compute percentiles
- * client-side.
- */
+/** Per-user CDFs (storage, recordings, server-tx); sort happens in SQL. */
 export async function pricingSnapshot() {
     const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
-    // Left-join from `users` so users with zero live recordings appear as 0
-    // in the CDF instead of being dropped. Aggregating off `recordings`
-    // alone would bias every percentile high.
     const [storage, recordingCounts, serverTx] = await Promise.all([
         db.execute<{ bytes: number }>(sql`
             select coalesce(sum(r.filesize) filter (where r.deleted_at is null), 0)::bigint as bytes
@@ -842,23 +766,8 @@ export async function pricingSnapshot() {
     };
 }
 
-/**
- * Prune old admin_audit_log rows. Mutation log is NOT pruned -- mutations
- * are rare, every row is auditable forever, and you want long retention for
- * abuse investigations. Reads are cheap and noisy; default 90-day retention.
- *
- * Designed to be invoked from a cron / scheduled task. Idempotent. Returns
- * the row count that matched the cutoff (counted before the delete runs)
- * so the caller can log it. Intentionally avoids `.returning()` -- on a
- * years-old table that would allocate one row per deleted record just to
- * compute a count, defeating the purpose of pruning.
- */
+/** Prune read-audit rows older than `olderThanDays`. Mutation log is never pruned. */
 export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
-    // Single statement, atomic count: avoids the count-then-delete race
-    // where rows inserted between the two would understate the returned
-    // count. The CTE deletes and `select count(*)` reads from its result,
-    // so we get exact affected-row count without `.returning()` allocating
-    // one row per deleted record.
     const cutoff = new Date(Date.now() - olderThanDays * DAY_MS).toISOString();
     const rows = await db.execute<{ n: number }>(sql`
         with deleted as (
@@ -871,6 +780,4 @@ export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
     return Number(rows[0]?.n ?? 0);
 }
 
-// Re-export so the mutation log table is reachable via this module's public
-// surface for tests and future tooling without importing the schema directly.
 export { adminActionLog, adminAuditLog };

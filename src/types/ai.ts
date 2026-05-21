@@ -1,7 +1,3 @@
-/**
- * AI prompt types for title generation
- */
-
 export type PromptPreset =
     | "default"
     | "meetings"
@@ -17,9 +13,6 @@ export interface PromptConfig {
     prompt: string;
 }
 
-/**
- * Custom prompt interface
- */
 export interface CustomPrompt {
     id: string;
     name: string;
@@ -27,9 +20,6 @@ export interface CustomPrompt {
     createdAt: string;
 }
 
-/**
- * Prompt configuration structure
- */
 export interface PromptConfiguration {
     selectedPrompt: string; // preset ID or custom prompt ID
     customPrompts: CustomPrompt[];

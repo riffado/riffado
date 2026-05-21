@@ -1,24 +1,3 @@
-/**
- * Plaud workspace token (WT) flow.
- *
- * Plaud issues two distinct JWTs:
- *  - **UT** (User Token, typ="UT"): returned by POST /auth/otp-login, lifetime
- *    ~300 days. Authenticates user-scoped endpoints (/user/me,
- *    /team-app/workspaces/list, the workspace-token mint endpoint itself).
- *  - **WT** (Workspace Token, typ="WT"): minted from a UT, lifetime 24h.
- *    Required by recording endpoints (/file/simple/web, /device/list,
- *    /file/temp-url/*, /filetag/, ...). On regional servers (EU, APAC) a UT
- *    sent to /file/simple/web returns a 200 with an empty list — the request
- *    silently fails open, which is the bug behind issue #66.
- *
- * We never persist the WT or its refresh_token; we mint a fresh WT from the
- * stored UT on every PlaudClient instance. The WT lasts 24h, far longer than
- * any sync run, so no in-flight refresh logic is needed.
- *
- * The workspaceId itself IS persisted in plaud_connections.workspace_id so we
- * can skip the /team-app/workspaces/list lookup on subsequent syncs.
- */
-
 import { AppError, ErrorCode } from "@/lib/errors";
 import type {
     PlaudWorkspaceListResponse,
@@ -28,19 +7,7 @@ import { plaudFetch } from "./fetch";
 import { safeParseJson } from "./parse";
 import { PLAUD_USER_AGENT } from "./servers";
 
-/**
- * SSRF barrier. `apiBase` is user-influenced (originally chosen at OTP-send
- * time via Plaud's regional -302 redirect, then round-tripped through the
- * client and persisted in the DB). The verify route validates it before
- * insert, but these helpers are also reachable from the sync path which
- * reads apiBase from the DB — revalidate at the boundary so a tampered DB
- * row can't coerce the server into requesting an arbitrary URL.
- *
- * Returns a freshly-constructed URL object whose hostname has been
- * whitelist-checked against plaud.ai. Inlining the URL parse + hostname
- * check (rather than delegating to a helper) is required for CodeQL's
- * SSRF analysis to recognize this as a sanitizer.
- */
+// SSRF sanitiser. Inlined (not delegated) so CodeQL recognises it.
 function safePlaudUrl(apiBase: string, path: string): URL {
     const parsed = new URL(path, apiBase);
     if (
@@ -57,13 +24,7 @@ function safePlaudUrl(apiBase: string, path: string): URL {
     return parsed;
 }
 
-/**
- * List all workspaces accessible to the user. Personal accounts always have
- * exactly one workspace with workspace_type="0" ("Personal"). Team accounts
- * may have additional workspaces; we always pick the personal one.
- *
- * Auth: requires a valid UT.
- */
+/** List workspaces accessible to the user. Auth: UT. */
 export async function listPlaudWorkspaces(
     userToken: string,
     apiBase: string,
@@ -92,9 +53,6 @@ export async function listPlaudWorkspaces(
         );
     }
 
-    // Defensive parse — if Plaud ever returns 200 with an HTML body (or
-    // any other non-JSON shape), `safeParseJson` throws a typed `AppError`
-    // instead of the raw `SyntaxError` that would flatten to 500. See #142.
     const body = await safeParseJson<PlaudWorkspaceListResponse>(res);
     if (body.status !== 0 || !body.data?.workspaces) {
         throw new AppError(
@@ -107,12 +65,7 @@ export async function listPlaudWorkspaces(
     return body;
 }
 
-/**
- * Pick the personal workspace (workspace_type === "0") from a workspace list.
- * Falls back to the first workspace if no personal one is found, since some
- * accounts (e.g. team-only members) may not have one. Throws if the list is
- * empty.
- */
+/** Personal workspace id, falling back to first for team-only accounts. */
 export function pickPersonalWorkspaceId(
     response: PlaudWorkspaceListResponse,
 ): string {
@@ -128,12 +81,7 @@ export function pickPersonalWorkspaceId(
     return (personal ?? workspaces[0]).workspace_id;
 }
 
-/**
- * Mint a fresh workspace token (WT) for a given workspace.
- *
- * Auth: requires a valid UT. Body is `{}` — the workspace is identified by
- * the URL path.
- */
+/** Mint a workspace token. Auth: UT. */
 export async function mintPlaudWorkspaceToken(
     userToken: string,
     workspaceId: string,
@@ -155,15 +103,7 @@ export async function mintPlaudWorkspaceToken(
 
     if (!res.ok) {
         const status = res.status;
-        // 5xx is treated as transient (don't relist on a server hiccup);
-        // 4xx is treated as cache-stale (workspace gone, role revoked, ...).
         const stale = status >= 400 && status < 500;
-        // 401 has a distinct contract: the stored token itself is no
-        // longer accepted by Plaud, so the UI must route the user to the
-        // reconnect flow. Collapsing it into PLAUD_WORKSPACE_UNAVAILABLE
-        // (400) would break that signal. Keep stale=true so callers still
-        // try a relist + remint before giving up; if the relist also 401s,
-        // the auth-typed error from listPlaudWorkspaces propagates.
         let code: ErrorCode;
         let statusCode: number;
         let message = "Failed to mint Plaud workspace token";
@@ -179,12 +119,6 @@ export async function mintPlaudWorkspaceToken(
             code = ErrorCode.PLAUD_WORKSPACE_UNAVAILABLE;
             statusCode = 400;
         }
-        // 401 must NOT be marked stale: a stale error gets swallowed by
-        // resolveWorkspaceToken (which falls through to relist + remint),
-        // and even though the relist usually 401s too, depending on that
-        // collision is fragile. Surface the invalid-token signal directly
-        // so the route layer hits PLAUD_INVALID_TOKEN (401) without a
-        // round-trip through workspace discovery.
         throw new WorkspaceTokenError(message, {
             httpStatus: status,
             stale: status === 401 ? false : stale,
@@ -195,11 +129,6 @@ export async function mintPlaudWorkspaceToken(
 
     const body = await safeParseJson<PlaudWorkspaceTokenResponse>(res);
     if (body.status !== 0 || !body.data?.workspace_token) {
-        // 2xx response with a business-level error (status != 0) most
-        // commonly means the workspace is no longer valid for this user
-        // (deleted, membership revoked, etc.). Mark as stale so the caller
-        // re-discovers via /team-app/workspaces/list rather than falling
-        // straight back to the UT and silently regressing the fix.
         throw new WorkspaceTokenError(
             body.msg || "Failed to mint Plaud workspace token",
             {
@@ -212,17 +141,6 @@ export async function mintPlaudWorkspaceToken(
     return body.data.workspace_token;
 }
 
-/**
- * Thrown when the workspace-token mint fails.
- *
- * `stale` indicates whether the failure looks like a cache-staleness issue
- * (workspace gone, role revoked, ...) versus a transient server problem.
- * `resolveWorkspaceToken` uses it to decide whether to relist+remint
- * (stale) or propagate the error (transient).
- *
- * `httpStatus` carries the HTTP status when the failure was at the HTTP
- * level rather than in a 2xx response body.
- */
 export interface WorkspaceTokenErrorOptions {
     httpStatus?: number;
     stale?: boolean;
@@ -249,13 +167,7 @@ export class WorkspaceTokenError extends AppError {
     }
 }
 
-/**
- * Resolve a usable WT given a UT. If a cached workspaceId is provided we try
- * it first; on 4xx we invalidate and re-discover via /team-app/workspaces/list.
- *
- * Returns both the minted WT and the workspaceId that was actually used, so
- * callers can persist the (possibly newly-discovered) workspaceId.
- */
+/** Resolve a WT; relist + retry on stale cache. */
 export async function resolveWorkspaceToken(
     userToken: string,
     apiBase: string,
@@ -270,10 +182,6 @@ export async function resolveWorkspaceToken(
             );
             return { workspaceToken, workspaceId: cachedWorkspaceId };
         } catch (err) {
-            // Stale cache (workspace deleted/moved/role revoked, including
-            // 2xx-with-status != 0 business errors) → fall through to relist.
-            // Transient failures (5xx, network) → propagate so the client
-            // falls back to the UT rather than burning an extra list call.
             const stale =
                 err instanceof WorkspaceTokenError ? err.stale : false;
             if (!stale) throw err;

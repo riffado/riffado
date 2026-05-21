@@ -27,7 +27,6 @@ import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 type IdContext = { params: Promise<{ id: string }> };
 
-// POST - Generate summary
 export const POST = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
 
@@ -35,7 +34,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     const body = await request.json().catch(() => ({}));
     const presetId = (body.preset as string) || undefined;
 
-    // Verify recording belongs to user
     const [recording] = await db
         .select()
         .from(recordings)
@@ -56,7 +54,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    // Get transcription text
     const [transcription] = await db
         .select()
         .from(transcriptions)
@@ -76,7 +73,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    // Get user's summary prompt configuration
     const [userSettingsRow] = await db
         .select()
         .from(userSettings)
@@ -86,9 +82,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     let promptConfig: SummaryPromptConfiguration =
         getDefaultSummaryPromptConfig();
     if (userSettingsRow?.summaryPrompt) {
-        // `summaryPrompt` is jsonb-envelope encrypted at rest. Decrypt
-        // (legacy plaintext rows pass through verbatim) before reading
-        // the user's prompt configuration.
         const config =
             decryptJsonField<SummaryPromptConfiguration>(
                 userSettingsRow.summaryPrompt,
@@ -99,7 +92,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         };
     }
 
-    // Determine which prompt to use (body override > user setting > default)
     const selectedPreset = presetId || promptConfig.selectedPrompt || "general";
     let promptTemplate = getSummaryPromptById(selectedPreset, promptConfig);
 
@@ -118,7 +110,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         }
     }
 
-    // Get AI credentials (prefer enhancement provider, fallback to transcription)
     const [enhancementCredentials] = await db
         .select()
         .from(apiCredentials)
