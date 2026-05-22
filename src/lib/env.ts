@@ -122,6 +122,21 @@ export const envSchema = z.object({
         .transform((val) => (val ? Number(val) : 10))
         .pipe(z.number().int().positive().max(600)),
 
+    // Per-user rate limit on auto-generated summaries (post-transcription
+    // path only — manual "Generate summary" button is not throttled).
+    // Defaults to 60/hour. Caps the cost blast radius if a misconfigured
+    // sync replays N recordings or an upstream provider keeps a quota
+    // alive but degraded. Range 1..600.
+    AUTO_SUMMARY_RATE_LIMIT_PER_HOUR: z
+        .string()
+        .regex(
+            /^\d+$/,
+            "AUTO_SUMMARY_RATE_LIMIT_PER_HOUR must be a positive integer",
+        )
+        .optional()
+        .transform((val) => (val ? Number(val) : 60))
+        .pipe(z.number().int().positive().max(600)),
+
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z
         .string()
@@ -248,6 +263,8 @@ function validateEnv(): Env {
             PLAUD_PROXY_SCOPE: process.env.PLAUD_PROXY_SCOPE,
             PLAUD_SYNC_RATE_LIMIT_PER_MINUTE:
                 process.env.PLAUD_SYNC_RATE_LIMIT_PER_MINUTE,
+            AUTO_SUMMARY_RATE_LIMIT_PER_HOUR:
+                process.env.AUTO_SUMMARY_RATE_LIMIT_PER_HOUR,
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,

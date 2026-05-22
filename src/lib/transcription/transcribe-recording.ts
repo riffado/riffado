@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
+    aiEnhancements,
     apiCredentials,
     plaudConnections,
     recordings,
@@ -12,8 +13,11 @@ import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
+import { env } from "@/lib/env";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
+import { consumeRateLimitBucket } from "@/lib/rate-limit";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import {
@@ -160,6 +164,8 @@ export async function transcribeRecording(
         const quality = settings?.transcriptionQuality || "balanced";
         const autoGenerateTitle = settings?.autoGenerateTitle ?? true;
         const syncTitleToPlaud = settings?.syncTitleToPlaud ?? false;
+        const autoSummarize = settings?.autoSummarize ?? false;
+        const autoSummarizePreset = settings?.autoSummarizePreset ?? null;
 
         void quality;
 
@@ -258,6 +264,22 @@ export async function transcribeRecording(
                 // the provider default when the manual route supplied an
                 // override). Mirrors what the OpenAI request really ran.
                 if (currentTranscription) {
+                    // Re-transcribe path: the previous transcript is being
+                    // overwritten, so any existing summary now references
+                    // stale source text. Drop it inside the same tx so
+                    // readers never see "fresh transcript + old summary".
+                    // If auto-summarize is on, a fresh summary will be
+                    // generated below; otherwise the recording shows no
+                    // summary until the user clicks "Generate summary".
+                    await tx
+                        .delete(aiEnhancements)
+                        .where(
+                            and(
+                                eq(aiEnhancements.recordingId, recordingId),
+                                eq(aiEnhancements.userId, userId),
+                            ),
+                        );
+
                     await tx
                         .update(transcriptions)
                         .set({
@@ -389,6 +411,53 @@ export async function transcribeRecording(
         }
 
         await emitEvent("transcription.completed", userId, recordingId);
+
+        if (autoSummarize) {
+            // Per-user hourly cap on auto-summary calls. Cheap defense
+            // against runaway provider cost if a sync replays N
+            // recordings or the user toggles auto-summarize on with an
+            // expensive model. The manual "Generate summary" button is
+            // not throttled — the user is in the loop there.
+            const rateLimit = await consumeRateLimitBucket(
+                `auto-summary:user:${userId}`,
+                {
+                    limit: env.AUTO_SUMMARY_RATE_LIMIT_PER_HOUR,
+                    windowMs: 60 * 60 * 1000,
+                },
+            );
+
+            if (!rateLimit.allowed) {
+                console.warn(
+                    `Auto-summary rate limit hit for user ${userId} (recording ${recordingId})`,
+                );
+                await emitEvent("summary.failed", userId, recordingId, {
+                    error: `Auto-summary rate limit exceeded (${env.AUTO_SUMMARY_RATE_LIMIT_PER_HOUR}/hour). Manual summary still works.`,
+                });
+            } else {
+                // Run summarization synchronously so the `summary.completed`
+                // event (and the underlying `aiEnhancements` write) lands
+                // before downstream consumers that listen for it. A failure
+                // here must not roll back the transcript itself — the user
+                // still wants the transcript even if the summary call dies.
+                try {
+                    await generateSummaryForRecording(userId, recordingId, {
+                        presetId: autoSummarizePreset ?? undefined,
+                    });
+                    await emitEvent("summary.completed", userId, recordingId);
+                } catch (error) {
+                    console.error(
+                        `Auto-summarize failed for recording ${recordingId}:`,
+                        error,
+                    );
+                    await emitEvent("summary.failed", userId, recordingId, {
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error),
+                    });
+                }
+            }
+        }
 
         return {
             success: true,

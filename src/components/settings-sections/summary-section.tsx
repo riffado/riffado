@@ -12,6 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 import {
     AI_OUTPUT_LANGUAGES,
@@ -19,11 +20,19 @@ import {
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
 
+// Sentinel value used by the auto-summarize preset Select to represent
+// "use the user's default prompt". The DB stores this as NULL.
+const AUTO_PRESET_DEFAULT = "__default__";
+
 export function SummarySection() {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [selectedPrompt, setSelectedPrompt] = useState("general");
     const [outputLanguage, setOutputLanguage] = useState<string>("auto");
+    const [autoSummarize, setAutoSummarize] = useState(false);
+    const [autoSummarizePreset, setAutoSummarizePreset] = useState<
+        string | null
+    >(null);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -41,6 +50,12 @@ export function SummarySection() {
                     } else {
                         setOutputLanguage("auto");
                     }
+                    setAutoSummarize(data.autoSummarize === true);
+                    setAutoSummarizePreset(
+                        typeof data.autoSummarizePreset === "string"
+                            ? data.autoSummarizePreset
+                            : null,
+                    );
                 }
             } catch (error) {
                 console.error("Failed to fetch settings:", error);
@@ -99,6 +114,43 @@ export function SummarySection() {
         }
     };
 
+    const handleAutoSummarizeChange = async (checked: boolean) => {
+        const previous = autoSummarize;
+        setAutoSummarize(checked);
+        try {
+            const response = await fetch("/api/settings/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ autoSummarize: checked }),
+            });
+            if (!response.ok) {
+                throw new Error("Failed to save settings");
+            }
+        } catch {
+            setAutoSummarize(previous);
+            toast.error("Failed to save settings. Changes reverted.");
+        }
+    };
+
+    const handleAutoPresetChange = async (value: string) => {
+        const previous = autoSummarizePreset;
+        const next = value === AUTO_PRESET_DEFAULT ? null : value;
+        setAutoSummarizePreset(next);
+        try {
+            const response = await fetch("/api/settings/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ autoSummarizePreset: next }),
+            });
+            if (!response.ok) {
+                throw new Error("Failed to save settings");
+            }
+        } catch {
+            setAutoSummarizePreset(previous);
+            toast.error("Failed to save settings. Changes reverted.");
+        }
+    };
+
     if (isLoadingSettings) {
         return (
             <div className="flex items-center justify-center py-8">
@@ -106,6 +158,8 @@ export function SummarySection() {
             </div>
         );
     }
+
+    const autoPresetValue = autoSummarizePreset ?? AUTO_PRESET_DEFAULT;
 
     return (
         <div className="space-y-6">
@@ -181,6 +235,82 @@ export function SummarySection() {
                         the model match the transcript's language.
                     </p>
                 </div>
+                <div className="flex items-center justify-between pt-2">
+                    <div className="space-y-0.5 flex-1">
+                        <Label htmlFor="auto-summarize" className="text-base">
+                            Auto-generate summary after transcription
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Triggers after any successful transcription —
+                            manual, auto-sync, or re-transcribe. Enable
+                            Auto-transcribe to also cover newly synced
+                            recordings. Costs one extra AI provider call per
+                            generated summary.
+                        </p>
+                    </div>
+                    <Switch
+                        id="auto-summarize"
+                        checked={autoSummarize}
+                        onCheckedChange={handleAutoSummarizeChange}
+                        disabled={isSavingSettings}
+                    />
+                </div>
+                {autoSummarize && (
+                    <div className="space-y-2">
+                        <Label htmlFor="auto-summarize-preset">
+                            Preset for auto-summary
+                        </Label>
+                        <Select
+                            value={autoPresetValue}
+                            onValueChange={handleAutoPresetChange}
+                            disabled={isSavingSettings}
+                        >
+                            <SelectTrigger
+                                id="auto-summarize-preset"
+                                className="w-full"
+                            >
+                                <SelectValue>
+                                    {autoPresetValue === AUTO_PRESET_DEFAULT
+                                        ? "Use default summary prompt"
+                                        : SUMMARY_PRESETS[
+                                              autoPresetValue as keyof typeof SUMMARY_PRESETS
+                                          ]?.name ||
+                                          "Use default summary prompt"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={AUTO_PRESET_DEFAULT}>
+                                    <div>
+                                        <div>Use default summary prompt</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            Inherits the preset selected above
+                                        </div>
+                                    </div>
+                                </SelectItem>
+                                {Object.values(SUMMARY_PRESETS).map(
+                                    (preset) => (
+                                        <SelectItem
+                                            key={preset.id}
+                                            value={preset.id}
+                                        >
+                                            <div>
+                                                <div>{preset.name}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {preset.description}
+                                                </div>
+                                            </div>
+                                        </SelectItem>
+                                    ),
+                                )}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Pick a different preset for the auto-mode (e.g.
+                            "Action Items" for meetings) without changing your
+                            manual default above.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

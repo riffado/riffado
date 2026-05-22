@@ -81,3 +81,60 @@ On any recording, the workstation panel exposes a transcription provider
 picker and a summary provider picker. Changes apply immediately; you can
 re-run a transcription with a different provider if the first result was
 poor.
+
+## Auto-summarize after transcription
+
+**Settings → Summary → Auto-generate summary after transcription** turns
+the summary pipeline into a one-shot flow. When the toggle is on, every
+**successful transcription** also generates a summary immediately
+afterward — including manual transcribes, auto-transcribes after sync,
+and re-transcribes. The toggle is independent from Auto-transcribe;
+each governs its own trigger.
+
+The auto path is opt-in (default off) — it costs an extra AI provider
+call per recording. You can pick a separate preset for auto-mode
+("Preset for auto-summary") so meeting recordings can default to
+"Meeting Notes" while you keep "General" for the manual button.
+
+### Cost guardrails
+
+Auto-summary makes one LLM call per transcript. With chat models at
+`$0.15-$5 / 1M input tokens` and typical 1-2k token transcripts, a
+single summary is fractions of a cent — but a runaway sync of N
+recordings or an upgrade to a premium model can add up. Two safeguards:
+
+- **Per-user hourly cap.** Auto-summary requests are throttled by
+  `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` (default `60`). When the bucket
+  is exhausted, the transcript still saves, the recording goes through
+  without a summary, and a `summary.failed` event is emitted with a
+  `rate limit` error so your monitoring picks it up. The manual
+  "Generate summary" button is **not** throttled — you stay in the
+  loop there.
+- **Pick the cheap model.** The endpoint reuses the user's enhancement
+  provider (or falls back to the transcription provider). A
+  whisper-only id falls through to `gpt-4o-mini` / `llama-3.1-8b` for
+  the chat call. Override the default model in Settings → AI providers
+  if you want a different tradeoff.
+
+### Stale summaries on re-transcribe
+
+When a recording is **re-transcribed**, the previous summary is now
+based on the old transcript text. To prevent a fresh transcript from
+appearing alongside a stale summary, OpenPlaud deletes the existing
+`aiEnhancements` row in the same transaction that overwrites the
+transcript. If auto-summary is on, a fresh summary is generated
+immediately. If it's off, the recording shows no summary until you
+click "Generate summary" manually.
+
+### Failure semantics
+
+Failure is isolated: if the summary call dies, the transcript is still
+saved, the `transcription.completed` event still fires, and a
+`summary.failed` event surfaces the error to your webhook receiver. The
+manual "Generate summary" button on the recording still works.
+
+Requires an AI provider configured with a chat-capable model — the same
+provider used by the manual summary endpoint. Custom prompts saved in
+`summaryPrompt.customPrompts` are not yet wired into auto-mode; pick a
+built-in preset (General, Meeting Notes, Key Points, Action Items) for
+the auto path.
