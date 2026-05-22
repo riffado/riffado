@@ -222,7 +222,12 @@ export async function generateSummaryForRecording(
         userSettingsRow?.aiOutputLanguage ?? null,
     );
 
-    const prompt = promptTemplate.replace(
+    // `replaceAll` (not `replace`) so a custom prompt that mentions
+    // `{transcription}` more than once — e.g. an instruction line plus
+    // the inlined transcript at the end — gets every placeholder
+    // expanded. `String.prototype.replace` with a string pattern only
+    // substitutes the first occurrence.
+    const prompt = promptTemplate.replaceAll(
         "{transcription}",
         truncatedTranscription,
     );
@@ -255,7 +260,19 @@ export async function generateSummaryForRecording(
             .replace(/\s*```$/i, "")
             .trim();
         const parsed = JSON.parse(cleanContent);
-        summary = parsed.summary || "";
+        // If the JSON parses but the `summary` key is missing or
+        // empty, treat the entire raw response as the summary text
+        // rather than persisting an empty string. Some models (most
+        // notably smaller chat models, and providers that wrap the
+        // shape) return `{ "keyPoints": [...], "actionItems": [...] }`
+        // without a `summary` key, or return a bare paragraph that
+        // happens to be valid JSON only because it's a single string.
+        // Falling back to `rawContent` keeps the recording useful
+        // instead of showing the user a silently blank summary.
+        summary =
+            typeof parsed.summary === "string" && parsed.summary
+                ? parsed.summary
+                : rawContent;
         keyPoints = Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [];
         actionItems = Array.isArray(parsed.actionItems)
             ? parsed.actionItems

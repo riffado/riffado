@@ -111,10 +111,21 @@ recordings or an upgrade to a premium model can add up. Two safeguards:
   "Generate summary" button is **not** throttled — you stay in the
   loop there.
 - **Pick the cheap model.** The endpoint reuses the user's enhancement
-  provider (or falls back to the transcription provider). A
-  whisper-only id falls through to `gpt-4o-mini` / `llama-3.1-8b` for
-  the chat call. Override the default model in Settings → AI providers
-  if you want a different tradeoff.
+  provider (or falls back to the transcription provider). If the
+  configured default model id contains `whisper` (i.e. the user only
+  set up a transcription provider), the summary call substitutes a
+  cheap provider-appropriate chat model so the request doesn't 404
+  against the audio endpoint:
+
+  | Provider base URL contains | Fallback chat model                            |
+  | -------------------------- | ---------------------------------------------- |
+  | `groq`                     | `llama-3.1-8b-instant`                         |
+  | `together`                 | `meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo`  |
+  | `openrouter`               | `openai/gpt-4o-mini`                           |
+  | anything else              | `gpt-4o-mini`                                  |
+
+  Override the default model in Settings → AI providers if you want a
+  different tradeoff.
 
 ### Stale summaries on re-transcribe
 
