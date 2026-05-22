@@ -1,7 +1,7 @@
 "use client";
 
 import { ListChecks } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,16 @@ export function SummarySection() {
     const [autoSummarizePreset, setAutoSummarizePreset] = useState<
         string | null
     >(null);
+
+    // Per-control AbortController refs so a fast-double-toggle can't let
+    // a slow earlier save fail *after* a newer save succeeded and clobber
+    // the displayed state with stale `previous` values. Each handler
+    // aborts its predecessor and bails out of rollback when its own
+    // controller is no longer the latest. See cubic review on PR #168.
+    const promptAbortRef = useRef<AbortController | null>(null);
+    const languageAbortRef = useRef<AbortController | null>(null);
+    const autoSummarizeAbortRef = useRef<AbortController | null>(null);
+    const autoPresetAbortRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -67,6 +77,9 @@ export function SummarySection() {
     }, [setIsLoadingSettings]);
 
     const handlePresetChange = async (value: string) => {
+        promptAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        promptAbortRef.current = ctrl;
         const previous = selectedPrompt;
         setSelectedPrompt(value);
 
@@ -80,18 +93,26 @@ export function SummarySection() {
                         customPrompts: [],
                     },
                 }),
+                signal: ctrl.signal,
             });
 
             if (!response.ok) {
                 throw new Error("Failed to save settings");
             }
         } catch {
+            // Skip the rollback if a newer click already started a fresh
+            // save: the latest click owns the displayed state, and
+            // restoring `previous` here would resurrect an outdated value.
+            if (promptAbortRef.current !== ctrl) return;
             setSelectedPrompt(previous);
             toast.error("Failed to save settings. Changes reverted.");
         }
     };
 
     const handleLanguageChange = async (value: string) => {
+        languageAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        languageAbortRef.current = ctrl;
         const previous = outputLanguage;
         setOutputLanguage(value);
 
@@ -103,18 +124,23 @@ export function SummarySection() {
                 body: JSON.stringify({
                     aiOutputLanguage: value === "auto" ? null : value,
                 }),
+                signal: ctrl.signal,
             });
 
             if (!response.ok) {
                 throw new Error("Failed to save settings");
             }
         } catch {
+            if (languageAbortRef.current !== ctrl) return;
             setOutputLanguage(previous);
             toast.error("Failed to save settings. Changes reverted.");
         }
     };
 
     const handleAutoSummarizeChange = async (checked: boolean) => {
+        autoSummarizeAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        autoSummarizeAbortRef.current = ctrl;
         const previous = autoSummarize;
         setAutoSummarize(checked);
         try {
@@ -122,17 +148,22 @@ export function SummarySection() {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ autoSummarize: checked }),
+                signal: ctrl.signal,
             });
             if (!response.ok) {
                 throw new Error("Failed to save settings");
             }
         } catch {
+            if (autoSummarizeAbortRef.current !== ctrl) return;
             setAutoSummarize(previous);
             toast.error("Failed to save settings. Changes reverted.");
         }
     };
 
     const handleAutoPresetChange = async (value: string) => {
+        autoPresetAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        autoPresetAbortRef.current = ctrl;
         const previous = autoSummarizePreset;
         const next = value === AUTO_PRESET_DEFAULT ? null : value;
         setAutoSummarizePreset(next);
@@ -141,11 +172,13 @@ export function SummarySection() {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ autoSummarizePreset: next }),
+                signal: ctrl.signal,
             });
             if (!response.ok) {
                 throw new Error("Failed to save settings");
             }
         } catch {
+            if (autoPresetAbortRef.current !== ctrl) return;
             setAutoSummarizePreset(previous);
             toast.error("Failed to save settings. Changes reverted.");
         }
