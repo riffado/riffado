@@ -58,6 +58,17 @@ export async function consumeRateLimitBucket(
     { limit, windowMs, now = new Date() }: RateLimitConfig,
 ): Promise<RateLimitResult> {
     const resetAt = new Date(now.getTime() + windowMs);
+    // Embed Date literals as explicit ISO-stringified `timestamptz`
+    // casts inside the `sql` template. Drizzle treats raw `${now}`
+    // bindings as untyped params; on some `postgres`-js / bun
+    // combinations that path doesn't have an OID hint for `Date`, so
+    // the driver falls back to `Buffer.byteLength(value)` which throws
+    // for a `Date` instance with `Received an instance of Date`.
+    // Casting to `timestamptz` at the SQL layer keeps the comparison
+    // semantics identical while sidestepping the param-serializer
+    // ambiguity.
+    const nowSql = sql`${now.toISOString()}::timestamptz`;
+    const resetAtSql = sql`${resetAt.toISOString()}::timestamptz`;
     const [bucket] = await db
         .insert(apiRateLimitBuckets)
         .values({
@@ -70,8 +81,8 @@ export async function consumeRateLimitBucket(
         .onConflictDoUpdate({
             target: apiRateLimitBuckets.key,
             set: {
-                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
-                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then ${resetAt} else ${apiRateLimitBuckets.resetAt} end`,
+                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${nowSql} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
+                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${nowSql} then ${resetAtSql} else ${apiRateLimitBuckets.resetAt} end`,
                 updatedAt: now,
             },
         })
