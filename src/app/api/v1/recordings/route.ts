@@ -1,5 +1,9 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, gte, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { parseBuffer } from "music-metadata";
+import { nanoid } from "nanoid";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -9,7 +13,11 @@ import {
     transcriptions,
 } from "@/db/schema";
 import { authenticateRequest } from "@/lib/auth-request";
+import { encryptText } from "@/lib/encryption/fields";
+import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { createUserStorageProvider } from "@/lib/storage/factory";
+import { getAudioMimeType } from "@/lib/utils";
 import {
     enforceV1AuthenticatedRateLimit,
     enforceV1IpRateLimit,
@@ -19,6 +27,49 @@ import {
     encodeRecordingCursor,
     serializeRecording,
 } from "@/lib/v1/serialize";
+
+const ACCEPTED_UPLOAD_EXTENSIONS = new Set([
+    ".mp3",
+    ".mp4",
+    ".m4a",
+    ".wav",
+    ".ogg",
+    ".opus",
+    ".webm",
+    ".aac",
+    ".flac",
+]);
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+const EXTERNAL_ID_MAX_LEN = 255;
+
+async function probeDurationMs(
+    buffer: Uint8Array,
+    mimeType: string,
+): Promise<number> {
+    try {
+        const { format } = await parseBuffer(
+            buffer,
+            { mimeType, size: buffer.byteLength },
+            { duration: true },
+        );
+        const sec = format.duration ?? 0;
+        if (sec > 0) return Math.round(sec * 1000);
+        return 0;
+    } catch (err) {
+        console.error("Audio metadata parse failed:", err);
+        return 0;
+    }
+}
+
+function readMultipartField(
+    formData: FormData,
+    key: string,
+): string | undefined {
+    const value = formData.get(key);
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    return trimmed === "" ? undefined : trimmed;
+}
 
 function parseLimit(value: string | null): number {
     if (!value) return 50;
@@ -179,4 +230,170 @@ export const GET = apiHandler(async (request: Request) => {
                 : null,
         has_more: hasMore,
     });
+});
+
+/**
+ * Programmatic upload — server-to-server counterpart of the browser
+ * `/api/recordings/upload` endpoint. Distinct route on purpose:
+ *
+ *  - accepts API keys (via `authenticateRequest`) instead of only browser
+ *    sessions, so integrating systems (meeting platforms, telephony
+ *    pipelines) can post recordings with a `Bearer op_...` token;
+ *  - takes an optional `external_id` correlation handle that round-trips
+ *    into every subsequent webhook, so the caller can match a
+ *    `transcription.completed` event back to its own row without keeping
+ *    a separate mapping table;
+ *  - is idempotent on `(user_id, external_id)` — a retry with the same
+ *    `external_id` short-circuits to the existing row with HTTP 200
+ *    instead of creating a duplicate (and instead of orphaning the
+ *    already-uploaded blob).
+ *
+ * The browser path keeps its own route because its trust model is
+ * different (CSRF, no rate-limit headers, no external_id concept).
+ */
+export const POST = apiHandler(async (request: Request) => {
+    const ipLimitResponse = await enforceV1IpRateLimit(request);
+    if (ipLimitResponse) return ipLimitResponse;
+
+    const authn = await authenticateRequest(request);
+    if (!authn) {
+        throw new AppError(ErrorCode.UNAUTHORIZED, "Unauthorized", 401);
+    }
+
+    const authLimitResponse = await enforceV1AuthenticatedRateLimit(authn);
+    if (authLimitResponse) return authLimitResponse;
+
+    const formData = await request.formData();
+    const fileEntry = formData.get("file");
+
+    if (!fileEntry || !(fileEntry instanceof File)) {
+        throw new AppError(
+            ErrorCode.MISSING_REQUIRED_FIELD,
+            "No file provided",
+            400,
+            { field: "file" },
+        );
+    }
+    const file = fileEntry;
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+        throw new AppError(
+            ErrorCode.FILE_TOO_LARGE,
+            "File exceeds the 500 MB size limit",
+            413,
+        );
+    }
+
+    const ext = path.extname(file.name).toLowerCase();
+    if (!ACCEPTED_UPLOAD_EXTENSIONS.has(ext)) {
+        throw new AppError(
+            ErrorCode.INVALID_FILE_FORMAT,
+            `Unsupported format. Accepted: ${[...ACCEPTED_UPLOAD_EXTENSIONS].join(", ")}`,
+            400,
+        );
+    }
+
+    const externalId = readMultipartField(formData, "external_id");
+    if (externalId && externalId.length > EXTERNAL_ID_MAX_LEN) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `external_id must be ${EXTERNAL_ID_MAX_LEN} characters or fewer`,
+            400,
+            { field: "external_id" },
+        );
+    }
+
+    // Idempotency short-circuit — same caller retrying the same upload
+    // (e.g. our webhook receiver retrying after a network blip) should
+    // map to the same row, not a duplicate. We do this BEFORE reading
+    // the file body so a retry is cheap.
+    if (externalId) {
+        const [existing] = await db
+            .select()
+            .from(recordings)
+            .where(
+                and(
+                    eq(recordings.userId, authn.user.id),
+                    eq(recordings.externalId, externalId),
+                    isNull(recordings.deletedAt),
+                ),
+            )
+            .limit(1);
+        if (existing) {
+            return NextResponse.json(
+                serializeRecording(existing, null, null, null),
+                { status: 200 },
+            );
+        }
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    const fileId = `uploaded-${nanoid()}`;
+    const storageKey = `${authn.user.id}/${fileId}${ext}`;
+    const contentType = getAudioMimeType(storageKey);
+
+    const md5 = createHash("md5").update(buffer).digest("hex");
+    const durationMs = await probeDurationMs(buffer, contentType);
+    if (durationMs === 0) {
+        throw new AppError(
+            ErrorCode.INVALID_FILE_FORMAT,
+            "File does not contain a valid audio stream",
+            422,
+        );
+    }
+
+    const explicitName = readMultipartField(formData, "name");
+    const basename =
+        explicitName ??
+        path.basename(file.name, ext) ??
+        // Fallback that never fires in practice — File.name is required
+        // by the spec, and path.basename of any string returns a string.
+        "recording";
+
+    const storage = await createUserStorageProvider(authn.user.id);
+    await storage.uploadFile(storageKey, buffer, contentType);
+
+    const now = new Date();
+    const endTime = new Date(now.getTime() + durationMs);
+
+    try {
+        const [inserted] = await db
+            .insert(recordings)
+            .values({
+                userId: authn.user.id,
+                deviceSn: "api",
+                plaudFileId: fileId,
+                filename: encryptText(basename),
+                duration: durationMs,
+                startTime: now,
+                endTime,
+                filesize: buffer.length,
+                fileMd5: md5,
+                storageType: env.DEFAULT_STORAGE_TYPE,
+                storagePath: storageKey,
+                downloadedAt: now,
+                plaudVersion: "1",
+                isTrash: false,
+                externalId: externalId ?? null,
+            })
+            .returning();
+        return NextResponse.json(
+            serializeRecording(inserted, null, null, null),
+            { status: 201 },
+        );
+    } catch (dbError) {
+        // Clean up the blob we just wrote — without this the next retry
+        // would resurrect a half-created row by external_id and there
+        // would be an unreferenced object sitting in storage forever.
+        try {
+            await storage.deleteFile(storageKey);
+        } catch (cleanupErr) {
+            console.error(
+                "Failed to clean up orphaned storage file after DB insert error:",
+                cleanupErr,
+            );
+        }
+        throw dbError;
+    }
 });

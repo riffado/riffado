@@ -391,6 +391,7 @@ List recordings with cursor pagination and incremental filters.
     {
       "id": "abc123",
       "title": "Meeting Notes",
+      "external_id": null,
       "created_at": "2026-05-06T12:00:00.000Z",
       "updated_at": "2026-05-06T12:05:00.000Z",
       "recorded_at": "2026-05-06T11:30:00.000Z",
@@ -418,6 +419,51 @@ List recordings with cursor pagination and incremental filters.
 `updated_at` is the recording resource timestamp for v1 clients. It changes
 when the recording metadata changes and when transcript, summary, or generated
 title state changes.
+
+#### POST `/v1/recordings`
+
+Programmatic upload — server-to-server counterpart of the browser
+`/recordings/upload` endpoint. Used by integrating systems (meeting
+platforms, telephony pipelines) that need to post recordings without a
+browser session.
+
+**Request:** `multipart/form-data` with fields:
+
+- `file` (required) — binary, one of `.mp3 .mp4 .m4a .wav .ogg .opus .webm .aac .flac`, max 500 MB
+- `external_id` (optional, max 255 chars) — caller-supplied correlation
+  handle. Round-trips into every subsequent webhook (`recording.synced`,
+  `transcription.completed`, etc.) in the `external_id` field, so the
+  caller can match an event back to its own row without keeping a
+  separate mapping table.
+- `name` (optional) — friendly title; default derived from the file's
+  basename.
+
+**Response:** the stable v1 recording shape from `GET /v1/recordings`,
+with:
+
+- HTTP `201 Created` for a new row.
+- HTTP `200 OK` (no insert, no extra storage write) when the caller
+  retries with an `external_id` that already maps to a non-deleted
+  recording owned by the same user. This makes the endpoint safe to
+  retry on network blips without producing duplicates.
+
+```http
+POST /api/v1/recordings HTTP/1.1
+Host: openplaud.example
+Authorization: Bearer op_...
+Content-Type: multipart/form-data; boundary=...
+
+--...
+Content-Disposition: form-data; name="file"; filename="meeting.mp4"
+Content-Type: video/mp4
+
+<binary>
+--...
+Content-Disposition: form-data; name="external_id"
+
+MR-2026-05-24-001
+--...--
+```
 
 #### GET `/v1/recordings/[id]`
 
