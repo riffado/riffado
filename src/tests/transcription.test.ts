@@ -56,6 +56,37 @@ describe("Transcription", () => {
     const mockUserId = "user-123";
     const mockRecordingId = "rec-456";
 
+    /**
+     * Default `db.update(...)` mock that satisfies the in-flight-claim
+     * pattern in `transcribeRecording`:
+     *
+     *   - claim:   `db.update(recordings).set({transcribingStartedAt}).where(...).returning({id})`
+     *   - release: `db.update(recordings).set({transcribingStartedAt: null}).where(...)`
+     *   - title:   `db.update(recordings).set({filename, updatedAt}).where(...)`
+     *
+     * All three share `db.update`, so the chain object below is thenable
+     * on `.where(...)` AND exposes a `.returning()` resolver — that way
+     * a single mock handles both endings without requiring tests to
+     * juggle `mockReturnValueOnce` for each call.
+     */
+    function buildDefaultDbUpdateMock(): {
+        set: Mock;
+    } {
+        const whereResult = {
+            returning: vi.fn().mockResolvedValue([{ id: mockRecordingId }]),
+            // biome-ignore lint/suspicious/noThenProperty: thenable mock — drizzle chain is awaited in some call sites, returning() is used in others, single mock covers both
+            then: (
+                onFulfilled?: (value: undefined) => unknown,
+                onRejected?: (reason: unknown) => unknown,
+            ) => Promise.resolve(undefined).then(onFulfilled, onRejected),
+        };
+        return {
+            set: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue(whereResult),
+            }),
+        };
+    }
+
     beforeEach(() => {
         vi.clearAllMocks();
         // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
@@ -68,6 +99,7 @@ describe("Transcription", () => {
                 },
             };
         });
+        (db.update as Mock).mockReturnValue(buildDefaultDbUpdateMock());
     });
 
     describe("transcribeRecording", () => {
@@ -121,6 +153,75 @@ describe("Transcription", () => {
             );
 
             expect(result.success).toBe(true);
+        });
+
+        it("returns TRANSCRIPTION_IN_PROGRESS when a fresh claim is already held", async () => {
+            // recording lookup → exists
+            // existingTranscription lookup → none
+            // credentials lookup → present (so we get past the provider check)
+            // user settings lookup → present
+            (db.select as Mock)
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    id: mockRecordingId,
+                                    filename: "test.mp3",
+                                    storagePath: "test.mp3",
+                                    deletedAt: null,
+                                },
+                            ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    id: "creds-1",
+                                    provider: "openai",
+                                    apiKey: "encrypted-key",
+                                    defaultModel: "whisper-1",
+                                    baseUrl: null,
+                                },
+                            ]),
+                        }),
+                    }),
+                });
+
+            // Override the default db.update mock so the claim returns
+            // zero rows (claim race lost — another worker already holds
+            // a fresh claim on this recording).
+            (db.update as Mock).mockReturnValue({
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        returning: vi.fn().mockResolvedValue([]),
+                    }),
+                }),
+            });
+
+            const result = await transcribeRecording(
+                mockUserId,
+                mockRecordingId,
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.errorCode).toBe("TRANSCRIPTION_IN_PROGRESS");
+            // Provider call must NOT have been attempted — the whole
+            // point of the claim is to skip the work, not to bill the
+            // user for a parallel run. The OpenAI constructor is only
+            // reached if we get past the claim, so an unmade construction
+            // is the cleanest "no provider call happened" signal.
+            expect(OpenAI).not.toHaveBeenCalled();
         });
 
         it("should return error when no API credentials configured", async () => {
@@ -332,7 +433,19 @@ describe("Transcription", () => {
                 ) => callback(tx),
             );
 
-            const titleUpdateWhere = vi.fn().mockResolvedValue(undefined);
+            // titleUpdateWhere is awaited (no `.returning()`), but the
+            // in-flight claim call on the same `db.update` mock DOES
+            // call `.returning()`. Make the where result satisfy both
+            // shapes so a single `mockReturnValue` covers the claim,
+            // the title update, and the release in any order.
+            const titleUpdateWhere = vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue([{ id: mockRecordingId }]),
+                // biome-ignore lint/suspicious/noThenProperty: thenable mock — drizzle chain is awaited in some call sites, returning() is used in others, single mock covers both
+                then: (
+                    onFulfilled?: (value: undefined) => unknown,
+                    onRejected?: (reason: unknown) => unknown,
+                ) => Promise.resolve(undefined).then(onFulfilled, onRejected),
+            });
             const titleUpdateSet = vi.fn().mockReturnValue({
                 where: titleUpdateWhere,
             });

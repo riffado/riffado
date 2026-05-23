@@ -238,6 +238,9 @@ Transcribe a recording.
 }
 ```
 
+**Error responses:**
+- `409 Conflict` (`TRANSCRIPTION_IN_PROGRESS`) — another transcription run for this recording is already underway. The caller should not retry; the existing run will finish and the v1 payload's `transcription_in_progress` flag will flip back to `false`. Stale claims older than 3 hours are automatically reclaimable by the next caller.
+
 ---
 
 ### Settings

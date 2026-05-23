@@ -64,6 +64,12 @@ function mapErrorCodeToAppError(
             return new AppError(ErrorCode.NOT_FOUND, msg, 410);
         case "NO_TRANSCRIPTION_PROVIDER":
             return new AppError(ErrorCode.NO_TRANSCRIPTION_PROVIDER, msg, 400);
+        case "TRANSCRIPTION_IN_PROGRESS":
+            // 409 Conflict — a previous click is still running. The UI
+            // shows the in-flight chip from `transcription_in_progress`
+            // in the v1 payload, so the user does not need to retry;
+            // they just wait for the existing run to finish.
+            return new AppError(ErrorCode.CONFLICT, msg, 409);
         default:
             return new AppError(ErrorCode.TRANSCRIPTION_FAILED, msg, 500);
     }
