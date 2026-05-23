@@ -36,6 +36,22 @@ export const envSchema = z.object({
         .optional()
         .transform((val) => val === "true"),
 
+    // Restrict sign-up to specific email domains. Comma-separated, exact
+    // match (subdomains are NOT auto-allowed). Lower-cased and trimmed at
+    // parse time. Empty/unset means no restriction. Enforced server-side
+    // via the better-auth user-create hook (see src/lib/auth.ts); the
+    // /register form also surfaces the list as a hint. Inert when
+    // DISABLE_REGISTRATION=true (the lockdown trips first).
+    ALLOWED_EMAIL_DOMAINS: z
+        .string()
+        .optional()
+        .transform((val) =>
+            (val ?? "").split(",").flatMap((s) => {
+                const trimmed = s.trim().toLowerCase();
+                return trimmed ? [trimmed] : [];
+            }),
+        ),
+
     // Disable the self-host update-available check (GitHub releases API).
     // When `true`, the footer never reaches out to api.github.com to look
     // for a newer release tag. Useful for instances with strict egress
@@ -223,6 +239,7 @@ function validateEnv(): Env {
         const parsed = envSchema.parse({
             IS_HOSTED: process.env.IS_HOSTED,
             DISABLE_REGISTRATION: process.env.DISABLE_REGISTRATION,
+            ALLOWED_EMAIL_DOMAINS: process.env.ALLOWED_EMAIL_DOMAINS,
             DISABLE_UPDATE_CHECK: process.env.DISABLE_UPDATE_CHECK,
             DATABASE_URL: process.env.DATABASE_URL,
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- `ALLOWED_EMAIL_DOMAINS` env var: comma-separated allowlist of email domains permitted to sign up. Enforced server-side via the better-auth user-create hook so the gate fires regardless of UI state (and on any future OAuth provider). Exact match — subdomains are NOT auto-allowed. The `/register` form surfaces the configured domains as a UX hint. Empty/unset preserves existing behavior (no restriction). Inert when `DISABLE_REGISTRATION=true` (full lockdown trips first).
 - `PLAUD_PROXY_SCOPE` env var (`all` default | `api-only`) controlling whether `resource.plaud.ai` signed-URL audio downloads go through the Webshare residential proxy. Audio bytes dominate proxy bandwidth; operators who verify `resource.plaud.ai` serves direct from their egress IPs (via `scripts/plaud-egress-probe.sh`) can flip to `api-only` and save most of the Webshare quota without affecting API correctness. Default `all` preserves existing behavior.
 - `PLAUD_SYNC_RATE_LIMIT_PER_MINUTE` env var (default 10) capping per-user sync requests. Backstops the new client-side throttling at the route boundary so a script hammering `POST /api/plaud/sync` is rejected before any Plaud or Webshare call is issued.
 

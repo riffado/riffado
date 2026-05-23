@@ -15,7 +15,9 @@ export default async function RegisterPage() {
                 {env.DISABLE_REGISTRATION ? (
                     <RegistrationDisabled />
                 ) : (
-                    <RegisterForm />
+                    <RegisterForm
+                        allowedEmailDomains={env.ALLOWED_EMAIL_DOMAINS}
+                    />
                 )}
             </div>
         </div>
