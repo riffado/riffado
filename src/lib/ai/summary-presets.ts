@@ -183,14 +183,40 @@ export function normalizeAiOutputLanguage(value: unknown): string | null {
     return LANGUAGE_CODES.has(value) ? value : null;
 }
 
-/** Directive sentence for the model; null for `auto`/missing/unknown. */
+/**
+ * Directive sentence for the model. Three branches:
+ *
+ *   - explicit non-auto code → "Write everything in <Label>".
+ *   - `auto` (or unset) AND we know the transcript's detected language →
+ *     "Write everything in <Label of detected>". Matches the user's
+ *     mental model of "Auto = match transcript", which the previous
+ *     implementation broke: a null directive let the model fall back
+ *     on the prompt template's English context and produce English
+ *     summaries for German transcripts.
+ *   - `auto` AND no detected language hint → soft instruction asking
+ *     the model to mirror the transcript's language itself. This is
+ *     the path for legacy rows without `detected_language` populated
+ *     and for transcription providers that don't return a language
+ *     code.
+ */
 export function getAiOutputLanguageDirective(
     code: string | null | undefined,
+    transcriptLanguage?: string | null,
 ): string | null {
-    if (!code || code === "auto") return null;
-    const match = AI_OUTPUT_LANGUAGES.find((l) => l.code === code);
-    if (!match) return null;
-    return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
+    if (code && code !== "auto") {
+        const match = AI_OUTPUT_LANGUAGES.find((l) => l.code === code);
+        if (!match) return null;
+        return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
+    }
+    if (transcriptLanguage) {
+        const match = AI_OUTPUT_LANGUAGES.find(
+            (l) => l.code === transcriptLanguage,
+        );
+        if (match) {
+            return `IMPORTANT: Write all natural-language output in ${match.label} (matching the transcription's detected language). Keep any JSON keys in English exactly as specified.`;
+        }
+    }
+    return "IMPORTANT: Write all natural-language output in the same language as the transcription. Keep any JSON keys in English exactly as specified.";
 }
 
 export function getSummaryPromptById(

@@ -186,6 +186,7 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     // prompt where language and JSON-shape rules compete.
     const languageDirective = getAiOutputLanguageDirective(
         userSettingsRow?.aiOutputLanguage ?? null,
+        transcription.detectedLanguage,
     );
 
     const prompt = promptTemplate.replace(
