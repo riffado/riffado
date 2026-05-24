@@ -9,6 +9,9 @@
 ### Changed
 - Sync flow now coalesces concurrent calls for the same user inside one Next.js worker into a single Plaud round-trip; secondary callers receive the same result with an `inProgress: true` marker and the client renders it as a quiet no-op (no extra `router.refresh()`, no duplicate toast). Combined with a new client-side cross-tab `localStorage` in-flight stamp (90s TTL) and a 5s floor on manual sync taps, this collapses N-tab fan-out and rage-clicks before they reach the API. Reduces Webshare proxy load on hosted by suppressing redundant runs that were previously paginating Plaud and re-downloading recordings through the proxy.
 
+### Fixed
+- `docker-compose.yml` mounted the `audio` volume at `/app/audio`, but the app writes uploads to `LOCAL_STORAGE_PATH` (default `./storage` → `/app/storage` under the image WORKDIR). The mount target was dead — every upload landed in the writable container layer and was wiped on the next `docker compose up -d`, surfacing as `ENOENT: no such file or directory, open '/app/storage/<user>/uploaded-<id>.<ext>'` when the dashboard tried to play or download the recording. Fix by mounting the named volume at `/app/storage` so it actually backs the path the app uses. Self-hosters who never restarted (or hit the bug and re-uploaded after restart) are unaffected after `docker compose up -d`; data already lost to the writable layer cannot be recovered.
+
 ## [0.5.3] - 2026-05-15
 
 ### Fixed

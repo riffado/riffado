@@ -55,7 +55,11 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
     volumes:
-      - audio:/app/audio
+      # Must match LOCAL_STORAGE_PATH (default `./storage`, which resolves
+      # to `/app/storage` under the image's WORKDIR). Mounting elsewhere
+      # silently writes uploads into the writable container layer and
+      # loses every recording on the next `docker compose up -d`.
+      - audio:/app/storage
     depends_on:
       db:
         condition: service_healthy
