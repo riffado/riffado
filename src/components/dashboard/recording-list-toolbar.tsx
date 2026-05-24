@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownAZ, Rows3, Search, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type * as React from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +40,8 @@ export function RecordingListToolbar({
     density: ListDensity;
     onDensityChange: (next: ListDensity) => void;
 }) {
+    const t = useTranslations("dashboard.list");
+    const tDashboard = useTranslations("dashboard");
     return (
         <div className="flex flex-col gap-2 border-b p-3">
             <div className="relative">
@@ -53,15 +56,15 @@ export function RecordingListToolbar({
                             onEnterSelectFirst();
                         }
                     }}
-                    placeholder="Search recordings, transcripts..."
+                    placeholder={t("searchPlaceholder")}
                     className="h-9 pl-8 pr-8"
-                    aria-label="Search recordings"
+                    aria-label={t("searchLabel")}
                 />
                 {query && (
                     <button
                         type="button"
                         onClick={() => onQueryChange("")}
-                        aria-label="Clear search"
+                        aria-label={t("clearSearch")}
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
                     >
                         <X className="size-4" />
@@ -70,9 +73,14 @@ export function RecordingListToolbar({
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                    {filteredCount}
-                    {query ? " matching" : ""} of {totalCount} recording
-                    {totalCount !== 1 ? "s" : ""}
+                    {t("ofCount", {
+                        filtered: filteredCount,
+                        matchingSuffix: query ? t("matchingSuffix") : "",
+                        total: totalCount,
+                        recordingLabel: t("recordingsLabel", {
+                            count: totalCount,
+                        }),
+                    })}
                 </span>
                 <div className="flex items-center gap-1">
                     <DropdownMenu>
@@ -81,20 +89,20 @@ export function RecordingListToolbar({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                aria-label="Sort"
+                                aria-label={t("sort")}
                             >
                                 <ArrowDownAZ className="size-3.5" />
                                 <span>
                                     {sortOrder === "newest"
-                                        ? "Newest"
+                                        ? tDashboard("newest")
                                         : sortOrder === "oldest"
-                                          ? "Oldest"
-                                          : "Name"}
+                                          ? tDashboard("oldest")
+                                          : t("byName")}
                                 </span>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                            <DropdownMenuLabel>{t("sortBy")}</DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={sortOrder}
                                 onValueChange={(v) =>
@@ -102,13 +110,13 @@ export function RecordingListToolbar({
                                 }
                             >
                                 <DropdownMenuRadioItem value="newest">
-                                    Newest first
+                                    {t("newestFirst")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="oldest">
-                                    Oldest first
+                                    {t("oldestFirst")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="name">
-                                    Name
+                                    {t("byName")}
                                 </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
@@ -119,18 +127,20 @@ export function RecordingListToolbar({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                aria-label="Density"
+                                aria-label={t("density")}
                             >
                                 <Rows3 className="size-3.5" />
                                 <span>
                                     {density === "compact"
-                                        ? "Compact"
-                                        : "Comfortable"}
+                                        ? t("compactDensity")
+                                        : tDashboard("comfortable")}
                                 </span>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Density</DropdownMenuLabel>
+                            <DropdownMenuLabel>
+                                {t("density")}
+                            </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={density}
                                 onValueChange={(v) =>
@@ -138,10 +148,10 @@ export function RecordingListToolbar({
                                 }
                             >
                                 <DropdownMenuRadioItem value="comfortable">
-                                    Comfortable
+                                    {tDashboard("comfortable")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="compact">
-                                    Compact
+                                    {t("compactDensity")}
                                 </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
