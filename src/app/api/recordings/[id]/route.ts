@@ -8,11 +8,13 @@ import {
     webhookDeliveries,
 } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { emitEvent } from "@/lib/webhooks/emit";
 import { createRedactedWebhookPayload } from "@/lib/webhooks/payload";
+
+const CONTEXT_MAX_LEN = 4000;
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -63,6 +65,9 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         recording: {
             ...recording,
             filename: decryptText(recording.filename),
+            context: recording.context
+                ? decryptText(recording.context)
+                : null,
         },
         transcription: transcription
             ? { ...transcription, text: decryptText(transcription.text) }
@@ -106,6 +111,89 @@ function isStorageNotFoundError(error: unknown): boolean {
     }
     return false;
 }
+
+/**
+ * Update mutable fields on a recording. Only `context` for now —
+ * extending this rather than adding a one-field route so future
+ * editable fields don't accrue more endpoints. Encrypts at rest.
+ * `context: null` (explicit) clears the field; omitting the key
+ * leaves it untouched.
+ */
+export const PATCH = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
+    const { id } = await (context as IdContext).params;
+
+    // `request.json()` happily resolves to the JSON literal `null`
+    // (i.e. a body that's just `null`) without throwing — only invalid
+    // JSON hits the catch. `Object.hasOwn(null, ...)` then throws
+    // TypeError and a malformed request leaks out as a 500. Normalize
+    // any non-plain-object body to an empty object so the "nothing to
+    // update" guard below answers the question correctly with a 400.
+    const rawBody = (await request.json().catch(() => ({}))) as unknown;
+    const body: { context?: string | null } =
+        rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+            ? (rawBody as { context?: string | null })
+            : {};
+
+    if (!Object.hasOwn(body, "context")) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "Nothing to update",
+            400,
+        );
+    }
+
+    const next = body.context;
+    if (next != null) {
+        if (typeof next !== "string") {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                "context must be a string or null",
+                400,
+                { field: "context" },
+            );
+        }
+        if (next.length > CONTEXT_MAX_LEN) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                `context must be ${CONTEXT_MAX_LEN} characters or fewer`,
+                400,
+                { field: "context" },
+            );
+        }
+    }
+
+    // Trim+collapse: a textarea that the user blanked produces "" not
+    // null. Both should clear the column so the LLM doesn't get an
+    // empty-string primer that pollutes Whisper's prompt budget.
+    const trimmed = typeof next === "string" ? next.trim() : null;
+    const stored = trimmed ? encryptText(trimmed) : null;
+
+    const updated = await db
+        .update(recordings)
+        .set({ context: stored, updatedAt: new Date() })
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .returning({ id: recordings.id });
+
+    if (updated.length === 0) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
+
+    return NextResponse.json({
+        success: true,
+        context: trimmed,
+    });
+});
 
 /**
  * Soft-delete a recording.

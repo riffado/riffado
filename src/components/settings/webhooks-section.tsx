@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Trash2, Webhook } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -15,6 +16,8 @@ import {
 } from "./webhook-types";
 
 export function WebhooksSection() {
+    const t = useTranslations("settings.webhooks");
+    const tCommon = useTranslations("common");
     const confirm = useConfirm();
     const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
     const [events, setEvents] = useState<string[]>(DEFAULT_WEBHOOK_EVENTS);
@@ -36,11 +39,11 @@ export function WebhooksSection() {
             setWebhooks(data.webhooks);
             setEvents(data.events);
         } catch {
-            toast.error("Failed to load webhooks");
+            toast.error(t("loadFailed"));
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         refreshWebhooks();
@@ -53,11 +56,10 @@ export function WebhooksSection() {
 
     const handleDelete = (webhookId: string) => {
         void confirm({
-            title: "Delete this webhook?",
-            description:
-                "Deliveries will stop immediately. You'll have to recreate the endpoint and re-share its signing secret with any consumers.",
-            confirmLabel: "Delete",
-            pendingLabel: "Deleting…",
+            title: t("deleteConfirmTitle"),
+            description: t("deleteConfirmBody"),
+            confirmLabel: tCommon("delete"),
+            pendingLabel: tCommon("deleting"),
             destructive: true,
             onConfirm: async () => {
                 const response = await fetch(
@@ -65,23 +67,23 @@ export function WebhooksSection() {
                     { method: "DELETE" },
                 );
                 if (!response.ok) throw new Error("Failed to delete webhook");
-                toast.success("Webhook deleted");
+                toast.success(t("deletedToast"));
                 await refreshWebhooks();
             },
-            errorMessage: "Failed to delete webhook",
+            errorMessage: t("deleteFailed"),
         });
     };
 
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Webhooks"
-                description="Outbound HTTP notifications for recording, transcript, and summary events."
+                title={t("title")}
+                description={t("description")}
                 icon={Webhook}
                 action={
                     <Button size="sm" onClick={() => openEditor(null)}>
                         <Plus className="size-4" />
-                        Add Webhook
+                        {t("addWebhook")}
                     </Button>
                 }
             />
@@ -93,10 +95,12 @@ export function WebhooksSection() {
             ) : webhooks.length === 0 ? (
                 <div className="text-center py-12 border rounded-lg">
                     <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No webhooks</h3>
+                    <h3 className="font-semibold mb-2">
+                        {t("noWebhooksTitle")}
+                    </h3>
                     <Button size="sm" onClick={() => openEditor(null)}>
                         <Plus className="size-4" />
-                        Add Webhook
+                        {t("addWebhook")}
                     </Button>
                 </div>
             ) : (
@@ -110,6 +114,27 @@ export function WebhooksSection() {
                             onShowDeliveries={setDeliveryWebhook}
                         />
                     ))}
+                    {/*
+                      Always-visible Add button at the foot of the list.
+                      The section header's action slot is the primary
+                      affordance, but the Settings dialog clamps to
+                      `lg:max-w-[900px]` with `overflow-hidden`, and on
+                      narrow panes the header's right-side action can
+                      collide with the dialog's close button or get
+                      clipped — leaving the user unable to add a second
+                      webhook. This bottom button is a guaranteed escape
+                      hatch that mirrors the empty-state CTA.
+                    */}
+                    <div className="pt-1">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditor(null)}
+                        >
+                            <Plus className="size-4" />
+                            {t("addWebhook")}
+                        </Button>
+                    </div>
                 </div>
             )}
 
@@ -144,9 +169,10 @@ function WebhookRow({
     onDelete: (webhookId: string) => void;
     onShowDeliveries: (webhook: WebhookEndpoint) => void;
 }) {
+    const t = useTranslations("settings.webhooks");
     return (
         <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
                 <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate font-medium">
@@ -159,7 +185,7 @@ function WebhookRow({
                                     : "text-muted-foreground"
                             }`}
                         >
-                            {webhook.enabled ? "Enabled" : "Disabled"}
+                            {webhook.enabled ? t("enabled") : t("disabled")}
                         </span>
                         {webhook.lastDeliveryStatus && (
                             <span className="rounded border px-2 py-0.5 text-xs">
@@ -181,23 +207,39 @@ function WebhookRow({
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Last delivery:{" "}
-                        {formatWebhookDate(webhook.lastDeliveryAt)}
+                        {webhook.lastDeliveryAt
+                            ? t("lastDelivery", {
+                                  time: formatWebhookDate(
+                                      webhook.lastDeliveryAt,
+                                  ),
+                              })
+                            : t("lastDeliveryNever")}
                     </p>
                 </div>
-                <div className="flex gap-2">
+                {/*
+                  Always stacked below the row content (never side-by-side):
+                  the Settings dialog clamps the main pane to ~550–650 px on
+                  `md:max-w-[800px]` / `lg:max-w-[900px]`, and the previous
+                  `sm:flex-row sm:justify-between` triggered at 640 px viewport
+                  — which is wider than the actual pane. Result: Deliveries +
+                  Edit + Delete pushed off the right edge with no way to
+                  reach them. `flex-wrap` covers the extreme-narrow case
+                  (mobile-portrait) where three buttons + gaps still exceed
+                  the pane width.
+                */}
+                <div className="flex flex-wrap gap-2">
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => onShowDeliveries(webhook)}
                     >
-                        Deliveries
+                        {t("deliveries")}
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
                         onClick={() => onEdit(webhook)}
-                        aria-label="Edit webhook"
+                        aria-label={t("editWebhook")}
                     >
                         <Pencil className="size-4" />
                     </Button>
@@ -205,7 +247,7 @@ function WebhookRow({
                         variant="outline"
                         size="icon"
                         onClick={() => onDelete(webhook.id)}
-                        aria-label="Delete webhook"
+                        aria-label={t("deleteWebhook")}
                     >
                         <Trash2 className="size-4 text-destructive" />
                     </Button>

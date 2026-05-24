@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Github } from "@/components/icons/icons";
 import { Logo } from "@/components/icons/logo";
@@ -26,8 +27,9 @@ import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
  * gets a support link, self-host gets the update badge. Neither side
  * sees both. PR #124 already dropped the original `"use client"`.
  */
-export function Footer() {
+export async function Footer() {
     const currentYear = new Date().getFullYear();
+    const t = await getTranslations("footer");
 
     return (
         <footer className="border-t border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -36,7 +38,7 @@ export function Footer() {
                     <div className="flex items-center gap-2">
                         <Logo className="size-4" />
                         <span>
-                            © {currentYear} OpenPlaud · Licensed under{" "}
+                            © {currentYear} OpenPlaud · {t("licensedUnder")}{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -71,7 +73,7 @@ export function Footer() {
                             href="/docs"
                             className="hover:text-foreground transition-colors"
                         >
-                            Docs
+                            {t("docs")}
                         </Link>
                         {/* Single bug-report entry point for both modes.
                             Self-host → GitHub-only dialog. Hosted →

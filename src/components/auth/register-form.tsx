@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Logo } from "@/components/icons/logo";
@@ -11,7 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
 
-export function RegisterForm() {
+export function RegisterForm({
+    allowedEmailDomains = [],
+}: {
+    allowedEmailDomains?: readonly string[];
+}) {
+    const t = useTranslations("auth.signUp");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -23,12 +29,12 @@ export function RegisterForm() {
         e.preventDefault();
 
         if (password !== confirmPassword) {
-            toast.error("Passwords do not match");
+            toast.error(t("passwordsMismatch"));
             return;
         }
 
         if (password.length < 8) {
-            toast.error("Password must be at least 8 characters");
+            toast.error(t("passwordTooShort"));
             return;
         }
 
@@ -42,18 +48,16 @@ export function RegisterForm() {
             });
 
             if (result.error) {
-                toast.error(result.error.message || "Failed to create account");
+                toast.error(result.error.message || t("failedGeneric"));
                 return;
             }
 
-            toast.success("Account created successfully");
+            toast.success(t("createdToast"));
             push("/onboarding");
             refresh();
         } catch (error) {
             const message =
-                error instanceof Error
-                    ? error.message
-                    : "Failed to create account";
+                error instanceof Error ? error.message : t("failedGeneric");
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -66,21 +70,21 @@ export function RegisterForm() {
                 <Logo className="size-10 shrink-0" />
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">
-                        Create Account
+                        {t("title")}
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Get started with OpenPlaud
+                        {t("subtitle")}
                     </p>
                 </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name">{t("name")}</Label>
                     <Input
                         id="name"
                         type="text"
-                        placeholder="John Doe"
+                        placeholder={t("namePlaceholder")}
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required
@@ -89,20 +93,27 @@ export function RegisterForm() {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{t("email")}</Label>
                     <Input
                         id="email"
                         type="email"
-                        placeholder="you@example.com"
+                        placeholder={t("emailPlaceholder")}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         disabled={isLoading}
                     />
+                    {allowedEmailDomains.length > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                            {t("domainsHint", {
+                                domains: allowedEmailDomains.join(", "),
+                            })}
+                        </p>
+                    ) : null}
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">{t("password")}</Label>
                     <Input
                         id="password"
                         type="password"
@@ -116,7 +127,9 @@ export function RegisterForm() {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Label htmlFor="confirmPassword">
+                        {t("confirmPassword")}
+                    </Label>
                     <Input
                         id="confirmPassword"
                         type="password"
@@ -134,19 +147,19 @@ export function RegisterForm() {
                     variant="cyan"
                     disabled={isLoading}
                 >
-                    {isLoading ? "Creating account..." : "Create Account"}
+                    {isLoading ? t("submitting") : t("submit")}
                 </MetalButton>
             </form>
 
             <div className="text-center text-sm">
                 <span className="text-muted-foreground">
-                    Already have an account?{" "}
+                    {t("haveAccount")}{" "}
                 </span>
                 <Link
                     href="/login"
                     className="text-accent-cyan hover:underline"
                 >
-                    Sign in
+                    {t("signInLink")}
                 </Link>
             </div>
         </Panel>

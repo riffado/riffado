@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -35,6 +36,7 @@ interface ExportSectionProps {
 }
 
 export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [defaultExportFormat, setDefaultExportFormat] = useState("json");
@@ -178,8 +180,8 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Export & Backup"
-                description="Take your data with you — recordings, transcripts, and summaries."
+                title={t("exportTitle")}
+                description={t("exportDescription")}
                 icon={Download}
             />
             <div className="space-y-4">

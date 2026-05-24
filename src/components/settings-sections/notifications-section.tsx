@@ -1,6 +1,7 @@
 "use client";
 
 import { Bell, BellRing, Mail, Smartphone, Volume2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
@@ -12,6 +13,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { requestNotificationPermission } from "@/lib/notifications/browser";
 
 export function NotificationsSection() {
+    const t = useTranslations("sectionHeaders");
     const {
         isLoadingSettings,
         isSavingSettings,
@@ -164,8 +166,8 @@ export function NotificationsSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Notifications"
-                description="Choose how and when OpenPlaud lets you know about new recordings and sync events."
+                title={t("notificationsTitle")}
+                description={t("notificationsDescription")}
                 icon={Bell}
             />
 

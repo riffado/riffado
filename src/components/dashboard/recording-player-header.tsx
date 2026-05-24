@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioWaveform, Loader2 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDateTime } from "@/lib/format-date";
@@ -33,8 +34,10 @@ export function RecordingPlayerHeader({
     waveformStatus,
     onDecodeWaveform,
 }: Props) {
+    const t = useTranslations("recordingPlayer");
+    const locale = useLocale();
     const metaParts: string[] = [
-        formatDateTime(recording.startTime, "relative"),
+        formatDateTime(recording.startTime, "relative", locale),
         formatDuration(duration || recording.duration / 1000),
         formatBytes(recording.filesize),
     ];
@@ -62,7 +65,7 @@ export function RecordingPlayerHeader({
                                 ·
                             </span>
                             <Loader2 className="size-3 animate-spin" />
-                            Analyzing audio…
+                            {t("analyzingAudio")}
                         </span>
                     )}
                 {scrubberStyle === "waveform" &&
@@ -71,13 +74,13 @@ export function RecordingPlayerHeader({
                             type="button"
                             onClick={onDecodeWaveform}
                             className="inline-flex items-center gap-1 underline-offset-2 hover:text-foreground hover:underline"
-                            title="Decode waveform in your browser (may take a few seconds)"
+                            title={t("generateWaveformTooltip")}
                         >
                             <span aria-hidden="true" className="opacity-40">
                                 ·
                             </span>
                             <AudioWaveform className="size-3" />
-                            Generate waveform
+                            {t("generateWaveform")}
                         </button>
                     )}
                 {scrubberStyle === "waveform" && waveformStatus === "error" && (
@@ -90,7 +93,7 @@ export function RecordingPlayerHeader({
                             ·
                         </span>
                         <AudioWaveform className="size-3" />
-                        Retry waveform
+                        {t("retryWaveform")}
                     </button>
                 )}
             </div>

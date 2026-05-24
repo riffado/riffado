@@ -26,6 +26,10 @@ export default async function DashboardPage() {
             filesize: recordings.filesize,
             deviceSn: recordings.deviceSn,
             waveformPeaks: recordings.waveformPeaks,
+            transcribingStartedAt: recordings.transcribingStartedAt,
+            transcriptionProgressSeconds:
+                recordings.transcriptionProgressSeconds,
+            context: recordings.context,
         })
         .from(recordings)
         .where(
@@ -60,21 +64,54 @@ export default async function DashboardPage() {
     const summaryIds = new Set(userSummaryRows.map((r) => r.recordingId));
     const transcriptIds = new Set(userTranscriptions.map((t) => t.recordingId));
 
+    // Mirror of TRANSCRIPTION_STALE_TIMEOUT_MS in transcribe-recording.ts
+    // and lib/v1/serialize.ts. Kept local rather than imported because
+    // page.tsx is an RSC and pulling in the worker module would drag the
+    // OpenAI SDK + storage drivers into the server bundle. Three copies
+    // is the lesser evil; keep them in sync.
+    const TRANSCRIPTION_STALE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+
     // Content fields are encrypted at rest; decrypt server-side (this is
     // an RSC — client never sees a key) before serializing for the
     // workstation. Legacy plaintext rows pass through verbatim.
-    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) =>
-        serializeRecording(
-            { ...r, filename: decryptText(r.filename) },
-            {
-                hasTranscript: transcriptIds.has(r.id),
-                hasSummary: summaryIds.has(r.id),
-                // jsonb comes back already-parsed; coerce to the typed shape.
-                waveformPeaks: Array.isArray(waveformPeaks)
-                    ? (waveformPeaks as number[])
-                    : null,
-            },
-        ),
+    const recordingsData = userRecordings.map(
+        ({
+            waveformPeaks,
+            transcribingStartedAt,
+            transcriptionProgressSeconds,
+            context,
+            ...r
+        }) => {
+            const transcriptionInProgress = Boolean(
+                transcribingStartedAt &&
+                    nowMs - transcribingStartedAt.getTime() <
+                        TRANSCRIPTION_STALE_TIMEOUT_MS,
+            );
+            return serializeRecording(
+                {
+                    ...r,
+                    filename: decryptText(r.filename),
+                    context: context ? decryptText(context) : null,
+                },
+                {
+                    hasTranscript: transcriptIds.has(r.id),
+                    hasSummary: summaryIds.has(r.id),
+                    // jsonb comes back already-parsed; coerce to the typed shape.
+                    waveformPeaks: Array.isArray(waveformPeaks)
+                        ? (waveformPeaks as number[])
+                        : null,
+                    transcriptionInProgress,
+                    // Drop a leftover progress value from a previous run
+                    // that never got cleaned up (e.g. app killed mid-write
+                    // of the release) — otherwise the UI would show a
+                    // stale percentage on a recording that isn't running.
+                    transcriptionProgressSeconds: transcriptionInProgress
+                        ? transcriptionProgressSeconds
+                        : null,
+                },
+            );
+        },
     );
 
     const transcriptionMap = new Map(

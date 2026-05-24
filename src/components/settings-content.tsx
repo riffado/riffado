@@ -6,6 +6,7 @@ import { WebhooksSection } from "./settings/webhooks-section";
 import { DevSection } from "./settings-sections/dev-section";
 import { DisplaySection } from "./settings-sections/display-section";
 import { ExportSection } from "./settings-sections/export-section";
+import { LanguageSection } from "./settings-sections/language-section";
 import { NotificationsSection } from "./settings-sections/notifications-section";
 import { PlaudAccountSection } from "./settings-sections/plaud-account-section";
 import { PlaybackSection } from "./settings-sections/playback-section";
@@ -66,6 +67,8 @@ export function SettingsContent({
             return <DisplaySection />;
         case "notifications":
             return <NotificationsSection />;
+        case "language":
+            return <LanguageSection />;
         case "export":
             return <ExportSection onReRunOnboarding={onReRunOnboarding} />;
         case "storage":

@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Link2Off, Mic, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
@@ -45,6 +46,7 @@ function regionLabel(
 }
 
 export function PlaudAccountSection() {
+    const t = useTranslations("sectionHeaders");
     const [info, setInfo] = useState<ConnectionInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [confirmOpen, setConfirmOpen] = useState<
@@ -147,8 +149,8 @@ export function PlaudAccountSection() {
         <div className="space-y-6">
             <div>
                 <SettingsSectionHeader
-                    title="Plaud Account"
-                    description="Your connection to the Plaud cloud used to pull recordings."
+                    title={t("plaudAccountTitle")}
+                    description={t("plaudAccountDescription")}
                     icon={Mic}
                 />
                 <p className="text-sm text-muted-foreground mt-1">

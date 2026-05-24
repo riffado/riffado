@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
     boolean,
     index,
@@ -9,6 +10,7 @@ import {
     text,
     timestamp,
     unique,
+    uniqueIndex,
     varchar,
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
@@ -237,6 +239,53 @@ export const recordings = pgTable(
         // so payload is ~3–6 KB. Used purely for visualization — no
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
+        // Caller-supplied correlation handle for server-to-server uploads
+        // (`POST /api/v1/recordings`). Used by integrating systems (e.g. a
+        // meeting platform that posts the recording, then receives the
+        // transcription.completed webhook and needs to find its own row
+        // for the result) — every webhook payload round-trips this value
+        // in `external_id`. Nullable so the field is invisible to UI-only
+        // users. Unique per (user_id, external_id) when set, so a retry
+        // with the same external_id is idempotent.
+        externalId: text("external_id"),
+        // Caller-supplied context for AI tasks (transcription + summary):
+        // participant names, customer / project, meeting type, vocabulary
+        // the model would otherwise mis-hear ("Eibach" vs "Eich-Bach",
+        // proper nouns, internal jargon). Free-text on purpose — the
+        // shape varies by caller and the LLM handles arbitrary prose
+        // better than rigid JSON. Encrypted at rest because it can carry
+        // PII (participant names). Surfaced to:
+        //   - faster-whisper's `prompt` field (priming text, ~244 token
+        //     budget — we truncate) for better acoustic recognition of
+        //     names and jargon
+        //   - the summary system message, so attribution doesn't have
+        //     to be inferred from dialogue cues alone
+        // Nullable; absence means the LLM falls back to context-only
+        // inference as before.
+        context: text("context"),
+        // Progress marker for the in-flight transcription, in seconds of
+        // audio. Updated by the worker as Speaches/Whisper streams back
+        // per-segment events (`stream=true`). Nullable; reset to null
+        // when the worker releases the claim. The dashboard divides this
+        // by `duration` (ms / 1000) to show a real progress bar instead
+        // of the previous "spinner only" UX. Cleared on each new claim.
+        transcriptionProgressSeconds: integer("transcription_progress_seconds"),
+        // In-flight transcription claim. Set by the worker right before it
+        // dispatches the provider call, cleared after success or failure
+        // (whichever happens first). Used to give the manual transcribe
+        // route an idempotency boundary: a second click while a previous
+        // run is still in progress returns HTTP 409 instead of spawning
+        // a parallel worker. The dashboard reads this through v1's
+        // `transcription_in_progress` flag to keep the "Transcribing..."
+        // chip visible across browser reloads, which is exactly the gap
+        // that let users trigger 3+ runs by re-clicking.
+        //
+        // Stale-claim safety: a crashed worker would leave this set
+        // forever, blocking re-transcription. The worker treats a claim
+        // older than `TRANSCRIPTION_STALE_TIMEOUT_MS` as abandoned and
+        // overwrites it. Long meeting audio on slow CPU-only Whisper
+        // boxes is the realistic upper bound for picking that timeout.
+        transcribingStartedAt: timestamp("transcribing_started_at"),
         // Soft-delete tombstone. Set when the user deletes a recording from
         // OpenPlaud's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
@@ -261,6 +310,15 @@ export const recordings = pgTable(
         userPlaudFileUnique: unique(
             "recordings_user_id_plaud_file_id_unique",
         ).on(table.userId, table.plaudFileId),
+        // Partial unique index — only enforces uniqueness when external_id
+        // is set, so the bulk of recordings (no external_id) are not
+        // affected. Lets `POST /api/v1/recordings` short-circuit a retry
+        // with the same external_id back to the existing row.
+        userExternalIdUnique: uniqueIndex(
+            "recordings_user_id_external_id_unique",
+        )
+            .on(table.userId, table.externalId)
+            .where(sql`${table.externalId} IS NOT NULL`),
     }),
 );
 

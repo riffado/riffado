@@ -42,6 +42,10 @@ const recording = {
     scene: null,
     isTrash: false,
     waveformPeaks: null,
+    externalId: null,
+    context: null,
+    transcribingStartedAt: null,
+    transcriptionProgressSeconds: null,
     deletedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -98,6 +102,8 @@ describe("v1 recordings", () => {
         ).toEqual({
             id: "rec-1",
             title: "Planning Call",
+            external_id: null,
+            context: null,
             created_at: now.toISOString(),
             updated_at: now.toISOString(),
             recorded_at: "2026-05-06T11:00:00.000Z",
@@ -110,12 +116,32 @@ describe("v1 recordings", () => {
             },
             has_transcription: true,
             has_summary: true,
+            transcription_in_progress: false,
+            transcription_progress_seconds: null,
             links: {
                 self: "/api/v1/recordings/rec-1",
                 transcript: "/api/v1/recordings/rec-1/transcript",
                 audio: "/api/v1/recordings/rec-1/audio",
             },
         });
+    });
+
+    it("reports transcription_in_progress while a claim is fresh", () => {
+        const justNow = new Date();
+        const row = { ...recording, transcribingStartedAt: justNow };
+        expect(
+            serializeRecording(row, null, null, null).transcription_in_progress,
+        ).toBe(true);
+    });
+
+    it("treats a stale claim as not in progress", () => {
+        // Older than TRANSCRIPTION_STALE_TIMEOUT_MS (3h) → considered
+        // abandoned, the next caller is allowed to claim again.
+        const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+        const row = { ...recording, transcribingStartedAt: longAgo };
+        expect(
+            serializeRecording(row, null, null, null).transcription_in_progress,
+        ).toBe(false);
     });
 
     it("inlines transcript and summary for detail payloads", () => {
@@ -142,5 +168,40 @@ describe("v1 recordings", () => {
 
         expect(detail.title).toBe("Legacy Recording");
         expect(detail.transcript?.text).toBe("Legacy transcript");
+    });
+
+    it("round-trips external_id when set so webhook receivers can correlate", () => {
+        const row = { ...recording, externalId: "MR-2026-05-24-001" };
+        expect(serializeRecording(row, null, null, null).external_id).toBe(
+            "MR-2026-05-24-001",
+        );
+    });
+
+    it("surfaces transcription_progress_seconds while a claim is fresh", () => {
+        const row = {
+            ...recording,
+            transcribingStartedAt: new Date(),
+            transcriptionProgressSeconds: 142,
+        };
+        expect(
+            serializeRecording(row, null, null, null)
+                .transcription_progress_seconds,
+        ).toBe(142);
+    });
+
+    it("hides transcription_progress_seconds once the claim is stale", () => {
+        // A stale claim was supposed to be released; if the release UPDATE
+        // never ran (process killed mid-write) a leftover progress number
+        // would otherwise stick to the row and confuse the UI.
+        const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+        const row = {
+            ...recording,
+            transcribingStartedAt: longAgo,
+            transcriptionProgressSeconds: 999,
+        };
+        expect(
+            serializeRecording(row, null, null, null)
+                .transcription_progress_seconds,
+        ).toBeNull();
     });
 });

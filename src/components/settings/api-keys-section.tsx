@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Clipboard, KeyRound, Plus, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -33,6 +34,7 @@ function formatDate(value: string | null): string {
 }
 
 export function ApiKeysSection() {
+    const t = useTranslations("sectionHeaders");
     const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
@@ -147,8 +149,8 @@ export function ApiKeysSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="API Keys"
-                description="Personal access tokens for the OpenPlaud public API."
+                title={t("apiKeysTitle")}
+                description={t("apiKeysDescription")}
                 icon={KeyRound}
                 action={
                     <Button

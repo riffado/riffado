@@ -1,0 +1,1 @@
+ALTER TABLE "recordings" ADD COLUMN "transcription_progress_seconds" integer;

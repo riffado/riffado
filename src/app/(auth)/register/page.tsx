@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { RegisterForm } from "@/components/auth/register-form";
 import { Logo } from "@/components/icons/logo";
 import { Panel } from "@/components/panel";
@@ -15,43 +16,42 @@ export default async function RegisterPage() {
                 {env.DISABLE_REGISTRATION ? (
                     <RegistrationDisabled />
                 ) : (
-                    <RegisterForm />
+                    <RegisterForm
+                        allowedEmailDomains={env.ALLOWED_EMAIL_DOMAINS}
+                    />
                 )}
             </div>
         </div>
     );
 }
 
-function RegistrationDisabled() {
+async function RegistrationDisabled() {
+    const t = await getTranslations("auth.disabled");
     return (
         <Panel className="w-full max-w-md space-y-6">
             <div className="flex items-center gap-3">
                 <Logo className="size-10 shrink-0" />
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">
-                        Registration Disabled
+                        {t("title")}
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        New sign-ups are turned off on this instance
+                        {t("subtitle")}
                     </p>
                 </div>
             </div>
 
-            <p className="text-sm text-muted-foreground">
-                The administrator of this OpenPlaud instance has disabled
-                self-service registration. If you need an account, contact the
-                administrator directly.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("body")}</p>
 
             <div className="text-center text-sm">
                 <span className="text-muted-foreground">
-                    Already have an account?{" "}
+                    {t("haveAccount")}{" "}
                 </span>
                 <Link
                     href="/login"
                     className="text-accent-cyan hover:underline"
                 >
-                    Sign in
+                    {t("signInLink")}
                 </Link>
             </div>
         </Panel>

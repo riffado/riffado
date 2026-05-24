@@ -238,6 +238,9 @@ Transcribe a recording.
 }
 ```
 
+**Error responses:**
+- `409 Conflict` (`TRANSCRIPTION_IN_PROGRESS`) — another transcription run for this recording is already underway. The caller should not retry; the existing run will finish and the v1 payload's `transcription_in_progress` flag will flip back to `false`. Stale claims older than 3 hours are automatically reclaimable by the next caller.
+
 ---
 
 ### Settings
@@ -391,6 +394,7 @@ List recordings with cursor pagination and incremental filters.
     {
       "id": "abc123",
       "title": "Meeting Notes",
+      "external_id": null,
       "created_at": "2026-05-06T12:00:00.000Z",
       "updated_at": "2026-05-06T12:05:00.000Z",
       "recorded_at": "2026-05-06T11:30:00.000Z",
@@ -419,10 +423,95 @@ List recordings with cursor pagination and incremental filters.
 when the recording metadata changes and when transcript, summary, or generated
 title state changes.
 
+#### POST `/v1/recordings`
+
+Programmatic upload — server-to-server counterpart of the browser
+`/recordings/upload` endpoint. Used by integrating systems (meeting
+platforms, telephony pipelines) that need to post recordings without a
+browser session.
+
+**Request:** `multipart/form-data` with fields:
+
+- `file` (required) — binary, one of `.mp3 .mp4 .m4a .wav .ogg .opus .webm .aac .flac`, max 500 MB
+- `external_id` (optional, max 255 chars) — caller-supplied correlation
+  handle. Round-trips into every subsequent webhook (`recording.synced`,
+  `transcription.completed`, etc.) in the `external_id` field, so the
+  caller can match an event back to its own row without keeping a
+  separate mapping table.
+- `name` (optional) — friendly title; default derived from the file's
+  basename.
+- `auto_transcribe` (optional, defaults to `true`) — when `true` (or
+  omitted), a transcribe worker fires immediately after the row is
+  inserted. The HTTP response returns before transcription finishes
+  (which can take many minutes on CPU Whisper); completion arrives
+  via the `transcription.completed` webhook. Pass `"false"` to defer —
+  the row is created and the audio is stored, but no transcribe is
+  triggered until you call `POST /api/recordings/[id]/transcribe`.
+- `context` (optional, max 4000 chars) — free-text context the AI
+  tasks should ground on: participant names, customer / project,
+  meeting type, domain vocabulary. Two downstream consumers:
+  Whisper receives the first ~900 chars as a priming `prompt` (helps
+  acoustic recognition of proper nouns and jargon the model would
+  otherwise mishear), and the summary worker prepends the full
+  context to its system message so speaker attribution lands on
+  real names instead of "Speaker A / B". Encrypted at rest. Editable
+  after upload via `PATCH /api/recordings/[id]`. Auto-summary
+  picks up changes only on the next transcribe run, so re-transcribe
+  after editing if you want the new context to flow through.
+
+**Response:** the stable v1 recording shape from `GET /v1/recordings`,
+with:
+
+- HTTP `201 Created` for a new row.
+- HTTP `200 OK` (no insert, no extra storage write) when the caller
+  retries with an `external_id` that already maps to a non-deleted
+  recording owned by the same user. This makes the endpoint safe to
+  retry on network blips without producing duplicates.
+
+```http
+POST /api/v1/recordings HTTP/1.1
+Host: openplaud.example
+Authorization: Bearer op_...
+Content-Type: multipart/form-data; boundary=...
+
+--...
+Content-Disposition: form-data; name="file"; filename="meeting.mp4"
+Content-Type: video/mp4
+
+<binary>
+--...
+Content-Disposition: form-data; name="external_id"
+
+MR-2026-05-24-001
+--...--
+```
+
 #### GET `/v1/recordings/[id]`
 
 Return the stable recording shape plus inline `transcript` and `summary`
 objects when present.
+
+#### PATCH `/v1/recordings/[id]`
+
+Update mutable fields on a recording. Bearer-auth, v1 rate-limit.
+
+**Request body** (JSON; either or both keys must be present):
+
+- `context` — string or `null`. Same semantics as the POST field
+  (max 4000 chars, encrypted at rest, fed to Whisper + summary).
+- `external_id` — string or `null`. Sets/clears the correlation
+  handle that round-trips into every webhook. Unique per user
+  (partial index on `(user_id, external_id)` where not null);
+  trying to attach an `external_id` already in use on another of
+  the caller's recordings returns `409`. Useful for the pull-import
+  flow where the caller has only the OpenPlaud `id` at first and
+  wants to attach its own correlation handle after the fact.
+
+Omitting both keys is a `400 Nothing to update`. Passing `null`
+clears the field; passing a string sets it (whitespace-trimmed, an
+all-whitespace string also clears).
+
+Response: the full v1 recording detail shape (same as `GET`).
 
 #### GET `/v1/recordings/[id]/transcript`
 

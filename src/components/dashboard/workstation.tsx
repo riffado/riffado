@@ -222,9 +222,16 @@ export function Workstation({
     const anyTranscribing = Array.from(inFlightActions.values()).some(
         (kind) => kind === "transcribing",
     );
+    // `isCurrentTranscribing` ORs the in-tab client claim with the
+    // server-side `transcribingStartedAt` flag baked into `recording`
+    // by the RSC. Without the second term the "Transcribing… 36%"
+    // panel disappears on reload (and never shows in a second tab),
+    // because `inFlightActions` only knows about transcribes the user
+    // kicked off in *this* React tree.
     const isCurrentTranscribing =
         currentRecording !== null &&
-        inFlightActions.get(currentRecording.id) === "transcribing";
+        (inFlightActions.get(currentRecording.id) === "transcribing" ||
+            currentRecording.transcriptionInProgress === true);
     const isProcessing = anyTranscribing || isUploading;
 
     const handleTranscribe = useCallback(async () => {
@@ -374,6 +381,7 @@ export function Workstation({
                                     initialSettings.autoPlayNext
                                 }
                                 scrubberStyle={initialSettings.playerScrubber}
+                                onServerTranscribeComplete={refresh}
                             />
                         </div>
                     )}

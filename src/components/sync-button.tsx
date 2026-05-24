@@ -1,43 +1,53 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatDateTime } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 
 /**
- * Compact relative-time string for the sync button label.
+ * Compact relative-time descriptor for the sync button label.
  *
- * `date-fns` defaults ("less than a minute", "about 1 hour") balloon
- * the button width past what we want in the header. This formatter
- * is intentionally terse: "just now" / "2m ago" / "3h ago" / "5d
- * ago". Loses some precision in exchange for a button that doesn't
- * dominate the toolbar.
+ * Returns a discriminated union instead of an English string so the
+ * renderer can pick the right ICU-plural translation. The previous
+ * shape concatenated "Synchronisiert vor " + "2m ago" → denglish.
+ *
+ * The bucketing is intentionally terse: "just now" / "Xm ago" /
+ * "Xh ago" / "Xd ago" / "Xw ago" — `date-fns` defaults ("about 1 hour")
+ * blow the button width past what fits in the header.
  */
-function compactAgo(from: Date): string {
-    // Guard against `new Date(invalid)` reaching us — `getTime()` would
-    // return NaN and every downstream branch would render "NaN m ago".
+type AgoBucket =
+    | { kind: "invalid" }
+    | { kind: "justNow" }
+    | { kind: "minutes"; n: number }
+    | { kind: "hours"; n: number }
+    | { kind: "days"; n: number }
+    | { kind: "weeks"; n: number };
+
+function compactAgo(from: Date): AgoBucket {
     const ts = from.getTime();
-    if (!Number.isFinite(ts)) return "";
+    if (!Number.isFinite(ts)) return { kind: "invalid" };
     const diffMs = Date.now() - ts;
-    if (diffMs < 0) return "just now";
+    // Clock skew / future dates collapse to "just now" rather than a
+    // negative duration the i18n templates aren't set up to render.
+    if (diffMs < 0) return { kind: "justNow" };
     const sec = Math.floor(diffMs / 1000);
-    // Everything under a minute reads as "just now" — otherwise the
-    // 45–59 s window renders "0m ago" because `min = floor(sec/60)`.
-    if (sec < 60) return "just now";
+    // Everything under a minute is "just now" — otherwise the 45–59s
+    // window would render "0 min ago" (floor(sec/60)).
+    if (sec < 60) return { kind: "justNow" };
     const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
+    if (min < 60) return { kind: "minutes", n: min };
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
+    if (hr < 24) return { kind: "hours", n: hr };
     const day = Math.floor(hr / 24);
-    if (day < 7) return `${day}d ago`;
-    const wk = Math.floor(day / 7);
-    return `${wk}w ago`;
+    if (day < 7) return { kind: "days", n: day };
+    return { kind: "weeks", n: Math.floor(day / 7) };
 }
 
 /**
@@ -80,25 +90,35 @@ export function SyncButton({
     onSync,
     className,
 }: SyncButtonProps) {
+    const t = useTranslations("syncButton");
+    const tDash = useTranslations("dashboard");
+    const locale = useLocale();
     const failed = !isAutoSyncing && lastSyncResult?.success === false;
 
     const label = (() => {
-        if (isAutoSyncing) return "Syncing...";
-        if (failed) return "Retry sync";
-        if (lastSyncTime) {
-            try {
-                return `Synced ${compactAgo(lastSyncTime)}`;
-            } catch {
-                return "Synced recently";
-            }
+        if (isAutoSyncing) return t("syncing");
+        if (failed) return t("retrySync");
+        if (!lastSyncTime) return tDash("syncDevice");
+        const ago = compactAgo(lastSyncTime);
+        switch (ago.kind) {
+            case "invalid":
+            case "justNow":
+                return t("syncedJustNow");
+            case "minutes":
+                return t("syncedMinutesAgo", { count: ago.n });
+            case "hours":
+                return t("syncedHoursAgo", { count: ago.n });
+            case "days":
+                return t("syncedDaysAgo", { count: ago.n });
+            case "weeks":
+                return t("syncedWeeksAgo", { count: ago.n });
         }
-        return "Sync device";
     })();
 
-    // Tooltip: secondary context for users who hover. We pack what the
-    // old stacked layout showed below the primary line (next sync ETA,
-    // last-error message) into a single `title=` string so we don't
-    // need a tooltip primitive just for this.
+    // Tooltip: secondary context for users who hover. Packs the old
+    // stacked layout's secondary lines (next sync ETA, last-error
+    // message) into a single string so a tooltip primitive isn't
+    // needed just for this.
     const title = (() => {
         const parts: string[] = [];
         if (failed && lastSyncResult?.error) {
@@ -108,27 +128,33 @@ export function SyncButton({
             try {
                 const diff = nextSyncTime.getTime() - Date.now();
                 if (diff < 60000) {
-                    parts.push("Next auto-sync soon");
+                    parts.push(t("nextAutoSyncSoon"));
                 } else {
                     parts.push(
-                        `Next auto-sync ${formatDistanceToNow(nextSyncTime, {
-                            addSuffix: true,
-                        })}`,
+                        t("nextAutoSync", {
+                            time: formatDateTime(
+                                nextSyncTime,
+                                "relative",
+                                locale,
+                            ),
+                        }),
                     );
                 }
             } catch {
                 // Ignore - we just won't include the next-sync line.
             }
         }
-        parts.push(isAutoSyncing ? "Sync in progress" : "Click to sync now");
+        parts.push(
+            isAutoSyncing ? t("syncInProgress") : t("clickToSyncNow"),
+        );
         return parts.join(" \u00b7 ");
     })();
 
     const ariaLabel = isAutoSyncing
-        ? "Syncing device"
+        ? t("syncing")
         : failed
-          ? "Retry sync"
-          : "Sync device";
+          ? t("retrySync")
+          : tDash("syncDevice");
 
     return (
         <Tooltip>

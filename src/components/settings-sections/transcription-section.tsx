@@ -1,6 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -48,6 +49,7 @@ const qualityOptions = [
 ];
 
 export function TranscriptionSection() {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoTranscribe, setAutoTranscribe] = useState(false);
@@ -220,8 +222,8 @@ export function TranscriptionSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Transcription"
-                description="Defaults and provider selection for converting audio to text."
+                title={t("transcriptionSettingsTitle")}
+                description={t("transcriptionSettingsDescription")}
                 icon={FileText}
             />
             <div className="space-y-4">

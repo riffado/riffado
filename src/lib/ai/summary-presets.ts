@@ -47,17 +47,31 @@ Transcription:
         id: "meeting-notes",
         name: "Meeting Notes",
         description:
-            "Structured meeting summary with attendees, decisions, and action items",
-        prompt: `Summarize this meeting recording. Include attendees mentioned, decisions made, and action items.
+            "Structured meeting summary with speaker attribution, decisions, and action items",
+        // The transcript arrives WITHOUT diarization (faster-whisper /
+        // Speaches on a local CPU stack doesn't run pyannote), so we
+        // ask the model to infer speakers from contextual cues:
+        // self-introductions, names addressed in dialogue, distinct
+        // speaking patterns, topic ownership, turn-taking. Not
+        // perfect, but for a typical 2–6-person meeting it's far
+        // better than the previous "wall of attributed-to-nobody
+        // text" output. The structured `participants` array gives
+        // the client a stable handle even when the prose summary
+        // anonymizes ("Speaker A asked …"). Falls back gracefully
+        // when context is insufficient: instruct the model to use
+        // generic labels rather than guess names.
+        prompt: `Summarize this meeting recording.
+
+The transcript is NOT speaker-diarized — speaker labels were not provided. Reconstruct who said what from contextual cues: self-introductions ("Hi, I'm Alex"), names addressed in dialogue ("Stefan, was meinst du?"), topic ownership, and turn-taking patterns. When a real name is clearly attributable, use it. When you can tell speakers apart but can't identify them by name, use generic labels ("Speaker A", "Speaker B", "Sprecher A", "Sprecher B" — match the transcript's language). When you cannot reliably separate speakers, omit the attribution rather than guess.
 
 Respond in the following JSON format (no markdown, no code fences):
 {
-  "summary": "A structured summary of the meeting including attendees and decisions",
-  "keyPoints": ["decision 1", "decision 2", "key discussion point"],
-  "actionItems": ["action item with owner if mentioned", "follow-up task"]
+  "summary": "Start with a one-line 'Participants:' / 'Teilnehmer:' header (match the transcript's language) listing every speaker you identified, then a structured prose summary. Attribute statements to speakers inline (e.g. 'Stefan raised the IT-security topic; Ben proposed an audit'). Cover decisions made and the overall arc of the discussion.",
+  "keyPoints": ["decision or major point 1 (with attributed speaker if clear)", "decision 2"],
+  "actionItems": ["action item — owner if mentioned", "follow-up task — owner if mentioned"]
 }
 
-If there are no key points or action items, return empty arrays.
+If there are no key points or action items, return empty arrays for those fields.
 
 Transcription:
 {transcription}`,
@@ -183,14 +197,40 @@ export function normalizeAiOutputLanguage(value: unknown): string | null {
     return LANGUAGE_CODES.has(value) ? value : null;
 }
 
-/** Directive sentence for the model; null for `auto`/missing/unknown. */
+/**
+ * Directive sentence for the model. Three branches:
+ *
+ *   - explicit non-auto code → "Write everything in <Label>".
+ *   - `auto` (or unset) AND we know the transcript's detected language →
+ *     "Write everything in <Label of detected>". Matches the user's
+ *     mental model of "Auto = match transcript", which the previous
+ *     implementation broke: a null directive let the model fall back
+ *     on the prompt template's English context and produce English
+ *     summaries for German transcripts.
+ *   - `auto` AND no detected language hint → soft instruction asking
+ *     the model to mirror the transcript's language itself. This is
+ *     the path for legacy rows without `detected_language` populated
+ *     and for transcription providers that don't return a language
+ *     code.
+ */
 export function getAiOutputLanguageDirective(
     code: string | null | undefined,
+    transcriptLanguage?: string | null,
 ): string | null {
-    if (!code || code === "auto") return null;
-    const match = AI_OUTPUT_LANGUAGES.find((l) => l.code === code);
-    if (!match) return null;
-    return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
+    if (code && code !== "auto") {
+        const match = AI_OUTPUT_LANGUAGES.find((l) => l.code === code);
+        if (!match) return null;
+        return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
+    }
+    if (transcriptLanguage) {
+        const match = AI_OUTPUT_LANGUAGES.find(
+            (l) => l.code === transcriptLanguage,
+        );
+        if (match) {
+            return `IMPORTANT: Write all natural-language output in ${match.label} (matching the transcription's detected language). Keep any JSON keys in English exactly as specified.`;
+        }
+    }
+    return "IMPORTANT: Write all natural-language output in the same language as the transcription. Keep any JSON keys in English exactly as specified.";
 }
 
 export function getSummaryPromptById(

@@ -58,6 +58,19 @@ export async function consumeRateLimitBucket(
     { limit, windowMs, now = new Date() }: RateLimitConfig,
 ): Promise<RateLimitResult> {
     const resetAt = new Date(now.getTime() + windowMs);
+    // Drizzle serializes `Date` correctly when it's set as a column value
+    // (the `values({...})` and the `updatedAt:` line below both work). But
+    // a `Date` interpolated inside a `sql<>` template literal goes through
+    // a different path that ends up calling `Date.prototype.toString()` —
+    // postgres-js then chokes with
+    //   ERR_INVALID_ARG_TYPE: The "string" argument must be of type string
+    //   or an instance of Buffer or ArrayBuffer. Received an instance of Date
+    // and every `/api/v1/*` request fails with 500 the moment a row needs
+    // to be UPDATED (i.e. the second hit, or any hit after the previous
+    // window expired). Pre-stringify to ISO so the binding is a plain
+    // string — postgres accepts that for `timestamp` columns.
+    const nowIso = now.toISOString();
+    const resetAtIso = resetAt.toISOString();
     const [bucket] = await db
         .insert(apiRateLimitBuckets)
         .values({
@@ -70,8 +83,8 @@ export async function consumeRateLimitBucket(
         .onConflictDoUpdate({
             target: apiRateLimitBuckets.key,
             set: {
-                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
-                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then ${resetAt} else ${apiRateLimitBuckets.resetAt} end`,
+                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
+                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso} then ${resetAtIso} else ${apiRateLimitBuckets.resetAt} end`,
                 updatedAt: now,
             },
         })

@@ -38,6 +38,8 @@ export type V1Summary = {
 export type V1Recording = {
     id: string;
     title: string;
+    external_id: string | null;
+    context: string | null;
     created_at: string;
     updated_at: string;
     recorded_at: string;
@@ -50,12 +52,37 @@ export type V1Recording = {
     } | null;
     has_transcription: boolean;
     has_summary: boolean;
+    /**
+     * True while a `transcribeRecording` worker holds an active claim on
+     * this row. Lets the dashboard show a persistent "Transcribing..."
+     * chip across browser reloads — without this the chip only existed
+     * as client React state and was lost on reload, which is why users
+     * could trigger duplicate runs by clicking again. Derived from
+     * `recordings.transcribing_started_at` + stale-timeout.
+     */
+    transcription_in_progress: boolean;
+    /**
+     * Latest segment-end-seconds reported by the provider's streaming
+     * response (Speaches/Whisper emits one SSE event per segment).
+     * `null` when no run is in progress or when the provider didn't
+     * stream incremental events. The dashboard divides this by
+     * `duration_ms / 1000` to render a real progress bar.
+     */
+    transcription_progress_seconds: number | null;
     links: {
         self: string;
         transcript: string;
         audio: string;
     };
 };
+
+/**
+ * Mirrors `TRANSCRIPTION_STALE_TIMEOUT_MS` in `transcribe-recording.ts`.
+ * Defined here as well (rather than imported) because the serializer
+ * runs in contexts that should not pull in the OpenAI SDK and storage
+ * drivers transitively from the worker module. Keep these two in sync.
+ */
+const TRANSCRIPTION_STALE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
 export type V1RecordingDetail = V1Recording & {
     transcript: V1Transcript | null;
@@ -146,9 +173,17 @@ export function serializeRecording(
 ): V1Recording {
     const self = `/api/v1/recordings/${recording.id}`;
 
+    const claimAt = recording.transcribingStartedAt;
+    const transcriptionInProgress = Boolean(
+        claimAt &&
+            Date.now() - claimAt.getTime() < TRANSCRIPTION_STALE_TIMEOUT_MS,
+    );
+
     return {
         id: recording.id,
         title: decryptText(recording.filename),
+        external_id: recording.externalId ?? null,
+        context: recording.context ? decryptText(recording.context) : null,
         created_at: toIso(recording.createdAt),
         updated_at: toIso(recording.updatedAt),
         recorded_at: toIso(recording.startTime),
@@ -163,6 +198,14 @@ export function serializeRecording(
             : null,
         has_transcription: Boolean(transcription),
         has_summary: Boolean(enhancement),
+        transcription_in_progress: transcriptionInProgress,
+        // Only surface progress while a claim is fresh. A leftover
+        // value from a previous run that never got cleaned up (e.g.
+        // app killed mid-write of the release) would otherwise stick
+        // to the row and confuse the UI.
+        transcription_progress_seconds: transcriptionInProgress
+            ? (recording.transcriptionProgressSeconds ?? null)
+            : null,
         links: {
             self,
             transcript: `${self}/transcript`,

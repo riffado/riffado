@@ -43,8 +43,9 @@ export function buildTranscriptionParams(args: {
     model: string;
     responseFormat: ResponseFormat;
     language?: string;
+    prompt?: string;
 }): TranscriptionCreateParamsNonStreaming {
-    const { file, model, responseFormat, language } = args;
+    const { file, model, responseFormat, language, prompt } = args;
     return {
         file,
         model,
@@ -53,5 +54,6 @@ export function buildTranscriptionParams(args: {
             ? { chunking_strategy: "auto" as const }
             : {}),
         ...(language ? { language } : {}),
+        ...(prompt ? { prompt } : {}),
     };
 }

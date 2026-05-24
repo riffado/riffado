@@ -1,6 +1,8 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { RecordingContextEditor } from "@/components/dashboard/recording-context-editor";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,14 @@ interface Props {
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
     scrubberStyle: "waveform" | "slider" | undefined;
+    /**
+     * Bubbled up from the progress poll inside TranscriptionPanel when
+     * it observes that a server-side transcribe (one not started in
+     * this React tree) finished. Parent calls `refresh()` so the
+     * in-progress flag flips off and the panel switches to rendering
+     * the transcript.
+     */
+    onServerTranscribeComplete?: () => void;
 }
 
 /**
@@ -52,7 +62,9 @@ export function WorkstationDetailPane({
     initialVolume,
     initialAutoPlayNext,
     scrubberStyle,
+    onServerTranscribeComplete,
 }: Props) {
+    const t = useTranslations("dashboard");
     return (
         <div
             className={cn(
@@ -73,7 +85,7 @@ export function WorkstationDetailPane({
                 className="-ml-2 h-9 gap-1 px-2 lg:hidden"
             >
                 <ArrowLeft className="size-4" />
-                Back to recordings
+                {t("backToRecordings")}
             </Button>
             {currentRecording ? (
                 <>
@@ -97,18 +109,25 @@ export function WorkstationDetailPane({
                             }
                         }}
                     />
+                    <RecordingContextEditor
+                        key={currentRecording.id}
+                        recordingId={currentRecording.id}
+                        initialContext={currentRecording.context ?? null}
+                        onSaved={onServerTranscribeComplete}
+                    />
                     <TranscriptionPanel
                         recording={currentRecording}
                         transcription={currentTranscription}
                         isTranscribing={isCurrentTranscribing}
                         onTranscribe={onTranscribe}
+                        onServerTranscribeComplete={onServerTranscribeComplete}
                     />
                 </>
             ) : (
                 <Card>
                     <CardContent className="py-16 text-center">
                         <p className="text-muted-foreground">
-                            Select a recording to view details and transcription
+                            {t("selectRecordingHint")}
                         </p>
                     </CardContent>
                 </Card>

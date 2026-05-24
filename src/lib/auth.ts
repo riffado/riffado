@@ -1,7 +1,9 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { APIError } from "better-auth/api";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { isEmailDomainAllowed } from "./email-domain";
 import { env } from "./env";
 import { sendPasswordResetEmail } from "./notifications/email";
 
@@ -35,6 +37,28 @@ export const auth = betterAuth({
     },
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.APP_URL,
+    // Email-domain allowlist for sign-up. Fires before the user row is
+    // written, regardless of which sign-up path triggered it (email/password
+    // today, OAuth later) -- ALLOWED_EMAIL_DOMAINS is the security boundary,
+    // any client hint on /register is UX only. Empty list = no restriction.
+    databaseHooks: {
+        user: {
+            create: {
+                before: async (user) => {
+                    if (env.ALLOWED_EMAIL_DOMAINS.length === 0) return;
+                    const email =
+                        typeof user.email === "string" ? user.email : "";
+                    if (
+                        !isEmailDomainAllowed(email, env.ALLOWED_EMAIL_DOMAINS)
+                    ) {
+                        throw new APIError("BAD_REQUEST", {
+                            message: `Sign-up is restricted to: ${env.ALLOWED_EMAIL_DOMAINS.join(", ")}`,
+                        });
+                    }
+                },
+            },
+        },
+    },
 });
 
 export type Session = typeof auth.$Infer.Session;
