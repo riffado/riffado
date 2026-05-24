@@ -491,6 +491,28 @@ MR-2026-05-24-001
 Return the stable recording shape plus inline `transcript` and `summary`
 objects when present.
 
+#### PATCH `/v1/recordings/[id]`
+
+Update mutable fields on a recording. Bearer-auth, v1 rate-limit.
+
+**Request body** (JSON; either or both keys must be present):
+
+- `context` — string or `null`. Same semantics as the POST field
+  (max 4000 chars, encrypted at rest, fed to Whisper + summary).
+- `external_id` — string or `null`. Sets/clears the correlation
+  handle that round-trips into every webhook. Unique per user
+  (partial index on `(user_id, external_id)` where not null);
+  trying to attach an `external_id` already in use on another of
+  the caller's recordings returns `409`. Useful for the pull-import
+  flow where the caller has only the OpenPlaud `id` at first and
+  wants to attach its own correlation handle after the fact.
+
+Omitting both keys is a `400 Nothing to update`. Passing `null`
+clears the field; passing a string sets it (whitespace-trimmed, an
+all-whitespace string also clears).
+
+Response: the full v1 recording detail shape (same as `GET`).
+
 #### GET `/v1/recordings/[id]/transcript`
 
 Return transcript text and provider metadata, or `404` when the recording has
