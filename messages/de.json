@@ -201,7 +201,14 @@
             "url": "URL",
             "events": "Events",
             "saveSecretHint": "Jetzt kopieren — er wird nicht mehr angezeigt.",
-            "savedAcknowledge": "Gespeichert"
+            "savedAcknowledge": "Gespeichert",
+            "deleteConfirmTitle": "Diesen Webhook löschen?",
+            "deleteConfirmBody": "Zustellungen werden sofort gestoppt. Du musst den Endpoint neu anlegen und sein Signing-Secret erneut mit den Konsumenten teilen.",
+            "deletedToast": "Webhook gelöscht",
+            "deleteFailed": "Webhook konnte nicht gelöscht werden",
+            "loadFailed": "Webhooks konnten nicht geladen werden",
+            "editWebhook": "Webhook bearbeiten",
+            "deleteWebhook": "Webhook löschen"
         }
     },
     "errors": {

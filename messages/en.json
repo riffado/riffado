@@ -201,7 +201,14 @@
             "url": "URL",
             "events": "Events",
             "saveSecretHint": "Copy now — it won't be shown again.",
-            "savedAcknowledge": "Saved"
+            "savedAcknowledge": "Saved",
+            "deleteConfirmTitle": "Delete this webhook?",
+            "deleteConfirmBody": "Deliveries will stop immediately. You'll have to recreate the endpoint and re-share its signing secret with any consumers.",
+            "deletedToast": "Webhook deleted",
+            "deleteFailed": "Failed to delete webhook",
+            "loadFailed": "Failed to load webhooks",
+            "editWebhook": "Edit webhook",
+            "deleteWebhook": "Delete webhook"
         }
     },
     "errors": {

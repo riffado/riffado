@@ -1,6 +1,7 @@
 "use client";
 
 import { Pencil, Plus, Trash2, Webhook } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -15,6 +16,8 @@ import {
 } from "./webhook-types";
 
 export function WebhooksSection() {
+    const t = useTranslations("settings.webhooks");
+    const tCommon = useTranslations("common");
     const confirm = useConfirm();
     const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
     const [events, setEvents] = useState<string[]>(DEFAULT_WEBHOOK_EVENTS);
@@ -36,11 +39,11 @@ export function WebhooksSection() {
             setWebhooks(data.webhooks);
             setEvents(data.events);
         } catch {
-            toast.error("Failed to load webhooks");
+            toast.error(t("loadFailed"));
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         refreshWebhooks();
@@ -53,11 +56,10 @@ export function WebhooksSection() {
 
     const handleDelete = (webhookId: string) => {
         void confirm({
-            title: "Delete this webhook?",
-            description:
-                "Deliveries will stop immediately. You'll have to recreate the endpoint and re-share its signing secret with any consumers.",
-            confirmLabel: "Delete",
-            pendingLabel: "Deleting…",
+            title: t("deleteConfirmTitle"),
+            description: t("deleteConfirmBody"),
+            confirmLabel: tCommon("delete"),
+            pendingLabel: tCommon("deleting"),
             destructive: true,
             onConfirm: async () => {
                 const response = await fetch(
@@ -65,23 +67,23 @@ export function WebhooksSection() {
                     { method: "DELETE" },
                 );
                 if (!response.ok) throw new Error("Failed to delete webhook");
-                toast.success("Webhook deleted");
+                toast.success(t("deletedToast"));
                 await refreshWebhooks();
             },
-            errorMessage: "Failed to delete webhook",
+            errorMessage: t("deleteFailed"),
         });
     };
 
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Webhooks"
-                description="Outbound HTTP notifications for recording, transcript, and summary events."
+                title={t("title")}
+                description={t("description")}
                 icon={Webhook}
                 action={
                     <Button size="sm" onClick={() => openEditor(null)}>
                         <Plus className="size-4" />
-                        Add Webhook
+                        {t("addWebhook")}
                     </Button>
                 }
             />
@@ -93,10 +95,12 @@ export function WebhooksSection() {
             ) : webhooks.length === 0 ? (
                 <div className="text-center py-12 border rounded-lg">
                     <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No webhooks</h3>
+                    <h3 className="font-semibold mb-2">
+                        {t("noWebhooksTitle")}
+                    </h3>
                     <Button size="sm" onClick={() => openEditor(null)}>
                         <Plus className="size-4" />
-                        Add Webhook
+                        {t("addWebhook")}
                     </Button>
                 </div>
             ) : (
@@ -128,7 +132,7 @@ export function WebhooksSection() {
                             onClick={() => openEditor(null)}
                         >
                             <Plus className="size-4" />
-                            Add Webhook
+                            {t("addWebhook")}
                         </Button>
                     </div>
                 </div>
@@ -165,6 +169,7 @@ function WebhookRow({
     onDelete: (webhookId: string) => void;
     onShowDeliveries: (webhook: WebhookEndpoint) => void;
 }) {
+    const t = useTranslations("settings.webhooks");
     return (
         <div className="space-y-3 rounded-lg border p-4">
             <div className="space-y-3">
@@ -180,7 +185,7 @@ function WebhookRow({
                                     : "text-muted-foreground"
                             }`}
                         >
-                            {webhook.enabled ? "Enabled" : "Disabled"}
+                            {webhook.enabled ? t("enabled") : t("disabled")}
                         </span>
                         {webhook.lastDeliveryStatus && (
                             <span className="rounded border px-2 py-0.5 text-xs">
@@ -202,8 +207,13 @@ function WebhookRow({
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Last delivery:{" "}
-                        {formatWebhookDate(webhook.lastDeliveryAt)}
+                        {webhook.lastDeliveryAt
+                            ? t("lastDelivery", {
+                                  time: formatWebhookDate(
+                                      webhook.lastDeliveryAt,
+                                  ),
+                              })
+                            : t("lastDeliveryNever")}
                     </p>
                 </div>
                 {/*
@@ -223,13 +233,13 @@ function WebhookRow({
                         size="sm"
                         onClick={() => onShowDeliveries(webhook)}
                     >
-                        Deliveries
+                        {t("deliveries")}
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
                         onClick={() => onEdit(webhook)}
-                        aria-label="Edit webhook"
+                        aria-label={t("editWebhook")}
                     >
                         <Pencil className="size-4" />
                     </Button>
@@ -237,7 +247,7 @@ function WebhookRow({
                         variant="outline"
                         size="icon"
                         onClick={() => onDelete(webhook.id)}
-                        aria-label="Delete webhook"
+                        aria-label={t("deleteWebhook")}
                     >
                         <Trash2 className="size-4 text-destructive" />
                     </Button>
