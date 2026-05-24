@@ -123,9 +123,17 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
     const { id } = await (context as IdContext).params;
 
-    const body = (await request.json().catch(() => ({}))) as {
-        context?: string | null;
-    };
+    // `request.json()` happily resolves to the JSON literal `null`
+    // (i.e. a body that's just `null`) without throwing — only invalid
+    // JSON hits the catch. `Object.hasOwn(null, ...)` then throws
+    // TypeError and a malformed request leaks out as a 500. Normalize
+    // any non-plain-object body to an empty object so the "nothing to
+    // update" guard below answers the question correctly with a 400.
+    const rawBody = (await request.json().catch(() => ({}))) as unknown;
+    const body: { context?: string | null } =
+        rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+            ? (rawBody as { context?: string | null })
+            : {};
 
     if (!Object.hasOwn(body, "context")) {
         throw new AppError(

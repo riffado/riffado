@@ -68,9 +68,15 @@ export const PATCH = apiHandler<IdContext>(async (request, ctx) => {
     if (authLimitResponse) return authLimitResponse;
 
     const { id } = await (ctx as IdContext).params;
-    const body = (await request.json().catch(() => ({}))) as {
-        context?: string | null;
-    };
+    // `request.json()` resolves the JSON literal `null` to JS null
+    // without throwing; only invalid JSON hits the catch. Without this
+    // normalization, `Object.hasOwn(null, ...)` below throws TypeError
+    // and a malformed body leaks as a 500 instead of the intended 400.
+    const rawBody = (await request.json().catch(() => ({}))) as unknown;
+    const body: { context?: string | null } =
+        rawBody && typeof rawBody === "object" && !Array.isArray(rawBody)
+            ? (rawBody as { context?: string | null })
+            : {};
 
     if (!Object.hasOwn(body, "context")) {
         throw new AppError(
