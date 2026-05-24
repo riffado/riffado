@@ -244,6 +244,19 @@ export async function transcribeRecording(
             baseURL: credentials.baseUrl || undefined,
         });
 
+        // Decrypt the caller-supplied context, if any. Whisper's
+        // `prompt` field has a hard ~244-token budget upstream; longer
+        // primers are silently truncated. ~900 characters is a safe
+        // proxy in mixed-script text. The full context (untruncated)
+        // is reused later by the summary worker — we only trim for the
+        // acoustic-priming pass.
+        const recordingContext = recording.context
+            ? decryptText(recording.context)
+            : null;
+        const whisperPrompt = recordingContext
+            ? recordingContext.slice(0, 900)
+            : undefined;
+
         const storage = await createUserStorageProvider(userId);
         const audioBuffer = await storage.downloadFile(recording.storagePath);
 
@@ -294,6 +307,7 @@ export async function transcribeRecording(
                     apiKey,
                     model,
                     language: defaultLanguage,
+                    prompt: whisperPrompt,
                     file: audioFile,
                     onProgress: async (seconds) => {
                         // Only update if WE still own the claim. Same
@@ -326,6 +340,7 @@ export async function transcribeRecording(
                         model,
                         responseFormat,
                         language: defaultLanguage,
+                        prompt: whisperPrompt,
                     }),
                 );
                 const parsed = parseTranscriptionResponse(

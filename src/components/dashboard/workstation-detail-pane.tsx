@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { RecordingContextEditor } from "@/components/dashboard/recording-context-editor";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
@@ -107,6 +108,12 @@ export function WorkstationDetailPane({
                                 );
                             }
                         }}
+                    />
+                    <RecordingContextEditor
+                        key={currentRecording.id}
+                        recordingId={currentRecording.id}
+                        initialContext={currentRecording.context ?? null}
+                        onSaved={onServerTranscribeComplete}
                     />
                     <TranscriptionPanel
                         recording={currentRecording}

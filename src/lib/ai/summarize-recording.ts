@@ -213,9 +213,26 @@ export async function summarizeRecording(
 
         const baseSystem =
             "You are a helpful assistant that summarizes audio transcriptions. Always respond with valid JSON only, no markdown formatting or code fences.";
-        const systemContent = languageDirective
-            ? `${baseSystem} ${languageDirective}`
-            : baseSystem;
+        // Caller-supplied context (participant names, customer, project,
+        // domain vocabulary) was stored encrypted at upload time.
+        // Prepended to the system message rather than embedded in the
+        // user prompt so the prompt-template's `{transcription}`
+        // contract stays clean and the context isn't accidentally
+        // truncated when the transcript itself is long. Models tend to
+        // honor system-level grounding more strictly than mid-prompt
+        // hints, and putting names here means even prompts that don't
+        // mention speaker attribution still benefit (Whisper might
+        // mishear "Eibach"; the system message anchors the right
+        // spelling for downstream extraction).
+        const contextText = recording.context
+            ? decryptText(recording.context)
+            : null;
+        const contextDirective = contextText
+            ? `Context provided by the caller about this recording (use it when interpreting and attributing the transcript — do not invent details that go beyond what's stated here or what's in the transcript): ${contextText}`
+            : null;
+        const systemContent = [baseSystem, languageDirective, contextDirective]
+            .filter((s): s is string => Boolean(s))
+            .join(" ");
 
         const response = await openai.chat.completions.create({
             model,

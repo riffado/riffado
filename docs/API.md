@@ -447,6 +447,17 @@ browser session.
   via the `transcription.completed` webhook. Pass `"false"` to defer —
   the row is created and the audio is stored, but no transcribe is
   triggered until you call `POST /api/recordings/[id]/transcribe`.
+- `context` (optional, max 4000 chars) — free-text context the AI
+  tasks should ground on: participant names, customer / project,
+  meeting type, domain vocabulary. Two downstream consumers:
+  Whisper receives the first ~900 chars as a priming `prompt` (helps
+  acoustic recognition of proper nouns and jargon the model would
+  otherwise mishear), and the summary worker prepends the full
+  context to its system message so speaker attribution lands on
+  real names instead of "Speaker A / B". Encrypted at rest. Editable
+  after upload via `PATCH /api/recordings/[id]`. Auto-summary
+  picks up changes only on the next transcribe run, so re-transcribe
+  after editing if you want the new context to flow through.
 
 **Response:** the stable v1 recording shape from `GET /v1/recordings`,
 with:

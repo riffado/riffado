@@ -29,6 +29,8 @@ import {
     serializeRecording,
 } from "@/lib/v1/serialize";
 
+const CONTEXT_MAX_LEN = 4000;
+
 const ACCEPTED_UPLOAD_EXTENSIONS = new Set([
     ".mp3",
     ".mp4",
@@ -315,6 +317,28 @@ export const POST = apiHandler(async (request: Request) => {
     const autoTranscribeRaw = readMultipartField(formData, "auto_transcribe");
     const autoTranscribe = autoTranscribeRaw !== "false";
 
+    // Free-text context the caller supplies up front so the AI tasks
+    // don't have to guess. Two consumers downstream:
+    //   - Whisper's `prompt` field (truncated to its 244-token budget)
+    //     gets a primer that contains names + jargon, dramatically
+    //     improving acoustic recognition of proper nouns ("Eibach",
+    //     not "Eich-Bach"; "Lexware", not "Lexwerb").
+    //   - The summary system message prepends the context so speaker
+    //     attribution and customer/project framing aren't reverse-
+    //     engineered from dialogue cues alone.
+    // 4000 chars is generous — plenty for a participant list, the
+    // customer name, and a paragraph of context — but capped so the
+    // column doesn't grow unboundedly via abuse.
+    const contextField = readMultipartField(formData, "context");
+    if (contextField && contextField.length > CONTEXT_MAX_LEN) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `context must be ${CONTEXT_MAX_LEN} characters or fewer`,
+            400,
+            { field: "context" },
+        );
+    }
+
     // Idempotency short-circuit — same caller retrying the same upload
     // (e.g. our webhook receiver retrying after a network blip) should
     // map to the same row, not a duplicate. We do this BEFORE reading
@@ -388,6 +412,7 @@ export const POST = apiHandler(async (request: Request) => {
                 plaudVersion: "1",
                 isTrash: false,
                 externalId: externalId ?? null,
+                context: contextField ? encryptText(contextField) : null,
             })
             .returning();
 

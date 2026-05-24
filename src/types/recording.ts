@@ -4,7 +4,15 @@ import type { recordings } from "@/db/schema";
 export type RecordingQueryResult = Pick<
     InferSelectModel<typeof recordings>,
     "id" | "filename" | "duration" | "startTime" | "filesize" | "deviceSn"
->;
+> & {
+    /**
+     * Decrypted free-text context the caller (or the user via the
+     * GUI editor) attached to this recording. Plain-string here
+     * because the encryption boundary lives in the loader; the
+     * dashboard treats it as opaque text. Null when none was set.
+     */
+    context?: string | null;
+};
 
 export type Recording = Omit<RecordingQueryResult, "startTime"> & {
     startTime: string;

@@ -183,6 +183,13 @@
       "when": 1779590617572,
       "tag": "0025_square_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779993600000,
+      "tag": "0026_add_recording_context",
+      "breakpoints": true
     }
   ]
 }

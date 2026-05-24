@@ -65,6 +65,15 @@ export interface StreamTranscribeArgs {
     model: string;
     /** Optional ISO 639-1 language hint (passed as `language`). */
     language?: string;
+    /**
+     * Optional priming text sent as Whisper's `prompt` form field.
+     * Caps out around 244 tokens upstream (faster-whisper truncates
+     * silently past that), so the caller should hand in names +
+     * jargon and skip prose context. Helps acoustic recognition of
+     * proper nouns and domain vocabulary the model would otherwise
+     * mishear.
+     */
+    prompt?: string;
     /** Audio bytes. */
     file: File;
     /**
@@ -107,6 +116,7 @@ export async function streamTranscribe(
     form.append("response_format", "verbose_json");
     form.append("stream", "true");
     if (args.language) form.append("language", args.language);
+    if (args.prompt) form.append("prompt", args.prompt);
     // Two faster-whisper params that mitigate the classic "Whisper got
     // stuck and emitted the same sentence 300 times" failure on quiet
     // or noisy audio:

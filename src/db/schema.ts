@@ -248,6 +248,21 @@ export const recordings = pgTable(
         // users. Unique per (user_id, external_id) when set, so a retry
         // with the same external_id is idempotent.
         externalId: text("external_id"),
+        // Caller-supplied context for AI tasks (transcription + summary):
+        // participant names, customer / project, meeting type, vocabulary
+        // the model would otherwise mis-hear ("Eibach" vs "Eich-Bach",
+        // proper nouns, internal jargon). Free-text on purpose — the
+        // shape varies by caller and the LLM handles arbitrary prose
+        // better than rigid JSON. Encrypted at rest because it can carry
+        // PII (participant names). Surfaced to:
+        //   - faster-whisper's `prompt` field (priming text, ~244 token
+        //     budget — we truncate) for better acoustic recognition of
+        //     names and jargon
+        //   - the summary system message, so attribution doesn't have
+        //     to be inferred from dialogue cues alone
+        // Nullable; absence means the LLM falls back to context-only
+        // inference as before.
+        context: text("context"),
         // Progress marker for the in-flight transcription, in seconds of
         // audio. Updated by the worker as Speaches/Whisper streams back
         // per-segment events (`stream=true`). Nullable; reset to null

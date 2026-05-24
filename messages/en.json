@@ -122,6 +122,16 @@
         "generateWaveformTooltip": "Decode waveform in your browser (may take a few seconds)",
         "retryWaveform": "Retry waveform"
     },
+    "recordingContext": {
+        "title": "Context for AI",
+        "addButton": "Add",
+        "emptyHint": "No context provided. The AI will infer participants, customer, and jargon from the audio alone.",
+        "placeholder": "Participants: Alex (Sales), Carol (Customer at Acme). Topic: Q3 renewal negotiation. Vocabulary: \"Lexware\", \"Eibach\" (German company name).",
+        "helpText": "Helps Whisper recognize names and jargon correctly, and gives the summary speaker-attribution real names instead of \"Speaker A / B\".",
+        "saved": "Context saved",
+        "saveFailed": "Failed to save context",
+        "tooLong": "Context must be {max} characters or fewer"
+    },
     "transcription": {
         "title": "Transcription",
         "transcribe": "Transcribe",

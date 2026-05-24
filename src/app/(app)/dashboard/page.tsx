@@ -29,6 +29,7 @@ export default async function DashboardPage() {
             transcribingStartedAt: recordings.transcribingStartedAt,
             transcriptionProgressSeconds:
                 recordings.transcriptionProgressSeconds,
+            context: recordings.context,
         })
         .from(recordings)
         .where(
@@ -79,6 +80,7 @@ export default async function DashboardPage() {
             waveformPeaks,
             transcribingStartedAt,
             transcriptionProgressSeconds,
+            context,
             ...r
         }) => {
             const transcriptionInProgress = Boolean(
@@ -87,7 +89,11 @@ export default async function DashboardPage() {
                         TRANSCRIPTION_STALE_TIMEOUT_MS,
             );
             return serializeRecording(
-                { ...r, filename: decryptText(r.filename) },
+                {
+                    ...r,
+                    filename: decryptText(r.filename),
+                    context: context ? decryptText(context) : null,
+                },
                 {
                     hasTranscript: transcriptIds.has(r.id),
                     hasSummary: summaryIds.has(r.id),

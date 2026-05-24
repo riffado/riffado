@@ -39,6 +39,7 @@ export type V1Recording = {
     id: string;
     title: string;
     external_id: string | null;
+    context: string | null;
     created_at: string;
     updated_at: string;
     recorded_at: string;
@@ -182,6 +183,7 @@ export function serializeRecording(
         id: recording.id,
         title: decryptText(recording.filename),
         external_id: recording.externalId ?? null,
+        context: recording.context ? decryptText(recording.context) : null,
         created_at: toIso(recording.createdAt),
         updated_at: toIso(recording.updatedAt),
         recorded_at: toIso(recording.startTime),

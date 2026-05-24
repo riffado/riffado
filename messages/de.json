@@ -122,6 +122,16 @@
         "generateWaveformTooltip": "Waveform im Browser dekodieren (kann ein paar Sekunden dauern)",
         "retryWaveform": "Waveform erneut versuchen"
     },
+    "recordingContext": {
+        "title": "Kontext für die KI",
+        "addButton": "Hinzufügen",
+        "emptyHint": "Kein Kontext hinterlegt. Die KI wird Teilnehmer, Kunde und Fachbegriffe aus dem Audio allein erschließen.",
+        "placeholder": "Teilnehmer: Stefan (Geschäftsführer), Ben (IT). Thema: IT-Sicherheits-Audit. Begriffe: \"Eibach\" (Kundenname), \"Lexware\" (Abrechnungs-Portal).",
+        "helpText": "Hilft Whisper Namen und Fachbegriffe korrekt zu erkennen, und gibt der Zusammenfassung echte Namen statt \"Sprecher A / B\".",
+        "saved": "Kontext gespeichert",
+        "saveFailed": "Speichern fehlgeschlagen",
+        "tooLong": "Kontext darf maximal {max} Zeichen enthalten"
+    },
     "transcription": {
         "title": "Transkription",
         "transcribe": "Transkribieren",
