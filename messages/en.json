@@ -87,13 +87,32 @@
         "searchPlaceholder": "Search recordings, transcripts…",
         "recordingCount": "{count, plural, =0 {No recordings} =1 {1 recording} other {# recordings}}",
         "countOf": "{count} of {total} recordings",
-        "today": "TODAY",
-        "yesterday": "YESTERDAY",
-        "thisWeek": "THIS WEEK",
-        "older": "OLDER",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This week",
+        "older": "Older",
+        "earlierThisMonth": "Earlier this month",
         "noRecordingsTitle": "No recordings yet",
         "noRecordingsBody": "Upload an audio file or connect your Plaud device to get started.",
-        "playbackError": "Failed to play audio"
+        "emptyStateBody": "Sync your Plaud device to import your recordings and start transcribing them.",
+        "syncDevice": "Sync Device",
+        "syncing": "Syncing…",
+        "playbackError": "Failed to play audio",
+        "list": {
+            "searchPlaceholder": "Search recordings, transcripts…",
+            "searchLabel": "Search recordings",
+            "clearSearch": "Clear search",
+            "matchingSuffix": " matching",
+            "ofCount": "{filtered}{matchingSuffix} of {total} {recordingLabel}",
+            "recordingsLabel": "{count, plural, =1 {recording} other {recordings}}",
+            "sort": "Sort",
+            "sortBy": "Sort by",
+            "newestFirst": "Newest first",
+            "oldestFirst": "Oldest first",
+            "byName": "Name",
+            "density": "Density",
+            "compactDensity": "Compact"
+        }
     },
     "transcription": {
         "title": "Transcription",
@@ -182,7 +201,14 @@
             "url": "URL",
             "events": "Events",
             "saveSecretHint": "Copy now — it won't be shown again.",
-            "savedAcknowledge": "Saved"
+            "savedAcknowledge": "Saved",
+            "deleteConfirmTitle": "Delete this webhook?",
+            "deleteConfirmBody": "Deliveries will stop immediately. You'll have to recreate the endpoint and re-share its signing secret with any consumers.",
+            "deletedToast": "Webhook deleted",
+            "deleteFailed": "Failed to delete webhook",
+            "loadFailed": "Failed to load webhooks",
+            "editWebhook": "Edit webhook",
+            "deleteWebhook": "Delete webhook"
         }
     },
     "errors": {

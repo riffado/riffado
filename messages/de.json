@@ -87,13 +87,32 @@
         "searchPlaceholder": "Aufnahmen, Transkripte durchsuchen…",
         "recordingCount": "{count, plural, =0 {Keine Aufnahmen} =1 {1 Aufnahme} other {# Aufnahmen}}",
         "countOf": "{count} von {total} Aufnahmen",
-        "today": "HEUTE",
-        "yesterday": "GESTERN",
-        "thisWeek": "DIESE WOCHE",
-        "older": "ÄLTER",
+        "today": "Heute",
+        "yesterday": "Gestern",
+        "thisWeek": "Diese Woche",
+        "older": "Älter",
+        "earlierThisMonth": "Früher diesen Monat",
         "noRecordingsTitle": "Noch keine Aufnahmen",
         "noRecordingsBody": "Lade eine Audiodatei hoch oder verbinde dein Plaud-Gerät, um loszulegen.",
-        "playbackError": "Wiedergabe fehlgeschlagen"
+        "emptyStateBody": "Synchronisiere dein Plaud-Gerät, um Aufnahmen zu importieren und sie zu transkribieren.",
+        "syncDevice": "Gerät synchronisieren",
+        "syncing": "Synchronisiere…",
+        "playbackError": "Wiedergabe fehlgeschlagen",
+        "list": {
+            "searchPlaceholder": "Aufnahmen, Transkripte durchsuchen…",
+            "searchLabel": "Aufnahmen durchsuchen",
+            "clearSearch": "Suche leeren",
+            "matchingSuffix": " Treffer",
+            "ofCount": "{filtered}{matchingSuffix} von {total} {recordingLabel}",
+            "recordingsLabel": "{count, plural, =1 {Aufnahme} other {Aufnahmen}}",
+            "sort": "Sortierung",
+            "sortBy": "Sortieren nach",
+            "newestFirst": "Neueste zuerst",
+            "oldestFirst": "Älteste zuerst",
+            "byName": "Name",
+            "density": "Dichte",
+            "compactDensity": "Kompakt"
+        }
     },
     "transcription": {
         "title": "Transkription",
@@ -182,7 +201,14 @@
             "url": "URL",
             "events": "Events",
             "saveSecretHint": "Jetzt kopieren — er wird nicht mehr angezeigt.",
-            "savedAcknowledge": "Gespeichert"
+            "savedAcknowledge": "Gespeichert",
+            "deleteConfirmTitle": "Diesen Webhook löschen?",
+            "deleteConfirmBody": "Zustellungen werden sofort gestoppt. Du musst den Endpoint neu anlegen und sein Signing-Secret erneut mit den Konsumenten teilen.",
+            "deletedToast": "Webhook gelöscht",
+            "deleteFailed": "Webhook konnte nicht gelöscht werden",
+            "loadFailed": "Webhooks konnten nicht geladen werden",
+            "editWebhook": "Webhook bearbeiten",
+            "deleteWebhook": "Webhook löschen"
         }
     },
     "errors": {

@@ -1,6 +1,7 @@
 "use client";
 
 import { Mic } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type * as React from "react";
 import {
     useCallback,
@@ -21,7 +22,7 @@ import {
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
 import { Card, CardContent } from "@/components/ui/card";
-import { dateGroupLabel } from "@/lib/format-date";
+import { type DateGroup, dateGroup } from "@/lib/format-date";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
@@ -79,6 +80,29 @@ function transcriptSnippet(
     return `${stripped.slice(0, maxChars - 1).trimEnd()}\u2026`;
 }
 
+/**
+ * Translate a `DateGroup` discriminator using a next-intl `t` from the
+ * `dashboard` namespace. Pulled out of the component to keep the
+ * grouped-map JSX readable and to make the locale-aware label single-
+ * responsibility (the `i18n` glue lives next to the consumer, the
+ * date math stays in `lib/format-date.ts`).
+ */
+function renderGroupLabel(g: DateGroup, t: (key: string) => string): string {
+    switch (g.kind) {
+        case "today":
+            return t("today");
+        case "yesterday":
+            return t("yesterday");
+        case "thisWeek":
+            return t("thisWeek");
+        case "earlierThisMonth":
+            return t("earlierThisMonth");
+        case "month":
+        case "monthYear":
+            return g.text;
+    }
+}
+
 export function RecordingList({
     recordings,
     transcriptions,
@@ -93,6 +117,7 @@ export function RecordingList({
     initialChunkSize,
     ref,
 }: RecordingListProps & { ref?: React.Ref<RecordingListHandle> }) {
+    const tDate = useTranslations("dashboard");
     const [dateTimeFormat] = useState<DateTimeFormat>(initialDateTimeFormat);
     const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
     const [density, setDensity] = useState<ListDensity>(initialDensity);
@@ -157,16 +182,30 @@ export function RecordingList({
 
     const grouped = useMemo(() => {
         if (sortOrder === "name") {
-            return [{ label: null as string | null, items: visible }];
+            return [
+                { label: null as string | null, group: null, items: visible },
+            ];
         }
-        const groups: { label: string; items: Recording[] }[] = [];
+        const groups: {
+            label: string;
+            group: DateGroup;
+            items: Recording[];
+        }[] = [];
         for (const r of visible) {
-            const label = dateGroupLabel(r.startTime);
+            const group = dateGroup(r.startTime);
+            // The label is used as a key for grouping consecutive rows
+            // — derive it once per group from the kind+text combo so
+            // `{ kind: "month", text: "May" }` doesn't collide with the
+            // sentinel kinds.
+            const label =
+                group.kind in { month: 1, monthYear: 1 }
+                    ? `${group.kind}:${(group as { text: string }).text}`
+                    : group.kind;
             const last = groups[groups.length - 1];
             if (last && last.label === label) {
                 last.items.push(r);
             } else {
-                groups.push({ label, items: [r] });
+                groups.push({ label, group, items: [r] });
             }
         }
         return groups;
@@ -276,17 +315,15 @@ export function RecordingList({
                 )}
 
                 <div>
-                    {grouped.map((group, gi) => (
-                        <div
-                            key={group.label ?? `__ungrouped-${gi.toString()}`}
-                        >
-                            {group.label && (
+                    {grouped.map((g, gi) => (
+                        <div key={g.label ?? `__ungrouped-${gi.toString()}`}>
+                            {g.group && (
                                 <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                                    {group.label}
+                                    {renderGroupLabel(g.group, tDate)}
                                 </div>
                             )}
                             <div className="divide-y">
-                                {group.items.map((recording) => (
+                                {g.items.map((recording) => (
                                     <RecordingRow
                                         key={recording.id}
                                         recording={recording}
