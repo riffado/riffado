@@ -152,6 +152,7 @@
     "settings": {
         "title": "Einstellungen",
         "groups": {
+            "ai": "KI",
             "providers": "Provider",
             "plaud": "Plaud",
             "personalize": "Personalisierung",
@@ -171,7 +172,10 @@
             "exportBackup": "Export/Backup",
             "apiKeys": "API-Schlüssel",
             "webhooks": "Webhooks",
-            "language": "Sprache"
+            "language": "Sprache",
+            "developerTools": "Entwickler-Werkzeuge",
+            "transcription": "Transkription",
+            "summary": "Zusammenfassung"
         },
         "language": {
             "title": "Oberflächensprache",

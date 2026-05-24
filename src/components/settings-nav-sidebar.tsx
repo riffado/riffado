@@ -1,6 +1,7 @@
 "use client";
 
 import { Settings as SettingsIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
     settingsNav,
     settingsNavGroups,
@@ -33,6 +34,9 @@ export function SettingsNavSidebar({
     keyboardSelectedIndex,
     onSectionChange,
 }: Props) {
+    const tSections = useTranslations("settings.sections");
+    const tGroups = useTranslations("settings.groups");
+    const tSettings = useTranslations("settings");
     return (
         // Sidebar needs an explicit height to match <main>'s h-[600px],
         // otherwise SidebarContent's overflow-y-auto has no bound to
@@ -48,7 +52,7 @@ export function SettingsNavSidebar({
             */}
             <div className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                 <SettingsIcon className="size-5" />
-                <h2 className="text-lg font-semibold">Settings</h2>
+                <h2 className="text-lg font-semibold">{tSettings("title")}</h2>
             </div>
             <SidebarContent className="min-h-0">
                 {/*
@@ -60,11 +64,11 @@ export function SettingsNavSidebar({
                   li nesting which is invalid HTML and confuses screen
                   readers.
                 */}
-                <nav aria-label="Settings sections" className="space-y-4">
+                <nav aria-label={tSettings("title")} className="space-y-4">
                     {settingsNavGroups.map((group) => (
                         <SidebarGroup key={group.label} className="space-y-1">
                             <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                                {group.label}
+                                {tGroups(group.i18nKey)}
                             </div>
                             <SidebarGroupContent>
                                 <SidebarMenu>
@@ -96,7 +100,9 @@ export function SettingsNavSidebar({
                                                     onClick={() =>
                                                         onSectionChange(item.id)
                                                     }
-                                                    aria-label={`${item.name} settings`}
+                                                    aria-label={tSections(
+                                                        item.i18nKey,
+                                                    )}
                                                     aria-current={
                                                         activeSection ===
                                                         item.id
@@ -113,7 +119,11 @@ export function SettingsNavSidebar({
                                                         className="size-4"
                                                         aria-hidden="true"
                                                     />
-                                                    <span>{item.name}</span>
+                                                    <span>
+                                                        {tSections(
+                                                            item.i18nKey,
+                                                        )}
+                                                    </span>
                                                 </SidebarMenuButton>
                                             </SidebarMenuItem>
                                         );
