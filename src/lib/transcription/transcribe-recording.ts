@@ -80,8 +80,15 @@ export async function transcribeRecording(
     // Tracks whether THIS invocation owns the in-flight claim, so the
     // finally block knows whether to clear it. Stays null if we returned
     // before claiming (recording not found, existing-transcript
-    // short-circuit, lost the claim race).
+    // short-circuit, lost the claim race). `claimedAt` is captured at
+    // claim time and used in the release WHERE clause as an ownership
+    // token: if another worker has since taken over via the stale-claim
+    // path, its `transcribing_started_at` will differ and our release
+    // becomes a no-op — without this guard a stalled worker that
+    // finally returns could clear the live successor's claim and let
+    // a third worker race in.
     let claimedRecordingId: string | null = null;
+    let claimedAt: Date | null = null;
     try {
         const [recording] = await db
             .select()
@@ -207,6 +214,7 @@ export async function transcribeRecording(
             };
         }
         claimedRecordingId = recordingId;
+        claimedAt = claimNow;
 
         const [settings] = await db
             .select()
@@ -466,13 +474,25 @@ export async function transcribeRecording(
             errorCode: "TRANSCRIPTION_FAILED",
         };
     } finally {
-        // Release the in-flight claim regardless of success or failure.
+        // Release the in-flight claim only if WE still own it. The
+        // ownership token is `transcribingStartedAt = claimedAt`: if a
+        // successor has taken over via the stale-claim path, its
+        // timestamp differs and the UPDATE matches zero rows — that's
+        // the desired no-op (the successor keeps running with a valid
+        // claim, and a third worker is blocked by it).
+        //
+        // Without this guard a worker that stalled past
+        // `TRANSCRIPTION_STALE_TIMEOUT_MS`, then finally woke up and
+        // hit its `finally`, would have cleared the live successor's
+        // claim — letting yet another concurrent worker pass the
+        // claim race. Bug surfaced by an automated review on the
+        // upstream PR (cubic-dev-ai).
+        //
         // A crash here (DB unavailable, etc.) is non-fatal — the stale
-        // timeout (`TRANSCRIPTION_STALE_TIMEOUT_MS`) is the backstop that
-        // recovers an abandoned claim on the next attempt, so we just
-        // log and move on rather than letting a release failure mask
-        // the original result.
-        if (claimedRecordingId) {
+        // timeout is the backstop that recovers an abandoned claim on
+        // the next attempt, so we just log and move on rather than
+        // letting a release failure mask the original result.
+        if (claimedRecordingId && claimedAt) {
             try {
                 await db
                     .update(recordings)
@@ -481,6 +501,7 @@ export async function transcribeRecording(
                         and(
                             eq(recordings.id, claimedRecordingId),
                             eq(recordings.userId, userId),
+                            eq(recordings.transcribingStartedAt, claimedAt),
                         ),
                     );
             } catch (releaseError) {
