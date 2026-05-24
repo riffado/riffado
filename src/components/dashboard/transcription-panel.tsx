@@ -11,6 +11,7 @@ import {
     Sparkles,
     Trash2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -49,6 +50,9 @@ export function TranscriptionPanel({
     isTranscribing,
     onTranscribe,
 }: TranscriptionPanelProps) {
+    const t = useTranslations("transcription");
+    const tSummary = useTranslations("summary");
+    const tCommon = useTranslations("common");
     // Real progress comes from the worker writing
     // `transcription_progress_seconds` to the recording row as Whisper
     // streams segments. The hook polls /api/recordings/[id] every 3s
@@ -91,7 +95,7 @@ export function TranscriptionPanel({
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
                             <FileText className="size-5" />
-                            Transcription
+                            {t("title")}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                             {transcription?.text && (
@@ -102,7 +106,7 @@ export function TranscriptionPanel({
                                     disabled={isTranscribing}
                                 >
                                     <RefreshCw className="size-4 mr-2" />
-                                    Re-transcribe
+                                    {t("reTranscribe")}
                                 </Button>
                             )}
                             {!transcription?.text && !isTranscribing && (
@@ -112,7 +116,7 @@ export function TranscriptionPanel({
                                     disabled={isTranscribing}
                                 >
                                     <Sparkles className="size-4 mr-2" />
-                                    Transcribe
+                                    {t("transcribe")}
                                 </Button>
                             )}
                         </div>
@@ -123,7 +127,7 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-12">
                             <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                             <p className="text-sm text-muted-foreground mb-3">
-                                Transcribing audio…
+                                {t("transcribing")}
                             </p>
                             {/*
                               Real progress, not a time-based estimate:
@@ -166,19 +170,26 @@ export function TranscriptionPanel({
                                     <div className="flex items-center gap-1">
                                         <Languages className="size-3" />
                                         <span>
-                                            Language: {transcription.language}
+                                            {t("languageLabel", {
+                                                language:
+                                                    transcription.language,
+                                            })}
                                         </span>
                                     </div>
                                 )}
                                 <div>
-                                    {transcription.text.trim()
-                                        ? transcription.text.trim().split(/\s+/)
-                                              .length
-                                        : 0}{" "}
-                                    words
+                                    {t("wordCount", {
+                                        count: transcription.text.trim()
+                                            ? transcription.text
+                                                  .trim()
+                                                  .split(/\s+/).length
+                                            : 0,
+                                    })}
                                 </div>
                                 <div>
-                                    {transcription.text.length} characters
+                                    {t("charCount", {
+                                        count: transcription.text.length,
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -186,8 +197,7 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-10 text-center">
                             <FileText className="size-10 text-muted-foreground mb-3" />
                             <p className="text-sm text-muted-foreground">
-                                No transcription yet. Use the Transcribe button
-                                above.
+                                {t("noTranscriptionBody")}
                             </p>
                         </div>
                     )}
@@ -201,7 +211,7 @@ export function TranscriptionPanel({
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
                                 <ListChecks className="size-5" />
-                                Summary
+                                {tSummary("title")}
                             </CardTitle>
                             <div className="flex items-center gap-2">
                                 {!isSummarizing && (
@@ -237,17 +247,17 @@ export function TranscriptionPanel({
                                     {isSummarizing ? (
                                         <>
                                             <Loader2 className="size-4 mr-2 animate-spin" />
-                                            Generating…
+                                            {tSummary("generating")}
                                         </>
                                     ) : summaryData ? (
                                         <>
                                             <RefreshCw className="size-4 mr-2" />
-                                            Re-generate
+                                            {tSummary("reGenerate")}
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="size-4 mr-2" />
-                                            Summarize
+                                            {tSummary("summarize")}
                                         </>
                                     )}
                                 </Button>
@@ -259,7 +269,7 @@ export function TranscriptionPanel({
                             <div className="flex flex-col items-center justify-center py-8">
                                 <Loader2 className="size-8 animate-spin text-primary mb-4" />
                                 <p className="text-sm text-muted-foreground">
-                                    Generating summary…
+                                    {tSummary("generating")}
                                 </p>
                             </div>
                         ) : summaryData?.summary ? (
@@ -277,8 +287,8 @@ export function TranscriptionPanel({
                                         <ChevronDown className="size-4" />
                                     )}
                                     {summaryExpanded
-                                        ? "Collapse"
-                                        : "Expand summary"}
+                                        ? tSummary("collapse")
+                                        : tSummary("expand")}
                                 </button>
 
                                 {summaryExpanded && (
@@ -296,7 +306,7 @@ export function TranscriptionPanel({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Key Points
+                                                        {tSummary("keyPoints")}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.keyPoints.map(
@@ -325,7 +335,9 @@ export function TranscriptionPanel({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Action Items
+                                                        {tSummary(
+                                                            "actionItems",
+                                                        )}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.actionItems.map(
@@ -369,7 +381,7 @@ export function TranscriptionPanel({
                                                 className="text-destructive hover:text-destructive"
                                             >
                                                 <Trash2 className="size-4 mr-1" />
-                                                Delete
+                                                {tCommon("delete")}
                                             </Button>
                                         </div>
                                     </div>
@@ -379,8 +391,7 @@ export function TranscriptionPanel({
                             <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <ListChecks className="size-10 text-muted-foreground mb-3" />
                                 <p className="text-sm text-muted-foreground">
-                                    No summary yet. Click "Summarize" to
-                                    generate one.
+                                    {tSummary("noSummaryBody")}
                                 </p>
                             </div>
                         )}
