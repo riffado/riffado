@@ -42,6 +42,7 @@ const recording = {
     scene: null,
     isTrash: false,
     waveformPeaks: null,
+    externalId: null,
     deletedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -98,6 +99,7 @@ describe("v1 recordings", () => {
         ).toEqual({
             id: "rec-1",
             title: "Planning Call",
+            external_id: null,
             created_at: now.toISOString(),
             updated_at: now.toISOString(),
             recorded_at: "2026-05-06T11:00:00.000Z",
@@ -142,5 +144,12 @@ describe("v1 recordings", () => {
 
         expect(detail.title).toBe("Legacy Recording");
         expect(detail.transcript?.text).toBe("Legacy transcript");
+    });
+
+    it("round-trips external_id when set so webhook receivers can correlate", () => {
+        const row = { ...recording, externalId: "MR-2026-05-24-001" };
+        expect(serializeRecording(row, null, null, null).external_id).toBe(
+            "MR-2026-05-24-001",
+        );
     });
 });

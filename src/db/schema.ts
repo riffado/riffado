@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
     boolean,
     index,
@@ -9,6 +10,7 @@ import {
     text,
     timestamp,
     unique,
+    uniqueIndex,
     varchar,
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
@@ -237,6 +239,15 @@ export const recordings = pgTable(
         // so payload is ~3–6 KB. Used purely for visualization — no
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
+        // Caller-supplied correlation handle for server-to-server uploads
+        // (`POST /api/v1/recordings`). Used by integrating systems (e.g. a
+        // meeting platform that posts the recording, then receives the
+        // transcription.completed webhook and needs to find its own row
+        // for the result) — every webhook payload round-trips this value
+        // in `external_id`. Nullable so the field is invisible to UI-only
+        // users. Unique per (user_id, external_id) when set, so a retry
+        // with the same external_id is idempotent.
+        externalId: text("external_id"),
         // Soft-delete tombstone. Set when the user deletes a recording from
         // OpenPlaud's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
@@ -261,6 +272,15 @@ export const recordings = pgTable(
         userPlaudFileUnique: unique(
             "recordings_user_id_plaud_file_id_unique",
         ).on(table.userId, table.plaudFileId),
+        // Partial unique index — only enforces uniqueness when external_id
+        // is set, so the bulk of recordings (no external_id) are not
+        // affected. Lets `POST /api/v1/recordings` short-circuit a retry
+        // with the same external_id back to the existing row.
+        userExternalIdUnique: uniqueIndex(
+            "recordings_user_id_external_id_unique",
+        )
+            .on(table.userId, table.externalId)
+            .where(sql`${table.externalId} IS NOT NULL`),
     }),
 );
 

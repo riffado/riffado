@@ -1,0 +1,2 @@
+ALTER TABLE "recordings" ADD COLUMN "external_id" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "recordings_user_id_external_id_unique" ON "recordings" USING btree ("user_id","external_id") WHERE "recordings"."external_id" IS NOT NULL;

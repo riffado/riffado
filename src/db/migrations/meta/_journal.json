@@ -162,6 +162,13 @@
       "when": 1778498592155,
       "tag": "0022_icy_norman_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779579480881,
+      "tag": "0023_fresh_sumo",
+      "breakpoints": true
     }
   ]
 }
