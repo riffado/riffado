@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+      # Fork-local production-bundle branch (aundb / aepfel+birnen). Carries
+      # the merged set of out-of-band fixes consumed by `transcript.aundb.io`.
+      # Built as a dedicated tag so the upstream `:latest` / `:dev` channels
+      # are untouched and downstream operators can pin to it explicitly.
+      - aundb-prod
     tags:
       - 'v*'
 
@@ -48,6 +53,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=aundb-prod,enable=${{ github.ref == 'refs/heads/aundb-prod' }}
+            type=sha,enable=${{ github.ref == 'refs/heads/aundb-prod' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
