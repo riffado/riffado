@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ export function WorkstationDetailPane({
     initialAutoPlayNext,
     scrubberStyle,
 }: Props) {
+    const t = useTranslations("dashboard");
     return (
         <div
             className={cn(
@@ -73,7 +75,7 @@ export function WorkstationDetailPane({
                 className="-ml-2 h-9 gap-1 px-2 lg:hidden"
             >
                 <ArrowLeft className="size-4" />
-                Back to recordings
+                {t("backToRecordings")}
             </Button>
             {currentRecording ? (
                 <>
@@ -108,7 +110,7 @@ export function WorkstationDetailPane({
                 <Card>
                     <CardContent className="py-16 text-center">
                         <p className="text-muted-foreground">
-                            Select a recording to view details and transcription
+                            {t("selectRecordingHint")}
                         </p>
                     </CardContent>
                 </Card>

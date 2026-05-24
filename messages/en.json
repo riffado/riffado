@@ -98,6 +98,8 @@
         "syncDevice": "Sync Device",
         "syncing": "Syncing…",
         "playbackError": "Failed to play audio",
+        "backToRecordings": "Back to recordings",
+        "selectRecordingHint": "Select a recording to view details and transcription",
         "list": {
             "searchPlaceholder": "Search recordings, transcripts…",
             "searchLabel": "Search recordings",
@@ -113,6 +115,12 @@
             "density": "Density",
             "compactDensity": "Compact"
         }
+    },
+    "recordingPlayer": {
+        "analyzingAudio": "Analyzing audio…",
+        "generateWaveform": "Generate waveform",
+        "generateWaveformTooltip": "Decode waveform in your browser (may take a few seconds)",
+        "retryWaveform": "Retry waveform"
     },
     "transcription": {
         "title": "Transcription",
@@ -259,11 +267,18 @@
     "syncButton": {
         "label": "Sync",
         "syncing": "Syncing…",
-        "syncedAgo": "Synced {time} ago",
         "syncedJustNow": "Synced just now",
+        "syncedMinutesAgo": "{count, plural, =1 {Synced 1m ago} other {Synced #m ago}}",
+        "syncedHoursAgo": "{count, plural, =1 {Synced 1h ago} other {Synced #h ago}}",
+        "syncedDaysAgo": "{count, plural, =1 {Synced 1d ago} other {Synced #d ago}}",
+        "syncedWeeksAgo": "{count, plural, =1 {Synced 1w ago} other {Synced #w ago}}",
         "retrySync": "Retry sync",
         "neverSynced": "Never synced",
         "nextSyncIn": "Next sync in {time}",
+        "nextAutoSync": "Next auto-sync {time}",
+        "nextAutoSyncSoon": "Next auto-sync soon",
+        "syncInProgress": "Sync in progress",
+        "clickToSyncNow": "Click to sync now",
         "syncError": "Sync error",
         "newRecordings": "{count, plural, =0 {No new recordings} =1 {1 new recording} other {# new recordings}}"
     },

@@ -98,6 +98,8 @@
         "syncDevice": "Gerät synchronisieren",
         "syncing": "Synchronisiere…",
         "playbackError": "Wiedergabe fehlgeschlagen",
+        "backToRecordings": "Zurück zu den Aufnahmen",
+        "selectRecordingHint": "Wähle eine Aufnahme aus, um Details und Transkript zu sehen",
         "list": {
             "searchPlaceholder": "Aufnahmen, Transkripte durchsuchen…",
             "searchLabel": "Aufnahmen durchsuchen",
@@ -113,6 +115,12 @@
             "density": "Dichte",
             "compactDensity": "Kompakt"
         }
+    },
+    "recordingPlayer": {
+        "analyzingAudio": "Analysiere Audio…",
+        "generateWaveform": "Waveform erzeugen",
+        "generateWaveformTooltip": "Waveform im Browser dekodieren (kann ein paar Sekunden dauern)",
+        "retryWaveform": "Waveform erneut versuchen"
     },
     "transcription": {
         "title": "Transkription",
@@ -259,11 +267,18 @@
     "syncButton": {
         "label": "Sync",
         "syncing": "Synchronisiere…",
-        "syncedAgo": "Synchronisiert vor {time}",
         "syncedJustNow": "Gerade synchronisiert",
+        "syncedMinutesAgo": "{count, plural, =1 {Vor 1 Min synchronisiert} other {Vor # Min synchronisiert}}",
+        "syncedHoursAgo": "{count, plural, =1 {Vor 1 Std synchronisiert} other {Vor # Std synchronisiert}}",
+        "syncedDaysAgo": "{count, plural, =1 {Vor 1 Tag synchronisiert} other {Vor # Tagen synchronisiert}}",
+        "syncedWeeksAgo": "{count, plural, =1 {Vor 1 Woche synchronisiert} other {Vor # Wochen synchronisiert}}",
         "retrySync": "Erneut synchronisieren",
         "neverSynced": "Nie synchronisiert",
         "nextSyncIn": "Nächste Synchronisierung in {time}",
+        "nextAutoSync": "Nächste Auto-Sync {time}",
+        "nextAutoSyncSoon": "Nächste Auto-Sync gleich",
+        "syncInProgress": "Synchronisierung läuft",
+        "clickToSyncNow": "Jetzt synchronisieren",
         "syncError": "Sync-Fehler",
         "newRecordings": "{count, plural, =0 {Keine neuen Aufnahmen} =1 {1 neue Aufnahme} other {# neue Aufnahmen}}"
     },

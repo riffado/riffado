@@ -5,26 +5,45 @@ import {
     isThisYear,
     isToday,
     isYesterday,
+    type Locale,
 } from "date-fns";
+import { de } from "date-fns/locale/de";
+import { enUS } from "date-fns/locale/en-US";
 import type { DateTimeFormat } from "@/types/common";
 
 export type { DateTimeFormat };
 
+// Resolve a next-intl locale code to a date-fns Locale. Unknown codes
+// fall back to enUS so a future locale we haven't wired up doesn't
+// surface "Invalid Date" or "about NaN ago" to the user.
+function dateFnsLocale(locale: string | undefined): Locale {
+    if (locale === "de") return de;
+    return enUS;
+}
+
 export function formatDateTime(
     date: Date | string,
     formatType: DateTimeFormat = "relative",
+    locale?: string,
 ): string {
     const dateObj = typeof date === "string" ? new Date(date) : date;
+    const loc = dateFnsLocale(locale);
 
     switch (formatType) {
         case "relative":
-            return formatDistanceToNow(dateObj, { addSuffix: true });
+            return formatDistanceToNow(dateObj, {
+                addSuffix: true,
+                locale: loc,
+            });
         case "absolute":
-            return format(dateObj, "MMM d, yyyy h:mm a");
+            return format(dateObj, "MMM d, yyyy h:mm a", { locale: loc });
         case "iso":
             return dateObj.toISOString();
         default:
-            return formatDistanceToNow(dateObj, { addSuffix: true });
+            return formatDistanceToNow(dateObj, {
+                addSuffix: true,
+                locale: loc,
+            });
     }
 }
 
