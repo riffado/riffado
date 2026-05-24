@@ -125,6 +125,17 @@ export async function streamTranscribe(
 
     let lastEvent: StreamEvent | null = null;
     let maxProgressSeconds = 0;
+    // Accumulate segments across events keyed by start time. Speaches
+    // (observed empirically) sends ONE segment per event, and the
+    // top-level `text` field on each event contains only THAT segment's
+    // text — not an accumulating transcript. The single-segment JFK
+    // probe was misleading because `text` and `segments[0].text` were
+    // identical for an 11-second clip. For a real 4-minute file, taking
+    // the last event's `text` gave us only the closing sentence and
+    // dropped the prior 99% of the transcript. Track segments by start
+    // and reassemble at the end. Using a Map keyed on `start` also
+    // de-dupes if a provider ever re-emits the same segment.
+    const accumulatedSegments = new Map<number, StreamSegment>();
 
     for await (const chunk of iterateSseEvents(response.body)) {
         const event = parseEvent(chunk);
@@ -132,6 +143,11 @@ export async function streamTranscribe(
         lastEvent = event;
 
         if (event.segments && event.segments.length > 0) {
+            for (const seg of event.segments) {
+                if (typeof seg.start === "number") {
+                    accumulatedSegments.set(seg.start, seg);
+                }
+            }
             const latestEnd = Math.max(
                 ...event.segments
                     .map((s) => (typeof s.end === "number" ? s.end : 0))
@@ -156,8 +172,22 @@ export async function streamTranscribe(
         throw new Error("Transcription stream closed before any event arrived");
     }
 
+    // Prefer the reconstructed text from accumulated segments — that's
+    // the source of truth across multi-event streams. Fall back to the
+    // last event's `text` for providers that send a single final event
+    // (e.g. OpenAI whisper-1's non-streaming-like response with
+    // `stream=true`), since in that case there's only one segment and
+    // it lives on the same event.
+    const reconstructedText = Array.from(accumulatedSegments.values())
+        .sort((a, b) => (a.start ?? 0) - (b.start ?? 0))
+        .map((s) => (typeof s.text === "string" ? s.text : ""))
+        .join("")
+        .trim();
+    const fallbackText =
+        typeof lastEvent.text === "string" ? lastEvent.text.trim() : "";
+
     return {
-        text: typeof lastEvent.text === "string" ? lastEvent.text : "",
+        text: reconstructedText || fallbackText,
         detectedLanguage:
             typeof lastEvent.language === "string" ? lastEvent.language : null,
         finalProgressSeconds: Math.floor(maxProgressSeconds),
