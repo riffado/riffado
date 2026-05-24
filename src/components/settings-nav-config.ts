@@ -5,6 +5,7 @@ import {
     FileText,
     HardDrive,
     KeyRound,
+    Languages,
     ListChecks,
     Mic,
     Monitor,
@@ -50,6 +51,7 @@ export const settingsNavGroups: { label: string; items: NavItem[] }[] = [
         items: [
             { name: "Playback", id: "playback", icon: Play },
             { name: "Display", id: "display", icon: Monitor },
+            { name: "Language", id: "language", icon: Languages },
             { name: "Notifications", id: "notifications", icon: Bell },
         ],
     },

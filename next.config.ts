@@ -1,5 +1,11 @@
 import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
+import createNextIntlPlugin from "next-intl/plugin";
+
+// Point next-intl at our request-config helper so server components and
+// route handlers can call `getTranslations()` without per-route plumbing.
+// See src/i18n/request.ts for the locale-resolution rules.
+const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 // The Rybbit analytics proxy used to live here as a `rewrites()` entry.
 // `next.config.ts` is evaluated at `next build`, and the published Docker
@@ -64,4 +70,4 @@ const nextConfig: NextConfig = {
 // in lockstep with the `.gitignore` entry and the import in `src/lib/source.ts`.
 const withMDX = createMDX({ outDir: "src/.source" });
 
-export default withMDX(nextConfig);
+export default withMDX(withNextIntl(nextConfig));
