@@ -14,6 +14,7 @@ import {
     Sun,
     Upload,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { type DateTimeFormat, formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
@@ -94,11 +95,12 @@ export function RecordingsGroup({
     onTranscribeRecording: (id: string) => void;
     runAction: (fn: () => void) => () => void;
 }) {
+    const t = useTranslations("commandPalette");
     if (recordings.length === 0) return null;
     const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
 
     return (
-        <Command.Group heading="Recent">
+        <Command.Group heading={t("groupRecent")}>
             {recordings.map((r) => {
                 const snippet = transcriptSnippet(
                     transcriptions.get(r.id)?.text,
@@ -114,21 +116,21 @@ export function RecordingsGroup({
                     );
                     stateLabel =
                         inFlight === "transcribing"
-                            ? "Transcribing"
-                            : "Summarizing";
+                            ? t("stateTranscribing")
+                            : t("stateSummarizing");
                 } else if (!r.hasTranscript) {
                     stateIcon = (
                         <Mic className="size-4 text-muted-foreground" />
                     );
-                    stateLabel = "Audio only";
+                    stateLabel = t("stateAudioOnly");
                 } else if (!r.hasSummary) {
                     stateIcon = (
                         <FileText className="size-4 text-foreground/70" />
                     );
-                    stateLabel = "Transcribed";
+                    stateLabel = t("stateTranscribed");
                 } else {
                     stateIcon = <Sparkles className="size-4 text-primary" />;
-                    stateLabel = "Transcribed & summarized";
+                    stateLabel = t("stateTranscribedSummarized");
                 }
 
                 const durationText =
@@ -228,33 +230,34 @@ export function ActionsGroup({
     onOpenShortcuts: () => void;
     runAction: (fn: () => void) => () => void;
 }) {
+    const t = useTranslations("commandPalette");
     return (
-        <Command.Group heading="Actions">
+        <Command.Group heading={t("groupActions")}>
             <Command.Item onSelect={runAction(onSync)}>
                 <Row
                     icon={
                         <RefreshCw className="size-4 text-muted-foreground" />
                     }
-                    title="Sync device"
+                    title={t("syncDevice")}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onUpload)}>
                 <Row
                     icon={<Upload className="size-4 text-muted-foreground" />}
-                    title="Upload audio"
+                    title={t("uploadAudio")}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onOpenSettings)}>
                 <Row
                     icon={<Settings className="size-4 text-muted-foreground" />}
-                    title="Open settings"
+                    title={t("openSettings")}
                     accessory={<Kbd>,</Kbd>}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onOpenShortcuts)}>
                 <Row
                     icon={<Keyboard className="size-4 text-muted-foreground" />}
-                    title="Keyboard shortcuts"
+                    title={t("keyboardShortcuts")}
                     accessory={<Kbd>?</Kbd>}
                 />
             </Command.Item>
@@ -271,15 +274,16 @@ export function ThemeGroup({
     onSetTheme: (t: "light" | "dark" | "system") => void;
     runAction: (fn: () => void) => () => void;
 }) {
+    const t = useTranslations("commandPalette");
     return (
-        <Command.Group heading="Theme">
+        <Command.Group heading={t("groupTheme")}>
             <Command.Item onSelect={runAction(() => onSetTheme("light"))}>
                 <Row
                     icon={<Sun className="size-4 text-muted-foreground" />}
-                    title="Light"
+                    title={t("themeLight")}
                     accessory={
                         currentTheme === "light" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">●</span>
                         ) : null
                     }
                 />
@@ -287,10 +291,10 @@ export function ThemeGroup({
             <Command.Item onSelect={runAction(() => onSetTheme("dark"))}>
                 <Row
                     icon={<Moon className="size-4 text-muted-foreground" />}
-                    title="Dark"
+                    title={t("themeDark")}
                     accessory={
                         currentTheme === "dark" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">●</span>
                         ) : null
                     }
                 />
@@ -298,10 +302,10 @@ export function ThemeGroup({
             <Command.Item onSelect={runAction(() => onSetTheme("system"))}>
                 <Row
                     icon={<Monitor className="size-4 text-muted-foreground" />}
-                    title="Auto"
+                    title={t("themeAuto")}
                     accessory={
                         currentTheme === "system" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">●</span>
                         ) : null
                     }
                 />

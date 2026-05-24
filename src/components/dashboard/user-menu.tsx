@@ -2,6 +2,7 @@
 
 import {
     Keyboard,
+    Languages,
     LogOut,
     Monitor,
     Moon,
@@ -10,7 +11,8 @@ import {
     Sun,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -20,6 +22,8 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/hooks/use-theme";
+import { setLocale } from "@/i18n/actions";
+import { SUPPORTED_LOCALES } from "@/i18n/locales";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +58,9 @@ export function UserMenu({
     onOpenShortcuts,
 }: UserMenuProps) {
     const t = useTranslations("userMenu");
+    const tCommon = useTranslations("common");
+    const currentLocale = useLocale();
+    const [localePending, startLocaleTransition] = useTransition();
     const { push, refresh } = useRouter();
     const { theme, setTheme } = useTheme(initialTheme);
 
@@ -145,6 +152,55 @@ export function UserMenu({
                                         aria-hidden="true"
                                     />
                                     {opt.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="border-t px-3 py-2">
+                    {/*
+                      Language toggle styled identically to the theme
+                      pill group above. Lives here (not just under
+                      Settings → Personalize → Language) because UI
+                      language is a top-level preference users want to
+                      flip without three clicks of navigation — the
+                      Settings sidebar is one of the surfaces that
+                      itself needs translating, so making locale
+                      reachable in one click matters most on first run.
+                    */}
+                    <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+                        <Languages className="size-3" aria-hidden="true" />
+                        {tCommon("language")}
+                    </div>
+                    <div
+                        role="radiogroup"
+                        aria-label={tCommon("language")}
+                        className="grid auto-cols-fr grid-flow-col gap-1 rounded-md border bg-muted/40 p-0.5"
+                    >
+                        {SUPPORTED_LOCALES.map((locale) => {
+                            const isActive = currentLocale === locale.code;
+                            return (
+                                // biome-ignore lint/a11y/useSemanticElements: segmented control
+                                <button
+                                    key={locale.code}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={isActive}
+                                    disabled={localePending}
+                                    onClick={() =>
+                                        startLocaleTransition(() => {
+                                            void setLocale(locale.code);
+                                        })
+                                    }
+                                    className={cn(
+                                        "inline-flex items-center justify-center rounded-sm px-2 py-1.5 text-xs font-medium transition-colors",
+                                        isActive
+                                            ? "bg-background text-foreground shadow-sm"
+                                            : "text-muted-foreground hover:text-foreground",
+                                    )}
+                                >
+                                    {locale.label}
                                 </button>
                             );
                         })}

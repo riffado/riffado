@@ -308,6 +308,25 @@
         "defaultConfirm": "Bestätigen",
         "defaultCancel": "Abbrechen"
     },
+    "commandPalette": {
+        "label": "Befehlspalette",
+        "placeholder": "Aufnahmen, Transkripte oder Aktionen durchsuchen…",
+        "groupRecent": "Zuletzt",
+        "groupActions": "Aktionen",
+        "groupTheme": "Thema",
+        "syncDevice": "Gerät synchronisieren",
+        "uploadAudio": "Audio hochladen",
+        "openSettings": "Einstellungen öffnen",
+        "keyboardShortcuts": "Tastenkürzel",
+        "themeLight": "Hell",
+        "themeDark": "Dunkel",
+        "themeAuto": "Auto",
+        "stateTranscribing": "Transkribiert",
+        "stateSummarizing": "Wird zusammengefasst",
+        "stateAudioOnly": "Nur Audio",
+        "stateTranscribed": "Transkribiert",
+        "stateTranscribedSummarized": "Transkribiert & zusammengefasst"
+    },
     "providers": {
         "addProvider": "Provider hinzufügen",
         "editProvider": "Provider bearbeiten",

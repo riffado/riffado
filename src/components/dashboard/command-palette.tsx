@@ -2,6 +2,7 @@
 
 import { Command } from "cmdk";
 import { Search } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useMemo, useRef, useState } from "react";
 import {
     ActionsGroup,
@@ -57,6 +58,7 @@ export function CommandPalette({
     onSetTheme,
     onTranscribeRecording,
 }: CommandPaletteProps) {
+    const t = useTranslations("commandPalette");
     // Wrap action handlers so the palette closes first, then the
     // action runs on the next tick. Without the defer, dialogs the
     // action opens (settings, shortcuts) race the palette's own
@@ -128,10 +130,10 @@ export function CommandPalette({
                 className="max-w-xl gap-0 overflow-hidden p-0"
                 showCloseButton={false}
             >
-                <DialogTitle className="sr-only">Command palette</DialogTitle>
+                <DialogTitle className="sr-only">{t("label")}</DialogTitle>
                 <Command
                     className="command-palette"
-                    label="Command palette"
+                    label={t("label")}
                     value={activeValue}
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
@@ -141,7 +143,7 @@ export function CommandPalette({
                             className="cmd-input-icon size-4"
                             aria-hidden="true"
                         />
-                        <Command.Input placeholder="Search recordings, transcripts, or actions…" />
+                        <Command.Input placeholder={t("placeholder")} />
                         <Kbd>⌘K</Kbd>
                     </div>
 

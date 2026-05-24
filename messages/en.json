@@ -308,6 +308,25 @@
         "defaultConfirm": "Confirm",
         "defaultCancel": "Cancel"
     },
+    "commandPalette": {
+        "label": "Command palette",
+        "placeholder": "Search recordings, transcripts, or actions…",
+        "groupRecent": "Recent",
+        "groupActions": "Actions",
+        "groupTheme": "Theme",
+        "syncDevice": "Sync device",
+        "uploadAudio": "Upload audio",
+        "openSettings": "Open settings",
+        "keyboardShortcuts": "Keyboard shortcuts",
+        "themeLight": "Light",
+        "themeDark": "Dark",
+        "themeAuto": "Auto",
+        "stateTranscribing": "Transcribing",
+        "stateSummarizing": "Summarizing",
+        "stateAudioOnly": "Audio only",
+        "stateTranscribed": "Transcribed",
+        "stateTranscribedSummarized": "Transcribed & summarized"
+    },
     "providers": {
         "addProvider": "Add Provider",
         "editProvider": "Edit Provider",
