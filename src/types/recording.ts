@@ -21,6 +21,21 @@ export type Recording = Omit<RecordingQueryResult, "startTime"> & {
      * when never decoded; an empty array would be invalid (treat as null).
      */
     waveformPeaks?: number[] | null;
+    /**
+     * True while a transcribe worker still holds an active claim on
+     * the recording (i.e. `transcribing_started_at` is within the 3h
+     * stale window). Lets the dashboard show "Transcribing… 36%" on
+     * reload or in a second tab — previously the panel only knew
+     * about transcribes started in the current React tree.
+     */
+    transcriptionInProgress?: boolean;
+    /**
+     * Latest segment-end-seconds reported by the streaming provider
+     * (floor of Whisper's latest segment `end`). Null when no run is
+     * in progress or the provider didn't stream incremental events.
+     * Used as a first-render value before the polling hook lands.
+     */
+    transcriptionProgressSeconds?: number | null;
 };
 
 // Helper to serialize a recording query result. Optional fields let
@@ -31,6 +46,8 @@ export function serializeRecording(
         hasTranscript?: boolean;
         hasSummary?: boolean;
         waveformPeaks?: number[] | null;
+        transcriptionInProgress?: boolean;
+        transcriptionProgressSeconds?: number | null;
     },
 ): Recording {
     return {
@@ -45,5 +62,8 @@ export function serializeRecording(
         waveformPeaks: flags?.waveformPeaks?.length
             ? flags.waveformPeaks
             : null,
+        transcriptionInProgress: flags?.transcriptionInProgress ?? false,
+        transcriptionProgressSeconds:
+            flags?.transcriptionProgressSeconds ?? null,
     };
 }

@@ -42,6 +42,14 @@ interface TranscriptionPanelProps {
     transcription?: Transcription;
     isTranscribing: boolean;
     onTranscribe: () => void;
+    /**
+     * Fires when the progress poll observes that the server-side
+     * claim was released (i.e. a transcribe that wasn't started in
+     * this tab has finished). The parent uses it to refresh the
+     * recording list so the in-progress flag flips off and the panel
+     * transitions from the progress view to the rendered transcript.
+     */
+    onServerTranscribeComplete?: () => void;
 }
 
 export function TranscriptionPanel({
@@ -49,6 +57,7 @@ export function TranscriptionPanel({
     transcription,
     isTranscribing,
     onTranscribe,
+    onServerTranscribeComplete,
 }: TranscriptionPanelProps) {
     const t = useTranslations("transcription");
     const tSummary = useTranslations("summary");
@@ -60,16 +69,23 @@ export function TranscriptionPanel({
     const { progressSeconds } = useTranscriptionProgress(
         recording?.id,
         isTranscribing,
+        onServerTranscribeComplete,
     );
     const durationSeconds = Math.max(
         1,
         Math.round((recording?.duration ?? 0) / 1000),
     );
+    // Prefer the latest polled value; fall back to the RSC-baked
+    // seed from `recording.transcriptionProgressSeconds` so reloading
+    // mid-run doesn't show "0%" for the first 3 seconds while the
+    // first poll is in flight.
+    const effectiveProgress =
+        progressSeconds ?? recording?.transcriptionProgressSeconds ?? null;
     const pct =
-        progressSeconds !== null
+        effectiveProgress !== null
             ? Math.min(
                   99,
-                  Math.round((progressSeconds / durationSeconds) * 100),
+                  Math.round((effectiveProgress / durationSeconds) * 100),
               )
             : null;
 
@@ -148,7 +164,7 @@ export function TranscriptionPanel({
                                     <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
                                         <span>
                                             {formatSeconds(
-                                                progressSeconds ?? 0,
+                                                effectiveProgress ?? 0,
                                             )}
                                             {" / "}
                                             {formatSeconds(durationSeconds)}

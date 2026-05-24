@@ -28,6 +28,14 @@ interface Props {
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
     scrubberStyle: "waveform" | "slider" | undefined;
+    /**
+     * Bubbled up from the progress poll inside TranscriptionPanel when
+     * it observes that a server-side transcribe (one not started in
+     * this React tree) finished. Parent calls `refresh()` so the
+     * in-progress flag flips off and the panel switches to rendering
+     * the transcript.
+     */
+    onServerTranscribeComplete?: () => void;
 }
 
 /**
@@ -53,6 +61,7 @@ export function WorkstationDetailPane({
     initialVolume,
     initialAutoPlayNext,
     scrubberStyle,
+    onServerTranscribeComplete,
 }: Props) {
     const t = useTranslations("dashboard");
     return (
@@ -104,6 +113,7 @@ export function WorkstationDetailPane({
                         transcription={currentTranscription}
                         isTranscribing={isCurrentTranscribing}
                         onTranscribe={onTranscribe}
+                        onServerTranscribeComplete={onServerTranscribeComplete}
                     />
                 </>
             ) : (
