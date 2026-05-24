@@ -110,6 +110,27 @@ export function WebhooksSection() {
                             onShowDeliveries={setDeliveryWebhook}
                         />
                     ))}
+                    {/*
+                      Always-visible Add button at the foot of the list.
+                      The section header's action slot is the primary
+                      affordance, but the Settings dialog clamps to
+                      `lg:max-w-[900px]` with `overflow-hidden`, and on
+                      narrow panes the header's right-side action can
+                      collide with the dialog's close button or get
+                      clipped — leaving the user unable to add a second
+                      webhook. This bottom button is a guaranteed escape
+                      hatch that mirrors the empty-state CTA.
+                    */}
+                    <div className="pt-1">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditor(null)}
+                        >
+                            <Plus className="size-4" />
+                            Add Webhook
+                        </Button>
+                    </div>
                 </div>
             )}
 
@@ -146,7 +167,7 @@ function WebhookRow({
 }) {
     return (
         <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
                 <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate font-medium">
@@ -185,7 +206,18 @@ function WebhookRow({
                         {formatWebhookDate(webhook.lastDeliveryAt)}
                     </p>
                 </div>
-                <div className="flex gap-2">
+                {/*
+                  Always stacked below the row content (never side-by-side):
+                  the Settings dialog clamps the main pane to ~550–650 px on
+                  `md:max-w-[800px]` / `lg:max-w-[900px]`, and the previous
+                  `sm:flex-row sm:justify-between` triggered at 640 px viewport
+                  — which is wider than the actual pane. Result: Deliveries +
+                  Edit + Delete pushed off the right edge with no way to
+                  reach them. `flex-wrap` covers the extreme-narrow case
+                  (mobile-portrait) where three buttons + gaps still exceed
+                  the pane width.
+                */}
+                <div className="flex flex-wrap gap-2">
                     <Button
                         variant="outline"
                         size="sm"
