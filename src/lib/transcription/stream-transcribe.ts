@@ -107,6 +107,25 @@ export async function streamTranscribe(
     form.append("response_format", "verbose_json");
     form.append("stream", "true");
     if (args.language) form.append("language", args.language);
+    // Two faster-whisper params that mitigate the classic "Whisper got
+    // stuck and emitted the same sentence 300 times" failure on quiet
+    // or noisy audio:
+    //
+    //  - `vad_filter=true` runs Silero VAD ahead of decode so silent
+    //    chunks (where the model is most likely to confabulate filler
+    //    text) never reach Whisper at all.
+    //  - `condition_on_previous_text=false` stops the model from using
+    //    its own previous output as context for the next segment.
+    //    Once the loop kicks in, conditioning amplifies it; turning
+    //    this off is the standard recommendation upstream.
+    //
+    // Providers that don't recognize the fields silently ignore them
+    // (Speaches forwards everything to faster-whisper as kwargs;
+    // OpenAI's whisper-1 just drops unknowns), so unconditionally
+    // appending is safe. Both are documented mitigations for the
+    // compression-ratio-9.8 / temperature-retry path we saw in logs.
+    form.append("vad_filter", "true");
+    form.append("condition_on_previous_text", "false");
 
     const url = `${args.baseUrl.replace(/\/$/, "")}/audio/transcriptions`;
     const response = await fetch(url, {
