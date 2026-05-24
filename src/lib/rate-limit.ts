@@ -58,6 +58,8 @@ export async function consumeRateLimitBucket(
     { limit, windowMs, now = new Date() }: RateLimitConfig,
 ): Promise<RateLimitResult> {
     const resetAt = new Date(now.getTime() + windowMs);
+    const nowIso = now.toISOString();
+    const resetAtIso = resetAt.toISOString();
     const [bucket] = await db
         .insert(apiRateLimitBuckets)
         .values({
@@ -70,8 +72,8 @@ export async function consumeRateLimitBucket(
         .onConflictDoUpdate({
             target: apiRateLimitBuckets.key,
             set: {
-                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
-                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then ${resetAt} else ${apiRateLimitBuckets.resetAt} end`,
+                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
+                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso} then ${resetAtIso} else ${apiRateLimitBuckets.resetAt} end`,
                 updatedAt: now,
             },
         })
