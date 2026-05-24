@@ -1,6 +1,7 @@
 "use client";
 
 import { Mail } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Github } from "@/components/icons/icons";
 import { Button } from "@/components/ui/button";
@@ -123,6 +124,7 @@ const RESET_BUTTON_CLASSES =
     "appearance-none border-0 bg-transparent p-0 m-0 font-inherit text-inherit cursor-pointer";
 
 export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
+    const t = useTranslations("footer");
     const [open, setOpen] = useState(false);
 
     return (
@@ -132,7 +134,7 @@ export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
                 onClick={() => setOpen(true)}
                 className={`${RESET_BUTTON_CLASSES} ${className ?? ""}`}
             >
-                Report a bug
+                {t("reportBug")}
             </button>
             <ReportBugDialog
                 isHosted={isHosted}

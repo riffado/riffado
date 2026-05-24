@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { settingsNav } from "@/components/settings-nav-config";
 import {
     Select,
@@ -21,6 +22,8 @@ interface Props {
  * still have a way to switch sections without a separate route.
  */
 export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
+    const tSections = useTranslations("settings.sections");
+    const tSettings = useTranslations("settings");
     const activeNavItem = settingsNav.find((item) => item.id === activeSection);
 
     return (
@@ -33,10 +36,12 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
             >
                 <SelectTrigger
                     className="w-[180px]"
-                    aria-label="Select settings section"
+                    aria-label={tSettings("title")}
                 >
                     <SelectValue>
-                        {activeNavItem?.name || "Settings"}
+                        {activeNavItem
+                            ? tSections(activeNavItem.i18nKey)
+                            : tSettings("title")}
                     </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -44,7 +49,7 @@ export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
                         <SelectItem key={item.id} value={item.id}>
                             <div className="flex items-center gap-2">
                                 <item.icon className="size-4" />
-                                <span>{item.name}</span>
+                                <span>{tSections(item.i18nKey)}</span>
                             </div>
                         </SelectItem>
                     ))}
