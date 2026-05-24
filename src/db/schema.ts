@@ -248,6 +248,22 @@ export const recordings = pgTable(
         // users. Unique per (user_id, external_id) when set, so a retry
         // with the same external_id is idempotent.
         externalId: text("external_id"),
+        // In-flight transcription claim. Set by the worker right before it
+        // dispatches the provider call, cleared after success or failure
+        // (whichever happens first). Used to give the manual transcribe
+        // route an idempotency boundary: a second click while a previous
+        // run is still in progress returns HTTP 409 instead of spawning
+        // a parallel worker. The dashboard reads this through v1's
+        // `transcription_in_progress` flag to keep the "Transcribing..."
+        // chip visible across browser reloads, which is exactly the gap
+        // that let users trigger 3+ runs by re-clicking.
+        //
+        // Stale-claim safety: a crashed worker would leave this set
+        // forever, blocking re-transcription. The worker treats a claim
+        // older than `TRANSCRIPTION_STALE_TIMEOUT_MS` as abandoned and
+        // overwrites it. Long meeting audio on slow CPU-only Whisper
+        // boxes is the realistic upper bound for picking that timeout.
+        transcribingStartedAt: timestamp("transcribing_started_at"),
         // Soft-delete tombstone. Set when the user deletes a recording from
         // OpenPlaud's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted

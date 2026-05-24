@@ -169,6 +169,13 @@
       "when": 1779579480881,
       "tag": "0023_fresh_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779582945833,
+      "tag": "0024_perfect_skaar",
+      "breakpoints": true
     }
   ]
 }

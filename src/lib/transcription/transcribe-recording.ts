@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
@@ -32,7 +32,19 @@ export type TranscribeErrorCode =
     | "RECORDING_NOT_FOUND"
     | "NO_TRANSCRIPTION_PROVIDER"
     | "RECORDING_DELETED"
+    | "TRANSCRIPTION_IN_PROGRESS"
     | "TRANSCRIPTION_FAILED";
+
+/**
+ * A transcription claim older than this is treated as stale (a crashed
+ * worker, a killed container, a deploy that interrupted a run) and the
+ * next caller is allowed to overwrite it. Set generously enough to cover
+ * the realistic upper bound of a long-meeting transcribe on a slow
+ * CPU-only Whisper box — large-v3 INT8 on a modest VPS can run ~0.5×
+ * realtime, so a 60-minute meeting takes ~2h. 3h gives margin without
+ * leaving genuinely stuck rows blocked for the rest of the day.
+ */
+const TRANSCRIPTION_STALE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
 export interface TranscribeOptions {
     /** Use a specific provider (by id, user-scoped) instead of the user's default. */
@@ -65,6 +77,11 @@ export async function transcribeRecording(
     recordingId: string,
     opts: TranscribeOptions = {},
 ): Promise<TranscribeResult> {
+    // Tracks whether THIS invocation owns the in-flight claim, so the
+    // finally block knows whether to clear it. Stays null if we returned
+    // before claiming (recording not found, existing-transcript
+    // short-circuit, lost the claim race).
+    let claimedRecordingId: string | null = null;
     try {
         const [recording] = await db
             .select()
@@ -148,6 +165,48 @@ export async function transcribeRecording(
                 errorCode: "NO_TRANSCRIPTION_PROVIDER",
             };
         }
+
+        // Atomic claim — only one worker can be in-flight for a given
+        // (user_id, recording_id) at a time. Placed AFTER the provider
+        // check so a recording with no configured provider is not
+        // briefly marked "in progress" only to be released milliseconds
+        // later; the UI would otherwise flicker through a spurious chip
+        // state. The UPDATE matches only when the previous claim is
+        // null or older than the stale timeout, so two concurrent
+        // callers can't both pass: postgres serializes the writes, the
+        // loser's UPDATE returns zero rows and surfaces
+        // TRANSCRIPTION_IN_PROGRESS (HTTP 409 from the manual route).
+        // Without this, rage-clicking "Transcribe" spawned N parallel
+        // workers all racing to write the same transcript and burning
+        // N× CPU on the provider.
+        const claimNow = new Date();
+        const staleCutoff = new Date(
+            claimNow.getTime() - TRANSCRIPTION_STALE_TIMEOUT_MS,
+        );
+        const claimed = await db
+            .update(recordings)
+            .set({ transcribingStartedAt: claimNow })
+            .where(
+                and(
+                    eq(recordings.id, recordingId),
+                    eq(recordings.userId, userId),
+                    isNull(recordings.deletedAt),
+                    or(
+                        isNull(recordings.transcribingStartedAt),
+                        lt(recordings.transcribingStartedAt, staleCutoff),
+                    ),
+                ),
+            )
+            .returning({ id: recordings.id });
+
+        if (claimed.length === 0) {
+            return {
+                success: false,
+                error: "A transcription run is already in progress for this recording",
+                errorCode: "TRANSCRIPTION_IN_PROGRESS",
+            };
+        }
+        claimedRecordingId = recordingId;
 
         const [settings] = await db
             .select()
@@ -406,5 +465,30 @@ export async function transcribeRecording(
                 error instanceof Error ? error.message : "Transcription failed",
             errorCode: "TRANSCRIPTION_FAILED",
         };
+    } finally {
+        // Release the in-flight claim regardless of success or failure.
+        // A crash here (DB unavailable, etc.) is non-fatal — the stale
+        // timeout (`TRANSCRIPTION_STALE_TIMEOUT_MS`) is the backstop that
+        // recovers an abandoned claim on the next attempt, so we just
+        // log and move on rather than letting a release failure mask
+        // the original result.
+        if (claimedRecordingId) {
+            try {
+                await db
+                    .update(recordings)
+                    .set({ transcribingStartedAt: null })
+                    .where(
+                        and(
+                            eq(recordings.id, claimedRecordingId),
+                            eq(recordings.userId, userId),
+                        ),
+                    );
+            } catch (releaseError) {
+                console.error(
+                    "Failed to release transcription claim (will recover via stale timeout):",
+                    releaseError,
+                );
+            }
+        }
     }
 }

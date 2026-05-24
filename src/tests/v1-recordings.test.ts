@@ -43,6 +43,7 @@ const recording = {
     isTrash: false,
     waveformPeaks: null,
     externalId: null,
+    transcribingStartedAt: null,
     deletedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -112,12 +113,31 @@ describe("v1 recordings", () => {
             },
             has_transcription: true,
             has_summary: true,
+            transcription_in_progress: false,
             links: {
                 self: "/api/v1/recordings/rec-1",
                 transcript: "/api/v1/recordings/rec-1/transcript",
                 audio: "/api/v1/recordings/rec-1/audio",
             },
         });
+    });
+
+    it("reports transcription_in_progress while a claim is fresh", () => {
+        const justNow = new Date();
+        const row = { ...recording, transcribingStartedAt: justNow };
+        expect(
+            serializeRecording(row, null, null, null).transcription_in_progress,
+        ).toBe(true);
+    });
+
+    it("treats a stale claim as not in progress", () => {
+        // Older than TRANSCRIPTION_STALE_TIMEOUT_MS (3h) → considered
+        // abandoned, the next caller is allowed to claim again.
+        const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+        const row = { ...recording, transcribingStartedAt: longAgo };
+        expect(
+            serializeRecording(row, null, null, null).transcription_in_progress,
+        ).toBe(false);
     });
 
     it("inlines transcript and summary for detail payloads", () => {

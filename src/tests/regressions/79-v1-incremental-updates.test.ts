@@ -173,6 +173,26 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
                 },
             ],
         });
+        // Satisfy the in-flight-claim + release `db.update(...)` calls in
+        // `transcribeRecording`. `.where(...)` is thenable AND exposes
+        // `.returning()` so claim (awaits `.returning()`) and release
+        // (awaits `.where()` directly) share one mock.
+        (db.update as Mock).mockReturnValue({
+            set: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    returning: vi.fn().mockResolvedValue([{ id: recordingId }]),
+                    // biome-ignore lint/suspicious/noThenProperty: thenable mock — drizzle chain is awaited in some call sites, returning() is used in others, single mock covers both
+                    then: (
+                        onFulfilled?: (value: undefined) => unknown,
+                        onRejected?: (reason: unknown) => unknown,
+                    ) =>
+                        Promise.resolve(undefined).then(
+                            onFulfilled,
+                            onRejected,
+                        ),
+                }),
+            }),
+        });
     });
 
     it("bumps recording updatedAt inside the manual transcription transaction", async () => {

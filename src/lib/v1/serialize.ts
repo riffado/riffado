@@ -51,12 +51,29 @@ export type V1Recording = {
     } | null;
     has_transcription: boolean;
     has_summary: boolean;
+    /**
+     * True while a `transcribeRecording` worker holds an active claim on
+     * this row. Lets the dashboard show a persistent "Transcribing..."
+     * chip across browser reloads — without this the chip only existed
+     * as client React state and was lost on reload, which is why users
+     * could trigger duplicate runs by clicking again. Derived from
+     * `recordings.transcribing_started_at` + stale-timeout.
+     */
+    transcription_in_progress: boolean;
     links: {
         self: string;
         transcript: string;
         audio: string;
     };
 };
+
+/**
+ * Mirrors `TRANSCRIPTION_STALE_TIMEOUT_MS` in `transcribe-recording.ts`.
+ * Defined here as well (rather than imported) because the serializer
+ * runs in contexts that should not pull in the OpenAI SDK and storage
+ * drivers transitively from the worker module. Keep these two in sync.
+ */
+const TRANSCRIPTION_STALE_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
 export type V1RecordingDetail = V1Recording & {
     transcript: V1Transcript | null;
@@ -147,6 +164,12 @@ export function serializeRecording(
 ): V1Recording {
     const self = `/api/v1/recordings/${recording.id}`;
 
+    const claimAt = recording.transcribingStartedAt;
+    const transcriptionInProgress = Boolean(
+        claimAt &&
+            Date.now() - claimAt.getTime() < TRANSCRIPTION_STALE_TIMEOUT_MS,
+    );
+
     return {
         id: recording.id,
         title: decryptText(recording.filename),
@@ -165,6 +188,7 @@ export function serializeRecording(
             : null,
         has_transcription: Boolean(transcription),
         has_summary: Boolean(enhancement),
+        transcription_in_progress: transcriptionInProgress,
         links: {
             self,
             transcript: `${self}/transcript`,

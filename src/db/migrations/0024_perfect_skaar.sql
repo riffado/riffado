@@ -1,0 +1,1 @@
+ALTER TABLE "recordings" ADD COLUMN "transcribing_started_at" timestamp;
