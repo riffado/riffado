@@ -44,6 +44,7 @@ const recording = {
     waveformPeaks: null,
     externalId: null,
     transcribingStartedAt: null,
+    transcriptionProgressSeconds: null,
     deletedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -114,6 +115,7 @@ describe("v1 recordings", () => {
             has_transcription: true,
             has_summary: true,
             transcription_in_progress: false,
+            transcription_progress_seconds: null,
             links: {
                 self: "/api/v1/recordings/rec-1",
                 transcript: "/api/v1/recordings/rec-1/transcript",
@@ -171,5 +173,33 @@ describe("v1 recordings", () => {
         expect(serializeRecording(row, null, null, null).external_id).toBe(
             "MR-2026-05-24-001",
         );
+    });
+
+    it("surfaces transcription_progress_seconds while a claim is fresh", () => {
+        const row = {
+            ...recording,
+            transcribingStartedAt: new Date(),
+            transcriptionProgressSeconds: 142,
+        };
+        expect(
+            serializeRecording(row, null, null, null)
+                .transcription_progress_seconds,
+        ).toBe(142);
+    });
+
+    it("hides transcription_progress_seconds once the claim is stale", () => {
+        // A stale claim was supposed to be released; if the release UPDATE
+        // never ran (process killed mid-write) a leftover progress number
+        // would otherwise stick to the row and confuse the UI.
+        const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+        const row = {
+            ...recording,
+            transcribingStartedAt: longAgo,
+            transcriptionProgressSeconds: 999,
+        };
+        expect(
+            serializeRecording(row, null, null, null)
+                .transcription_progress_seconds,
+        ).toBeNull();
     });
 });

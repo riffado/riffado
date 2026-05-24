@@ -146,6 +146,21 @@ vi.mock("@/lib/plaud/client-factory", () => ({
     createPlaudClient: vi.fn(),
 }));
 
+// `verbose_json` providers (whisper-1, Systran/faster-whisper-*) now go
+// through `streamTranscribe` (SSE) for real per-segment progress. The
+// diarize / json paths stay on the SDK — they need format-specific
+// response parsing and don't benefit from streaming the same way.
+// Stub the helper here so the existing whisper-1 tests below remain
+// concerned with "did we hit the right transcription endpoint" rather
+// than the SSE byte stream itself, which is tested elsewhere.
+vi.mock("@/lib/transcription/stream-transcribe", () => ({
+    streamTranscribe: vi.fn().mockResolvedValue({
+        text: "plain whisper transcript",
+        detectedLanguage: "en",
+        finalProgressSeconds: 0,
+    }),
+}));
+
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
@@ -313,18 +328,19 @@ describe("issue #101 — transcribeRecording sends chunking_strategy for diarize
     });
 
     it("does NOT send chunking_strategy for non-diarize models", async () => {
-        audioCreate.mockResolvedValue({
-            text: "plain whisper transcript",
-            language: "en",
-        });
+        // verbose_json providers now go through the SSE streamTranscribe
+        // path (see vi.mock above) — `audioCreate` is bypassed entirely
+        // for whisper-1. The original intent of this assertion was
+        // "chunking_strategy must not leak onto non-diarize calls"; we
+        // restate it as "the SDK transcribe endpoint was never even
+        // contacted for the whisper-1 path", which is the stronger
+        // guarantee (no params can sneak in at all).
         mockRecordingFlow({ defaultModel: "whisper-1" });
 
         const result = await transcribeRecording(userId, recordingId);
 
         expect(result.success).toBe(true);
-        const args = audioCreate.mock.calls[0]?.[0];
-        expect(args.response_format).toBe("verbose_json");
-        expect(args.chunking_strategy).toBeUndefined();
+        expect(audioCreate).not.toHaveBeenCalled();
     });
 
     it("respects manual model override and sends chunking_strategy when the override is diarize", async () => {

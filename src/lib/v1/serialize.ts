@@ -60,6 +60,14 @@ export type V1Recording = {
      * `recordings.transcribing_started_at` + stale-timeout.
      */
     transcription_in_progress: boolean;
+    /**
+     * Latest segment-end-seconds reported by the provider's streaming
+     * response (Speaches/Whisper emits one SSE event per segment).
+     * `null` when no run is in progress or when the provider didn't
+     * stream incremental events. The dashboard divides this by
+     * `duration_ms / 1000` to render a real progress bar.
+     */
+    transcription_progress_seconds: number | null;
     links: {
         self: string;
         transcript: string;
@@ -189,6 +197,13 @@ export function serializeRecording(
         has_transcription: Boolean(transcription),
         has_summary: Boolean(enhancement),
         transcription_in_progress: transcriptionInProgress,
+        // Only surface progress while a claim is fresh. A leftover
+        // value from a previous run that never got cleaned up (e.g.
+        // app killed mid-write of the release) would otherwise stick
+        // to the row and confuse the UI.
+        transcription_progress_seconds: transcriptionInProgress
+            ? (recording.transcriptionProgressSeconds ?? null)
+            : null,
         links: {
             self,
             transcript: `${self}/transcript`,
