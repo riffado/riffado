@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
+import { summarizeRecording } from "@/lib/ai/summarize-recording";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -504,6 +505,30 @@ export async function transcribeRecording(
         }
 
         await emitEvent("transcription.completed", userId, recordingId);
+
+        // Chain the summary worker. The previous behavior left the
+        // summary as a manual step the user had to click in the
+        // dashboard, which broke the server-to-server flow (meets
+        // posts a recording, gets the transcript, but no summary
+        // ever lands). Fire-and-forget — we don't await because the
+        // caller of `transcribeRecording` typically times out long
+        // before a long meeting's summary completes, and the user
+        // experience hinges on `transcription.completed` arriving
+        // promptly. `summarizeRecording` emits its own `summary.created`
+        // / `summary.failed` webhooks and handles its own errors, so
+        // a bare catch here only guards against an unhandled rejection
+        // crashing the process.
+        if (transcriptionText.trim()) {
+            void summarizeRecording(userId, recordingId).catch(
+                (err: unknown) => {
+                    console.error(
+                        "Auto-summary trigger failed for",
+                        recordingId,
+                        err,
+                    );
+                },
+            );
+        }
 
         return {
             success: true,

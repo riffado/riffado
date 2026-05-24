@@ -10,6 +10,8 @@ export const WEBHOOK_EVENTS = [
     "recording.deleted",
     "transcription.completed",
     "transcription.failed",
+    "summary.created",
+    "summary.failed",
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
