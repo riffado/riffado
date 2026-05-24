@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
 
-export function RegisterForm() {
+export function RegisterForm({
+    allowedEmailDomains = [],
+}: {
+    allowedEmailDomains?: readonly string[];
+}) {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -99,6 +103,12 @@ export function RegisterForm() {
                         required
                         disabled={isLoading}
                     />
+                    {allowedEmailDomains.length > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                            Sign-ups limited to:{" "}
+                            {allowedEmailDomains.join(", ")}
+                        </p>
+                    ) : null}
                 </div>
 
                 <div className="space-y-2">
