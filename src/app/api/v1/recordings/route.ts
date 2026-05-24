@@ -17,6 +17,7 @@ import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 import { getAudioMimeType } from "@/lib/utils";
 import {
     enforceV1AuthenticatedRateLimit,
@@ -303,6 +304,17 @@ export const POST = apiHandler(async (request: Request) => {
         );
     }
 
+    // `auto_transcribe` defaults to true because the only reason a
+    // server-to-server integration POSTs an audio file is to get a
+    // transcript back via webhook — having to make a second
+    // /transcribe call after every upload would be pure ceremony.
+    // Callers that want to defer (e.g. batch-upload first, transcribe
+    // later) can opt out with auto_transcribe=false. The dashboard
+    // upload path stays separate (browser session, immediate UI
+    // feedback, doesn't benefit from this gate).
+    const autoTranscribeRaw = readMultipartField(formData, "auto_transcribe");
+    const autoTranscribe = autoTranscribeRaw !== "false";
+
     // Idempotency short-circuit — same caller retrying the same upload
     // (e.g. our webhook receiver retrying after a network blip) should
     // map to the same row, not a duplicate. We do this BEFORE reading
@@ -378,6 +390,29 @@ export const POST = apiHandler(async (request: Request) => {
                 externalId: externalId ?? null,
             })
             .returning();
+
+        // Fire-and-forget transcribe worker. We can't `await` it here
+        // because a real meeting transcript on CPU Whisper runs an
+        // hour+ — the HTTP response would time out long before the
+        // worker finishes, and the caller (meets etc.) only needs the
+        // `recording.id` + `external_id` correlation handle from this
+        // response anyway. Completion arrives via the
+        // `transcription.completed` webhook subscription. A bare
+        // .catch keeps an unhandled-rejection from killing the
+        // process; `transcribeRecording` already handles errors
+        // internally and emits `transcription.failed` itself.
+        if (autoTranscribe) {
+            void transcribeRecording(authn.user.id, inserted.id).catch(
+                (err: unknown) => {
+                    console.error(
+                        "Auto-transcribe trigger failed for",
+                        inserted.id,
+                        err,
+                    );
+                },
+            );
+        }
+
         return NextResponse.json(
             serializeRecording(inserted, null, null, null),
             { status: 201 },

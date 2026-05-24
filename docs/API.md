@@ -440,6 +440,13 @@ browser session.
   separate mapping table.
 - `name` (optional) — friendly title; default derived from the file's
   basename.
+- `auto_transcribe` (optional, defaults to `true`) — when `true` (or
+  omitted), a transcribe worker fires immediately after the row is
+  inserted. The HTTP response returns before transcription finishes
+  (which can take many minutes on CPU Whisper); completion arrives
+  via the `transcription.completed` webhook. Pass `"false"` to defer —
+  the row is created and the audio is stored, but no transcribe is
+  triggered until you call `POST /api/recordings/[id]/transcribe`.
 
 **Response:** the stable v1 recording shape from `GET /v1/recordings`,
 with:
