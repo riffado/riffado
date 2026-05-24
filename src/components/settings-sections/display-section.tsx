@@ -1,6 +1,7 @@
 "use client";
 
 import { Monitor } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -50,6 +51,7 @@ const themeOptions = [
 ];
 
 export function DisplaySection() {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [dateTimeFormat, setDateTimeFormat] = useState("relative");
@@ -171,8 +173,8 @@ export function DisplaySection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Display"
-                description="How dates, lists, and the overall UI present themselves."
+                title={t("displayTitle")}
+                description={t("displayDescription")}
                 icon={Monitor}
             />
             <div className="space-y-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -33,6 +34,7 @@ const getSyncIntervalLabel = (value: number) => {
 };
 
 export function SyncSection() {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [syncInterval, setSyncInterval] = useState(300000);
@@ -139,8 +141,8 @@ export function SyncSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Sync"
-                description="When and how OpenPlaud pulls new recordings from your Plaud device."
+                title={t("syncTitle")}
+                description={t("syncDescription")}
                 icon={RefreshCw}
             />
             <div className="space-y-3">

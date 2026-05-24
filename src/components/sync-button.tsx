@@ -2,6 +2,7 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
     Tooltip,
@@ -80,19 +81,24 @@ export function SyncButton({
     onSync,
     className,
 }: SyncButtonProps) {
+    const t = useTranslations("syncButton");
+    const tDash = useTranslations("dashboard");
     const failed = !isAutoSyncing && lastSyncResult?.success === false;
 
     const label = (() => {
-        if (isAutoSyncing) return "Syncing...";
-        if (failed) return "Retry sync";
+        if (isAutoSyncing) return t("syncing");
+        if (failed) return t("retrySync");
         if (lastSyncTime) {
             try {
-                return `Synced ${compactAgo(lastSyncTime)}`;
+                const ago = compactAgo(lastSyncTime);
+                return ago === "just now"
+                    ? t("syncedJustNow")
+                    : t("syncedAgo", { time: ago });
             } catch {
-                return "Synced recently";
+                return t("syncedJustNow");
             }
         }
-        return "Sync device";
+        return tDash("syncDevice");
     })();
 
     // Tooltip: secondary context for users who hover. We pack what the
@@ -125,10 +131,10 @@ export function SyncButton({
     })();
 
     const ariaLabel = isAutoSyncing
-        ? "Syncing device"
+        ? t("syncing")
         : failed
-          ? "Retry sync"
-          : "Sync device";
+          ? t("retrySync")
+          : tDash("syncDevice");
 
     return (
         <Tooltip>

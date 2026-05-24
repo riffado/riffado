@@ -1,6 +1,7 @@
 "use client";
 
 import { Bot, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
@@ -48,6 +49,7 @@ export function ProvidersSection({
     initialProviders = EMPTY_PROVIDERS,
     isHosted = false,
 }: ProvidersSectionProps) {
+    const t = useTranslations("sectionHeaders");
     const confirm = useConfirm();
     const [providers, setProviders] = useState<Provider[]>(initialProviders);
     const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
@@ -107,8 +109,8 @@ export function ProvidersSection({
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <SettingsSectionHeader
-                        title="AI Providers"
-                        description="Connect transcription and summary providers. Anything OpenAI-compatible works."
+                        title={t("providersTitle")}
+                        description={t("providersDescription")}
                         icon={Bot}
                     />
                     {aiSubSection === "providers" && (

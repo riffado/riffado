@@ -1,6 +1,7 @@
 "use client";
 
 import { HardDrive } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -34,6 +35,7 @@ interface StorageUsage {
 }
 
 export function StorageSection({ isHosted = false }: StorageSectionProps) {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [autoDeleteRecordings, setAutoDeleteRecordings] = useState(false);
@@ -205,8 +207,8 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Storage"
-                description="Where OpenPlaud keeps the audio files behind your recordings."
+                title={t("storageTitle")}
+                description={t("storageDescription")}
                 icon={HardDrive}
             />
 

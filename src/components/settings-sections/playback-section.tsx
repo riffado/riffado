@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioWaveform, Keyboard, Play } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
@@ -27,6 +28,7 @@ const playbackSpeedOptions = [
 ];
 
 export function PlaybackSection() {
+    const t = useTranslations("sectionHeaders");
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [defaultPlaybackSpeed, setDefaultPlaybackSpeed] = useState(1.0);
@@ -160,8 +162,8 @@ export function PlaybackSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Playback"
-                description="Defaults applied to every recording when it loads in the player."
+                title={t("playbackTitle")}
+                description={t("playbackDescription")}
                 icon={Play}
             />
 
