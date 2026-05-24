@@ -21,6 +21,7 @@ import {
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
+import { streamTranscribe } from "@/lib/transcription/stream-transcribe";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -192,7 +193,13 @@ export async function transcribeRecording(
         );
         const claimed = await db
             .update(recordings)
-            .set({ transcribingStartedAt: claimNow })
+            .set({
+                transcribingStartedAt: claimNow,
+                // Reset progress for THIS run — a prior run on the
+                // same recording (manual re-transcribe, or a stale
+                // takeover) may have left the column populated.
+                transcriptionProgressSeconds: null,
+            })
             .where(
                 and(
                     eq(recordings.id, recordingId),
@@ -271,21 +278,62 @@ export async function transcribeRecording(
             transcriptionText = result.text;
             detectedLanguage = result.detectedLanguage;
         } else {
+            // Stream only for `verbose_json` providers (whisper-1,
+            // Systran/faster-whisper-*, etc.) — those are the ones
+            // that emit per-segment events that we can turn into a
+            // real progress bar. `diarized_json` (gpt-4o-transcribe-diarize)
+            // and the bare `json` shape (gpt-4o-transcribe non-diarize)
+            // both need their own response parsing and don't benefit
+            // from streaming the same way — keep them on the original
+            // non-streaming SDK path so we don't regress #101 / #122.
             const responseFormat = getResponseFormat(model);
-            const transcription = await openai.audio.transcriptions.create(
-                buildTranscriptionParams({
-                    file: audioFile,
+            if (responseFormat === "verbose_json") {
+                const result = await streamTranscribe({
+                    baseUrl: credentials.baseUrl || "https://api.openai.com/v1",
+                    apiKey,
                     model,
-                    responseFormat,
                     language: defaultLanguage,
-                }),
-            );
-            const parsed = parseTranscriptionResponse(
-                transcription,
-                responseFormat,
-            );
-            transcriptionText = parsed.text;
-            detectedLanguage = parsed.detectedLanguage;
+                    file: audioFile,
+                    onProgress: async (seconds) => {
+                        // Only update if WE still own the claim. Same
+                        // ownership-token pattern as the release path —
+                        // a stalled worker that wakes up to a stream
+                        // event after a successor has taken over must
+                        // not write progress onto the successor's row.
+                        if (!claimedAt) return;
+                        await db
+                            .update(recordings)
+                            .set({ transcriptionProgressSeconds: seconds })
+                            .where(
+                                and(
+                                    eq(recordings.id, recordingId),
+                                    eq(recordings.userId, userId),
+                                    eq(
+                                        recordings.transcribingStartedAt,
+                                        claimedAt,
+                                    ),
+                                ),
+                            );
+                    },
+                });
+                transcriptionText = result.text;
+                detectedLanguage = result.detectedLanguage;
+            } else {
+                const transcription = await openai.audio.transcriptions.create(
+                    buildTranscriptionParams({
+                        file: audioFile,
+                        model,
+                        responseFormat,
+                        language: defaultLanguage,
+                    }),
+                );
+                const parsed = parseTranscriptionResponse(
+                    transcription,
+                    responseFormat,
+                );
+                transcriptionText = parsed.text;
+                detectedLanguage = parsed.detectedLanguage;
+            }
         }
 
         const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
@@ -496,7 +544,10 @@ export async function transcribeRecording(
             try {
                 await db
                     .update(recordings)
-                    .set({ transcribingStartedAt: null })
+                    .set({
+                        transcribingStartedAt: null,
+                        transcriptionProgressSeconds: null,
+                    })
                     .where(
                         and(
                             eq(recordings.id, claimedRecordingId),

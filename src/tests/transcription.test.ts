@@ -45,6 +45,20 @@ vi.mock("@/lib/plaud/client-factory", () => ({
     createPlaudClient: vi.fn(),
 }));
 
+// `verbose_json` providers (whisper-1, Systran/faster-whisper-*) now go
+// through `streamTranscribe` (SSE) instead of the OpenAI SDK so the
+// dashboard can render real per-segment progress. Tests below that
+// exercise a whisper-1-shaped path see this stub instead of the live
+// fetch — the SSE byte-stream parsing is covered separately in
+// stream-transcribe tests.
+vi.mock("@/lib/transcription/stream-transcribe", () => ({
+    streamTranscribe: vi.fn().mockResolvedValue({
+        text: "Hello world",
+        detectedLanguage: "en",
+        finalProgressSeconds: 0,
+    }),
+}));
+
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
@@ -293,6 +307,14 @@ describe("Transcription", () => {
         });
 
         it("should return error when API call fails", async () => {
+            // whisper-1 goes through streamTranscribe in the new code
+            // path. Override the auto-mock from the file's top-level
+            // `vi.mock` so the streaming call rejects exactly the way
+            // the old SDK call used to.
+            const streamTranscribeMock = (
+                await import("@/lib/transcription/stream-transcribe")
+            ).streamTranscribe as unknown as Mock;
+            streamTranscribeMock.mockRejectedValueOnce(new Error("API Error"));
             const mockCreate = vi
                 .fn()
                 .mockRejectedValue(new Error("API Error"));

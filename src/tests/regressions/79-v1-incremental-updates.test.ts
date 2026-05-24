@@ -70,6 +70,17 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+// verbose_json providers now go through streamTranscribe (SSE) for
+// real per-segment progress. Stub here so the existing transcribe
+// flow tests don't need to mock a fetch byte stream.
+vi.mock("@/lib/transcription/stream-transcribe", () => ({
+    streamTranscribe: vi.fn().mockResolvedValue({
+        text: "Manual transcript",
+        detectedLanguage: "en",
+        finalProgressSeconds: 0,
+    }),
+}));
+
 import {
     DELETE as deleteSummary,
     POST as generateSummary,

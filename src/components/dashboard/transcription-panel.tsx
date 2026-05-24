@@ -20,9 +20,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useTranscriptionProgress } from "@/hooks/use-transcription-progress";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import { SUMMARY_PRESETS } from "@/lib/ai/summary-presets";
 import type { Recording } from "@/types/recording";
+
+function formatSeconds(totalSeconds: number): string {
+    const s = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(s / 60);
+    return `${String(m).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
 
 interface Transcription {
     text?: string;
@@ -42,6 +49,26 @@ export function TranscriptionPanel({
     isTranscribing,
     onTranscribe,
 }: TranscriptionPanelProps) {
+    // Real progress comes from the worker writing
+    // `transcription_progress_seconds` to the recording row as Whisper
+    // streams segments. The hook polls /api/recordings/[id] every 3s
+    // while `isTranscribing` is true and returns the latest value.
+    const { progressSeconds } = useTranscriptionProgress(
+        recording?.id,
+        isTranscribing,
+    );
+    const durationSeconds = Math.max(
+        1,
+        Math.round((recording?.duration ?? 0) / 1000),
+    );
+    const pct =
+        progressSeconds !== null
+            ? Math.min(
+                  99,
+                  Math.round((progressSeconds / durationSeconds) * 100),
+              )
+            : null;
+
     const {
         summaryData,
         isSummarizing,
@@ -95,9 +122,37 @@ export function TranscriptionPanel({
                     {isTranscribing ? (
                         <div className="flex flex-col items-center justify-center py-12">
                             <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted-foreground mb-3">
                                 Transcribing audio…
                             </p>
+                            {/*
+                              Real progress, not a time-based estimate:
+                              the worker writes `transcription_progress_seconds`
+                              as Whisper streams each segment. Until the
+                              first segment lands `pct` is null and we
+                              show the spinner alone (matches the
+                              "no-progress-known-yet" state).
+                            */}
+                            {pct !== null && (
+                                <div className="w-full max-w-md">
+                                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary transition-[width] duration-500 ease-out"
+                                            style={{ width: `${pct}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-xs text-muted-foreground mt-2 font-mono">
+                                        <span>
+                                            {formatSeconds(
+                                                progressSeconds ?? 0,
+                                            )}
+                                            {" / "}
+                                            {formatSeconds(durationSeconds)}
+                                        </span>
+                                        <span>{pct}%</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : transcription?.text ? (
                         <div className="space-y-4">

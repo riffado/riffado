@@ -248,6 +248,13 @@ export const recordings = pgTable(
         // users. Unique per (user_id, external_id) when set, so a retry
         // with the same external_id is idempotent.
         externalId: text("external_id"),
+        // Progress marker for the in-flight transcription, in seconds of
+        // audio. Updated by the worker as Speaches/Whisper streams back
+        // per-segment events (`stream=true`). Nullable; reset to null
+        // when the worker releases the claim. The dashboard divides this
+        // by `duration` (ms / 1000) to show a real progress bar instead
+        // of the previous "spinner only" UX. Cleared on each new claim.
+        transcriptionProgressSeconds: integer("transcription_progress_seconds"),
         // In-flight transcription claim. Set by the worker right before it
         // dispatches the provider call, cleared after success or failure
         // (whichever happens first). Used to give the manual transcribe
