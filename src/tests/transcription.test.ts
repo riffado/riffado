@@ -155,6 +155,42 @@ describe("Transcription", () => {
             expect(result.success).toBe(true);
         });
 
+        // ─────────────────────────────────────────────────────────────────
+        // MISSING REGRESSION TEST — stall-then-takeover claim sequence
+        // ─────────────────────────────────────────────────────────────────
+        //
+        // The release path in `transcribeRecording`'s `finally` matches on
+        //   (recording_id, user_id, transcribing_started_at = claimedAt)
+        // — the third predicate is the ownership token. Capturing it is
+        // load-bearing for the following sequence, which the current
+        // suite does NOT cover:
+        //
+        //   1. Worker A claims at T0 (sets transcribing_started_at = T0).
+        //   2. Worker A stalls past TRANSCRIPTION_STALE_TIMEOUT_MS (3h).
+        //   3. Worker B comes in, sees stale claim, takes over
+        //      (overwrites transcribing_started_at = T1, T1 > T0 + 3h).
+        //   4. Worker A finally returns from its stalled `await`, runs
+        //      its `finally` clause.
+        //   5. Without the ownership token, A's release would clear B's
+        //      claim → a hypothetical C would pass the claim check and
+        //      start a third parallel run, defeating the whole point of
+        //      the atomic claim.
+        //
+        // The ~3-line fix is straightforward, but a future refactor that
+        // moves the `finally` to a helper, reorders the release vs. the
+        // webhook-emit, or "simplifies" the WHERE clause back to the
+        // (recording_id, user_id) form would silently break this without
+        // the mocks in this file ever noticing — they don't observe what
+        // predicate the UPDATE is actually filtering on.
+        //
+        // A real test for this would need either (a) two concurrent
+        // transactions against a real postgres, or (b) a mock that
+        // records the WHERE-clause args and asserts the `claimedAt`
+        // predicate is present. Both feel out of scope here, but if
+        // you're touching this file: please add the case rather than
+        // leave the gap.
+        //
+        // Flagged by cubic-dev-ai on PR #175.
         it("returns TRANSCRIPTION_IN_PROGRESS when a fresh claim is already held", async () => {
             // recording lookup → exists
             // existingTranscription lookup → none
