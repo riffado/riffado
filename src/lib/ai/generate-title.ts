@@ -14,6 +14,14 @@ import { getAiOutputLanguageDirective } from "./summary-presets";
 export async function generateTitleFromTranscription(
     userId: string,
     transcriptionText: string,
+    /**
+     * ISO 639-1 code from Whisper's language detection, when known.
+     * Passed through to `getAiOutputLanguageDirective` so the
+     * `auto`/unset case can still match the transcript's language
+     * instead of falling back to whatever the LLM picks by default
+     * (typically English, since our prompt template is English).
+     */
+    detectedLanguage?: string | null,
 ): Promise<string | null> {
     try {
         // Get user's prompt configuration
@@ -119,6 +127,7 @@ export async function generateTitleFromTranscription(
         // the title-format rules in the user prompt.
         const languageDirective = getAiOutputLanguageDirective(
             userSettingsRow?.aiOutputLanguage ?? null,
+            detectedLanguage ?? null,
         );
 
         const prompt = promptTemplate.replace(

@@ -102,7 +102,7 @@
         "transcribing": "Transkribiere Audio…",
         "progressLabel": "{current} / {total}",
         "noTranscriptionTitle": "Noch keine Transkription",
-        "noTranscriptionBody": "Klicke oben auf „Transkribieren".",
+        "noTranscriptionBody": "Klicke oben auf „Transkribieren\".",
         "languageLabel": "Sprache: {language}",
         "wordCount": "{count} Wörter",
         "charCount": "{count} Zeichen",
@@ -118,7 +118,7 @@
         "expand": "Zusammenfassung ausklappen",
         "collapse": "Einklappen",
         "noSummaryTitle": "Noch keine Zusammenfassung",
-        "noSummaryBody": "Klicke auf „Zusammenfassen", um eine zu erstellen.",
+        "noSummaryBody": "Klicke auf „Zusammenfassen\", um eine zu erstellen.",
         "keyPoints": "Kernpunkte",
         "actionItems": "Aufgaben",
         "deleteSummary": "Löschen",
@@ -156,7 +156,7 @@
         },
         "language": {
             "title": "Oberflächensprache",
-            "description": "Sprache, die im OpenPlaud-Dashboard verwendet wird. Betrifft alles außer KI-generierten Zusammenfassungen (die folgen der Einstellung im Abschnitt „Zusammenfassung").",
+            "description": "Sprache, die im OpenPlaud-Dashboard verwendet wird. Betrifft alles außer KI-generierten Zusammenfassungen (die folgen der Einstellung im Abschnitt „Zusammenfassung\").",
             "label": "Sprache"
         },
         "summary": {
@@ -165,7 +165,7 @@
             "defaultPrompt": "Standard-Prompt für Zusammenfassungen",
             "defaultPromptHelp": "Die Standard-Vorlage, die für neue Zusammenfassungen verwendet wird. Du kannst sie pro Aufnahme überschreiben.",
             "outputLanguage": "Ausgabesprache der KI",
-            "outputLanguageHelp": "Gilt für KI-generierte Zusammenfassungen und Titel. „Auto" passt die Sprache an das Transkript an.",
+            "outputLanguageHelp": "Gilt für KI-generierte Zusammenfassungen und Titel. „Auto\" passt die Sprache an das Transkript an.",
             "outputLanguageAuto": "Auto (Transkript-Sprache verwenden)"
         },
         "webhooks": {
