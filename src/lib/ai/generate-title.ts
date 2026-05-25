@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
+import { buildChatCompletionParams } from "./chat-completion-params";
 import {
     getDefaultPromptConfig,
     getPromptById,
@@ -132,21 +133,23 @@ export async function generateTitleFromTranscription(
             ? `${baseSystem} ${languageDirective}`
             : baseSystem;
 
-        const response = await openai.chat.completions.create({
-            model,
-            messages: [
-                {
-                    role: "system",
-                    content: systemContent,
-                },
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-            temperature: 0.7,
-            max_tokens: 50, // Titles should be short
-        });
+        const response = await openai.chat.completions.create(
+            buildChatCompletionParams({
+                model,
+                messages: [
+                    {
+                        role: "system",
+                        content: systemContent,
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                temperature: 0.7,
+                maxTokens: 50, // Titles should be short
+            }),
+        );
 
         const title = response.choices[0]?.message?.content?.trim() || null;
 
