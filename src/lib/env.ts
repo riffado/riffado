@@ -76,6 +76,22 @@ export const envSchema = z.object({
         .refine((val) => val === undefined || val.length >= 32, {
             message: "API_TOKEN_HASH_SECRET must be at least 32 characters",
         }),
+    // Bearer secret for the admin provisioning surface
+    // (`/api/v1/admin/*`). Separate from regular API keys because it
+    // doesn't belong to any specific user — it's the operator
+    // bootstrap token for creating users + minting their keys on
+    // demand. Used by integrating systems (meets) that need to
+    // provision one OpenPlaud user per real human. Optional; if
+    // unset, the admin endpoints respond 503 (provisioning surface
+    // disabled). Length-checked so a typo'd short value can't pass
+    // for the secret.
+    OPENPLAUD_ADMIN_API_KEY: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val))
+        .refine((val) => val === undefined || val.length >= 32, {
+            message: "OPENPLAUD_ADMIN_API_KEY must be at least 32 characters",
+        }),
     APP_URL: z.string().url("APP_URL must be a valid URL").optional(),
 
     // Webhook target hardening. Unset means default to IS_HOSTED; explicit
@@ -244,6 +260,7 @@ function validateEnv(): Env {
             DATABASE_URL: process.env.DATABASE_URL,
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
             API_TOKEN_HASH_SECRET: process.env.API_TOKEN_HASH_SECRET,
+            OPENPLAUD_ADMIN_API_KEY: process.env.OPENPLAUD_ADMIN_API_KEY,
             APP_URL: process.env.APP_URL,
             WEBHOOKS_REQUIRE_PUBLIC_TARGETS:
                 process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
