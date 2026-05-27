@@ -16,6 +16,7 @@ import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
+import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 import {
     buildTranscriptionParams,
     getResponseFormat,
@@ -205,9 +206,27 @@ export async function transcribeRecording(
             detectedLanguage = result.detectedLanguage;
         } else {
             const responseFormat = getResponseFormat(model);
+
+            // OpenAI's /v1/audio/transcriptions endpoint has a hard 25 MiB
+            // per-request limit (https://platform.openai.com/docs/guides/speech-to-text).
+            // For meeting-length recordings that limit is the common case,
+            // not the edge case — fall back to a mono Opus re-encode so the
+            // 3 h+ uploads users actually have don't get rejected with a 413.
+            const compressed = await maybeCompressForWhisper(
+                audioBuffer,
+                contentType,
+            );
+            const fileToSend = compressed.compressed
+                ? buildAudioFile(
+                      compressed.buffer,
+                      recording.storagePath,
+                      decryptedFilename,
+                  ).file
+                : audioFile;
+
             const transcription = await openai.audio.transcriptions.create(
                 buildTranscriptionParams({
-                    file: audioFile,
+                    file: fileToSend,
                     model,
                     responseFormat,
                     language: defaultLanguage,
