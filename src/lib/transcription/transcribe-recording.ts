@@ -224,6 +224,12 @@ export async function transcribeRecording(
                   ).file
                 : audioFile;
 
+            // Whisper-1 transcribes at roughly 0.1-0.3x realtime on
+            // OpenAI's infrastructure, so a 3 h compressed recording can
+            // legitimately keep the request open for 20-40 minutes. The
+            // SDK default (10 min) times out long before that. Override
+            // per-request so unrelated OpenAI calls (e.g. title generation)
+            // keep the shorter default.
             const transcription = await openai.audio.transcriptions.create(
                 buildTranscriptionParams({
                     file: fileToSend,
@@ -231,6 +237,7 @@ export async function transcribeRecording(
                     responseFormat,
                     language: defaultLanguage,
                 }),
+                { timeout: whisperRequestTimeoutMs() },
             );
             const parsed = parseTranscriptionResponse(
                 transcription,
@@ -426,4 +433,15 @@ export async function transcribeRecording(
             errorCode: "TRANSCRIPTION_FAILED",
         };
     }
+}
+
+const DEFAULT_WHISPER_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
+
+function whisperRequestTimeoutMs(): number {
+    const raw = process.env.WHISPER_REQUEST_TIMEOUT_MS;
+    if (!raw) return DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
 }
