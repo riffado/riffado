@@ -1,4 +1,4 @@
-export type TranscriptionStyle = "whisper" | "chat";
+export type TranscriptionStyle = "whisper" | "chat" | "gemini";
 
 export interface ProviderPreset {
     name: string;
@@ -67,6 +67,20 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "ollama",
         defaultModel: "",
         transcriptionStyle: "whisper",
+    },
+    {
+        name: "Google Gemini",
+        baseUrl: "",
+        placeholder: "AIza...",
+        defaultModel: "gemini-2.0-flash",
+        transcriptionStyle: "gemini",
+        knownTranscriptionModels: [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ],
     },
     {
         name: "Custom",

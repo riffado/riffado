@@ -16,6 +16,7 @@ import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
+import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import {
     buildTranscriptionParams,
     getResponseFormat,
@@ -164,10 +165,6 @@ export async function transcribeRecording(
         void quality;
 
         const apiKey = decrypt(credentials.apiKey);
-        const openai = new OpenAI({
-            apiKey,
-            baseURL: credentials.baseUrl || undefined,
-        });
 
         const storage = await createUserStorageProvider(userId);
         const audioBuffer = await storage.downloadFile(recording.storagePath);
@@ -183,19 +180,18 @@ export async function transcribeRecording(
 
         const model = opts.model || credentials.defaultModel || "whisper-1";
 
-        // Chat-style providers (OpenRouter today) don't implement
-        // `/v1/audio/transcriptions` — calling that path returns a 404
-        // with a non-JSON body that crashes the OpenAI SDK's response
-        // parser (issue #122). Route those through chat-completions
-        // with an `input_audio` content part instead.
+        // Route based on the provider's transcription style:
+        // - "gemini": Google Gemini native generateContent API (inlineData)
+        // - "chat": OpenAI-compatible chat completions with input_audio
+        // - "whisper": OpenAI-compatible /v1/audio/transcriptions
         const transcriptionStyle = getTranscriptionStyle(credentials.provider);
 
         let transcriptionText: string;
         let detectedLanguage: string | null;
 
-        if (transcriptionStyle === "chat") {
-            const result = await chatTranscribe({
-                client: openai,
+        if (transcriptionStyle === "gemini") {
+            const result = await geminiTranscribe({
+                apiKey,
                 model,
                 audioBuffer,
                 contentType,
@@ -204,21 +200,39 @@ export async function transcribeRecording(
             transcriptionText = result.text;
             detectedLanguage = result.detectedLanguage;
         } else {
-            const responseFormat = getResponseFormat(model);
-            const transcription = await openai.audio.transcriptions.create(
-                buildTranscriptionParams({
-                    file: audioFile,
+            const openai = new OpenAI({
+                apiKey,
+                baseURL: credentials.baseUrl || undefined,
+            });
+
+            if (transcriptionStyle === "chat") {
+                const result = await chatTranscribe({
+                    client: openai,
                     model,
-                    responseFormat,
+                    audioBuffer,
+                    contentType,
                     language: defaultLanguage,
-                }),
-            );
-            const parsed = parseTranscriptionResponse(
-                transcription,
-                responseFormat,
-            );
-            transcriptionText = parsed.text;
-            detectedLanguage = parsed.detectedLanguage;
+                });
+                transcriptionText = result.text;
+                detectedLanguage = result.detectedLanguage;
+            } else {
+                const responseFormat = getResponseFormat(model);
+                const transcription =
+                    await openai.audio.transcriptions.create(
+                        buildTranscriptionParams({
+                            file: audioFile,
+                            model,
+                            responseFormat,
+                            language: defaultLanguage,
+                        }),
+                    );
+                const parsed = parseTranscriptionResponse(
+                    transcription,
+                    responseFormat,
+                );
+                transcriptionText = parsed.text;
+                detectedLanguage = parsed.detectedLanguage;
+            }
         }
 
         const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
