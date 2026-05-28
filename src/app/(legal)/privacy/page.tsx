@@ -13,13 +13,13 @@ import Link from "next/link";
  *     implemented via the full-backup endpoint)
  *   - Retention defaults and overrides
  *   - Cookie / tracking disclosure (Rybbit only, no third-party ads)
- *   - Contact for data requests (privacy@openplaud.com -- needs
+ *   - Contact for data requests (privacy@riffado.com -- needs
  *     mailbox if we want to use it)
  */
 
 export const metadata: Metadata = {
-    title: "Privacy Policy — OpenPlaud",
-    description: "How OpenPlaud handles your data on the hosted service.",
+    title: "Privacy Policy — Riffado",
+    description: "How Riffado handles your data on the hosted service.",
 };
 
 export default function PrivacyPage() {
@@ -30,12 +30,12 @@ export default function PrivacyPage() {
                 <em>Last updated: TBD. This page is a placeholder.</em>
             </p>
             <p>
-                OpenPlaud is open-source software you can run yourself (under
-                AGPL-3.0) or use through the hosted service at openplaud.com.
-                This page describes how the hosted service handles your data. If
-                you self-host, your data never touches our infrastructure and
-                this policy does not apply to you. See the{" "}
-                <Link href="https://github.com/openplaud/openplaud#readme">
+                Riffado is open-source software you can run yourself (under
+                AGPL-3.0) or use through the hosted service at riffado.com. This
+                page describes how the hosted service handles your data. If you
+                self-host, your data never touches our infrastructure and this
+                policy does not apply to you. See the{" "}
+                <Link href="https://github.com/riffado/riffado#readme">
                     project README
                 </Link>{" "}
                 for self-host guidance.
@@ -79,7 +79,7 @@ export default function PrivacyPage() {
 
             <h2>Compliance posture</h2>
             <p>
-                OpenPlaud is not HIPAA or SOC 2 certified. For regulated work,
+                Riffado is not HIPAA or SOC 2 certified. For regulated work,
                 self-host the project and plug in an AI provider that signs a
                 BAA you have reviewed, or run a local model.
             </p>
@@ -87,12 +87,12 @@ export default function PrivacyPage() {
             <h2>Contact</h2>
             <p>
                 Questions about this policy:{" "}
-                <Link href="mailto:support@openplaud.com">
-                    support@openplaud.com
+                <Link href="mailto:support@riffado.com">
+                    support@riffado.com
                 </Link>
                 . Security disclosures:{" "}
-                <Link href="mailto:security@openplaud.com">
-                    security@openplaud.com
+                <Link href="mailto:security@riffado.com">
+                    security@riffado.com
                 </Link>
                 .
             </p>

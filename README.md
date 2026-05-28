@@ -1,21 +1,23 @@
 <div align="center">
 
-# OpenPlaud
+![Riffado](.github/assets/banner.png)
 
-**Self-hosted AI transcription interface for Plaud Note devices.**
+# Riffado
 
-*Replace Plaud's $20/month AI subscription with your own OpenAI-compatible API keys.*
+**Open-source AI transcription companion for voice recorders.**
+
+*Bring your own AI provider, own your transcripts, self-host or hosted.*
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://openplaud.com/discord)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://riffado.com/discord)
 
-[Quick start](#quick-start) • [Documentation](https://openplaud.com/docs) • [Discord](https://openplaud.com/discord)
+[Quick start](#quick-start) • [Documentation](https://riffado.com/docs) • [Discord](https://riffado.com/discord)
 
 </div>
 
 ---
 
-OpenPlaud is a self-hosted web app for Plaud Note, Note Pro, and NotePin devices. It syncs your recordings from Plaud's servers, transcribes them with any OpenAI-compatible API (or in the browser, for free), and stores everything on infrastructure you control. AGPL-3.0.
+Riffado is an open-source companion app for AI voice recorders. It syncs your recordings from the manufacturer's cloud, transcribes them with any OpenAI-compatible API (or in the browser, for free), and stores everything on infrastructure you control. **Currently supports the Plaud Note family — Note, Note Pro, and NotePin. More device support on the way.** AGPL-3.0.
 
 ## Features
 
@@ -36,7 +38,7 @@ You need Docker, a Plaud account at [plaud.ai](https://plaud.ai), and (optionall
 **One-liner (Linux / macOS):**
 
 ```bash
-curl -fsSL https://openplaud.com/install.sh | sh
+curl -fsSL https://riffado.com/install.sh | sh
 ```
 
 Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` and `.env`, generates secrets, starts the stack, and waits for `/api/health`. Source: [`scripts/install.sh`](scripts/install.sh).
@@ -44,9 +46,9 @@ Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` a
 **Manual install:**
 
 ```bash
-mkdir openplaud && cd openplaud
-curl -fLO https://github.com/openplaud/openplaud/releases/latest/download/docker-compose.yml
-curl -fL  https://github.com/openplaud/openplaud/releases/latest/download/env.example -o .env
+mkdir riffado && cd riffado
+curl -fLO https://github.com/riffado/riffado/releases/latest/download/docker-compose.yml
+curl -fL  https://github.com/riffado/riffado/releases/latest/download/env.example -o .env
 
 # Generate secrets, paste into .env
 echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)"
@@ -59,36 +61,36 @@ Open <http://localhost:3000/register> and create your account. The onboarding wi
 
 **Upgrade:** `docker compose pull && docker compose up -d`. Migrations run on container start.
 
-Full install guide, version pinning, image tags, and Windows/WSL notes: [openplaud.com/docs/self-hosting/install](https://openplaud.com/docs/self-hosting/install).
+Full install guide, version pinning, image tags, and Windows/WSL notes: [riffado.com/docs/self-hosting/install](https://riffado.com/docs/self-hosting/install).
 
 > `main` is a rolling integration branch. Deploy from tagged image releases, not by building `main`. See [BRANCHING.md](BRANCHING.md).
 
 ## Connecting Plaud
 
-OpenPlaud signs into Plaud using your email — the same OTP flow as the official app. The verification code is forwarded directly to Plaud and never stored. Your access token is encrypted with AES-256-GCM before hitting the database. Region (Global, EU, APAC) is auto-detected.
+Riffado signs into Plaud using your email — the same OTP flow as the official app. The verification code is forwarded directly to Plaud and never stored. Your access token is encrypted with AES-256-GCM before hitting the database. Region (Global, EU, APAC) is auto-detected.
 
-If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [OpenPlaud Connector browser extension](https://github.com/openplaud/connector), or paste a token manually. Full instructions: [openplaud.com/docs/guides/connect-plaud-account](https://openplaud.com/docs/guides/connect-plaud-account).
+If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [Riffado Connector browser extension](https://github.com/riffado/connector), or paste a token manually. Full instructions: [riffado.com/docs/guides/connect-plaud-account](https://riffado.com/docs/guides/connect-plaud-account).
 
 > Every line that handles your credentials is open source — [send-code route](src/app/api/plaud/auth/send-code/route.ts) · [verify route](src/app/api/plaud/auth/verify/route.ts) · [encryption](src/lib/encryption.ts).
 
 ## Documentation
 
-Everything lives at **[openplaud.com/docs](https://openplaud.com/docs)**. Direct links:
+Everything lives at **[riffado.com/docs](https://riffado.com/docs)**. Direct links:
 
-- [Install & first run](https://openplaud.com/docs/self-hosting/install)
-- [Environment variables](https://openplaud.com/docs/self-hosting/environment-variables)
-- [Upgrading](https://openplaud.com/docs/self-hosting/upgrading)
-- [S3-compatible storage](https://openplaud.com/docs/self-hosting/storage-s3)
-- [Email / SMTP](https://openplaud.com/docs/self-hosting/email-smtp)
-- [Connect your Plaud account](https://openplaud.com/docs/guides/connect-plaud-account)
-- [AI providers](https://openplaud.com/docs/guides/ai-providers)
-- [Backup & restore](https://openplaud.com/docs/guides/backup-and-restore)
-- [Notifications](https://openplaud.com/docs/guides/notifications)
-- [Automation & webhooks](https://openplaud.com/docs/guides/automation-and-webhooks)
-- [Public API reference](https://openplaud.com/docs/reference/public-api)
-- [Encryption at rest](https://openplaud.com/docs/reference/encryption-at-rest)
-- [Security model](https://openplaud.com/docs/reference/security-model)
-- [Architecture](https://openplaud.com/docs/reference/architecture)
+- [Install & first run](https://riffado.com/docs/self-hosting/install)
+- [Environment variables](https://riffado.com/docs/self-hosting/environment-variables)
+- [Upgrading](https://riffado.com/docs/self-hosting/upgrading)
+- [S3-compatible storage](https://riffado.com/docs/self-hosting/storage-s3)
+- [Email / SMTP](https://riffado.com/docs/self-hosting/email-smtp)
+- [Connect your Plaud account](https://riffado.com/docs/guides/connect-plaud-account)
+- [AI providers](https://riffado.com/docs/guides/ai-providers)
+- [Backup & restore](https://riffado.com/docs/guides/backup-and-restore)
+- [Notifications](https://riffado.com/docs/guides/notifications)
+- [Automation & webhooks](https://riffado.com/docs/guides/automation-and-webhooks)
+- [Public API reference](https://riffado.com/docs/reference/public-api)
+- [Encryption at rest](https://riffado.com/docs/reference/encryption-at-rest)
+- [Security model](https://riffado.com/docs/reference/security-model)
+- [Architecture](https://riffado.com/docs/reference/architecture)
 
 ## Contributing
 
@@ -104,9 +106,9 @@ AGPL-3.0 — see [LICENSE](LICENSE). Free to use, modify, and self-host. If you 
 
 ## Disclaimer
 
-- **Not affiliated.** OpenPlaud is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Plaud Inc. or any of its subsidiaries. "Plaud" and related marks are the property of their respective owners and are used here only for descriptive interoperability purposes (nominative fair use).
-- **Third-party devices and services.** OpenPlaud is designed to interoperate with hardware and services from third parties that users choose to connect — including recording devices (such as Plaud) and storage and AI providers. Users are solely responsible for complying with the applicable terms of service, acceptable-use policies, and laws governing any third-party device or service they connect to this software.
+- **Not affiliated.** Riffado is an independent open-source project. It is not affiliated with, endorsed by, or sponsored by Plaud Inc. or any of its subsidiaries. "Plaud" and related marks are the property of their respective owners and are used here only for descriptive interoperability purposes (nominative fair use).
+- **Third-party devices and services.** Riffado is designed to interoperate with hardware and services from third parties that users choose to connect — including recording devices (such as Plaud) and storage and AI providers. Users are solely responsible for complying with the applicable terms of service, acceptable-use policies, and laws governing any third-party device or service they connect to this software.
 
 ## Acknowledgments
 
-Originally created by **Perier**. Maintained by the OpenPlaud community.
+Originally created by **Perier**. Maintained by the Riffado community.

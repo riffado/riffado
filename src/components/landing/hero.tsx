@@ -1,77 +1,59 @@
-import { ArrowRight } from "lucide-react";
-import Link from "next/link";
-import { MetalButton } from "@/components/metal-button";
+import { HeroReveal } from "@/components/landing/hero-reveal";
+import { HeroVisual } from "@/components/landing/hero-visual";
 
+/**
+ * Above-the-fold hero.
+ *
+ * Centered text band: headline, subhead, CTAs stacked and centered
+ * at all breakpoints. Below: full-width screenshot that bleeds down
+ * across the section boundary into TheMath, so the bg/border seam
+ * passes behind the screenshot. TheMath compensates with extra top
+ * padding (see `the-math.tsx`).
+ *
+ * Server component. Only the CTA pair + sticky-mobile bar are
+ * client-side (`HeroReveal`) so the LCP element -- the headline --
+ * ships as static HTML.
+ */
 export function Hero() {
     return (
-        <section className="relative pt-24 pb-20 md:pt-40 md:pb-32 overflow-hidden">
-            {/* Soft radial anchor behind the type. Uses the fixed color-mix
-                primary token from the earlier glow refactor. */}
-            <div className="absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_50%_40%,color-mix(in_oklch,var(--primary)_10%,transparent),transparent)]" />
+        <section className="relative pt-12 md:pt-20">
+            {/* Soft brand anchor behind the headline. */}
+            <div
+                aria-hidden
+                className="absolute inset-0 -z-10 bg-[radial-gradient(45%_40%_at_30%_25%,color-mix(in_oklch,var(--primary)_10%,transparent),transparent)]"
+            />
 
-            <div className="container mx-auto px-4">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h1 className="text-[clamp(2.5rem,6.5vw,5.5rem)] font-semibold tracking-[-0.02em] leading-[1.02] mb-8 text-foreground">
-                        Plaud charges{" "}
-                        <span className="text-muted-foreground/70 line-through decoration-[0.08em] decoration-muted-foreground/40">
-                            $29.99
+            <div className="container mx-auto px-4 relative">
+                <div className="mx-auto max-w-3xl text-center">
+                    <h1 className="text-[clamp(2.5rem,5.5vw,4.5rem)] font-semibold tracking-[-0.035em] leading-[1.05] text-foreground text-balance">
+                        Every word from your recorder.{" "}
+                        <span className="text-primary">
+                            Searchable, summarized, and yours.
                         </span>
-                        /month.
-                        <br />
-                        We charge <span className="text-primary">$0</span>.
                     </h1>
 
-                    <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground leading-relaxed mb-10">
-                        OpenPlaud connects to your Plaud Note and transcribes
-                        with your own AI keys. Pennies per hour, instead of a
-                        subscription. Self-host free, or hosted from{" "}
-                        <span className="text-foreground font-medium">
-                            $0/mo
-                        </span>
-                        .
+                    <p className="mt-6 text-lg text-muted-foreground leading-[1.55] text-pretty mx-auto max-w-xl">
+                        Sync in the background, transcribe with the AI you
+                        choose — or free in your browser — and keep the audio on
+                        storage you control.
                     </p>
 
-                    <div className="flex justify-center mb-10">
-                        <MetalButton
-                            asChild
-                            size="lg"
-                            className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 border-primary/50 h-12 px-7 text-base shadow-[0_0_24px_color-mix(in_oklch,var(--primary)_30%,transparent)]"
-                        >
-                            <Link href="/register">
-                                Start free <ArrowRight className="size-4" />
-                            </Link>
-                        </MetalButton>
+                    <div className="mt-8 mx-auto max-w-md sm:max-w-none">
+                        <HeroReveal />
                     </div>
+                </div>
+            </div>
 
-                    <TrustRow />
+            {/* Screenshot bleeds down into the next section. Negative
+                margin-bottom pulls TheMath up so its bg/border seam
+                runs roughly through the vertical middle of the image.
+                `relative z-10` keeps the screenshot above TheMath's
+                background fill. */}
+            <div className="relative z-10 mt-12 md:mt-16 -mb-24 md:-mb-40 lg:-mb-56">
+                <div className="mx-auto max-w-7xl px-4">
+                    <HeroVisual />
                 </div>
             </div>
         </section>
-    );
-}
-
-function TrustRow() {
-    const items = [
-        "Works with Plaud Note, Note Pro & NotePin",
-        "Open source",
-        "AGPL-3.0",
-    ];
-    return (
-        <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-            {items.map((item, i) => (
-                <li
-                    key={item}
-                    className="flex items-center gap-x-5 tracking-wide"
-                >
-                    <span>{item}</span>
-                    {i < items.length - 1 && (
-                        <span
-                            aria-hidden="true"
-                            className="size-1 rounded-full bg-muted-foreground/40"
-                        />
-                    )}
-                </li>
-            ))}
-        </ul>
     );
 }

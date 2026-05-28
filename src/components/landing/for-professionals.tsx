@@ -1,60 +1,75 @@
-import { FileLock, GitBranch, Server } from "lucide-react";
+import { ArrowRight, Github } from "lucide-react";
+import Link from "next/link";
 
 export function ForProfessionals() {
     return (
-        <section className="py-24 bg-secondary/20 border-y border-border/40">
+        <section
+            id="for-professionals"
+            className="py-20 bg-secondary/20 border-y border-border/40"
+        >
             <div className="container mx-auto px-4">
-                <div className="max-w-3xl mx-auto">
-                    <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mb-4">
-                        For professionals
-                    </p>
-                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-6">
+                <div className="max-w-5xl mx-auto">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono uppercase tracking-wider mb-4 text-muted-foreground">
+                        <span>For professionals</span>
+                        <span aria-hidden className="text-muted-foreground/40">
+                            {"//"}
+                        </span>
+                        <span className="text-muted-foreground/80">
+                            Lawyers · Journalists · Consultants · Researchers
+                        </span>
+                    </div>
+
+                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-8 max-w-3xl">
                         If your conversations stay in the room, your recordings
                         should too.
                     </h2>
-                    <p className="text-muted-foreground text-lg leading-relaxed mb-12">
-                        Lawyers, journalists, consultants, researchers:
-                        OpenPlaud gives you the parts that matter. Your
-                        recordings on infrastructure you control, the ability to
-                        audit every line of code yourself, and a real choice of
-                        AI provider, including ones that never leave your
-                        machine.
-                    </p>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-                        <ProBeat
-                            icon={<Server className="size-5" />}
-                            title="Infrastructure you control"
-                            description="Local disk, your own S3 bucket, or our hosted tier. No data sits somewhere you can't reach."
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-10 gap-y-8 mb-10">
+                        <Pillar
+                            kicker="01 / Infrastructure"
+                            headline="Runs where you put it."
+                            body="Local disk, your own S3 bucket, or our hosted tier. Recordings sit on storage you control."
                         />
-                        <ProBeat
-                            icon={<GitBranch className="size-5" />}
-                            title="Auditable by design"
-                            description="Every line of OpenPlaud is AGPL-3.0. Read it, fork it, prove to your clients what it does."
+                        <Pillar
+                            kicker="02 / Source"
+                            headline="Auditable, line by line."
+                            body="Every line of Riffado is AGPL-3.0. Read it, fork it, show clients exactly what it does."
                         />
-                        <ProBeat
-                            icon={<FileLock className="size-5" />}
-                            title="Your choice of AI provider"
-                            description="OpenAI, Anthropic, Groq, or a Whisper/Llama model running entirely on your own hardware via Ollama."
+                        <Pillar
+                            kicker="03 / AI"
+                            headline="Yours, including local."
+                            body="Run Whisper locally via Ollama — recordings never leave the machine. Or plug in any OpenAI-compatible cloud."
                         />
                     </div>
 
-                    <div className="rounded-xl border border-border bg-card p-6 md:p-8">
-                        <h3 className="text-base font-semibold mb-3">
-                            About HIPAA and regulated work
-                        </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+                        <div className="flex flex-wrap gap-3">
+                            <Link
+                                href="/docs/self-hosting"
+                                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-foreground text-background hover:bg-foreground/90 transition-colors text-sm font-medium"
+                            >
+                                Read the self-host guide
+                                <ArrowRight className="size-4" />
+                            </Link>
+                            <Link
+                                href="https://github.com/riffado/riffado"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-border bg-background hover:bg-secondary/40 transition-colors text-sm font-medium"
+                            >
+                                <Github className="size-4" />
+                                Read the source
+                            </Link>
+                        </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            Plaud self-attests HIPAA compliance and will sign a
-                            BAA. OpenPlaud doesn't make a compliance claim of
-                            its own; the claim belongs to your AI provider, not
-                            to us. If you handle protected information (health,
-                            privileged legal, regulated financial), the right
-                            path is to self-host OpenPlaud with a provider that
-                            signs a BAA you've reviewed (OpenAI Enterprise,
-                            Azure Speech, Deepgram), or use a local Whisper
-                            model that never leaves your machine. We won't
-                            promise compliance we don't control. We'll give you
-                            the tools to achieve it yourself.
+                            Need an air-gapped or in-house setup? Write to{" "}
+                            <Link
+                                href="mailto:support@riffado.com?subject=In-house%20Riffado%20setup"
+                                className="text-foreground font-medium hover:text-primary transition-colors underline-offset-4 hover:underline"
+                            >
+                                support@riffado.com
+                            </Link>{" "}
+                            — I'll reply personally.
                         </p>
                     </div>
                 </div>
@@ -63,23 +78,23 @@ export function ForProfessionals() {
     );
 }
 
-function ProBeat({
-    icon,
-    title,
-    description,
+function Pillar({
+    kicker,
+    headline,
+    body,
 }: {
-    icon: React.ReactNode;
-    title: string;
-    description: string;
+    kicker: string;
+    headline: string;
+    body: string;
 }) {
     return (
-        <div className="space-y-3">
-            <div className="size-10 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center">
-                {icon}
-            </div>
-            <h3 className="text-base font-semibold leading-tight">{title}</h3>
+        <div className="space-y-2">
+            <p className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                {kicker}
+            </p>
+            <h3 className="text-base font-semibold leading-snug">{headline}</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-                {description}
+                {body}
             </p>
         </div>
     );

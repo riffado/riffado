@@ -6,7 +6,7 @@ import { source } from "@/lib/source";
 export const dynamic = "force-dynamic";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = env.APP_URL ?? "https://openplaud.com";
+    const baseUrl = env.APP_URL ?? "https://riffado.com";
     return source.getPages().map((page) => ({
         url: `${baseUrl}${page.url}`,
         lastModified: page.data.lastModified,

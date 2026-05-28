@@ -1,5 +1,5 @@
 /*
- * Map Fumadocs UI's design tokens onto OpenPlaud's existing palette so the
+ * Map Fumadocs UI's design tokens onto Riffado's existing palette so the
  * docs surface inherits the audiophile color scheme defined in
  * `src/app/globals.css`. Imported AFTER `fumadocs-ui/style.css` in
  * `src/app/(docs)/layout.tsx` so these overrides win.

@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussions
-    url: https://github.com/openplaud/openplaud/discussions
+    url: https://github.com/riffado/riffado/discussions
     about: Ask questions and discuss ideas with the community
   - name: Security Vulnerability
-    url: https://github.com/openplaud/openplaud/security/advisories/new
+    url: https://github.com/riffado/riffado/security/advisories/new
     about: Report security vulnerabilities privately
   - name: Documentation
-    url: https://github.com/openplaud/openplaud/tree/main/docs
+    url: https://github.com/riffado/riffado/tree/main/docs
     about: Read the documentation

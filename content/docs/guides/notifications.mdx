@@ -3,7 +3,7 @@ title: Notifications
 description: Bark push notifications, browser notifications, and email — backends and configuration.
 ---
 
-OpenPlaud can notify you when a recording finishes syncing or a
+Riffado can notify you when a recording finishes syncing or a
 transcription completes. Three backends ship in the box: Bark
 (iOS push), browser notifications (Web Notifications API), and email
 (SMTP). Each backend is independent; you can enable any combination.
@@ -16,13 +16,13 @@ logged, not retried into a queue.
 
 [Bark](https://github.com/Finb/Bark) is a free, self-hostable iOS push
 service. You install the Bark app, it gives you a personal push URL,
-and you paste that URL into OpenPlaud.
+and you paste that URL into Riffado.
 
 **Settings → Notifications → Bark push URL.** Paste the URL Bark gave
 you (looks like `https://api.day.app/<your-key>`). The URL is stored
 per-user.
 
-OpenPlaud sends notifications with `level: "timeSensitive"` so they
+Riffado sends notifications with `level: "timeSensitive"` so they
 break through Focus modes on iOS. Failure is silent in the sense that
 sync continues — check the server logs if you expected a notification
 that didn't arrive.
@@ -34,20 +34,20 @@ out of the box on Chrome, Firefox, Safari, and Edge once you grant
 permission.
 
 **Settings → Notifications → Browser notifications → Enable.** The
-browser prompts you for permission; OpenPlaud remembers the per-user
+browser prompts you for permission; Riffado remembers the per-user
 toggle in the database.
 
-These only fire while the OpenPlaud tab is open in at least one
+These only fire while the Riffado tab is open in at least one
 browser. For background delivery, use Bark or email.
 
 ## Email
 
-On the hosted instance at openplaud.com, email is already configured
+On the hosted instance at riffado.com, email is already configured
 for you — just enable it. On a self-host instance, the operator has
 to wire up SMTP first; see
 [Email (SMTP) setup](../self-hosting/email-smtp).
 
-**Settings → Notifications → Email → Enable.** OpenPlaud will send a
+**Settings → Notifications → Email → Enable.** Riffado will send a
 message to your account email when a recording finishes syncing or a
 transcription completes.
 
@@ -62,7 +62,7 @@ mail goes out and no error surfaces in the UI.
 | Need                             | Use                  |
 | -------------------------------- | -------------------- |
 | Push to phone, away from desk    | Bark                 |
-| Notification while OpenPlaud open| Browser              |
+| Notification while Riffado open| Browser              |
 | Audit trail of completions       | Email                |
 | Multi-user team alerting         | Email                |
 

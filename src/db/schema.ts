@@ -212,7 +212,7 @@ export const recordings = pgTable(
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
         deviceSn: varchar("device_sn", { length: 255 }).notNull(),
-        // Unique ID from Plaud API, scoped per OpenPlaud user.
+        // Unique ID from Plaud API, scoped per Riffado user.
         plaudFileId: varchar("plaud_file_id", { length: 255 }).notNull(),
         filename: text("filename").notNull(),
         duration: integer("duration").notNull(), // milliseconds
@@ -240,7 +240,7 @@ export const recordings = pgTable(
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
         // Soft-delete tombstone. Set when the user deletes a recording from
-        // OpenPlaud's UI. Sync skips tombstoned rows so re-syncing from Plaud
+        // Riffado's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.

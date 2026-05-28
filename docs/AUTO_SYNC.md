@@ -1,6 +1,6 @@
 # Auto-Sync Documentation
 
-OpenPlaud includes an intelligent auto-sync system that automatically syncs recordings from your Plaud device in the background. This feature works seamlessly in both self-hosted and cloud deployments.
+Riffado includes an intelligent auto-sync system that automatically syncs recordings from your Plaud device in the background. This feature works seamlessly in both self-hosted and cloud deployments.
 
 ## How It Works
 
@@ -141,13 +141,13 @@ CMD ["npm", "start"]
 version: '3.8'
 
 services:
-  openplaud:
+  riffado:
     build: .
     ports:
       - "3000:3000"
     environment:
       # Database
-      DATABASE_URL: postgresql://user:password@db:5432/openplaud
+      DATABASE_URL: postgresql://user:password@db:5432/riffado
       
       # Sync Configuration
       NEXT_PUBLIC_SYNC_INTERVAL: 300000 # 5 minutes
@@ -165,7 +165,7 @@ services:
     environment:
       POSTGRES_PASSWORD: password
       POSTGRES_USER: user
-      POSTGRES_DB: openplaud
+      POSTGRES_DB: riffado
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -258,7 +258,7 @@ Monitor sync health by tracking:
 
 ### Sync Not Working
 
-1. **Check localStorage**: Ensure `openplaud_auto_sync_enabled` is `"true"`
+1. **Check localStorage**: Ensure `riffado_auto_sync_enabled` is `"true"`
 2. **Check environment variables**: Verify sync interval is set correctly
 3. **Browser console**: Look for network errors or CORS issues
 4. **API endpoint**: Test `/api/plaud/sync` manually
@@ -336,5 +336,5 @@ function setAutoSyncEnabled(enabled: boolean): void;
 
 ## License
 
-This auto-sync implementation is part of OpenPlaud and follows the same license.
+This auto-sync implementation is part of Riffado and follows the same license.
 
