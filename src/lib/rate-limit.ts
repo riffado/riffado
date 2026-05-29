@@ -58,6 +58,18 @@ export async function consumeRateLimitBucket(
     { limit, windowMs, now = new Date() }: RateLimitConfig,
 ): Promise<RateLimitResult> {
     const resetAt = new Date(now.getTime() + windowMs);
+
+    // Drizzle binds `${date}` slots inside `sql` template literals as
+    // untyped params. On postgres-js paired with newer Bun runtimes the
+    // serializer has no OID hint for those slots and trips on `Date` in
+    // its byteLength fast path (issue #171). Drizzle-managed columns
+    // (resetAt / createdAt / updatedAt) are unaffected because the schema
+    // gives them a typed serializer. Pre-stringify the inline-SQL params
+    // and tag them `::timestamptz` so the binding goes through the same
+    // string path every postgres-js / Bun build handles consistently.
+    const nowIso = now.toISOString();
+    const resetAtIso = resetAt.toISOString();
+
     const [bucket] = await db
         .insert(apiRateLimitBuckets)
         .values({
@@ -70,8 +82,8 @@ export async function consumeRateLimitBucket(
         .onConflictDoUpdate({
             target: apiRateLimitBuckets.key,
             set: {
-                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
-                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then ${resetAt} else ${apiRateLimitBuckets.resetAt} end`,
+                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso}::timestamptz then 1 else ${apiRateLimitBuckets.count} + 1 end`,
+                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${nowIso}::timestamptz then ${resetAtIso}::timestamptz else ${apiRateLimitBuckets.resetAt} end`,
                 updatedAt: now,
             },
         })
