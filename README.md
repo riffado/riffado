@@ -2,8 +2,6 @@
 
 ![Riffado](.github/assets/banner.png)
 
-# Riffado
-
 **Open-source AI transcription companion for voice recorders.**
 
 *Bring your own AI provider, own your transcripts, self-host or hosted.*
@@ -16,6 +14,8 @@
 </div>
 
 ---
+
+> **Renamed May 2026.** Riffado was previously **OpenPlaud**. Same project, same code, same team, same license &mdash; new name so the project isn't tied to one device vendor in its name. [Read the rebrand note &rarr;](https://riffado.com/rebrand)
 
 Riffado is an open-source companion app for AI voice recorders. It syncs your recordings from the manufacturer's cloud, transcribes them with any OpenAI-compatible API (or in the browser, for free), and stores everything on infrastructure you control. **Currently supports the Plaud Note family — Note, Note Pro, and NotePin. More device support on the way.** AGPL-3.0.
 
