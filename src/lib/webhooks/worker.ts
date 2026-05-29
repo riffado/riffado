@@ -240,11 +240,11 @@ async function postDelivery(
             {
                 "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(body).toString(),
-                "User-Agent": "OpenPlaud-Webhooks/1",
-                "X-OpenPlaud-Event": delivery.event,
-                "X-OpenPlaud-Delivery": delivery.id,
-                "X-OpenPlaud-Timestamp": String(timestamp),
-                "X-OpenPlaud-Signature": formatWebhookSignatureHeader(
+                "User-Agent": "Riffado-Webhooks/1",
+                "X-Riffado-Event": delivery.event,
+                "X-Riffado-Delivery": delivery.id,
+                "X-Riffado-Timestamp": String(timestamp),
+                "X-Riffado-Signature": formatWebhookSignatureHeader(
                     secret,
                     timestamp,
                     body,

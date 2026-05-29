@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Logo } from "@/components/icons/logo";
 import { MetalButton } from "@/components/metal-button";
-import { Panel } from "@/components/panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
@@ -31,6 +29,10 @@ interface LoginFormProps {
     smtpConfigured?: boolean;
 }
 
+/**
+ * Renders only the form (fields + submit + optional register footer).
+ * Page chrome (logo, headings, panel, background) is owned by the route.
+ */
 export function LoginForm({
     registrationEnabled = true,
     smtpConfigured = false,
@@ -72,19 +74,7 @@ export function LoginForm({
     };
 
     return (
-        <Panel className="w-full max-w-md space-y-6">
-            <div className="flex items-center gap-3">
-                <Logo className="size-10 shrink-0" />
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        OpenPlaud
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Self-hosted AI transcription
-                    </p>
-                </div>
-            </div>
-
+        <div className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -96,6 +86,7 @@ export function LoginForm({
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         disabled={isLoading}
+                        autoComplete="email"
                     />
                 </div>
 
@@ -119,6 +110,7 @@ export function LoginForm({
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         disabled={isLoading}
+                        autoComplete="current-password"
                     />
                 </div>
 
@@ -145,6 +137,6 @@ export function LoginForm({
                     </Link>
                 </div>
             )}
-        </Panel>
+        </div>
     );
 }

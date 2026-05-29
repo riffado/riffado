@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Logo } from "@/components/icons/logo";
+import { LogoWordmark } from "@/components/icons/logo";
 import { GitHubStarsPill } from "@/components/landing/github-stars-pill";
 import { MetalButton } from "@/components/metal-button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -10,12 +10,10 @@ export function LandingNav() {
             <div className="container mx-auto flex h-16 items-center justify-between px-4">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                    className="flex items-center hover:opacity-80 transition-opacity"
+                    aria-label="Riffado"
                 >
-                    <Logo className="size-8" />
-                    <span className="text-xl font-bold tracking-tight font-mono">
-                        OpenPlaud
-                    </span>
+                    <LogoWordmark className="h-8 w-auto" />
                 </Link>
                 <nav className="flex items-center gap-3">
                     <GitHubStarsPill />

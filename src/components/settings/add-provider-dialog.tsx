@@ -170,7 +170,7 @@ export function AddProviderDialog({
                                 We can&apos;t reach{" "}
                                 <code className="font-mono">localhost</code> or
                                 other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host OpenPlaud (
+                                use LM Studio or Ollama, self-host Riffado (
                                 <code className="font-mono">
                                     docker compose up
                                 </code>

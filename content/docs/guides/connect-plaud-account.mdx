@@ -1,9 +1,9 @@
 ---
 title: Connect your Plaud account
-description: Sign in to Plaud from OpenPlaud, including the Google/Apple workaround.
+description: Sign in to Plaud from Riffado, including the Google/Apple workaround.
 ---
 
-OpenPlaud signs into Plaud directly — the same way the official Plaud app
+Riffado signs into Plaud directly — the same way the official Plaud app
 does. No screen-scraping, no headless browser, no reverse-engineered
 mobile-app traffic. The flow you'll use depends on how you originally
 created your Plaud account.
@@ -11,11 +11,11 @@ created your Plaud account.
 ## Email-and-code (default path)
 
 If you signed up to Plaud with an email address and password, you can sign
-in from OpenPlaud directly:
+in from Riffado directly:
 
 1. Enter the email address you use on [plaud.ai](https://plaud.ai).
 2. Plaud emails you a 6-digit verification code.
-3. Paste it into OpenPlaud.
+3. Paste it into Riffado.
 
 The code is forwarded to Plaud's servers and **never stored locally**.
 After login, the returned access token is encrypted with AES-256-GCM
@@ -25,7 +25,7 @@ covers.
 
 Plaud's account region (Global, EU, Asia Pacific) is detected
 automatically: if the global endpoint responds with `status: -302` and a
-regional API host in `data.domains.api`, OpenPlaud follows the redirect
+regional API host in `data.domains.api`, Riffado follows the redirect
 and stores the per-account region alongside the token.
 
 ## Signed up with Google or Apple?
@@ -35,20 +35,20 @@ Apple** on Plaud, the email-and-code flow will *appear* to succeed but
 sync will return zero recordings. That's because the email/password
 identity and the Google/Apple identity are two different accounts on
 Plaud's side, even when they share an email address
-([#65](https://github.com/openplaud/openplaud/issues/65)).
+([#65](https://github.com/riffado/riffado/issues/65)).
 
-Real "Sign in with Google / Apple" inside OpenPlaud is structurally
+Real "Sign in with Google / Apple" inside Riffado is structurally
 blocked by Google's authorized-origins policy on Plaud's OAuth client.
 There are two workarounds.
 
 ### Easy path: the connector extension
 
-Install the [OpenPlaud Connector](https://github.com/openplaud/connector/releases/latest)
+Install the [Riffado Connector](https://github.com/riffado/connector/releases/latest)
 browser extension (AGPL-3.0) — grab the latest release from GitHub and
 load it as an unpacked extension. With the extension installed, the
 connect screen surfaces a **Sign in with Plaud** button. You sign in to
 `web.plaud.ai` the way you normally do; the extension forwards the
-resulting access token to your OpenPlaud instance. No copy-pasting, no
+resulting access token to your Riffado instance. No copy-pasting, no
 devtools.
 
 ### Manual fallback: paste the token
@@ -63,7 +63,7 @@ If you can't or won't install the extension:
    `api-euc1.plaud.ai`, or `api-apse1.plaud.ai`.
 4. Under **Headers → Request Headers**, find `Authorization`. Copy
    everything after `Bearer ` — the long `eyJ…` JWT.
-5. In OpenPlaud, switch to the **Paste token** tab, pick the region that
+5. In Riffado, switch to the **Paste token** tab, pick the region that
    matches the host you copied the token from (EU if it was
    `api-euc1.plaud.ai`, APAC for `api-apse1.plaud.ai`, otherwise
    Global), and paste.

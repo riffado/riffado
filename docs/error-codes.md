@@ -1,6 +1,6 @@
 # Error codes
 
-OpenPlaud's API returns a single error envelope on every failure, with one
+Riffado's API returns a single error envelope on every failure, with one
 documented exception (HTTP `416` audio range responses, see below):
 
 ```json

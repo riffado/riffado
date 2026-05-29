@@ -19,9 +19,9 @@ import Link from "next/link";
  */
 
 export const metadata: Metadata = {
-    title: "Terms of Service — OpenPlaud",
+    title: "Terms of Service — Riffado",
     description:
-        "Terms governing your use of the hosted OpenPlaud service at openplaud.com.",
+        "Terms governing your use of the hosted Riffado service at riffado.com.",
 };
 
 export default function TermsPage() {
@@ -32,22 +32,21 @@ export default function TermsPage() {
                 <em>Last updated: TBD. This page is a placeholder.</em>
             </p>
             <p>
-                These terms govern your use of the hosted OpenPlaud service at
-                openplaud.com. If you self-host the project, your relationship
-                is with the AGPL-3.0 license that governs the source code, not
-                with these terms.
+                These terms govern your use of the hosted Riffado service at
+                riffado.com. If you self-host the project, your relationship is
+                with the AGPL-3.0 license that governs the source code, not with
+                these terms.
             </p>
 
             <h2>The software vs. the service</h2>
             <p>
-                The OpenPlaud source code is licensed under AGPL-3.0 and lives
-                at{" "}
+                The Riffado source code is licensed under AGPL-3.0 and lives at{" "}
                 <Link
-                    href="https://github.com/openplaud/openplaud"
+                    href="https://github.com/riffado/riffado"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    github.com/openplaud/openplaud
+                    github.com/riffado/riffado
                 </Link>
                 . You are free to run, modify, and redistribute it under the
                 terms of that license. These Terms of Service apply only to the
@@ -86,8 +85,8 @@ export default function TermsPage() {
 
             <h2>Contact</h2>
             <p>
-                <Link href="mailto:support@openplaud.com">
-                    support@openplaud.com
+                <Link href="mailto:support@riffado.com">
+                    support@riffado.com
                 </Link>
             </p>
         </>

@@ -6,7 +6,7 @@ import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
-    title: "Account suspended — OpenPlaud",
+    title: "Account suspended — Riffado",
     robots: { index: false, follow: false },
 };
 
@@ -43,11 +43,8 @@ export default async function SuspendedPage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                     Reach out at{" "}
-                    <a
-                        href="mailto:support@openplaud.com"
-                        className="underline"
-                    >
-                        support@openplaud.com
+                    <a href="mailto:support@riffado.com" className="underline">
+                        support@riffado.com
                     </a>{" "}
                     if you think this is a mistake.
                 </p>

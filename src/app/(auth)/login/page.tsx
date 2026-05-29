@@ -1,20 +1,37 @@
+import {
+    HostedAuthChrome,
+    SelfHostAuthChrome,
+} from "@/components/auth/auth-chrome";
 import { LoginForm } from "@/components/auth/login-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
 
 export default async function LoginPage() {
-    // Redirect to dashboard if already authenticated
     await redirectIfAuthenticated();
 
+    const formProps = {
+        registrationEnabled: !env.DISABLE_REGISTRATION,
+        smtpConfigured: isSmtpConfigured(),
+    };
+
+    if (env.IS_HOSTED) {
+        return (
+            <HostedAuthChrome
+                title="Sign in"
+                subtitle="Welcome back to Riffado."
+            >
+                <LoginForm {...formProps} />
+            </HostedAuthChrome>
+        );
+    }
+
     return (
-        <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <LoginForm
-                    registrationEnabled={!env.DISABLE_REGISTRATION}
-                    smtpConfigured={isSmtpConfigured()}
-                />
-            </div>
-        </div>
+        <SelfHostAuthChrome
+            title="Sign in"
+            subtitle="Sign in to your Riffado instance."
+        >
+            <LoginForm {...formProps} />
+        </SelfHostAuthChrome>
     );
 }

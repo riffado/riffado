@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CopyableCommand } from "@/components/copyable-command";
 import { Footer } from "@/components/footer";
-import { Logo } from "@/components/icons/logo";
+import { LogoWordmark } from "@/components/icons/logo";
 import { LandingFooter } from "@/components/landing-footer";
 import { env } from "@/lib/env";
+import { INSTALL_ONELINER, pinnedInstallCommand } from "@/lib/install-commands";
 import { APP_VERSION_TAG } from "@/lib/version";
 
 /**
@@ -27,13 +28,13 @@ import { APP_VERSION_TAG } from "@/lib/version";
  */
 
 export const metadata: Metadata = {
-    title: "Install OpenPlaud — Self-host in one command",
+    title: "Install Riffado — Self-host in one command",
     description:
-        "Self-host OpenPlaud with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
+        "Self-host Riffado with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
 };
 
-const ONE_LINER = "curl -fsSL https://openplaud.com/install.sh | sh";
-const PINNED_LINER = `curl -fsSL https://openplaud.com/${APP_VERSION_TAG}/install.sh | sh`;
+const ONE_LINER = INSTALL_ONELINER;
+const PINNED_LINER = pinnedInstallCommand(APP_VERSION_TAG);
 
 export default function InstallPage() {
     return (
@@ -42,12 +43,10 @@ export default function InstallPage() {
                 <div className="container mx-auto px-4 max-w-4xl flex h-16 items-center justify-between">
                     <Link
                         href="/"
-                        className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                        className="flex items-center hover:opacity-80 transition-opacity"
+                        aria-label="Riffado"
                     >
-                        <Logo className="size-7" />
-                        <span className="text-lg font-bold tracking-tight font-mono">
-                            OpenPlaud
-                        </span>
+                        <LogoWordmark className="h-7 w-auto" />
                     </Link>
                     {/* The marketing landing only exists on hosted
                         (`/` redirects to `/login` on self-host), so
@@ -73,7 +72,7 @@ export default function InstallPage() {
                             Self-host
                         </div>
                         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-6">
-                            Install OpenPlaud
+                            Install Riffado
                         </h1>
                         <p className="text-lg text-muted-foreground leading-relaxed">
                             One command on a machine with Docker and Compose v2.
@@ -126,7 +125,7 @@ export default function InstallPage() {
                             <code className="font-mono">{APP_VERSION_TAG}</code>{" "}
                             with any released tag from{" "}
                             <Link
-                                href="https://github.com/openplaud/openplaud/releases"
+                                href="https://github.com/riffado/riffado/releases"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
@@ -193,7 +192,7 @@ export default function InstallPage() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Fair. Read the source at{" "}
                             <Link
-                                href="https://github.com/openplaud/openplaud/blob/main/scripts/install.sh"
+                                href="https://github.com/riffado/riffado/blob/main/scripts/install.sh"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"
@@ -202,7 +201,7 @@ export default function InstallPage() {
                             </Link>{" "}
                             on GitHub, or follow the manual{" "}
                             <Link
-                                href="https://github.com/openplaud/openplaud#self-host"
+                                href="https://github.com/riffado/riffado#self-host"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"

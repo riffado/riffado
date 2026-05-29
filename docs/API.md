@@ -1,6 +1,6 @@
 # API Documentation
 
-OpenPlaud API reference for all endpoints.
+Riffado API reference for all endpoints.
 
 ## Base URL
 
@@ -137,7 +137,7 @@ Get current Plaud connection status.
 
 #### DELETE `/plaud/connection`
 
-Disconnect the current Plaud account. Deletes the stored connection and device records; synced recordings are preserved in OpenPlaud storage.
+Disconnect the current Plaud account. Deletes the stored connection and device records; synced recordings are preserved in Riffado storage.
 
 **Response:**
 ```json
@@ -304,7 +304,7 @@ Configure storage provider.
   "storageType": "s3",
   "s3Config": {
     "endpoint": "https://...",
-    "bucket": "openplaud",
+    "bucket": "riffado",
     "region": "us-east-1",
     "accessKeyId": "...",
     "secretAccessKey": "..."
@@ -504,7 +504,7 @@ Forwarding headers such as `X-Forwarded-For` are ignored unless
 `RATE_LIMIT_TRUST_PROXY_HEADERS=true`; only enable it behind a trusted reverse
 proxy that strips or overwrites client-supplied forwarding headers.
 
-When `RATE_LIMIT_TRUST_PROXY_HEADERS=false` or unset, OpenPlaud cannot derive a
+When `RATE_LIMIT_TRUST_PROXY_HEADERS=false` or unset, Riffado cannot derive a
 trusted client IP from the request. The unauthenticated IP limiter therefore
 uses one shared `"unknown"` bucket of 1,200 requests per minute for the whole
 instance. Authenticated identity limits still apply per API key/session at 600
@@ -529,13 +529,13 @@ Supported events:
 - `transcription.completed`
 - `transcription.failed`
 
-OpenPlaud signs each request with HMAC-SHA256:
+Riffado signs each request with HMAC-SHA256:
 
 ```http
-X-OpenPlaud-Event: transcription.completed
-X-OpenPlaud-Delivery: <delivery-id>
-X-OpenPlaud-Timestamp: 1778078610
-X-OpenPlaud-Signature: t=1778078610,v1=<hex hmac>
+X-Riffado-Event: transcription.completed
+X-Riffado-Delivery: <delivery-id>
+X-Riffado-Timestamp: 1778078610
+X-Riffado-Signature: t=1778078610,v1=<hex hmac>
 ```
 
 The signature input is:
@@ -574,7 +574,7 @@ Webhook transcript payloads include a bounded preview instead of the full text:
     "created_at": "2026-05-06T12:05:00.000Z"
   },
   "links": {
-    "transcript": "https://openplaud.example/api/v1/recordings/abc123/transcript"
+    "transcript": "https://riffado.example/api/v1/recordings/abc123/transcript"
   }
 }
 ```

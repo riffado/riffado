@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Github, X } from "@/components/icons/icons";
-import { Logo } from "@/components/icons/logo";
+import { LogoWordmark } from "@/components/icons/logo";
 
 /**
  * Marketing footer for hosted public surfaces. Currently mounted on:
@@ -34,6 +34,12 @@ type FooterColumn = {
     links: FooterLink[];
 };
 
+// Recombined to three columns (Product / Community / Legal) after
+// dropping three duplicate links -- "Open Source" (covered by the
+// brand-block GitHub icon), "License (AGPL-3.0)" (covered by the
+// copyright row), and "Install script" (covered by Product → Self-host).
+// "For Professionals" moved from Company to Product where the
+// audience/page actually lives.
 const COLUMNS: FooterColumn[] = [
     {
         title: "Product",
@@ -41,50 +47,30 @@ const COLUMNS: FooterColumn[] = [
             { label: "Features", href: "/#features" },
             { label: "Pricing", href: "/#pricing" },
             { label: "Self-host", href: "/#deploy" },
-            {
-                label: "Changelog",
-                href: "https://github.com/openplaud/openplaud/blob/main/CHANGELOG.md",
-                external: true,
-            },
+            { label: "For Professionals", href: "/#for-professionals" },
+            { label: "Changelog", href: "/changelog" },
             {
                 label: "Roadmap",
-                href: "https://github.com/openplaud/openplaud/issues",
+                href: "https://github.com/riffado/riffado/issues",
                 external: true,
             },
         ],
     },
     {
-        title: "Resources",
+        title: "Community",
         links: [
             { label: "Documentation", href: "/docs" },
-            { label: "Install script", href: "/install" },
             {
                 label: "Discussions",
-                href: "https://github.com/openplaud/openplaud/discussions",
-                external: true,
-            },
-            {
-                label: "Security",
-                href: "https://github.com/openplaud/openplaud/blob/main/SECURITY.md",
-                external: true,
-            },
-        ],
-    },
-    {
-        title: "Company",
-        links: [
-            { label: "For Professionals", href: "/#for-professionals" },
-            {
-                label: "Open Source",
-                href: "https://github.com/openplaud/openplaud",
+                href: "https://github.com/riffado/riffado/discussions",
                 external: true,
             },
             {
                 label: "Code of Conduct",
-                href: "https://github.com/openplaud/openplaud/blob/main/CODE_OF_CONDUCT.md",
+                href: "https://github.com/riffado/riffado/blob/main/CODE_OF_CONDUCT.md",
                 external: true,
             },
-            { label: "Contact", href: "mailto:support@openplaud.com" },
+            { label: "Contact", href: "mailto:support@riffado.com" },
         ],
     },
     {
@@ -93,13 +79,13 @@ const COLUMNS: FooterColumn[] = [
             { label: "Privacy", href: "/privacy" },
             { label: "Terms", href: "/terms" },
             {
-                label: "Security disclosure",
-                href: "mailto:security@openplaud.com",
+                label: "Security",
+                href: "https://github.com/riffado/riffado/blob/main/SECURITY.md",
+                external: true,
             },
             {
-                label: "License (AGPL-3.0)",
-                href: "https://www.gnu.org/licenses/agpl-3.0.html",
-                external: true,
+                label: "Security disclosure",
+                href: "mailto:security@riffado.com",
             },
         ],
     },
@@ -128,39 +114,38 @@ export function LandingFooter() {
     return (
         <footer className="border-t border-border/40 bg-background">
             <div className="container mx-auto px-4 py-16 md:py-20 max-w-7xl">
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-8 md:gap-12">
-                    {/* Brand block spans 2 cols on desktop so the sitemap
-                        sits cleanly to the right. */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-8 md:gap-12">
+                    {/* Brand block spans 2 cols on desktop so the three
+                        sitemap columns sit cleanly to the right. */}
                     <div className="col-span-2 flex flex-col gap-4">
                         <Link
                             href="/"
-                            className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit"
+                            className="flex items-center hover:opacity-80 transition-opacity w-fit"
+                            aria-label="Riffado"
                         >
-                            <Logo className="size-7" />
-                            <span className="text-lg font-bold tracking-tight font-mono">
-                                OpenPlaud
-                            </span>
+                            <LogoWordmark className="h-7 w-auto" />
                         </Link>
                         <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
-                            Open-source companion for your Plaud device.
-                            Self-host it or let us run it for you.
+                            Open-source transcription for the voice recorder you
+                            already own. Your recordings, your transcripts,
+                            yours to keep.
                         </p>
                         <div className="flex items-center gap-3 mt-1">
                             <Link
-                                href="https://github.com/openplaud/openplaud"
+                                href="https://github.com/riffado/riffado"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="OpenPlaud on GitHub"
+                                aria-label="Riffado on GitHub"
                             >
                                 <Github className="size-5" />
                             </Link>
                             <Link
-                                href="https://x.com/openplaud"
+                                href="https://x.com/riffadohq"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="OpenPlaud on X"
+                                aria-label="Riffado on X"
                             >
                                 <X className="size-[18px]" />
                             </Link>
@@ -184,43 +169,45 @@ export function LandingFooter() {
                     ))}
                 </div>
 
-                {/* Honesty rail. OpenPlaud's Slice 2 audience
-                    (lawyers/journalists/regulated work) responds to
-                    explicit disclaimers more than to vague trust
-                    badges -- mirrors the FAQ's HIPAA answer. */}
-                <div className="mt-16 pt-6 border-t border-border/40">
+                {/* Honesty rail + copyright share one top border. The
+                    honesty rail is the trust signal Riffado's Slice 2
+                    audience (lawyers/journalists/regulated work)
+                    actually responds to -- mirrors the FAQ's HIPAA
+                    answer. Previously these sat under two adjacent
+                    rules ~30px apart; merged into one block to quiet
+                    the bottom of the page. */}
+                <div className="mt-16 pt-6 border-t border-border/40 flex flex-col gap-6">
                     <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-2xl">
-                        OpenPlaud is not HIPAA or SOC 2 certified. For regulated
+                        Riffado is not HIPAA or SOC 2 certified. For regulated
                         work, self-host and plug in an AI provider that signs a
                         BAA you&apos;ve reviewed, or run a local model that
                         never leaves your machine.
                     </p>
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-border/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <p className="text-xs text-muted-foreground font-mono">
-                        © {currentYear} OpenPlaud. Licensed under{" "}
-                        <Link
-                            href="https://www.gnu.org/licenses/agpl-3.0.html"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-foreground/80 hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
-                        >
-                            AGPL-3.0
-                        </Link>
-                        .
-                    </p>
-                    <p className="text-xs text-muted-foreground/70 font-mono">
-                        Built in the open on{" "}
-                        <Link
-                            href="https://github.com/openplaud/openplaud"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
-                        >
-                            GitHub
-                        </Link>
-                    </p>
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <p className="text-xs text-muted-foreground font-mono">
+                            © {currentYear} Riffado. Licensed under{" "}
+                            <Link
+                                href="https://www.gnu.org/licenses/agpl-3.0.html"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-foreground/80 hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
+                            >
+                                AGPL-3.0
+                            </Link>
+                            .
+                        </p>
+                        <p className="text-xs text-muted-foreground/70 font-mono">
+                            Built in the open on{" "}
+                            <Link
+                                href="https://github.com/riffado/riffado"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"
+                            >
+                                GitHub
+                            </Link>
+                        </p>
+                    </div>
                 </div>
             </div>
         </footer>

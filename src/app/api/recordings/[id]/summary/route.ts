@@ -16,6 +16,7 @@ import {
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
 import { requireApiSession } from "@/lib/auth-server";
+import { DEMO_SUMMARIES, isDemoRecordingId } from "@/lib/demo/fixtures";
 import { decrypt } from "@/lib/encryption";
 import {
     decryptJsonField,
@@ -353,6 +354,25 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
 
     const { id } = await (context as IdContext).params;
+
+    // Dev-only short-circuit for the `/dev/demo-dashboard` screenshot
+    // route. Two gates -- `NODE_ENV !== production` AND a `demo-` id
+    // prefix -- so this branch is literally unreachable in production
+    // builds even if a caller invents a `demo-*` id. Never touches the
+    // DB, never decrypts, never logs PII. See `src/lib/demo/fixtures.ts`.
+    if (process.env.NODE_ENV !== "production" && isDemoRecordingId(id)) {
+        const fixture = DEMO_SUMMARIES.get(id);
+        if (!fixture) {
+            return NextResponse.json({ summary: null });
+        }
+        return NextResponse.json({
+            summary: fixture.summary,
+            keyPoints: fixture.keyPoints,
+            actionItems: fixture.actionItems,
+            provider: fixture.provider,
+            model: fixture.model,
+        });
+    }
 
     const [recording] = await db
         .select({ id: recordings.id })

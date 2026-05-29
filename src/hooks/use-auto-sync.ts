@@ -25,10 +25,10 @@ interface SyncStatus {
     } | null;
 }
 
-const STORAGE_KEY = "openplaud_last_sync";
+const STORAGE_KEY = "riffado_last_sync";
 // Cross-tab in-flight stamp. Format: `${startedAtMs}:${token}`. Clear
 // side checks token match to avoid a TOCTOU wipe between concurrent tabs.
-const IN_FLIGHT_KEY = "openplaud_sync_in_progress";
+const IN_FLIGHT_KEY = "riffado_sync_in_progress";
 const IN_FLIGHT_TTL_MS = 90_000;
 const MANUAL_MIN_INTERVAL_MS = 5_000;
 
