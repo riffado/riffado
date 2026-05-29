@@ -56,7 +56,7 @@ const GROUPS: FaqGroup[] = [
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
-                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, you can plug in OpenAI, Anthropic, or Groq, or run a local model with Ollama. The browser path is on by default and stays free forever.",
+                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. The browser path is on by default and stays free forever.",
             },
             {
                 q: "Which voice recorders does Riffado work with?",
@@ -95,14 +95,14 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "Which AI providers can I use?",
-                a: "OpenAI, Anthropic, and Groq for cloud transcription and summaries. Ollama or LM Studio if you want a model running entirely on your own machine — nothing leaves your laptop. Browser-based Whisper if you don't want to configure anything at all. Pick per recording; change your mind any time. Power users: any OpenAI-compatible endpoint plugs in with one config entry, so OpenRouter, Together, Fireworks, Azure, and vLLM all work.",
+                a: "OpenAI or Groq for cloud transcription. Ollama or LM Studio if you want a model running entirely on your own machine — nothing leaves your laptop. Browser-based Whisper if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works — that includes OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
                 body: (
                     <>
                         <p>
                             <strong className="text-foreground font-medium">
-                                OpenAI, Anthropic, and Groq
+                                OpenAI or Groq
                             </strong>{" "}
-                            for cloud transcription and summaries.{" "}
+                            for cloud transcription.{" "}
                             <strong className="text-foreground font-medium">
                                 Ollama
                             </strong>{" "}
@@ -119,16 +119,16 @@ const GROUPS: FaqGroup[] = [
                             per recording; change your mind any time.
                         </p>
                         <p className="mt-3 text-sm text-muted-foreground/80">
-                            Power users: any OpenAI-compatible endpoint plugs in
-                            with one config entry, so OpenRouter, Together,
-                            Fireworks, Azure, and vLLM all work.
+                            For summaries, any OpenAI-compatible endpoint works
+                            — that includes OpenAI, Anthropic via OpenRouter,
+                            Groq, Together, Azure, and others.
                         </p>
                     </>
                 ),
             },
             {
                 q: "Does this affect my recorder's warranty or break the official app?",
-                a: "No. Riffado signs into your Plaud account with your credentials and downloads recordings the same way the official web app does — through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Riffado.",
+                a: "No. Riffado signs into your Plaud account the same way the official web app does — through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Riffado.",
             },
             {
                 q: "What happens if Plaud changes their API?",

@@ -10,13 +10,14 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { Pricing } from "@/components/landing/pricing";
 import { TheMath } from "@/components/landing/the-math";
 import { LandingFooter } from "@/components/landing-footer";
+import { RebrandAnnouncementBar } from "@/components/rebrand-announcement-bar";
 import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = {
     title: "Riffado — open-source AI transcription for voice recorders",
     description:
-        "Self-hostable companion app for AI voice recorders. Bring your own AI provider, own your transcripts, deploy where you want. Currently supports the Plaud Note family — Note, Note Pro, and NotePin.",
+        "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family — Note, Note Pro, and NotePin.",
 };
 
 export default async function HomePage() {
@@ -35,6 +36,10 @@ export default async function HomePage() {
 
     return (
         <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
+            {/* Above LandingNav -- deliberately not part of the sticky
+                header so the bar scrolls away after a single read. See
+                `rebrand-announcement-bar.tsx` for dismissal + expiration. */}
+            <RebrandAnnouncementBar />
             <LandingNav />
             <main className="flex-1">
                 <Hero />

@@ -103,10 +103,10 @@ export function TheMath() {
                     </div>
 
                     <p className="mt-6 text-xs text-muted-foreground/80 leading-relaxed text-pretty max-w-2xl">
-                        Published pricing as of 2026. Plans, minute ceilings,
-                        and trademarks belong to their respective owners; shown
-                        for descriptive context, not comparison. Riffado itself
-                        is free to self-host.
+                        Published pricing as of May 2026. Plans, minute
+                        ceilings, and trademarks belong to their respective
+                        owners; shown for descriptive context, not comparison.
+                        Riffado itself is free to self-host.
                     </p>
                 </div>
             </div>

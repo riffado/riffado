@@ -29,12 +29,12 @@ export function HostedAuthChrome({
 }: AuthChromeProps) {
     const bullets = [
         {
-            label: "Bring your own AI",
-            body: "OpenAI, Anthropic, Groq, Deepgram, or Whisper running locally on your machine.",
+            label: "Choose your AI",
+            body: "OpenAI or Groq for transcription, Anthropic and others for summaries — or Whisper running locally on your machine.",
         },
         {
             label: "Own your transcripts",
-            body: "Local disk, your own S3 bucket, or our hosted storage. Export anytime.",
+            body: "Local disk, your own cloud storage, or ours. Export anytime.",
         },
         {
             label: "Multi-device ready",

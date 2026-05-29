@@ -28,7 +28,7 @@ const BEATS: Beat[] = [
         step: "02",
         icon: <Cpu className="size-5" />,
         title: "Pick the AI. Get the transcript.",
-        body: "Use OpenAI, Anthropic, Groq, or another provider you already pay — you pay them directly at their published rate. No account anywhere? Transcription runs free, right in your browser. Every recording comes back with a summary, key points, and action items.",
+        body: "Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries — you pay them directly at their published rate. No account anywhere? Transcription runs free, right in your browser. Every recording comes back with a summary, key points, and action items.",
     },
     {
         step: "03",
@@ -64,8 +64,8 @@ export function Features() {
                     </ol>
 
                     <p className="mt-8 text-sm text-muted-foreground text-pretty">
-                        Free in your browser. Or bring your own AI account and
-                        pay them directly.
+                        Free in your browser. Or plug in OpenAI or Groq and pay
+                        them directly.
                     </p>
                 </div>
             </div>

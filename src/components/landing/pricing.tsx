@@ -67,7 +67,7 @@ const TIERS: Tier[] = [
             "Unlimited recordings and storage",
             "Runs on your laptop, NAS, or VPS via Docker",
             "Plug in OpenAI, Groq, Ollama — or transcribe free in your browser",
-            "Store on local disk or any S3-compatible bucket",
+            "Store locally, or push to Cloudflare R2, Backblaze B2, or AWS S3",
             "Every feature, no gates",
         ],
         cta: { label: "Deploy with Docker", href: "/install" },

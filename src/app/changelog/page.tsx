@@ -276,12 +276,17 @@ const TAG_STYLES: Record<PublicChangelogTag, string> = {
     new: "bg-primary/15 text-foreground border-primary/40",
     improved: "bg-foreground/5 text-foreground/80 border-border",
     fixed: "bg-foreground/5 text-muted-foreground border-border",
+    // `news` is for announcements that aren't feature work (rebrand,
+    // milestones, governance). Muted neutral so it doesn't outshine
+    // actual feature releases.
+    news: "bg-foreground/5 text-foreground/80 border-border",
 };
 
 const TAG_LABELS: Record<PublicChangelogTag, string> = {
     new: "New",
     improved: "Improved",
     fixed: "Fixed",
+    news: "News",
 };
 
 function TagChip({ tag }: { tag: PublicChangelogTag }) {

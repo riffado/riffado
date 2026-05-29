@@ -48,7 +48,7 @@
  * route are redirected to `CHANGELOG.md` on GitHub, which is the
  * accurate source for their installed version.
  */
-export type PublicChangelogTag = "new" | "improved" | "fixed";
+export type PublicChangelogTag = "new" | "improved" | "fixed" | "news";
 
 export type PublicChangelogItem = {
     tag: PublicChangelogTag;
@@ -81,6 +81,21 @@ export type PublicChangelogRelease = {
  * not significant -- add new releases wherever; the page sorts.
  */
 export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
+    {
+        // Standalone marketing-event entry, not tied to a code release.
+        // The `version` field stays for the maintainer cross-reference
+        // pattern but is not shown; the rebrand is dated, not versioned.
+        version: "0.5.4-rebrand",
+        date: "2026-05-29",
+        items: [
+            {
+                tag: "news",
+                title: "OpenPlaud is now Riffado",
+                body: "Same project, same code, same team — new name. The old name tied us to a single vendor; Riffado is a name we can grow into. Your account, recordings, transcripts, settings, and API tokens all keep working unchanged.",
+                link: { href: "/rebrand", label: "Read the full note" },
+            },
+        ],
+    },
     {
         version: "0.5.0",
         date: "2026-05-15",
