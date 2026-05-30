@@ -1,4 +1,4 @@
-import { pricingSnapshot } from "@/lib/admin/queries";
+import { pricingSnapshot } from "@/db/queries/admin";
 import { formatBytes, formatNumber } from "../_components/metrics";
 import { ExportCsvButton } from "./export-csv-button";
 

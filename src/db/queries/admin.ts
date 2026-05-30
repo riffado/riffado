@@ -13,7 +13,6 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import {
-    adminActionLog,
     adminAuditLog,
     aiEnhancements,
     apiCredentials,
@@ -397,7 +396,13 @@ export async function listUsers(opts: {
         | "last_sync_desc";
 }): Promise<{ rows: UserListRow[]; total: number }> {
     const since30 = new Date(Date.now() - 30 * DAY_MS).toISOString();
-    const search = (opts.q ?? "").trim().toLowerCase();
+    // ILIKE-escape: `%` and `_` are wildcards. Without escaping, a search
+    // for `_admin` matches `xadmin`, `yadmin`, etc., and `%` matches
+    // everything. Backslash is the default escape character in PostgreSQL.
+    // Admin-only surface, but escape anyway -- a permissive search input
+    // shouldn't surprise the operator with phantom matches.
+    const rawSearch = (opts.q ?? "").trim().toLowerCase();
+    const search = rawSearch.replace(/[\\%_]/g, (c) => `\\${c}`);
 
     const sortClause = (() => {
         switch (opts.sort) {
@@ -415,7 +420,7 @@ export async function listUsers(opts: {
     })();
 
     const whereClause = search
-        ? sql`where u.email ilike ${`%${search}%`}`
+        ? sql`where u.email ilike ${`%${search}%`} escape '\\'`
         : sql``;
 
     const [result, totalRes] = await Promise.all([
@@ -456,7 +461,7 @@ export async function listUsers(opts: {
             select user_id, count(*)::int as n
             from transcriptions
             where transcription_type = 'server'
-              and created_at >= ${since30}
+              and created_at >= ${since30}::timestamp
             group by user_id
         ) t on t.user_id = u.id
         ${whereClause}
@@ -702,7 +707,7 @@ export async function topServerTranscriptionUsers(limit = 50) {
         left join transcriptions t
           on t.user_id = u.id
          and t.transcription_type = 'server'
-         and t.created_at >= ${since30}
+         and t.created_at >= ${since30}::timestamp
         group by u.id, u.email
         order by n desc nulls last
         limit ${limit}
@@ -721,9 +726,9 @@ export async function syncHealth() {
         select bucket, count(*)::int as n from (
             select case
                 when last_sync is null then 'never'
-                when last_sync >= ${h1} then 'fresh'
-                when last_sync >= ${d1} then 'stale_24h'
-                when last_sync >= ${d7} then 'stale_7d'
+                when last_sync >= ${h1}::timestamp then 'fresh'
+                when last_sync >= ${d1}::timestamp then 'stale_24h'
+                when last_sync >= ${d7}::timestamp then 'stale_7d'
                 else 'stale_old'
             end as bucket
             from plaud_connections
@@ -755,7 +760,7 @@ export async function pricingSnapshot() {
             select count(*)::int as n
             from transcriptions
             where transcription_type = 'server'
-              and created_at >= ${since30}
+              and created_at >= ${since30}::timestamp
             group by user_id
             order by n asc
         `),
@@ -780,5 +785,3 @@ export async function pruneAdminAuditLog(olderThanDays = 90): Promise<number> {
     `);
     return Number(rows[0]?.n ?? 0);
 }
-
-export { adminActionLog, adminAuditLog };

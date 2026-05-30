@@ -284,8 +284,22 @@ function phase2Finalize(): void {
 	// is `chore(release): vX.Y.Z`. GitHub's default squash subject is the
 	// PR title, which we set to the same string, so this --grep works for
 	// both merge-commit and squash-merge PRs.
+	//
+	// Two non-obvious things going on here:
+	//   1. The grep pattern is SINGLE-QUOTED inside the JS template so the
+	//      backslashes (`\(` / `\)`) survive `/bin/sh -c`. Without quoting,
+	//      sh strips them and git sees `^chore(release): vX.Y.Z$` under
+	//      `--extended-regexp`, where `(release)` becomes a capture group
+	//      around the literal text "release" and the pattern stops matching
+	//      the actual commit subject `chore(release): vX.Y.Z`. Result was
+	//      zero matches and `Error: no commit on origin/main matches`.
+	//   2. `--no-merges` excludes GitHub's auto-generated merge commit,
+	//      whose body includes the PR title verbatim. Without it the grep
+	//      finds BOTH the release commit and its merge commit and the
+	//      script bails with `multiple commits match`. Squash-merge PRs
+	//      produce a non-merge commit, so this stays compatible.
 	const matches = run(
-		`git log origin/main --grep=^chore\\(release\\):\\ v${version}$ --extended-regexp --format=%H`,
+		`git log origin/main --no-merges --grep='^chore\\(release\\): v${version}$' --extended-regexp --format=%H`,
 		{ silent: true },
 	)
 		.trim()

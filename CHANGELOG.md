@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-05-30
+
+## [0.5.5] - 2026-05-30
+
+### Fixed
+- Rate-limit bucket upsert crashed every `/api/v1/*` and `/api/plaud/sync` request with `postgres-js` `ERR_INVALID_ARG_TYPE` ("Received an instance of Date") under Bun / Next 16. Drizzle only runs column encoders for `.values({...})` and bare column-mapped values; `Date` values interpolated into raw `` sql`case when reset_at <= ${now}` `` templates reached the driver as raw JS objects. Cast all Date params in the bucket upsert to `${iso}::timestamp`, matching the (TZ-naive) column type. Same hardening applied to six implicit text→timestamp comparisons in admin analytics queries that could also defeat index usage on `created_at` / `last_sync` ([#193](https://github.com/riffado/riffado/pull/193)).
+- Admin user search no longer treats `%` and `_` in the query as `ILIKE` wildcards. Escape with `` escape '\' `` so a search for `_admin` matches literal `_admin`, not anything ending in `admin`. Admin-only surface, low severity ([#193](https://github.com/riffado/riffado/pull/193)).
+
+### Changed
+- Rate limiter now **fails open** when the bucket store is unreachable. The previous behavior returned a 500 to every authenticated request when the DB upsert errored, taking the entire v1 API and Plaud sync down with the rate limiter. The new behavior catches the error, logs `[rate-limit] bucket store unavailable; failing open` for Sentry visibility, and lets the request through with a synthetic full bucket. A broken safety net should not collapse the building; upstream (Cloudflare / ALB) still rate-limits at the edge and `/api/v1/*` has per-token auth as a second gate. Trade-off: under a sustained outage an attacker could briefly burst past nominal limits ([#193](https://github.com/riffado/riffado/pull/193)).
+
 ## [0.5.4] - 2026-05-29
 
 ### Added
