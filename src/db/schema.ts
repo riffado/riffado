@@ -350,22 +350,6 @@ export const apiCredentials = pgTable("api_credentials", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Storage Configuration
-export const storageConfig = pgTable("storage_config", {
-    id: text("id")
-        .primaryKey()
-        .$defaultFn(() => nanoid()),
-    userId: text("user_id")
-        .notNull()
-        .unique()
-        .references(() => users.id, { onDelete: "cascade" }),
-    storageType: varchar("storage_type", { length: 10 }).notNull(), // 'local' or 's3'
-    // Encrypted S3 config (if s3): { endpoint, bucket, region, accessKeyId, secretAccessKey }
-    s3Config: jsonb("s3_config"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
-
 // User Settings
 export const userSettings = pgTable("user_settings", {
     id: text("id")
