@@ -418,18 +418,19 @@ export async function listUsers(opts: {
         ? sql`where u.email ilike ${`%${search}%`}`
         : sql``;
 
-    const result = await db.execute<{
-        id: string;
-        email: string;
-        created_at: Date;
-        suspended_at: Date | null;
-        last_sync: Date | null;
-        plaud_connected: boolean;
-        plaud_region: string | null;
-        recording_count: number;
-        storage_bytes: number;
-        server_tx_30d: number;
-    }>(sql`
+    const [result, totalRes] = await Promise.all([
+        db.execute<{
+            id: string;
+            email: string;
+            created_at: Date;
+            suspended_at: Date | null;
+            last_sync: Date | null;
+            plaud_connected: boolean;
+            plaud_region: string | null;
+            recording_count: number;
+            storage_bytes: number;
+            server_tx_30d: number;
+        }>(sql`
         select
             u.id,
             u.email,
@@ -462,13 +463,13 @@ export async function listUsers(opts: {
         order by ${sortClause}
         limit ${opts.limit}
         offset ${opts.offset}
-    `);
-
-    const totalRes = await db.execute<{ n: number }>(sql`
+    `),
+        db.execute<{ n: number }>(sql`
         select count(*)::int as n
         from users u
         ${whereClause}
-    `);
+    `),
+    ]);
 
     return {
         rows: result.map((r) => ({

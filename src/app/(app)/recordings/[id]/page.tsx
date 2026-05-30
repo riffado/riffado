@@ -34,13 +34,6 @@ export default async function RecordingDetailPage({
         notFound();
     }
 
-    // Fetch transcription if exists
-    const [transcription] = await db
-        .select()
-        .from(transcriptions)
-        .where(eq(transcriptions.recordingId, id))
-        .limit(1);
-
     // Load player preferences server-side so the embedded
     // RecordingPlayer respects the user's saved volume / speed /
     // auto-play / scrubber choices. Without this, the legacy
@@ -48,16 +41,23 @@ export default async function RecordingDetailPage({
     // 75 / 1x / false defaults regardless of what the user picked
     // in Settings → Playback (the dashboard route already plumbs
     // these through Workstation).
-    const [settingsRow] = await db
-        .select({
-            defaultPlaybackSpeed: userSettings.defaultPlaybackSpeed,
-            defaultVolume: userSettings.defaultVolume,
-            autoPlayNext: userSettings.autoPlayNext,
-            playerScrubber: userSettings.playerScrubber,
-        })
-        .from(userSettings)
-        .where(eq(userSettings.userId, session.user.id))
-        .limit(1);
+    const [[transcription], [settingsRow]] = await Promise.all([
+        db
+            .select()
+            .from(transcriptions)
+            .where(eq(transcriptions.recordingId, id))
+            .limit(1),
+        db
+            .select({
+                defaultPlaybackSpeed: userSettings.defaultPlaybackSpeed,
+                defaultVolume: userSettings.defaultVolume,
+                autoPlayNext: userSettings.autoPlayNext,
+                playerScrubber: userSettings.playerScrubber,
+            })
+            .from(userSettings)
+            .where(eq(userSettings.userId, session.user.id))
+            .limit(1),
+    ]);
     const scrubberStyle: "waveform" | "slider" =
         settingsRow?.playerScrubber === "slider" ? "slider" : "waveform";
 
