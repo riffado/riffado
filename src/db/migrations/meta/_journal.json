@@ -169,6 +169,13 @@
       "when": 1779721528953,
       "tag": "0023_ordinary_roxanne_simpson",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1780126747513,
+      "tag": "0024_sour_serpent_society",
+      "breakpoints": true
     }
   ]
 }
