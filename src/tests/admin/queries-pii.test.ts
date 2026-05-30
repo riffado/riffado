@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
  */
 describe("admin queries PII guard", () => {
     const raw = readFileSync(
-        join(process.cwd(), "src/lib/admin/queries.ts"),
+        join(process.cwd(), "src/db/queries/admin.ts"),
         "utf8",
     );
     // Strip block comments and line comments so the file-level docstring
@@ -41,7 +41,7 @@ describe("admin queries PII guard", () => {
         it(`does not reference ${tok}`, () => {
             expect(
                 file.includes(tok),
-                `src/lib/admin/queries.ts references ${tok}; admin must not surface this column`,
+                `src/db/queries/admin.ts references ${tok}; admin must not surface this column`,
             ).toBe(false);
         });
     }

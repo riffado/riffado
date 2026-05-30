@@ -275,7 +275,8 @@ In priority order when in doubt:
 
 - Prefer **server components**; use `"use client"` only for interactivity.
 - Route handlers live under `src/app/api/` — one `route.ts` per endpoint.
-- Database access via Drizzle. Queries may live inline in route handlers for now (no enforced `queries/` layer yet).
+- Database access via Drizzle. Fluent Drizzle queries (`db.select().from(...).where(...)`) may live inline in route handlers and feature `lib/` files. **Raw-SQL queries — anything calling `db.execute(sql\`...\`)` or holding a full `SELECT`/`INSERT`/`UPDATE`/`DELETE` inside a `sql\`\`` template — MUST live in `src/db/queries/`** and be imported by feature code. Inline `sql\`\`` *expression fragments* embedded inside Drizzle's fluent builder (`set: { col: sql\`col + 1\` }`, `where(sql\`json @> ...\`)`, `orderBy(sql\`...\`)`) stay where they're used — they're operator helpers, not queries.
+- When you write or touch any `sql\`\`` template: every interpolated value must be a `${...}` placeholder (param-bound, never string-concatenated); every `Date` value must be `.toISOString()` and cast (`${iso}::timestamp` for `timestamp` columns, `::timestamptz` only when the column is `timestamptz`); user-supplied `ILIKE` patterns must escape `%` and `_` with `escape '\\'`; sort columns and identifiers come from a fixed allowlist, never from user input.
 - Environment variables are validated via Zod in `src/lib/env.ts`. Add new vars there and access via the validated `env` object. **Never `process.env.X` directly in feature code.**
 - Toasts via `sonner`; no `alert()` or custom toast systems.
 - Client components that fetch from our own API use existing `/api/...` routes — no duplicate client-side Plaud API calls.

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getUserDetail } from "@/lib/admin/queries";
+import { getUserDetail } from "@/db/queries/admin";
 import {
     formatBytes,
     formatDate,

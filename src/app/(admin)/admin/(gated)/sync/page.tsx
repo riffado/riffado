@@ -1,4 +1,4 @@
-import { syncHealth } from "@/lib/admin/queries";
+import { syncHealth } from "@/db/queries/admin";
 import { formatNumber } from "../_components/metrics";
 
 export const dynamic = "force-dynamic";
