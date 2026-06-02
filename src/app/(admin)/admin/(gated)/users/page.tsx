@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listUsers } from "@/lib/admin/queries";
+import { listUsers } from "@/db/queries/admin";
 import {
     formatBytes,
     formatNumber,

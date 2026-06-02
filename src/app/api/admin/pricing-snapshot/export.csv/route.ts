@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
 import { headers as nextHeaders } from "next/headers";
 import { NextResponse } from "next/server";
-import { db } from "@/db";
+import { selectPricingSnapshotForCsvExport } from "@/db/queries/admin-pricing-snapshot-csv";
 import { logCsvExport } from "@/lib/admin/actions";
 import { requireAdminMutation } from "@/lib/admin/guard";
 import { clientIpFromHeaders } from "@/lib/admin/ip-allowlist";
@@ -38,44 +37,7 @@ export const POST = apiHandler(async (request: Request) => {
         );
     }
 
-    // Single round-trip: per-user storage, recording count, server-tx 30d.
-    // We do not include the user_id (an opaque nanoid) -- email is the
-    // operational handle. If you ever need user_id back, it should be a
-    // separate, more strongly justified export.
-    const rows = await db.execute<{
-        email: string;
-        created_at: Date;
-        suspended_at: Date | null;
-        recording_count: number;
-        storage_bytes: number;
-        server_tx_30d: number;
-    }>(sql`
-        with rec as (
-            select user_id,
-                   count(*)::int as n,
-                   coalesce(sum(filesize), 0)::bigint as bytes
-            from recordings
-            where deleted_at is null
-            group by user_id
-        ),
-        tx as (
-            select user_id, count(*)::int as n
-            from transcriptions
-            where transcription_type = 'server'
-              and created_at >= now() - interval '30 days'
-            group by user_id
-        )
-        select u.email,
-               u.created_at,
-               u.suspended_at,
-               coalesce(rec.n, 0)::int as recording_count,
-               coalesce(rec.bytes, 0)::bigint as storage_bytes,
-               coalesce(tx.n, 0)::int as server_tx_30d
-        from users u
-        left join rec on rec.user_id = u.id
-        left join tx on tx.user_id = u.id
-        order by storage_bytes desc nulls last
-    `);
+    const rows = await selectPricingSnapshotForCsvExport();
 
     await logCsvExport(
         {

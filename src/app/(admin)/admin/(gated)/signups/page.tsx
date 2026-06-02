@@ -1,4 +1,4 @@
-import { signupsByDay } from "@/lib/admin/queries";
+import { signupsByDay } from "@/db/queries/admin";
 import { formatNumber } from "../_components/metrics";
 
 export const dynamic = "force-dynamic";
