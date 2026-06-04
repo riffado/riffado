@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { RIFFADO_REPO_URL } from "@/components/landing/github-stars-pill";
+import { MESYNX_AI_REPO_URL } from "@/components/landing/github-stars-pill";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing-footer";
 import { env } from "@/lib/env";
@@ -13,12 +13,12 @@ import {
 } from "@/lib/public-changelog";
 import { cn } from "@/lib/utils";
 
-const TECHNICAL_CHANGELOG_URL = `${RIFFADO_REPO_URL}/blob/main/CHANGELOG.md`;
+const TECHNICAL_CHANGELOG_URL = `${MESYNX_AI_REPO_URL}/blob/main/CHANGELOG.md`;
 
 export const metadata: Metadata = {
-    title: "What's new — Riffado",
+    title: "What's new — Mesynx AI",
     description:
-        "Plain-language changelog for Riffado. New features, improvements, and fixes, written for the people who use the app.",
+        "Plain-language changelog for Mesynx AI. New features, improvements, and fixes, written for the people who use the app.",
 };
 
 /**
@@ -53,10 +53,10 @@ export default function ChangelogPage() {
                         Changelog
                     </p>
                     <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-balance">
-                        What&apos;s new in Riffado
+                        What&apos;s new in Mesynx AI
                     </h1>
                     <p className="mt-4 text-lg text-muted-foreground leading-relaxed max-w-xl">
-                        Updates to Riffado, in plain language. Looking for the
+                        Updates to Mesynx AI, in plain language. Looking for the
                         technical changelog?{" "}
                         <Link
                             href={TECHNICAL_CHANGELOG_URL}

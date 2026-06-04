@@ -33,7 +33,7 @@ export default function robots(): MetadataRoute.Robots {
         };
     }
 
-    const baseUrl = env.APP_URL ?? "https://riffado.com";
+    const baseUrl = env.APP_URL ?? "https://mesynx-ai.com";
 
     return {
         rules: [{ userAgent: "*", allow: "/", disallow: HOSTED_DISALLOW }],

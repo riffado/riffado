@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide covers deploying Riffado to production environments.
+This guide covers deploying Mesynx AI to production environments.
 
 ## Table of Contents
 
@@ -34,8 +34,8 @@ This guide covers deploying Riffado to production environments.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/riffado/riffado.git
-cd riffado
+git clone https://github.com/mesynx-ai/mesynx-ai.git
+cd mesynx-ai
 ```
 
 ### 2. Generate Secrets
@@ -60,7 +60,7 @@ Edit `.env` with your values:
 
 ```env
 # Database (use the service name from docker-compose.yml)
-DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@db:5432/riffado
+DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@db:5432/mesynx-ai
 
 # Auth
 BETTER_AUTH_SECRET=<generated-secret>
@@ -72,7 +72,7 @@ ENCRYPTION_KEY=<generated-key>
 # Storage (use 's3' for production)
 DEFAULT_STORAGE_TYPE=s3
 S3_ENDPOINT=https://your-s3-endpoint.com
-S3_BUCKET=riffado
+S3_BUCKET=mesynx-ai
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=<your-key>
 S3_SECRET_ACCESS_KEY=<your-secret>
@@ -122,10 +122,10 @@ pnpm install --frozen-lockfile
 
 ```bash
 # Create database
-createdb riffado
+createdb mesynx-ai
 
 # Update DATABASE_URL in .env
-DATABASE_URL=postgresql://user:password@localhost:5432/riffado
+DATABASE_URL=postgresql://user:password@localhost:5432/mesynx-ai
 ```
 
 ### 3. Run Migrations
@@ -155,7 +155,7 @@ For production, use a process manager:
 npm install -g pm2
 
 # Start with PM2
-pm2 start pnpm --name riffado -- start
+pm2 start pnpm --name mesynx-ai -- start
 
 # Save PM2 configuration
 pm2 save
@@ -173,7 +173,7 @@ pm2 startup
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
 | `BETTER_AUTH_SECRET` | Auth secret (32+ chars) | Generate with `openssl rand -hex 32` |
 | `ENCRYPTION_KEY` | Encryption key (64 hex chars) | Generate with `openssl rand -hex 32` |
-| `APP_URL` | Public URL of your app | `https://riffado.example.com` |
+| `APP_URL` | Public URL of your app | `https://mesynx-ai.example.com` |
 
 ### Optional Variables
 
@@ -226,10 +226,10 @@ effective_io_concurrency = 200  # For SSD
 # Daily backup script
 #!/bin/bash
 DATE=$(date +%Y%m%d_%H%M%S)
-pg_dump riffado | gzip > /backups/riffado_$DATE.sql.gz
+pg_dump mesynx-ai | gzip > /backups/mesynx-ai_$DATE.sql.gz
 
 # Keep last 30 days
-find /backups -name "riffado_*.sql.gz" -mtime +30 -delete
+find /backups -name "mesynx-ai_*.sql.gz" -mtime +30 -delete
 ```
 
 ### Connection Pooling
@@ -242,7 +242,7 @@ apt-get install pgbouncer
 
 # Configure /etc/pgbouncer/pgbouncer.ini
 [databases]
-riffado = host=localhost port=5432 dbname=riffado
+mesynx-ai = host=localhost port=5432 dbname=mesynx-ai
 
 [pgbouncer]
 listen_addr = 127.0.0.1
@@ -254,7 +254,7 @@ default_pool_size = 25
 
 Update `DATABASE_URL` to use PgBouncer:
 ```env
-DATABASE_URL=postgresql://user:pass@localhost:6432/riffado
+DATABASE_URL=postgresql://user:pass@localhost:6432/mesynx-ai
 ```
 
 ## Reverse Proxy Setup
@@ -264,10 +264,10 @@ DATABASE_URL=postgresql://user:pass@localhost:6432/riffado
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name riffado.example.com;
+    server_name mesynx-ai.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/riffado.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/riffado.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/mesynx-ai.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mesynx-ai.example.com/privkey.pem;
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -294,7 +294,7 @@ server {
 # Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name riffado.example.com;
+    server_name mesynx-ai.example.com;
     return 301 https://$server_name$request_uri;
 }
 ```
@@ -302,7 +302,7 @@ server {
 ### Caddy
 
 ```caddyfile
-riffado.example.com {
+mesynx-ai.example.com {
     reverse_proxy localhost:3000
 
     header {
@@ -327,7 +327,7 @@ riffado.example.com {
 apt-get install certbot python3-certbot-nginx
 
 # Get certificate
-certbot --nginx -d riffado.example.com
+certbot --nginx -d mesynx-ai.example.com
 
 # Auto-renewal (already set up by certbot)
 certbot renew --dry-run
@@ -339,10 +339,10 @@ certbot renew --dry-run
 
 ```bash
 # Backup
-docker compose exec db pg_dump -U postgres riffado > backup.sql
+docker compose exec db pg_dump -U postgres mesynx-ai > backup.sql
 
 # Restore
-docker compose exec -T db psql -U postgres riffado < backup.sql
+docker compose exec -T db psql -U postgres mesynx-ai < backup.sql
 ```
 
 ### File Storage Backup
@@ -365,13 +365,13 @@ BACKUP_DIR="/backups/$DATE"
 mkdir -p $BACKUP_DIR
 
 # Database
-docker compose exec db pg_dump -U postgres riffado | gzip > $BACKUP_DIR/db.sql.gz
+docker compose exec db pg_dump -U postgres mesynx-ai | gzip > $BACKUP_DIR/db.sql.gz
 
 # Environment config
 cp .env.local $BACKUP_DIR/env.backup
 
 # Docker volumes (if using local storage)
-docker run --rm -v riffado_audio:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/audio.tar.gz /data
+docker run --rm -v mesynx-ai_audio:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/audio.tar.gz /data
 
 echo "Backup completed: $BACKUP_DIR"
 ```
@@ -382,7 +382,7 @@ echo "Backup completed: $BACKUP_DIR"
 
 ```bash
 # Application health
-curl https://riffado.example.com/api/health
+curl https://mesynx-ai.example.com/api/health
 
 # Database health
 docker compose exec db pg_isready
@@ -460,7 +460,7 @@ docker compose down -v
 docker compose up -d
 
 # Or manually fix migration
-docker compose exec db psql -U postgres riffado
+docker compose exec db psql -U postgres mesynx-ai
 ```
 
 ### Performance Issues
@@ -472,7 +472,7 @@ docker compose exec db psql -U postgres riffado
 
 2. **Optimize database**
    ```bash
-   docker compose exec db vacuumdb -U postgres -z riffado
+   docker compose exec db vacuumdb -U postgres -z mesynx-ai
    ```
 
 3. **Enable caching**
@@ -562,6 +562,6 @@ For high-traffic deployments:
 ## Support
 
 For deployment help:
-- GitHub Discussions: https://github.com/riffado/riffado/discussions
-- Documentation: https://github.com/riffado/riffado/tree/main/docs
-- Issues: https://github.com/riffado/riffado/issues
+- GitHub Discussions: https://github.com/mesynx-ai/mesynx-ai/discussions
+- Documentation: https://github.com/mesynx-ai/mesynx-ai/tree/main/docs
+- Issues: https://github.com/mesynx-ai/mesynx-ai/issues

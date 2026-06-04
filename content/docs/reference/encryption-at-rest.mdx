@@ -3,7 +3,7 @@ title: Encryption at rest
 description: AES-256-GCM envelope encryption for sensitive database fields.
 ---
 
-Riffado encrypts user content fields in the database with AES-256-GCM,
+Mesynx AI encrypts user content fields in the database with AES-256-GCM,
 keyed off the `ENCRYPTION_KEY` environment variable that the runtime
 already requires.
 
@@ -57,7 +57,7 @@ Out of scope for this layer:
 
 If you need to keep plaintext audio and transcripts off third-party
 infrastructure entirely, run a local AI provider (Ollama or LM Studio)
-on the same machine as your Riffado instance. The server still holds
+on the same machine as your Mesynx AI instance. The server still holds
 the encryption key, but no plaintext leaves the box.
 
 ## Key management

@@ -6,7 +6,7 @@
  * Real Google/Apple OAuth on Plaud's behalf is structurally impossible from
  * a non-plaud.ai origin (Google's authorized-origins enforcement). The
  * shipping fix is a paste-token connect path: the user grabs the bearer
- * from a logged-in web.plaud.ai session and pastes it into Riffado. This
+ * from a logged-in web.plaud.ai session and pastes it into Mesynx AI. This
  * file pins the validation surface of /api/plaud/auth/connect-token plus
  * the shape of decodeAccessTokenExpiry, so we don't silently regress the
  * one escape hatch Google/Apple-registered Plaud users have today.

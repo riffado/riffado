@@ -113,7 +113,7 @@ jobs:
         run: pnpm build
         env:
           # Dummy values for build
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/riffado
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mesynx-ai
           BETTER_AUTH_SECRET: dummy-secret-for-build-only-not-used-in-production
           ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
           APP_URL: http://localhost:3000

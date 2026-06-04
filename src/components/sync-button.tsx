@@ -140,11 +140,7 @@ export function SyncButton({
                     variant="outline"
                     size="sm"
                     className={cn(
-                        "h-9",
-                        // Subtle destructive accent on failure: keeps
-                        // the outline shape (so the header doesn't get
-                        // a loud filled red button) but tints the
-                        // border + text.
+                        "h-8 gap-1.5 text-xs",
                         failed &&
                             "border-destructive/40 text-destructive hover:bg-destructive/10",
                         className,
@@ -152,16 +148,10 @@ export function SyncButton({
                     aria-label={ariaLabel}
                 >
                     {failed ? (
-                        <AlertCircle
-                            className="size-4 sm:mr-2"
-                            aria-hidden="true"
-                        />
+                        <AlertCircle className="size-3.5" aria-hidden="true" />
                     ) : (
                         <RefreshCw
-                            className={cn(
-                                "size-4 sm:mr-2",
-                                isAutoSyncing && "animate-spin",
-                            )}
+                            className={cn("size-3.5", isAutoSyncing && "animate-spin")}
                             aria-hidden="true"
                         />
                     )}

@@ -1,5 +1,5 @@
 // Brand colors extracted from email styles
-// Matches Riffado's technical aesthetic with WCAG AA contrast compliance
+// Matches Mesynx AI's technical aesthetic with WCAG AA contrast compliance
 
 export const brandColors = {
     // Primary brand color - terracotta/orange

@@ -1,17 +1,17 @@
 {
-    "name": "riffado",
+    "name": "mesynx-ai",
     "version": "0.5.6",
     "description": "Self-hosted AI transcription interface for Plaud Note devices",
-    "author": "Riffado Contributors",
+    "author": "Mesynx AI Contributors",
     "license": "AGPL-3.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/riffado/riffado.git"
+        "url": "https://github.com/mesynx-ai/mesynx-ai.git"
     },
     "bugs": {
-        "url": "https://github.com/riffado/riffado/issues"
+        "url": "https://github.com/mesynx-ai/mesynx-ai/issues"
     },
-    "homepage": "https://github.com/riffado/riffado#readme",
+    "homepage": "https://github.com/mesynx-ai/mesynx-ai#readme",
     "keywords": [
         "plaud",
         "plaud-note",

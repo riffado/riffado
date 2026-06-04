@@ -140,7 +140,7 @@ export function SyncSection() {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Sync"
-                description="When and how Riffado pulls new recordings from your Plaud device."
+                description="When and how Mesynx AI pulls new recordings from your Plaud device."
                 icon={RefreshCw}
             />
             <div className="space-y-3">

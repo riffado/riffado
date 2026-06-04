@@ -214,11 +214,11 @@ async function postDelivery(
             {
                 "Content-Type": "application/json",
                 "Content-Length": Buffer.byteLength(body).toString(),
-                "User-Agent": "Riffado-Webhooks/1",
-                "X-Riffado-Event": delivery.event,
-                "X-Riffado-Delivery": delivery.id,
-                "X-Riffado-Timestamp": String(timestamp),
-                "X-Riffado-Signature": formatWebhookSignatureHeader(
+                "User-Agent": "Mesynx AI-Webhooks/1",
+                "X-MesynxAI-Event": delivery.event,
+                "X-MesynxAI-Delivery": delivery.id,
+                "X-MesynxAI-Timestamp": String(timestamp),
+                "X-MesynxAI-Signature": formatWebhookSignatureHeader(
                     secret,
                     timestamp,
                     body,

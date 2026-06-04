@@ -19,7 +19,7 @@ export default async function LoginPage() {
         return (
             <HostedAuthChrome
                 title="Sign in"
-                subtitle="Welcome back to Riffado."
+                subtitle="Welcome back to Mesynx AI."
             >
                 <LoginForm {...formProps} />
             </HostedAuthChrome>
@@ -29,7 +29,7 @@ export default async function LoginPage() {
     return (
         <SelfHostAuthChrome
             title="Sign in"
-            subtitle="Sign in to your Riffado instance."
+            subtitle="Sign in to your Mesynx AI instance."
         >
             <LoginForm {...formProps} />
         </SelfHostAuthChrome>

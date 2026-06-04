@@ -3,161 +3,172 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Riffado Color Scheme - Modern Audiophile Design */
+/* ============================================================
+   MESYNX_AI — Cyan & Dark Design System
+   Primary surface: deep blue-black
+   Accent: light blue / cyan (pops on dark surfaces)
+   Typography: Geist Sans + Geist Mono
+   ============================================================ */
+
 :root {
-    --background: oklch(0.9818 0.0054 95.0986);
-    --foreground: oklch(0.3438 0.0269 95.7226);
-    --card: oklch(0.9818 0.0054 95.0986);
-    --card-foreground: oklch(0.1908 0.002 106.5859);
+    /* Surfaces */
+    --background: oklch(0.984 0.003 230);
+    --foreground: oklch(0.145 0.015 230);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0.015 230);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2671 0.0196 98.939);
-    --primary: oklch(0.6171 0.1375 39.0427);
+    --popover-foreground: oklch(0.145 0.015 230);
+
+    /* Brand — cyan / light blue */
+    --primary: oklch(0.55 0.18 220);
     --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9245 0.0138 92.9892);
-    --secondary-foreground: oklch(0.4334 0.0177 98.6048);
-    --muted: oklch(0.9341 0.0153 90.239);
-    --muted-foreground: oklch(0.6059 0.0075 97.4233);
-    --accent: oklch(0.9245 0.0138 92.9892);
-    --accent-foreground: oklch(0.2671 0.0196 98.939);
-    --destructive: oklch(0.1908 0.002 106.5859);
+
+    /* Secondary / Muted */
+    --secondary: oklch(0.954 0.006 230);
+    --secondary-foreground: oklch(0.32 0.015 230);
+    --muted: oklch(0.954 0.006 230);
+    --muted-foreground: oklch(0.50 0.018 230);
+    --accent: oklch(0.945 0.007 230);
+    --accent-foreground: oklch(0.145 0.015 230);
+
+    /* Semantic */
+    --destructive: oklch(0.615 0.215 25);
     --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.8847 0.0069 97.3627);
-    --input: oklch(0.7621 0.0156 98.3528);
-    --ring: oklch(0.6171 0.1375 39.0427);
-    --chart-1: oklch(0.5583 0.1276 42.9956);
-    --chart-2: oklch(0.6898 0.1581 290.4107);
-    --chart-3: oklch(0.8816 0.0276 93.128);
-    --chart-4: oklch(0.8822 0.0403 298.1792);
-    --chart-5: oklch(0.5608 0.1348 42.0584);
-    --sidebar: oklch(0.9663 0.008 98.8792);
-    --sidebar-foreground: oklch(0.359 0.0051 106.6524);
-    --sidebar-primary: oklch(0.6171 0.1375 39.0427);
-    --sidebar-primary-foreground: oklch(0.9881 0 0);
-    --sidebar-accent: oklch(0.9245 0.0138 92.9892);
-    --sidebar-accent-foreground: oklch(0.325 0 0);
-    --sidebar-border: oklch(0.9401 0 0);
-    --sidebar-ring: oklch(0.7731 0 0);
 
-    /* Theme-stable surface for marketing chrome (auth split-panel, etc.).
-       Locked to the light-mode foreground / background pair so the panel
-       stays dark-sepia + cream-text in BOTH light and dark themes -- it
-       intentionally does NOT invert. */
-    --auth-brand: oklch(0.3438 0.0269 95.7226);
-    --auth-brand-foreground: oklch(0.9818 0.0054 95.0986);
+    /* Chrome */
+    --border: oklch(0.885 0.008 230);
+    --input: oklch(0.885 0.008 230);
+    --ring: oklch(0.55 0.18 220);
 
-    --font-sans:
-        ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    /* Charts */
+    --chart-1: oklch(0.55 0.18 220);
+    --chart-2: oklch(0.60 0.18 264);
+    --chart-3: oklch(0.75 0.12 150);
+    --chart-4: oklch(0.65 0.18 290);
+    --chart-5: oklch(0.65 0.18 180);
+
+    /* Sidebar */
+    --sidebar: oklch(0.97 0.004 230);
+    --sidebar-foreground: oklch(0.32 0.015 230);
+    --sidebar-primary: oklch(0.55 0.18 220);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.945 0.007 230);
+    --sidebar-accent-foreground: oklch(0.145 0.015 230);
+    --sidebar-border: oklch(0.885 0.008 230);
+    --sidebar-ring: oklch(0.55 0.18 220);
+
+    /* Auth brand panel — locked dark regardless of theme */
+    --auth-brand: oklch(0.075 0.008 230);
+    --auth-brand-foreground: oklch(0.925 0.008 230);
+
+    /* Typography */
+    --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-    --font-mono:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
-    --radius: 0.5rem;
-    --shadow-x: 0;
-    --shadow-y: 1px;
-    --shadow-blur: 3px;
-    --shadow-spread: 0px;
-    --shadow-opacity: 0.1;
-    --shadow-color: oklch(0 0 0);
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm:
-        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow:
-        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow-md:
-        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg:
-        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-xl:
-        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
+    --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
 
-    /* Hardware Design System Colors (Light Mode) */
+    /* Shape */
+    --radius: 0.625rem;
+
+    /* Shadows — light */
+    --shadow-2xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
+    --shadow-xs: 0 1px 3px 0 oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.04);
+    --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
+    --shadow: 0 2px 4px 0 oklch(0 0 0 / 0.08), 0 1px 3px -1px oklch(0 0 0 / 0.06);
+    --shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.06);
+    --shadow-lg: 0 8px 16px -4px oklch(0 0 0 / 0.12), 0 4px 6px -4px oklch(0 0 0 / 0.06);
+    --shadow-xl: 0 16px 24px -6px oklch(0 0 0 / 0.14), 0 6px 10px -4px oklch(0 0 0 / 0.08);
+    --shadow-2xl: 0 24px 40px -8px oklch(0 0 0 / 0.18);
+
+    /* Semantic surface aliases */
     --app-background: var(--background);
-    --rack-background: var(--card);
     --panel-surface: var(--secondary);
     --panel-border: var(--border);
     --panel-inset: var(--muted);
 
-    /* Accent Colors */
-    --accent-primary: var(--primary);
-    --accent-primary-fg: var(--primary-foreground);
-    --accent-green: oklch(0.65 0.2 145);
-    --accent-blue: oklch(0.6 0.18 240);
-    --accent-purple: oklch(0.65 0.2 290);
-
-    /* LED Status Indicators */
-    --led-active: var(--accent-green);
-    --led-warning: oklch(0.75 0.15 85);
+    /* Status */
+    --accent-green: oklch(0.62 0.19 145);
+    --accent-blue: oklch(0.60 0.18 264);
+    --accent-purple: oklch(0.62 0.20 290);
+    --led-active: oklch(0.62 0.19 145);
+    --led-warning: oklch(0.72 0.16 85);
     --led-error: var(--destructive);
     --led-record: var(--destructive);
 
-    /* Text Hierarchy */
-    --text-primary: var(--foreground);
-    --text-secondary: var(--muted-foreground);
-    --text-muted: var(--muted-foreground);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
 }
 
 .dark {
-    --background: oklch(0.2679 0.0036 106.6427);
-    --foreground: oklch(0.8074 0.0142 93.0137);
-    --card: oklch(0.2679 0.0036 106.6427);
-    --card-foreground: oklch(0.9818 0.0054 95.0986);
-    --popover: oklch(0.3085 0.0035 106.6039);
-    --popover-foreground: oklch(0.9211 0.004 106.4781);
-    --primary: oklch(0.6724 0.1308 38.7559);
-    --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9818 0.0054 95.0986);
-    --secondary-foreground: oklch(0.3085 0.0035 106.6039);
-    --muted: oklch(0.2213 0.0038 106.707);
-    --muted-foreground: oklch(0.7713 0.0169 99.0657);
-    --accent: oklch(0.213 0.0078 95.4245);
-    --accent-foreground: oklch(0.9663 0.008 98.8792);
-    --destructive: oklch(0.6368 0.2078 25.3313);
-    --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.3618 0.0101 106.8928);
-    --input: oklch(0.4336 0.0113 100.2195);
-    --ring: oklch(0.6724 0.1308 38.7559);
-    --chart-1: oklch(0.5583 0.1276 42.9956);
-    --chart-2: oklch(0.6898 0.1581 290.4107);
-    --chart-3: oklch(0.213 0.0078 95.4245);
-    --chart-4: oklch(0.3074 0.0516 289.323);
-    --chart-5: oklch(0.5608 0.1348 42.0584);
-    --sidebar: oklch(0.2357 0.0024 67.7077);
-    --sidebar-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-primary: oklch(0.325 0 0);
-    --sidebar-primary-foreground: oklch(0.9881 0 0);
-    --sidebar-accent: oklch(0.168 0.002 106.6177);
-    --sidebar-accent-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-border: oklch(0.9401 0 0);
-    --sidebar-ring: oklch(0.7731 0 0);
+    /* Surfaces — deep blue-black (Odysseus-style) */
+    --background: oklch(0.13 0.015 230);
+    --foreground: oklch(0.925 0.008 220);
+    --card: oklch(0.155 0.018 230);
+    --card-foreground: oklch(0.925 0.008 220);
+    --popover: oklch(0.165 0.018 230);
+    --popover-foreground: oklch(0.925 0.008 220);
 
-    /* Hardware Design System Colors (Dark Mode) */
+    /* Brand — bright cyan that pops */
+    --primary: oklch(0.72 0.19 200);
+    --primary-foreground: oklch(0.10 0.02 220);
+
+    /* Secondary / Muted */
+    --secondary: oklch(0.165 0.015 230);
+    --secondary-foreground: oklch(0.72 0.012 220);
+    --muted: oklch(0.145 0.012 230);
+    --muted-foreground: oklch(0.52 0.02 220);
+    --accent: oklch(0.175 0.018 230);
+    --accent-foreground: oklch(0.88 0.008 220);
+
+    /* Semantic */
+    --destructive: oklch(0.62 0.22 25);
+    --destructive-foreground: oklch(1 0 0);
+
+    /* Chrome */
+    --border: oklch(0.24 0.018 230);
+    --input: oklch(0.185 0.015 230);
+    --ring: oklch(0.72 0.19 200);
+
+    /* Charts */
+    --chart-1: oklch(0.72 0.19 200);
+    --chart-2: oklch(0.65 0.18 264);
+    --chart-3: oklch(0.70 0.16 150);
+    --chart-4: oklch(0.68 0.20 290);
+    --chart-5: oklch(0.68 0.18 180);
+
+    /* Sidebar — slightly darker than background */
+    --sidebar: oklch(0.105 0.012 230);
+    --sidebar-foreground: oklch(0.925 0.008 220);
+    --sidebar-primary: oklch(0.72 0.19 200);
+    --sidebar-primary-foreground: oklch(0.10 0.02 220);
+    --sidebar-accent: oklch(0.155 0.015 230);
+    --sidebar-accent-foreground: oklch(0.88 0.008 220);
+    --sidebar-border: oklch(0.22 0.015 230);
+    --sidebar-ring: oklch(0.72 0.19 200);
+
+    /* Shadows — dark context (border-based depth) */
+    --shadow-2xs: 0 0 0 1px oklch(0 0 0 / 0.3), 0 1px 2px 0 oklch(0 0 0 / 0.4);
+    --shadow-xs: 0 0 0 1px var(--border), 0 1px 3px 0 oklch(0 0 0 / 0.5);
+    --shadow-sm: 0 0 0 1px var(--border), 0 2px 4px -1px oklch(0 0 0 / 0.5);
+    --shadow: 0 0 0 1px var(--border), 0 4px 6px -2px oklch(0 0 0 / 0.5);
+    --shadow-md: 0 0 0 1px var(--border), 0 6px 12px -3px oklch(0 0 0 / 0.6);
+    --shadow-lg: 0 0 0 1px var(--border), 0 10px 20px -5px oklch(0 0 0 / 0.65);
+    --shadow-xl: 0 0 0 1px var(--border), 0 20px 32px -8px oklch(0 0 0 / 0.7);
+    --shadow-2xl: 0 0 0 1px var(--border), 0 32px 48px -12px oklch(0 0 0 / 0.8);
+
+    /* Semantic surface aliases */
     --app-background: var(--background);
-    --rack-background: var(--card);
     --panel-surface: var(--accent);
     --panel-border: var(--border);
     --panel-inset: var(--muted);
 
-    /* Accent Colors */
-    --accent-primary: var(--primary);
-    --accent-primary-fg: var(--primary-foreground);
-    --accent-green: oklch(0.7 0.2 145);
-    --accent-blue: oklch(0.65 0.18 240);
-    --accent-purple: oklch(0.7 0.2 290);
-
-    /* LED Status Indicators */
-    --led-active: var(--accent-green);
+    /* Status */
+    --accent-green: oklch(0.70 0.20 145);
+    --accent-blue: oklch(0.65 0.18 264);
+    --accent-purple: oklch(0.68 0.20 290);
+    --led-active: oklch(0.70 0.20 145);
     --led-warning: oklch(0.75 0.15 85);
     --led-error: var(--destructive);
     --led-record: var(--destructive);
-
-    /* Text Hierarchy */
-    --text-primary: var(--foreground);
-    --text-secondary: var(--muted-foreground);
-    --text-muted: var(--muted-foreground);
 }
 
 @theme inline {
@@ -204,6 +215,7 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
+    --radius-2xl: calc(var(--radius) + 8px);
 
     --shadow-2xs: var(--shadow-2xs);
     --shadow-xs: var(--shadow-xs);
@@ -216,22 +228,28 @@
 
     --animate-accordion-down: accordion-down 0.2s ease-out;
     --animate-accordion-up: accordion-up 0.2s ease-out;
+    --animate-fade-in: fade-in 0.15s ease-out;
+    --animate-slide-up: slide-up 0.2s ease-out;
 
     @keyframes accordion-down {
-        from {
-            height: 0;
-        }
-        to {
-            height: var(--radix-accordion-content-height);
-        }
+        from { height: 0; }
+        to { height: var(--radix-accordion-content-height); }
     }
     @keyframes accordion-up {
-        from {
-            height: var(--radix-accordion-content-height);
-        }
-        to {
-            height: 0;
-        }
+        from { height: var(--radix-accordion-content-height); }
+        to { height: 0; }
+    }
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slide-up {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        50% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.95); }
     }
 }
 
@@ -243,31 +261,23 @@
     body {
         @apply text-foreground antialiased;
         background: var(--app-background);
-        font-feature-settings:
-            "rlig" 1,
-            "calt" 1;
+        font-family: var(--font-sans);
+        font-feature-settings: "rlig" 1, "calt" 1;
     }
 
-    /*
-     * Global thin scrollbars with auto-hide.
-     *
-     * At rest the thumb is fully transparent — scrollable regions
-     * read as flat surfaces. When the user hovers or focuses inside
-     * the region, or when the region itself is being scrolled, the
-     * thumb fades in. This mirrors the native macOS overlay-scrollbar
-     * behavior on every platform.
-     *
-     * Firefox honors the standard `scrollbar-*` properties;
-     * Chromium/Safari need the vendor-prefixed pseudo-elements. We
-     * declare both so the look is consistent across engines. Theme
-     * tokens (`--muted-foreground`) auto-adapt to dark mode.
-     *
-     * Discoverability note: at rest there's no visible scroll cue.
-     * The page itself opts back into a permanent thumb via the
-     * `:root::-webkit-scrollbar-thumb` override below so the document
-     * scroll never goes invisible — nested scroll containers (cards,
-     * sidebars, dialogs) are the ones that auto-hide.
-     */
+    /* Dark mode: subtle ambient cyan glow from top */
+    .dark body {
+        background-color: var(--background);
+        background-image:
+            radial-gradient(
+                ellipse 80% 40% at 50% -10%,
+                oklch(0.72 0.19 200 / 0.06) 0%,
+                transparent 70%
+            );
+        background-attachment: fixed;
+    }
+
+    /* ── Scrollbars ───────────────────────────────────────────── */
     * {
         scrollbar-width: thin;
         scrollbar-color: transparent transparent;
@@ -276,23 +286,11 @@
 
     *:hover,
     *:focus-within {
-        scrollbar-color: color-mix(
-                in oklch,
-                var(--muted-foreground) 60%,
-                transparent
-            )
-            transparent;
+        scrollbar-color: color-mix(in oklch, var(--muted-foreground) 55%, transparent) transparent;
     }
 
-    *::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-
-    *::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
+    *::-webkit-scrollbar { width: 6px; height: 6px; }
+    *::-webkit-scrollbar-track { background: transparent; }
     *::-webkit-scrollbar-thumb {
         background-color: transparent;
         border-radius: 9999px;
@@ -300,67 +298,84 @@
         background-clip: padding-box;
         transition: background-color 200ms ease;
     }
-
     *:hover::-webkit-scrollbar-thumb,
-    *:focus-within::-webkit-scrollbar-thumb,
-    *:active::-webkit-scrollbar-thumb {
-        background-color: color-mix(
-            in oklch,
-            var(--muted-foreground) 50%,
-            transparent
-        );
+    *:focus-within::-webkit-scrollbar-thumb {
+        background-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
     }
-
     *::-webkit-scrollbar-thumb:hover {
-        background-color: color-mix(
-            in oklch,
-            var(--muted-foreground) 75%,
-            transparent
-        );
+        background-color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
     }
+    *::-webkit-scrollbar-corner { background: transparent; }
 
-    *::-webkit-scrollbar-corner {
-        background: transparent;
-    }
-
-    /*
-     * Document-level scroll keeps a permanent (but still subtle)
-     * thumb. Without this, the page would have no visible scroll
-     * indicator at rest, which hurts "is there more below?" cues on
-     * marketing/long-form pages. Nested containers still auto-hide.
-     */
     html {
-        scrollbar-color: color-mix(
-                in oklch,
-                var(--muted-foreground) 40%,
-                transparent
-            )
-            transparent;
+        scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
     }
-
     html::-webkit-scrollbar-thumb {
-        background-color: color-mix(
-            in oklch,
-            var(--muted-foreground) 40%,
-            transparent
-        );
+        background-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
     }
 
-    /* Hardware Rack Module Utilities */
-    .rack-container {
-        background: var(--rack-background);
-        border: 1px solid var(--panel-border);
+    /* ── Focus rings ─────────────────────────────────────────── */
+    :focus-visible {
+        outline: none;
+    }
+}
+
+@layer components {
+    /* ── Glass surface ───────────────────────────────────────── */
+    .glass-surface {
+        background: oklch(from var(--card) l c h / 0.7);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid color-mix(in oklch, var(--border) 80%, transparent);
+    }
+
+    .dark .glass-surface {
+        background: oklch(from var(--popover) l c h / 0.75);
+        border: 1px solid color-mix(in oklch, var(--border) 60%, oklch(0.72 0.19 200 / 0.08));
+    }
+
+    /* ── Elevated card ───────────────────────────────────────── */
+    .card-elevated {
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-lg);
-        position: relative;
+        box-shadow: var(--shadow-md);
     }
 
+    .dark .card-elevated {
+        background: linear-gradient(
+            145deg,
+            oklch(0.118 0.009 264) 0%,
+            oklch(0.105 0.007 264) 100%
+        );
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-md);
+    }
+
+    /* ── Shimmer border (for selected / active states) ───────── */
+    .border-glow {
+        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.5), 0 0 12px oklch(0.72 0.19 200 / 0.2);
+    }
+
+    /* ── Primary glow button ─────────────────────────────────── */
+    .btn-glow {
+        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.3), 0 4px 14px oklch(0.72 0.19 200 / 0.35);
+    }
+    .btn-glow:hover {
+        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.45), 0 6px 20px oklch(0.72 0.19 200 / 0.45);
+    }
+
+    /* ── Panel utilities ─────────────────────────────────────── */
     .panel {
         background: var(--panel-surface);
         border: 1px solid var(--panel-border);
         border-radius: var(--radius-lg);
         box-shadow: var(--shadow-sm);
-        position: relative;
+    }
+
+    .dark .panel {
+        background: var(--card);
+        border-color: var(--border);
     }
 
     .panel-inset {
@@ -369,199 +384,96 @@
         border-radius: var(--radius-md);
     }
 
-    .metal-button {
-        background: var(--panel-surface);
-        box-shadow: var(--shadow-sm);
-        border: 1px solid var(--panel-border);
-        transition: all 0.2s ease;
+    /* ── LED indicators ──────────────────────────────────────── */
+    .led-active { color: var(--led-active); }
+    .led-warning { color: var(--led-warning); }
+    .led-error { color: var(--led-error); }
+
+    /* ── Status badge chips ──────────────────────────────────── */
+    .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.1875rem 0.625rem;
+        border-radius: 9999px;
+        font-size: 0.6875rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        border: 1px solid var(--border);
+        background: var(--muted);
+        color: var(--muted-foreground);
     }
 
-    .metal-button:hover {
-        background: var(--accent);
-        border-color: var(--primary);
-        box-shadow: var(--shadow-md);
-    }
-
-    .metal-button:active {
-        box-shadow: var(--shadow-xs);
-        transform: translateY(1px);
-    }
-
-    .led-indicator {
-        border-radius: 50%;
-        transition: all 0.3s ease;
-    }
-
-    .led-active {
-        color: var(--led-active);
-    }
-
-    .led-warning {
-        color: var(--led-warning);
-    }
-
-    .led-error {
-        color: var(--led-error);
-    }
-
+    /* ── Monospace label ─────────────────────────────────────── */
     .text-label {
         text-transform: uppercase;
-        letter-spacing: 0.1em;
-        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        font-size: 0.6875rem;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: var(--muted-foreground);
+        font-family: var(--font-mono);
     }
 
-    .glass-panel {
-        background: rgba(26, 26, 29, 0.8);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+    /* ── Gradient text ───────────────────────────────────────── */
+    .text-gradient {
+        background: linear-gradient(135deg, var(--primary) 0%, oklch(0.80 0.14 190) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
 
-    /* Hardware Knob Styling */
-    .knob {
-        position: relative;
-        width: 72px;
-        height: 72px;
-        border-radius: 50%;
-        background: var(--panel-surface);
-        box-shadow: var(--shadow-md);
-        cursor: grab;
-        border: 2px solid var(--panel-border);
-        transition: all 0.2s ease;
-    }
-
-    .knob:hover {
-        border-color: var(--primary);
+    /* ── Rack / hardware (kept for backwards compat) ─────────── */
+    .rack-container {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
         box-shadow: var(--shadow-lg);
     }
 
-    .knob:active {
-        cursor: grabbing;
+    .rack-module {
+        padding: 1.5rem;
+        background: var(--panel-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
         box-shadow: var(--shadow-sm);
     }
 
-    .knob-indicator {
-        position: absolute;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 4px;
-        height: 16px;
-        background: var(--primary);
-        border-radius: 2px;
-        z-index: 2;
-    }
-
-    /* Waveform Styling */
+    /* ── Waveform container ──────────────────────────────────── */
     .waveform {
         background: var(--panel-inset);
         border-radius: 0.5rem;
         overflow: hidden;
     }
 
-    /* Hardware VU Meter */
-    .vu-meter {
-        background: var(--panel-inset);
-        border: 1px solid var(--metal-dark);
-        border-radius: calc(var(--radius) - 2px);
-        box-shadow: var(--shadow-inset);
-        padding: 4px;
-        position: relative;
-    }
-
-    .vu-meter-bar {
-        height: 8px;
-        background: linear-gradient(
-            to right,
-            var(--led-active) 0%,
-            var(--led-active) 60%,
-            var(--led-warning) 75%,
-            var(--led-error) 90%,
-            var(--led-error) 100%
-        );
-        border-radius: 2px;
-        box-shadow:
-            0 0 10px rgba(0, 255, 153, 0.4),
-            inset 0 1px 0 rgba(255, 255, 255, 0.2);
-        position: relative;
-        overflow: hidden;
-    }
-
-    /* LED segment effect */
-    .vu-meter-bar::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: repeating-linear-gradient(
-            90deg,
-            rgba(0, 0, 0, 0.3) 0px,
-            rgba(0, 0, 0, 0.3) 2px,
-            transparent 2px,
-            transparent 6px
-        );
-    }
-
-    /* LED Meter Strip (like hardware LED arrays) */
-    .led-strip {
-        display: flex;
-        gap: 3px;
-        padding: 6px;
-        background: var(--panel-inset);
-        border: 1px solid var(--metal-dark);
-        border-radius: calc(var(--radius) - 2px);
-        box-shadow: var(--shadow-inset);
-    }
-
-    .led-strip-segment {
-        width: 4px;
-        height: 20px;
-        background: var(--metal-dark);
-        border-radius: 2px;
-        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
-        transition: all 0.1s ease;
-    }
-
-    .led-strip-segment.active {
-        background: var(--led-active);
-        box-shadow:
-            0 0 8px currentColor,
-            inset 0 1px 0 rgba(255, 255, 255, 0.3);
-    }
-
-    .led-strip-segment.warning {
-        background: var(--led-warning);
-    }
-
-    .led-strip-segment.error {
-        background: var(--led-error);
-    }
-
-    /* Hardware Display Screen */
+    /* ── Hardware display (monochrome screen) ────────────────── */
     .hardware-display {
         background: var(--panel-inset);
-        border: 1px solid var(--panel-border);
+        border: 1px solid var(--border);
         border-radius: var(--radius-md);
         padding: 1rem;
         font-family: var(--font-mono);
         color: var(--primary);
-        position: relative;
     }
 
-    /* Neumorphic Components */
-    .neomorph-raised {
-        box-shadow: var(--neomorph-raised);
+    /* ── Settings panel slide-out ────────────────────────────── */
+    .settings-panel {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 400px;
+        background: var(--popover);
+        border-left: 1px solid var(--border);
+        box-shadow: var(--shadow-2xl);
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.32, 0, 0.15, 1);
+        z-index: 100;
+        overflow-y: auto;
     }
 
-    .neomorph-pressed {
-        box-shadow: var(--neomorph-pressed);
-    }
+    .settings-panel.open { transform: translateX(0); }
 
-    .neomorph-flat {
-        box-shadow: var(--neomorph-flat);
-    }
-
-    /* Toggle Switch */
+    /* ── Toggle switch ───────────────────────────────────────── */
     .toggle-switch {
         position: relative;
         width: 52px;
@@ -569,421 +481,54 @@
         background: var(--muted);
         border: 1px solid var(--border);
         border-radius: 14px;
-        box-shadow: var(--shadow-sm);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-xs);
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: pointer;
     }
 
-    .toggle-switch:hover {
-        border-color: var(--primary);
-        box-shadow: var(--shadow-md);
-    }
+    .toggle-switch:hover { border-color: var(--primary); }
 
     .toggle-switch.active {
-        background: linear-gradient(
-            135deg,
-            var(--accent-green),
-            oklch(0.65 0.2 145)
-        );
-        border-color: var(--accent-green);
-        box-shadow:
-            var(--shadow-md),
-            0 0 12px oklch(0.65 0.2 145 / 0.4);
+        background: var(--primary);
+        border-color: var(--primary);
+        box-shadow: var(--shadow-sm), 0 0 10px oklch(0.72 0.19 200 / 0.35);
     }
 
     .toggle-thumb {
         position: absolute;
         top: 2px;
         left: 2px;
-        width: 24px;
-        height: 24px;
+        width: 22px;
+        height: 22px;
         background: var(--background);
-        border: 1px solid var(--border);
         border-radius: 50%;
-        box-shadow: var(--shadow-sm);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--shadow-xs);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .toggle-switch.active .toggle-thumb {
         transform: translateX(24px);
-        background: var(--primary-foreground);
-        border-color: var(--accent-green);
     }
 
-    /* Record Button */
-    .record-button {
-        position: relative;
-        width: 64px;
-        height: 64px;
-        background: var(--panel-surface);
-        border: 2px solid var(--panel-border);
-        border-radius: 12px;
-        box-shadow: var(--neomorph-raised);
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .record-button:hover {
-        box-shadow: var(--neomorph-flat), var(--glow-red);
-    }
-
-    .record-button:active,
-    .record-button.recording {
-        box-shadow: var(--neomorph-pressed);
-    }
-
-    .record-button .record-led {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 20px;
-        height: 20px;
-        background: var(--led-record);
-        border-radius: 50%;
-        box-shadow:
-            0 0 10px var(--led-record),
-            inset 0 0 5px rgba(0, 0, 0, 0.3);
-    }
-
-    .record-button.recording .record-led {
-        animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-    }
-
-    /* Info Card (warm theme) */
-    .info-card {
-        background: var(--warm-beige);
-        color: var(--warm-text);
-        border-radius: 12px;
-        box-shadow: var(--neomorph-flat);
-        padding: 1.5rem;
-    }
-
-    .info-card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-weight: 600;
-        font-size: 0.875rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Circular Progress Ring */
-    .circular-progress {
-        position: relative;
-        width: 120px;
-        height: 120px;
-    }
-
-    .circular-progress-track {
-        fill: none;
-        stroke: var(--metal-dark);
-        stroke-width: 8;
-    }
-
-    .circular-progress-indicator {
-        fill: none;
-        stroke: url(#gradient);
-        stroke-width: 8;
-        stroke-linecap: round;
-        transform: rotate(-90deg);
-        transform-origin: center;
-        transition: stroke-dashoffset 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    /* Knob Tick Marks */
-    .knob-ticks {
-        position: absolute;
-        inset: -12px;
-        pointer-events: none;
-    }
-
-    .knob-tick {
-        position: absolute;
-        width: 2px;
-        height: 6px;
-        background: var(--metal-light);
-        border-radius: 1px;
-        left: 50%;
-        top: 0;
-        transform-origin: center 60px;
-    }
-
-    /* Enhanced Slider */
-    .slider-track {
-        height: 6px;
-        background: var(--metal-dark);
-        border-radius: 3px;
-        box-shadow: var(--neomorph-pressed);
-        position: relative;
-    }
-
-    .slider-range {
-        height: 100%;
-        background: linear-gradient(
-            90deg,
-            var(--accent-cyan),
-            var(--accent-purple)
-        );
-        border-radius: 3px;
-        box-shadow: 0 0 10px rgba(0, 229, 204, 0.3);
-    }
-
-    .slider-thumb {
-        width: 20px;
-        height: 20px;
-        background: radial-gradient(
-            circle at 30% 30%,
-            var(--metal-highlight),
-            var(--metal-base)
-        );
-        border-radius: 50%;
-        box-shadow:
-            var(--shadow-medium),
-            0 0 0 2px var(--accent-cyan);
-        cursor: grab;
-        transition: all 0.2s ease;
-    }
-
-    .slider-thumb:hover {
-        box-shadow:
-            var(--shadow-medium),
-            0 0 0 3px var(--accent-cyan),
-            var(--glow-cyan);
-    }
-
-    .slider-thumb:active {
-        cursor: grabbing;
-        box-shadow:
-            var(--neomorph-pressed),
-            0 0 0 2px var(--accent-cyan);
-    }
-
-    /* Animations */
-    @keyframes pulse {
-        0%,
-        100% {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-        }
-        50% {
-            opacity: 0.6;
-            transform: translate(-50%, -50%) scale(0.95);
-        }
-    }
-
-    /* Module Styles */
-    .tape-deck,
-    .player-module,
-    .transcription-module {
-        padding: 1.5rem;
-        background: var(--panel-surface);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-sm);
-    }
-
-    /* Rack Module */
-    .rack-module {
-        padding: 1.5rem;
-        background: var(--panel-surface);
-        border: 1px solid var(--panel-border);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-sm);
-        position: relative;
-    }
-
-    /* Rack Screw (mounting holes) */
-    .rack-screw {
-        width: 6px;
-        height: 6px;
-        background: var(--muted);
-        border-radius: 50%;
+    /* ── Metal button (legacy, now uses CSS vars) ─────────────── */
+    .metal-button {
+        background: var(--secondary);
         border: 1px solid var(--border);
+        transition: all 0.15s ease;
     }
 
-    /* Settings Panel Slide-out */
-    .settings-panel {
-        position: fixed;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 400px;
-        background: var(--rack-background);
-        border-left: 2px solid var(--panel-border);
-        box-shadow: -10px 0 40px rgba(0, 0, 0, 0.9);
-        transform: translateX(100%);
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        z-index: 100;
-        overflow-y: auto;
+    .metal-button:hover {
+        background: var(--accent);
+        border-color: var(--primary);
     }
 
-    .settings-panel.open {
-        transform: translateX(0);
+    .metal-button:active {
+        transform: translateY(1px);
     }
 
-    /* Settings Backdrop */
-    .settings-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(4px);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-        z-index: 99;
-    }
-
-    .settings-backdrop.open {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    /* Brand Logo Style */
-    .brand-logo {
-        font-family: var(--font-mono);
-        font-weight: 700;
-        font-size: 1.25rem;
-        letter-spacing: 0.1em;
-        color: var(--primary);
-    }
-
-    /* Hardware Meter Scale */
-    .meter-scale {
-        display: flex;
-        justify-content: space-between;
-        padding: 0 4px;
-        font-size: 8px;
-        font-family: var(--font-mono);
-        color: var(--text-muted);
-        margin-top: 2px;
-    }
-
-    /* XY Pad (for future enhancements) */
-    .xy-pad {
-        position: relative;
-        aspect-ratio: 1;
-        background: var(--panel-inset);
-        border: 2px solid var(--metal-dark);
-        border-radius: calc(var(--radius) - 1px);
-        box-shadow: var(--shadow-inset);
-        cursor: crosshair;
-        touch-action: none;
-    }
-
-    .xy-pad::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 19px,
-                rgba(0, 229, 204, 0.05) 19px,
-                rgba(0, 229, 204, 0.05) 20px
-            ),
-            repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 19px,
-                rgba(0, 229, 204, 0.05) 19px,
-                rgba(0, 229, 204, 0.05) 20px
-            );
-        pointer-events: none;
-    }
-
-    .xy-pad-dot {
-        position: absolute;
-        width: 12px;
-        height: 12px;
-        background: var(--accent-cyan);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        box-shadow: var(--glow-cyan);
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-    }
-
-    /* Enhanced Info Card with Warm Theme */
-    .info-card {
-        background: linear-gradient(
-            135deg,
-            var(--warm-beige) 0%,
-            color-mix(in srgb, var(--warm-beige), white 5%) 100%
-        );
-        color: var(--warm-text);
-        border-radius: 8px;
-        box-shadow:
-            var(--shadow-medium),
-            inset 0 1px 0 rgba(255, 255, 255, 0.4);
-        padding: 1rem;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .info-card::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(
-            circle at 20% 20%,
-            rgba(255, 255, 255, 0.1),
-            transparent 50%
-        );
-        pointer-events: none;
-    }
-
-    /* Cassette-style indicator */
-    .cassette-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        background: var(--panel-inset);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 500;
-    }
-
-    /* Mobile Touch Improvements */
-    @media (hover: none) and (pointer: coarse) {
-        .knob {
-            width: 80px;
-            height: 80px;
-        }
-
-        .metal-button {
-            min-height: 44px;
-            padding: 0.75rem 1.5rem;
-        }
-
-        .toggle-switch {
-            width: 60px;
-            height: 32px;
-        }
-
-        .toggle-thumb {
-            width: 28px;
-            height: 28px;
-        }
-
-        .record-button {
-            width: 72px;
-            height: 72px;
-        }
-
-        .settings-panel {
-            width: 100%;
-        }
-    }
-
-    /* Print styles (disable hardware effects) */
+    /* ── Print ────────────────────────────────────────────────── */
     @media print {
-        .rack-container,
-        .panel,
-        .hardware-display {
+        .rack-container, .panel, .hardware-display {
             box-shadow: none;
             border: 1px solid #ccc;
         }

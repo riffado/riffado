@@ -16,7 +16,7 @@ export function OnboardingStepWelcome() {
                     Your AI-Powered Recording Hub
                 </h3>
                 <p className="text-muted-foreground">
-                    Riffado helps you manage, transcribe, and enhance your Plaud
+                    Mesynx AI helps you manage, transcribe, and enhance your Plaud
                     recordings with AI. Let's set up your account.
                 </p>
             </div>
@@ -196,7 +196,7 @@ export function OnboardingStepComplete() {
                 </div>
                 <h3 className="text-xl font-semibold">You're All Set!</h3>
                 <p className="text-muted-foreground">
-                    Start recording and let Riffado handle the rest
+                    Start recording and let Mesynx AI handle the rest
                 </p>
             </div>
 

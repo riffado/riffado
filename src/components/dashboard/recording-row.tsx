@@ -40,70 +40,69 @@ export function RecordingRow({
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
 }) {
     const confirm = useConfirm();
+
     return (
         <div
             className={cn(
-                "group/row relative",
+                "group/row relative transition-colors duration-100",
                 isSelected
-                    ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
-                    : null,
+                    ? "bg-primary/8 dark:bg-primary/10 shadow-[inset_2px_0_0_0_var(--color-primary)]"
+                    : "hover:bg-accent/40 dark:hover:bg-accent/50",
             )}
         >
             <button
-                ref={(el) => {
-                    registerRef(recording.id, el);
-                }}
+                ref={(el) => registerRef(recording.id, el)}
                 type="button"
                 onClick={() => onSelect(recording)}
                 className={cn(
-                    "w-full text-left transition-colors hover:bg-accent/60",
+                    "w-full text-left pr-10",
                     rowPadding,
                 )}
             >
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                    {/* Filename + status */}
                     <div className="flex items-center gap-2">
-                        <h3 className="truncate text-sm font-medium">
+                        <h3
+                            className={cn(
+                                "truncate text-sm leading-snug",
+                                isSelected
+                                    ? "font-semibold text-foreground"
+                                    : "font-medium text-foreground/90",
+                            )}
+                        >
                             {recording.filename}
                         </h3>
+
                         {inFlight && (
-                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
-                                <Loader2
-                                    className="size-3 animate-spin"
-                                    aria-hidden="true"
-                                />
-                                {inFlight === "transcribing"
-                                    ? "Transcribing"
-                                    : "Summarizing"}
+                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                <Loader2 className="size-2.5 animate-spin" aria-hidden />
+                                {inFlight === "transcribing" ? "Transcribing" : "Summarizing"}
                             </span>
                         )}
                     </div>
+
+                    {/* Metadata / snippet */}
                     {snippet ? (
                         <p
                             className={cn(
-                                "truncate text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
+                                "truncate text-xs leading-relaxed text-muted-foreground",
+                                isCompact ? "mt-0" : "mt-0.5",
                             )}
                         >
                             {snippet}
                         </p>
                     ) : (
-                        <p
-                            className={cn(
-                                "text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
-                            )}
-                        >
-                            {formatDurationMs(recording.duration)}
-                            {" \u00b7 "}
-                            {formatDateTime(
-                                recording.startTime,
-                                dateTimeFormat,
-                            )}
+                        <p className="text-xs text-muted-foreground/70 tabular-nums">
+                            <span>{formatDurationMs(recording.duration)}</span>
+                            <span className="mx-1 opacity-40">·</span>
+                            <span>{formatDateTime(recording.startTime, dateTimeFormat)}</span>
                         </p>
                     )}
                 </div>
             </button>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
+
+            {/* Row actions — appear on hover / focus */}
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
@@ -111,20 +110,20 @@ export function RecordingRow({
                             size="icon-sm"
                             aria-label="Row actions"
                             onClick={(e) => e.stopPropagation()}
+                            className="size-7 rounded-md text-muted-foreground hover:text-foreground"
                         >
-                            <MoreHorizontal className="size-4" />
+                            <MoreHorizontal className="size-3.5" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-44">
                         <DropdownMenuItem onSelect={() => onSelect(recording)}>
-                            <Play />
+                            <Play className="size-3.5" />
                             Open
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             variant="destructive"
                             onSelect={(e) => {
-                                // Keep menu mounted so confirm dialog can take focus.
                                 e.preventDefault();
                                 void confirm({
                                     title: "Delete this recording?",
@@ -134,9 +133,8 @@ export function RecordingRow({
                                                 {recording.filename}
                                             </span>
                                             <br />
-                                            The audio file and any transcript or
-                                            summary will be removed. If the file
-                                            is still on your Plaud device, the
+                                            The audio file and any transcript or summary will be
+                                            removed. If the file is still on your Plaud device, the
                                             next sync will re-download it.
                                         </>
                                     ),
@@ -147,7 +145,7 @@ export function RecordingRow({
                                 });
                             }}
                         >
-                            <Trash2 />
+                            <Trash2 className="size-3.5" />
                             Delete
                         </DropdownMenuItem>
                     </DropdownMenuContent>

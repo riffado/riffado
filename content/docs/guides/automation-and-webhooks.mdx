@@ -3,7 +3,7 @@ title: Automation API and webhooks
 description: Personal API keys, signed webhook deliveries, and using the /api/v1 surface from external tools.
 ---
 
-Riffado exposes a small, stable automation surface for external
+Mesynx AI exposes a small, stable automation surface for external
 tools — Zapier-style integrations, n8n flows, your own scripts. Two
 moving parts:
 
@@ -29,10 +29,10 @@ You authenticate by sending the key as a Bearer token:
 
 ```bash
 curl -H "Authorization: Bearer op_K7vR8x..." \
-  https://your-riffado-host/api/v1/recordings
+  https://your-mesynx-ai-host/api/v1/recordings
 ```
 
-Internally, Riffado stores an HMAC-SHA256 hash of the key (keyed off
+Internally, Mesynx AI stores an HMAC-SHA256 hash of the key (keyed off
 `API_TOKEN_HASH_SECRET`, falling back to `BETTER_AUTH_SECRET`) rather
 than the key itself. A database breach does not leak usable tokens. The
 key prefix (first 12 characters) is stored in plaintext so the UI can
@@ -71,10 +71,10 @@ headers:
 
 | Header                  | Meaning                                                 |
 | ----------------------- | ------------------------------------------------------- |
-| `X-Riffado-Event`     | The event name (e.g. `recording.synced`)                |
-| `X-Riffado-Delivery`  | Unique delivery id, useful for idempotent receivers     |
-| `X-Riffado-Timestamp` | Unix seconds, also embedded in the signature payload    |
-| `X-Riffado-Signature` | `t=<timestamp>,v1=<hex hmac>` — see below               |
+| `X-MesynxAI-Event`     | The event name (e.g. `recording.synced`)                |
+| `X-MesynxAI-Delivery`  | Unique delivery id, useful for idempotent receivers     |
+| `X-MesynxAI-Timestamp` | Unix seconds, also embedded in the signature payload    |
+| `X-MesynxAI-Signature` | `t=<timestamp>,v1=<hex hmac>` — see below               |
 
 The body always contains the event name, the affected recording id,
 and a serialized recording payload matching the
@@ -120,14 +120,14 @@ The exact same algorithm lives in `src/lib/webhooks/signature.ts`.
 ### Allowed URLs
 
 By default, webhook URLs may use `http://` or `https://` and may point
-at any host the Riffado container can reach. Docker-bridge service
+at any host the Mesynx AI container can reach. Docker-bridge service
 hostnames work (`http://n8n:5678/...`), so do private-network IPs.
 Credentials embedded in the URL are rejected.
 
 If you want stricter validation — HTTPS only, public-IP destinations
 only, RFC1918/loopback/link-local/ULA explicitly rejected — set
 `WEBHOOKS_REQUIRE_PUBLIC_TARGETS=true` in your `.env`. Useful if your
-Riffado instance is exposed to other people and you don't want it to
+Mesynx AI instance is exposed to other people and you don't want it to
 be usable as an SSRF relay against your private network.
 
 ### Retry behaviour
@@ -142,4 +142,4 @@ and visible in **Settings → Developer → Webhooks → Recent deliveries**.
 There aren't any public write endpoints yet. The current `/api/v1/*`
 surface is read-only by design: list recordings, get a recording, get
 its transcript, stream its audio. If you need to push data *in*, run
-the Riffado UI or sync the source Plaud account.
+the Mesynx AI UI or sync the source Plaud account.

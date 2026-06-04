@@ -1,22 +1,7 @@
 "use client";
 
-/**
- * Transcription model picker shared by the Add/Edit provider dialogs.
- *
- * Three modes:
- *   - Preset has `fetchAudioModels: true` (OpenRouter): live-fetch the
- *     audio-input model list from the provider's /v1/models endpoint via
- *     `POST /api/settings/ai/providers/models`. Debounced on apiKey change.
- *   - Preset has `knownTranscriptionModels`: render a dropdown from the
- *     hand-curated list shipped in `provider-presets.ts`.
- *   - Otherwise: plain freeform text input (LM Studio / Ollama / Custom).
- *
- * Both list modes include a final "Custom (type model name)…" option as
- * an escape hatch so users on a stale Riffado release can still type a
- * model id we haven't seeded yet.
- */
-
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,6 +27,117 @@ interface Props {
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
+    discoveredModels?: ModelOption[];
+}
+
+function SearchableModelDropdown({
+    models,
+    value,
+    onChange,
+    disabled,
+}: {
+    models: ModelOption[];
+    value: string;
+    onChange: (value: string) => void;
+    disabled?: boolean;
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        function handleClick(e: MouseEvent) {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        }
+        window.addEventListener("mousedown", handleClick);
+        return () => window.removeEventListener("mousedown", handleClick);
+    }, [open]);
+
+    useEffect(() => {
+        if (open) {
+            setSearch("");
+            setTimeout(() => inputRef.current?.focus(), 50);
+        }
+    }, [open]);
+
+    const filtered = useMemo(() => {
+        if (!search.trim()) return models;
+        const q = search.toLowerCase();
+        return models.filter((m) => m.name.toLowerCase().includes(q));
+    }, [models, search]);
+
+    const selectedLabel = models.find((m) => m.id === value)?.name || value || "Select a model";
+
+    return (
+        <div ref={containerRef} className="relative">
+            <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setOpen(!open)}
+                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+            >
+                <span className="truncate text-left flex-1">
+                    {selectedLabel}
+                </span>
+                <ChevronDown className="size-4 opacity-50 shrink-0 ml-2" />
+            </button>
+
+            {open && (
+                <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95 duration-100">
+                    <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
+                        <Search className="size-3.5 text-muted-foreground shrink-0" />
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={`Search ${models.length} models...`}
+                            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+                        />
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto py-1">
+                        {filtered.length === 0 ? (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                                No models matching &ldquo;{search}&rdquo;
+                            </div>
+                        ) : (
+                            filtered.map((m) => (
+                                <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => {
+                                        onChange(m.id);
+                                        setOpen(false);
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-sm font-mono hover:bg-accent hover:text-accent-foreground transition-colors ${
+                                        m.id === value ? "bg-accent/50 text-accent-foreground" : ""
+                                    }`}
+                                >
+                                    {m.name}
+                                </button>
+                            ))
+                        )}
+                    </div>
+                    <div className="border-t border-border/50 px-3 py-1.5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setOpen(false);
+                                onChange("");
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            Type a custom model name instead
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function TranscriptionModelPicker({
@@ -51,15 +147,11 @@ export function TranscriptionModelPicker({
     value,
     onChange,
     disabled,
+    discoveredModels,
 }: Props) {
-    // Live fetch for `fetchAudioModels: true` presets.
     const [audioModels, setAudioModels] = useState<ModelOption[]>([]);
     const [audioModelsLoading, setAudioModelsLoading] = useState(false);
-    const [audioModelsError, setAudioModelsError] = useState<string | null>(
-        null,
-    );
-    // Used to discard out-of-order audio-model fetches when the user
-    // toggles providers / edits the key faster than the network responds.
+    const [audioModelsError, setAudioModelsError] = useState<string | null>(null);
     const requestId = useRef(0);
 
     const shouldFetch =
@@ -73,8 +165,6 @@ export function TranscriptionModelPicker({
             setAudioModelsLoading(false);
             return;
         }
-        // Debounce so we don't fire a request on every keystroke of the
-        // API key paste. 400ms feels responsive without being chatty.
         const reqId = ++requestId.current;
         setAudioModelsLoading(true);
         setAudioModelsError(null);
@@ -96,9 +186,7 @@ export function TranscriptionModelPicker({
                 if (reqId !== requestId.current) return;
                 if (!res.ok) {
                     setAudioModels([]);
-                    setAudioModelsError(
-                        data?.error || "Couldn't load audio models.",
-                    );
+                    setAudioModelsError(data?.error || "Couldn't load audio models.");
                     return;
                 }
                 setAudioModels(data?.models ?? []);
@@ -106,49 +194,34 @@ export function TranscriptionModelPicker({
                 if (reqId !== requestId.current) return;
                 setAudioModelsError("Couldn't load audio models.");
             } finally {
-                if (reqId === requestId.current) {
-                    setAudioModelsLoading(false);
-                }
+                if (reqId === requestId.current) setAudioModelsLoading(false);
             }
         }, 400);
         return () => clearTimeout(timer);
     }, [shouldFetch, providerName, apiKey, baseUrl]);
 
-    // Resolve which option list (if any) we should render.
-    const options: ModelOption[] = preset?.fetchAudioModels
+    const presetOptions: ModelOption[] = preset?.fetchAudioModels
         ? audioModels
-        : (preset?.knownTranscriptionModels ?? []).map((id) => ({
-              id,
-              name: id,
-          }));
+        : (preset?.knownTranscriptionModels ?? []).map((id) => ({ id, name: id }));
 
-    const hasOptions = options.length > 0;
+    const hasDiscovered = (discoveredModels?.length ?? 0) > 0;
+    const hasPresetOptions = presetOptions.length > 0;
 
-    // Custom-mode toggle: true when the user explicitly picked "Custom…"
-    // OR when the stored `value` isn't one of the curated options (legacy
-    // values or hand-typed ids from a stale release).
     const [useCustom, setUseCustom] = useState(false);
 
-    // Reset whenever the selected preset changes. Without this, clicking
-    // "Custom…" on one provider and then switching providers leaves the
-    // picker stuck in freeform mode for the new provider (where the
-    // current value is a perfectly valid item in its curated list).
-    // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — reset on preset change only.
-    useEffect(() => {
-        setUseCustom(false);
-    }, [providerName]);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: reset on preset change
+    useEffect(() => { setUseCustom(false); }, [providerName]);
 
     useEffect(() => {
-        if (!hasOptions) {
+        if (!hasPresetOptions && !hasDiscovered) {
             setUseCustom(false);
             return;
         }
-        if (value && !options.some((o) => o.id === value)) {
+        const allOptions = hasDiscovered ? discoveredModels! : presetOptions;
+        if (value && !allOptions.some((o) => o.id === value)) {
             setUseCustom(true);
         }
-        // We deliberately don't flip useCustom back to false when value
-        // matches an option — the user might be in the middle of typing.
-    }, [hasOptions, options, value]);
+    }, [hasPresetOptions, hasDiscovered, presetOptions, discoveredModels, value]);
 
     const handleSelectChange = (selected: string) => {
         if (selected === CUSTOM_SENTINEL) {
@@ -160,28 +233,46 @@ export function TranscriptionModelPicker({
         onChange(selected);
     };
 
-    // Helper text below the picker.
+    if (hasDiscovered && !useCustom) {
+        return (
+            <div className="space-y-2">
+                <Label htmlFor="defaultModel">
+                    Default Model
+                    <span className="ml-2 text-xs text-muted-foreground font-normal">
+                        ({discoveredModels!.length} available)
+                    </span>
+                </Label>
+                <SearchableModelDropdown
+                    models={discoveredModels!}
+                    value={value}
+                    onChange={(v) => { setUseCustom(false); onChange(v); }}
+                    disabled={disabled}
+                />
+                {value && (
+                    <p className="text-xs text-muted-foreground font-mono truncate">
+                        {value}
+                    </p>
+                )}
+            </div>
+        );
+    }
+
     let helper: string | null = null;
     if (preset?.fetchAudioModels) {
-        if (audioModelsLoading) {
-            helper = "Loading audio-capable models…";
-        } else if (audioModelsError) {
-            helper = audioModelsError;
-        } else if (hasOptions) {
-            helper =
-                "Only audio-input models are shown. Transcription uses chat-completions; mp3/wav recordings only.";
-        } else {
-            helper = "Enter your API key to load audio-capable models.";
-        }
+        if (audioModelsLoading) helper = "Loading audio-capable models…";
+        else if (audioModelsError) helper = audioModelsError;
+        else if (hasPresetOptions) helper = "Only audio-input models are shown.";
+        else helper = "Enter your API key to load audio-capable models.";
     } else if (preset?.knownTranscriptionModels?.length) {
-        helper =
-            "Pick a transcription model. Choose Custom… to type a model id we haven't shipped yet.";
+        helper = "Pick a transcription model. Choose Custom… to type a model id.";
+    } else if (!hasDiscovered) {
+        helper = "Use Test Connection to discover available models, or type a model name.";
     }
 
     return (
         <div className="space-y-2">
             <Label htmlFor="defaultModel">Default Model</Label>
-            {hasOptions && !useCustom ? (
+            {hasPresetOptions && !useCustom ? (
                 <Select
                     value={value || undefined}
                     onValueChange={handleSelectChange}
@@ -191,14 +282,10 @@ export function TranscriptionModelPicker({
                         <SelectValue placeholder="Pick a transcription model" />
                     </SelectTrigger>
                     <SelectContent>
-                        {options.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                                {m.name}
-                            </SelectItem>
+                        {presetOptions.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                         ))}
-                        <SelectItem value={CUSTOM_SENTINEL}>
-                            Custom (type model name)…
-                        </SelectItem>
+                        <SelectItem value={CUSTOM_SENTINEL}>Custom (type model name)…</SelectItem>
                     </SelectContent>
                 </Select>
             ) : (
@@ -212,21 +299,16 @@ export function TranscriptionModelPicker({
                     className="font-mono text-sm"
                 />
             )}
-            {hasOptions && useCustom && (
+            {hasPresetOptions && useCustom && (
                 <button
                     type="button"
                     className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={() => {
-                        setUseCustom(false);
-                        onChange(options[0]?.id ?? "");
-                    }}
+                    onClick={() => { setUseCustom(false); onChange(presetOptions[0]?.id ?? ""); }}
                 >
                     Back to suggested models
                 </button>
             )}
-            {helper && (
-                <p className="text-xs text-muted-foreground">{helper}</p>
-            )}
+            {helper && <p className="text-xs text-muted-foreground">{helper}</p>}
         </div>
     );
 }

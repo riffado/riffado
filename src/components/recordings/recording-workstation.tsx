@@ -215,9 +215,9 @@ export function RecordingWorkstation({
                         <DialogTitle>Delete this recording?</DialogTitle>
                         <DialogDescription>
                             This permanently removes the audio file,
-                            transcription, and AI summary from Riffado. The
+                            transcription, and AI summary from Mesynx AI. The
                             recording on your Plaud account is not affected, but
-                            it will not be re-synced to Riffado.
+                            it will not be re-synced to Mesynx AI.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

@@ -5,7 +5,7 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing-footer";
 
 export const metadata: Metadata = {
-    title: "OpenPlaud is now Riffado — Read the rebrand note",
+    title: "OpenPlaud is now Mesynx AI — Read the rebrand note",
     description:
         "Same team. Same code. New name. Here's why we renamed and what doesn't change for you.",
 };
@@ -39,7 +39,7 @@ export default function RebrandPage() {
                         May 29, 2026
                     </p>
                     <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-balance">
-                        OpenPlaud is now Riffado.
+                        OpenPlaud is now Mesynx AI.
                     </h1>
                     <p className="mt-4 text-lg text-muted-foreground leading-relaxed max-w-xl text-pretty">
                         Same team. Same code. Bigger horizon.
@@ -53,7 +53,7 @@ export default function RebrandPage() {
                             Nobody bought us. Nobody acquired us. The project
                             did not change hands, the source did not fork, and
                             the license is still AGPL-3.0. The legal entity
-                            behind Riffado is the same as the legal entity
+                            behind Mesynx AI is the same as the legal entity
                             behind OpenPlaud yesterday. If anyone tells you
                             otherwise, they&apos;re wrong.
                         </p>
@@ -72,7 +72,7 @@ export default function RebrandPage() {
                             has always been broader than one recorder, and every
                             conversation about it started with the same
                             question: &quot;is this only for Plaud?&quot; The
-                            old name kept boxing us in. Riffado is a name we can
+                            old name kept boxing us in. Mesynx AI is a name we can
                             grow into without explaining a contradiction.
                         </p>
                         <p className="text-muted-foreground leading-relaxed">
@@ -128,12 +128,12 @@ export default function RebrandPage() {
                         <p className="text-muted-foreground leading-relaxed">
                             The repo moved to{" "}
                             <Link
-                                href="https://github.com/riffado/riffado"
+                                href="https://github.com/mesynx-ai/mesynx-ai"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80"
                             >
-                                github.com/riffado/riffado
+                                github.com/mesynx-ai/mesynx-ai
                             </Link>
                             ; GitHub redirects the old URL automatically. No env
                             vars renamed, no Docker images renamed, no migration
@@ -148,17 +148,17 @@ export default function RebrandPage() {
                         <p className="text-muted-foreground leading-relaxed">
                             Write to{" "}
                             <Link
-                                href="mailto:support@riffado.com?subject=Rebrand%20issue"
+                                href="mailto:support@mesynx-ai.com?subject=Rebrand%20issue"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80"
                             >
-                                support@riffado.com
+                                support@mesynx-ai.com
                             </Link>{" "}
                             and I&apos;ll fix it.
                         </p>
                     </section>
 
                     <p className="mt-16 text-base text-foreground">
-                        &mdash; Kacper, from Riffado
+                        &mdash; Kacper, from Mesynx AI
                     </p>
 
                     <p className="mt-12 text-sm">
@@ -167,7 +167,7 @@ export default function RebrandPage() {
                             className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <ArrowLeft className="size-3.5" aria-hidden />
-                            Back to riffado.com
+                            Back to mesynx-ai.com
                         </Link>
                     </p>
                 </article>

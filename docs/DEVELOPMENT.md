@@ -1,13 +1,13 @@
 # Development Guide
 
-This guide covers setting up a local development environment for Riffado.
+This guide covers setting up a local development environment for Mesynx AI.
 
 ## Quick Start
 
 ```bash
 # Clone repository
-git clone https://github.com/riffado/riffado.git
-cd riffado
+git clone https://github.com/mesynx-ai/mesynx-ai.git
+cd mesynx-ai
 
 # Install dependencies
 pnpm install
@@ -17,7 +17,7 @@ cp .env.example .env.local
 # Edit .env.local with your values
 
 # Create database
-createdb riffado
+createdb mesynx-ai
 
 # Run migrations
 pnpm db:migrate
@@ -261,7 +261,7 @@ pnpm dev
 See `.env.example` for all variables. Required for development:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/riffado
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/mesynx-ai
 BETTER_AUTH_SECRET=your-secret-here
 ENCRYPTION_KEY=your-64-char-hex-key-here
 APP_URL=http://localhost:3000

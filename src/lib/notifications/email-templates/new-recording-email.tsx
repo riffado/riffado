@@ -48,8 +48,8 @@ export function NewRecordingEmail({
                     <Section style={emailStyles.header}>
                         <div style={{ textAlign: "center" }}>
                             <Img
-                                src="https://riffado.com/logo.png"
-                                alt="Riffado"
+                                src="https://mesynx-ai.com/logo.png"
+                                alt="Mesynx AI"
                                 width="32"
                                 height="32"
                                 style={emailStyles.logo}

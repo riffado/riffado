@@ -1,0 +1,20 @@
+services:
+  whisper:
+    image: fedirz/faster-whisper-server:latest-cuda
+    container_name: mesynx-ai-whisper
+    restart: unless-stopped
+    ports:
+      - "8397:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3

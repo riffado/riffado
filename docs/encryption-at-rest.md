@@ -1,6 +1,6 @@
 # Encryption at rest
 
-Riffado encrypts user content fields in the database with AES-256-GCM, keyed off the `ENCRYPTION_KEY` environment variable that the runtime already requires.
+Mesynx AI encrypts user content fields in the database with AES-256-GCM, keyed off the `ENCRYPTION_KEY` environment variable that the runtime already requires.
 
 This is **server-held-key envelope encryption.** It is not zero-knowledge.
 
@@ -40,7 +40,7 @@ Out of scope for this layer:
 - A compromised `ENCRYPTION_KEY`. Treat the key like a database master credential.
 - A compromised AI provider. Plaintext is sent to whichever transcription / enhancement provider the user configured. That trust boundary is the user's choice and is independent of this layer.
 
-If you require true zero-knowledge — where even Riffado's hosted operators cannot read your data — **self-host with browser-based transcription** (Transformers.js) and a local LLM (Ollama / LM Studio). Hosted cannot give you that and we will not claim it does.
+If you require true zero-knowledge — where even Mesynx AI's hosted operators cannot read your data — **self-host with browser-based transcription** (Transformers.js) and a local LLM (Ollama / LM Studio). Hosted cannot give you that and we will not claim it does.
 
 ## Key management
 

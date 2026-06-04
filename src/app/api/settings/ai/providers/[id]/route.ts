@@ -18,6 +18,7 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
     const {
         apiKey,
         baseUrl,
+        nickname,
         defaultModel,
         isDefaultTranscription,
         isDefaultEnhancement,
@@ -81,6 +82,7 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
         // Build update object
         const updateData: {
             baseUrl: string | null;
+            nickname: string | null;
             defaultModel: string | null;
             isDefaultTranscription: boolean;
             isDefaultEnhancement: boolean;
@@ -88,6 +90,7 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
             apiKey?: string;
         } = {
             baseUrl: baseUrl || null,
+            nickname: nickname || null,
             defaultModel: defaultModel || null,
             isDefaultTranscription: isDefaultTranscription || false,
             isDefaultEnhancement: isDefaultEnhancement || false,

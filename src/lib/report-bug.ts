@@ -1,8 +1,8 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-export const SUPPORT_EMAIL = "support@riffado.com";
+export const SUPPORT_EMAIL = "support@mesynx-ai.com";
 
-const GITHUB_NEW_ISSUE_URL = "https://github.com/riffado/riffado/issues/new";
+const GITHUB_NEW_ISSUE_URL = "https://github.com/mesynx-ai/mesynx-ai/issues/new";
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
 export interface ReportBugOptions {
@@ -26,7 +26,7 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
     if (opts.isHosted !== undefined) {
         params.set(
             "deployment",
-            opts.isHosted ? "Hosted (riffado.com)" : "Self-hosted",
+            opts.isHosted ? "Hosted (mesynx-ai.com)" : "Self-hosted",
         );
     }
 
@@ -40,8 +40,8 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
 
 export function buildReportBugMailto(opts: ReportBugOptions): string {
     const subject = opts.errorId
-        ? `Riffado bug report (${opts.errorId})`
-        : "Riffado bug report";
+        ? `Mesynx AI bug report (${opts.errorId})`
+        : "Mesynx AI bug report";
     const body = [buildDescription(opts), "", "---", buildAdditional(opts)]
         .filter(Boolean)
         .join("\n");
@@ -77,7 +77,7 @@ function buildAdditional(opts: ReportBugOptions): string {
     lines.push(`Version: ${APP_VERSION_TAG}`);
     if (opts.isHosted !== undefined) {
         lines.push(
-            `Mode: ${opts.isHosted ? "Hosted (riffado.com)" : "Self-hosted"}`,
+            `Mode: ${opts.isHosted ? "Hosted (mesynx-ai.com)" : "Self-hosted"}`,
         );
     }
     return lines.join("\n");

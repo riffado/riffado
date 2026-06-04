@@ -18,6 +18,7 @@ export interface Provider {
     id: string;
     provider: string;
     baseUrl: string | null;
+    nickname: string | null;
     defaultModel: string | null;
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;

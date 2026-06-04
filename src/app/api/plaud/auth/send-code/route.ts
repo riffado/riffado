@@ -14,7 +14,7 @@ import { plaudSendCode } from "@/lib/plaud/auth";
  * the wrapper converts them into the unified envelope with the right
  * status code. No more "Plaud API error:" prefix string-matching.
  *
- * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/send-code/route.ts
+ * Source: https://github.com/mesynx-ai/mesynx-ai/blob/main/src/app/api/plaud/auth/send-code/route.ts
  */
 export const POST = apiHandler(async (request: Request) => {
     await requireApiSession(request);

@@ -152,7 +152,7 @@ export function PlaudAccountSection() {
                     icon={Mic}
                 />
                 <p className="text-sm text-muted-foreground mt-1">
-                    The Plaud account Riffado pulls recordings from. Switching
+                    The Plaud account Mesynx AI pulls recordings from. Switching
                     accounts keeps your existing recordings; only future syncs
                     change.
                 </p>

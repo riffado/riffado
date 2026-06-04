@@ -1,6 +1,13 @@
 "use client";
 
-import { AlertTriangle, Shield } from "lucide-react";
+import {
+    AlertTriangle,
+    Shield,
+    Loader2,
+    Plug,
+    CheckCircle2,
+    XCircle,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
@@ -31,6 +38,7 @@ interface Provider {
     id: string;
     provider: string;
     baseUrl: string | null;
+    nickname: string | null;
     defaultModel: string | null;
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
@@ -68,28 +76,75 @@ export function EditProviderDialog({
             ? provider.provider
             : null;
     const [providerName, setProviderName] = useState("");
+    const [nickname, setNickname] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
     const [defaultModel, setDefaultModel] = useState("");
     const [isDefaultTranscription, setIsDefaultTranscription] = useState(false);
     const [isDefaultEnhancement, setIsDefaultEnhancement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{
+        ok: boolean;
+        message: string;
+    } | null>(null);
+    const [discoveredModels, setDiscoveredModels] = useState<
+        { id: string; name: string }[]
+    >([]);
+
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        setDiscoveredModels([]);
+        try {
+            const res = await fetch(
+                "/api/settings/ai/providers/test-connection",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider: providerName,
+                        apiKey: apiKey || undefined,
+                        baseUrl: baseUrl || null,
+                    }),
+                },
+            );
+            const data = await res.json();
+            setTestResult({ ok: data.ok, message: data.message });
+            if (data.ok && Array.isArray(data.models)) {
+                setDiscoveredModels(data.models);
+            }
+        } catch {
+            setTestResult({
+                ok: false,
+                message: "Failed to reach the test endpoint.",
+            });
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     useEffect(() => {
         if (open && provider) {
             setProviderName(provider.provider);
+            setNickname(provider.nickname || "");
             setBaseUrl(provider.baseUrl || "");
             setDefaultModel(provider.defaultModel || "");
             setIsDefaultTranscription(provider.isDefaultTranscription);
             setIsDefaultEnhancement(provider.isDefaultEnhancement);
             setApiKey("");
+            setTestResult(null);
+            setDiscoveredModels([]);
         } else if (!open) {
             setProviderName("");
+            setNickname("");
             setApiKey("");
             setBaseUrl("");
             setDefaultModel("");
             setIsDefaultTranscription(false);
             setIsDefaultEnhancement(false);
+            setTestResult(null);
+            setDiscoveredModels([]);
         }
     }, [open, provider]);
 
@@ -119,12 +174,14 @@ export function EditProviderDialog({
         try {
             const updateData: {
                 baseUrl: string | null;
+                nickname: string | null;
                 defaultModel: string | null;
                 isDefaultTranscription: boolean;
                 isDefaultEnhancement: boolean;
                 apiKey?: string;
             } = {
                 baseUrl: baseUrl || null,
+                nickname: nickname.trim() || null,
                 defaultModel: defaultModel || null,
                 isDefaultTranscription,
                 isDefaultEnhancement,
@@ -153,6 +210,7 @@ export function EditProviderDialog({
             onOpenChange(false);
 
             setProviderName("");
+            setNickname("");
             setApiKey("");
             setBaseUrl("");
             setDefaultModel("");
@@ -219,7 +277,7 @@ export function EditProviderDialog({
                                     {legacyLocalProvider} isn&apos;t usable on
                                     the hosted app — we can&apos;t reach your
                                     machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host Riffado
+                                    with a public endpoint, or self-host Mesynx AI
                                     (
                                     <code className="font-mono">
                                         docker compose up
@@ -228,6 +286,23 @@ export function EditProviderDialog({
                                 </span>
                             </div>
                         )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="nickname">Nickname (Optional)</Label>
+                        <Input
+                            id="nickname"
+                            type="text"
+                            placeholder="e.g. My Whisper Server"
+                            value={nickname}
+                            onChange={(e) => setNickname(e.target.value)}
+                            disabled={isLoading}
+                            className="text-sm"
+                            maxLength={100}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            A friendly name to help you identify this provider
+                        </p>
                     </div>
 
                     <div className="space-y-2">
@@ -270,12 +345,41 @@ export function EditProviderDialog({
                                 We can&apos;t reach{" "}
                                 <code className="font-mono">localhost</code> or
                                 other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
+                                use LM Studio or Ollama, self-host Mesynx AI (
                                 <code className="font-mono">
                                     docker compose up
                                 </code>
                                 ).
                             </p>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleTestConnection}
+                            disabled={isTesting || !providerName}
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                            {isTesting ? (
+                                <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                                <Plug className="size-3" />
+                            )}
+                            {isTesting ? "Testing..." : "Test Connection"}
+                        </button>
+                        {testResult && (
+                            <div
+                                className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
+                                    testResult.ok
+                                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                        : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                                }`}
+                            >
+                                {testResult.ok ? (
+                                    <CheckCircle2 className="size-3.5 shrink-0 mt-0.5" />
+                                ) : (
+                                    <XCircle className="size-3.5 shrink-0 mt-0.5" />
+                                )}
+                                <span>{testResult.message}</span>
+                            </div>
                         )}
                     </div>
 
@@ -286,6 +390,7 @@ export function EditProviderDialog({
                         value={defaultModel}
                         onChange={setDefaultModel}
                         disabled={isLoading}
+                        discoveredModels={discoveredModels}
                     />
 
                     <Panel variant="inset" className="space-y-2 text-sm">

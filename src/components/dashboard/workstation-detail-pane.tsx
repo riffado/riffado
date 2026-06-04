@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Mic } from "lucide-react";
+import { useState } from "react";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -12,6 +12,8 @@ interface TranscriptionData {
     text?: string;
     language?: string;
 }
+
+type DetailTab = "sources" | "notes";
 
 interface Props {
     currentRecording: Recording | null;
@@ -21,7 +23,6 @@ interface Props {
     onTranscribe: () => void;
     onSelectRecording: (r: Recording) => void;
     onBackToList: () => void;
-    /** When true, the pane is hidden (mobile list view active). */
     hiddenOnMobile: boolean;
     initialPlaybackSpeed: number | undefined;
     initialVolume: number | undefined;
@@ -29,16 +30,6 @@ interface Props {
     scrubberStyle: "waveform" | "slider" | undefined;
 }
 
-/**
- * Right-hand detail pane: player + transcription. On lg+ this is a
- * sticky column next to the recording list; on <lg the list and
- * detail toggle via `mobileView` -- both stay mounted so scroll
- * position / search query / selection survive a back-navigation.
- *
- * Auto-advance on player ended (when `autoPlayNext` is on) moves to
- * the next recording in `visibleRecordings`; the back-affordance is
- * mobile-only because desktop has both panes visible at once.
- */
 export function WorkstationDetailPane({
     currentRecording,
     currentTranscription,
@@ -53,65 +44,133 @@ export function WorkstationDetailPane({
     initialAutoPlayNext,
     scrubberStyle,
 }: Props) {
+    const [activeTab, setActiveTab] = useState<DetailTab>("sources");
+
     return (
         <div
             className={cn(
-                "space-y-6 lg:sticky lg:top-[4.5rem] lg:col-span-2 lg:block lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:pr-1",
+                "flex flex-1 flex-col min-w-0 lg:block",
                 hiddenOnMobile && "hidden",
             )}
         >
-            {/*
-              Mobile back affordance. Returns to the list view without
-              dropping the selected recording -- reopening shows the
-              same detail. Hidden on lg+ where both panes are visible
-              at once.
-            */}
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBackToList}
-                className="-ml-2 h-9 gap-1 px-2 lg:hidden"
-            >
-                <ArrowLeft className="size-4" />
-                Back to recordings
-            </Button>
             {currentRecording ? (
-                <>
-                    <RecordingPlayer
-                        recording={currentRecording}
-                        initialPlaybackSpeed={initialPlaybackSpeed}
-                        initialVolume={initialVolume}
-                        initialAutoPlayNext={initialAutoPlayNext}
-                        scrubberStyle={scrubberStyle}
-                        onEnded={() => {
-                            const currentIndex = visibleRecordings.findIndex(
-                                (r) => r.id === currentRecording.id,
-                            );
-                            if (
-                                currentIndex >= 0 &&
-                                currentIndex < visibleRecordings.length - 1
-                            ) {
-                                onSelectRecording(
-                                    visibleRecordings[currentIndex + 1],
-                                );
-                            }
-                        }}
-                    />
-                    <TranscriptionPanel
-                        recording={currentRecording}
-                        transcription={currentTranscription}
-                        isTranscribing={isCurrentTranscribing}
-                        onTranscribe={onTranscribe}
-                    />
-                </>
+                <div className="flex flex-1 flex-col h-full">
+                    {/* Back button (mobile only) */}
+                    <div className="flex items-center border-b border-border/40 px-4 py-2 lg:hidden">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={onBackToList}
+                            className="h-8 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                            <ArrowLeft className="size-3.5" />
+                            Back
+                        </Button>
+                    </div>
+
+                    {/* Sources / Notes tab bar — Plaud-style */}
+                    <div className="flex items-center justify-center gap-6 border-b border-border/40 px-6 pt-4 pb-0">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("sources")}
+                            className={cn(
+                                "relative pb-3 text-sm font-semibold transition-colors",
+                                activeTab === "sources"
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground/70",
+                            )}
+                        >
+                            Sources
+                            {activeTab === "sources" && (
+                                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary" />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("notes")}
+                            className={cn(
+                                "relative pb-3 text-sm font-semibold transition-colors",
+                                activeTab === "notes"
+                                    ? "text-foreground"
+                                    : "text-muted-foreground hover:text-foreground/70",
+                            )}
+                        >
+                            Notes
+                            {activeTab === "notes" && (
+                                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-primary" />
+                            )}
+                        </button>
+                    </div>
+
+                    {/* Tab content */}
+                    <div className="flex-1 overflow-y-auto">
+                        {activeTab === "sources" ? (
+                            <div className="mx-auto max-w-3xl space-y-6 p-6">
+                                {/* Player */}
+                                <RecordingPlayer
+                                    recording={currentRecording}
+                                    initialPlaybackSpeed={initialPlaybackSpeed}
+                                    initialVolume={initialVolume}
+                                    initialAutoPlayNext={initialAutoPlayNext}
+                                    scrubberStyle={scrubberStyle}
+                                    onEnded={() => {
+                                        const currentIndex =
+                                            visibleRecordings.findIndex(
+                                                (r) =>
+                                                    r.id ===
+                                                    currentRecording.id,
+                                            );
+                                        if (
+                                            currentIndex >= 0 &&
+                                            currentIndex <
+                                                visibleRecordings.length - 1
+                                        ) {
+                                            onSelectRecording(
+                                                visibleRecordings[
+                                                    currentIndex + 1
+                                                ],
+                                            );
+                                        }
+                                    }}
+                                />
+                                {/* Transcript section */}
+                                <TranscriptionPanel
+                                    recording={currentRecording}
+                                    transcription={currentTranscription}
+                                    isTranscribing={isCurrentTranscribing}
+                                    onTranscribe={onTranscribe}
+                                    showSummary={false}
+                                />
+                            </div>
+                        ) : (
+                            <div className="mx-auto max-w-3xl p-6">
+                                {/* Notes tab — summary / AI notes */}
+                                <TranscriptionPanel
+                                    recording={currentRecording}
+                                    transcription={currentTranscription}
+                                    isTranscribing={isCurrentTranscribing}
+                                    onTranscribe={onTranscribe}
+                                    showTranscript={false}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
             ) : (
-                <Card>
-                    <CardContent className="py-16 text-center">
-                        <p className="text-muted-foreground">
-                            Select a recording to view details and transcription
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+                    <div className="rounded-full bg-muted/40 p-5">
+                        <Mic className="size-8 text-muted-foreground/30" />
+                    </div>
+                    <div className="space-y-1">
+                        <p className="text-sm font-medium text-muted-foreground">
+                            Select a recording
                         </p>
-                    </CardContent>
-                </Card>
+                        <p className="text-xs text-muted-foreground/60">
+                            Choose a recording from the list to view its
+                            transcript and notes
+                        </p>
+                    </div>
+                </div>
             )}
         </div>
     );

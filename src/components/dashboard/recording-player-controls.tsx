@@ -63,8 +63,9 @@ export function RecordingPlayerControls({
             <Button
                 onClick={onTogglePlay}
                 size="lg"
+                variant="glow"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="size-12 shrink-0 rounded-full"
+                className="size-11 shrink-0 rounded-full"
             >
                 {isPlaying ? (
                     <Pause className="size-5" />

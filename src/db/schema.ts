@@ -212,7 +212,7 @@ export const recordings = pgTable(
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
         deviceSn: varchar("device_sn", { length: 255 }).notNull(),
-        // Unique ID from Plaud API, scoped per Riffado user.
+        // Unique ID from Plaud API, scoped per Mesynx AI user.
         plaudFileId: varchar("plaud_file_id", { length: 255 }).notNull(),
         filename: text("filename").notNull(),
         duration: integer("duration").notNull(), // milliseconds
@@ -240,7 +240,7 @@ export const recordings = pgTable(
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
         // Soft-delete tombstone. Set when the user deletes a recording from
-        // Riffado's UI. Sync skips tombstoned rows so re-syncing from Plaud
+        // Mesynx AI's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.
@@ -337,6 +337,8 @@ export const apiCredentials = pgTable("api_credentials", {
     apiKey: text("api_key").notNull(),
     // Optional custom base URL (for OpenAI-compatible APIs)
     baseUrl: text("base_url"), // e.g., 'https://api.groq.com/openai/v1'
+    // Optional user-facing nickname to identify custom servers
+    nickname: varchar("nickname", { length: 100 }),
     // Default model for this provider
     defaultModel: varchar("default_model", { length: 100 }),
     // Whether this is the default provider for transcription/enhancement

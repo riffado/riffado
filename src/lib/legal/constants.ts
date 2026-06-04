@@ -63,10 +63,10 @@ export const EFFECTIVE_DATE_DISPLAY = new Date(
 
 /** Contact mailboxes referenced by the legal pages. */
 export const CONTACT_EMAILS = {
-    support: "support@riffado.com",
-    security: "security@riffado.com",
+    support: "support@mesynx-ai.com",
+    security: "security@mesynx-ai.com",
     /** Dedicated mailbox for GDPR data-subject requests. */
-    privacy: "privacy@riffado.com",
+    privacy: "privacy@mesynx-ai.com",
 } as const;
 
 /** Polish data-protection supervisory authority (GDPR right to complain). */

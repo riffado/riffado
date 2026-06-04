@@ -1,6 +1,6 @@
 ---
 title: Email (SMTP) setup
-description: Configure an SMTP server so Riffado can deliver email notifications.
+description: Configure an SMTP server so Mesynx AI can deliver email notifications.
 ---
 
 Email notifications go out through any SMTP server you configure —
@@ -11,7 +11,7 @@ email) lives in [Notifications](../guides/notifications).
 
 ## Configuration
 
-Set these in the environment that runs Riffado:
+Set these in the environment that runs Mesynx AI:
 
 ```bash
 SMTP_HOST=smtp.example.com
@@ -19,7 +19,7 @@ SMTP_PORT=587                  # 465 if SMTP_SECURE=true, else 587
 SMTP_SECURE=false              # true => implicit TLS on 465
 SMTP_USER=apikey-or-username
 SMTP_PASSWORD=secret
-SMTP_FROM="Riffado <noreply@example.com>"
+SMTP_FROM="Mesynx AI <noreply@example.com>"
 ```
 
 `SMTP_FROM` accepts either a bare email (`noreply@example.com`) or a

@@ -8,7 +8,7 @@
  *
  * `perHour` is the price normalized to one hour of audio so the two
  * tables compare on the same unit. Subscription rows divide the
- * sticker price by the plan's included minutes; Riffado rows use the
+ * sticker price by the plan's included minutes; Mesynx AI rows use the
  * upstream provider's published per-minute or per-hour rate. Always
  * the vendor's own number -- never a derived "savings" claim.
  */
@@ -36,23 +36,23 @@ const SUBSCRIPTION_SERVICES = [
     },
 ];
 
-const RIFFADO_OPTIONS = [
+const MESYNX_AI_OPTIONS = [
     {
-        name: "Riffado in your browser",
+        name: "Mesynx AI in your browser",
         price: "$0.00",
         unit: "free",
         scope: "Whisper via Transformers.js, no key required",
         perHour: "$0.00 / hr",
     },
     {
-        name: "Riffado + Groq Whisper",
+        name: "Mesynx AI + Groq Whisper",
         price: "$2.22",
         unit: "one-time",
         scope: "Billed by Groq at $0.111 / hr",
         perHour: "$0.11 / hr",
     },
     {
-        name: "Riffado + OpenAI Whisper",
+        name: "Mesynx AI + OpenAI Whisper",
         price: "$7.20",
         unit: "one-time",
         scope: "Billed by OpenAI at $0.006 / min",
@@ -74,7 +74,7 @@ export function TheMath() {
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             Most voice-AI services don't transcribe audio
-                            themselves — OpenAI, Groq, and Deepgram do. Riffado
+                            themselves — OpenAI, Groq, and Deepgram do. Mesynx AI
                             connects you to those providers directly, with your
                             own key.
                         </p>
@@ -95,8 +95,8 @@ export function TheMath() {
                             tone="muted"
                         />
                         <PriceTable
-                            label="With Riffado"
-                            rows={RIFFADO_OPTIONS}
+                            label="With Mesynx AI"
+                            rows={MESYNX_AI_OPTIONS}
                             tone="primary"
                             highlightFirst
                         />
@@ -106,7 +106,7 @@ export function TheMath() {
                         Published pricing as of May 2026. Plans, minute
                         ceilings, and trademarks belong to their respective
                         owners; shown for descriptive context, not comparison.
-                        Riffado itself is free to self-host.
+                        Mesynx AI itself is free to self-host.
                     </p>
                 </div>
             </div>
@@ -134,13 +134,13 @@ function PriceTable({
      * Both cards share identical chrome (border, radius, row height,
      * price font size) so they pair as a single comparison. Hierarchy
      * comes from `tone` -- subscriptions render in muted-foreground,
-     * Riffado in foreground, the highlighted free row in primary --
+     * Mesynx AI in foreground, the highlighted free row in primary --
      * never from size. Resizing prices made the rows misalign in the
      * previous version.
      */
     tone: "muted" | "primary";
     /**
-     * Riffado side leads with the strongest proof (free in browser).
+     * Mesynx AI side leads with the strongest proof (free in browser).
      * Highlight the first row instead of the last so the eye lands on
      * "$0.00" before scanning the rest.
      */

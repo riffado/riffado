@@ -3,27 +3,16 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { forgetPassword } from "@/lib/auth-client";
 
 interface ForgotPasswordFormProps {
-    /**
-     * Whether SMTP is configured on this instance. When false the form is
-     * replaced with an operator-help block that names the env vars to set,
-     * rather than letting the user submit a request that can't be delivered.
-     */
     smtpConfigured: boolean;
 }
 
-/**
- * Renders only the form body (input + submit / submitted state / SMTP help).
- * Page chrome (logo, headings, panel, background) is owned by the route.
- */
-export function ForgotPasswordForm({
-    smtpConfigured,
-}: ForgotPasswordFormProps) {
+export function ForgotPasswordForm({ smtpConfigured }: ForgotPasswordFormProps) {
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -32,93 +21,61 @@ export function ForgotPasswordForm({
         e.preventDefault();
         if (!smtpConfigured) return;
         setIsLoading(true);
-
         try {
-            // We intentionally don't surface the better-auth response: we
-            // always show the same success message so this endpoint can't
-            // be used to enumerate which emails have accounts.
-            await forgetPassword({
-                email,
-                redirectTo: "/reset-password",
-            });
+            await forgetPassword({ email, redirectTo: "/reset-password" });
             setSubmitted(true);
         } catch (error) {
-            // Network-level failures still get surfaced -- those aren't an
-            // account-existence signal.
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Could not send reset email. Please try again.";
-            toast.error(message);
+            toast.error(error instanceof Error ? error.message : "Could not send reset email. Please try again.");
         } finally {
             setIsLoading(false);
         }
     };
 
+    const InfoBlock = ({ children }: { children: React.ReactNode }) => (
+        <div className="rounded-lg border border-border/60 bg-muted/40 p-4 text-sm dark:bg-muted/20">
+            {children}
+        </div>
+    );
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             {!smtpConfigured ? (
-                <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">
-                        Password reset is unavailable on this instance.
+                <InfoBlock>
+                    <p className="font-medium mb-1.5">Password reset unavailable</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                        SMTP isn't configured on this instance. Set{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_HOST</code>,{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_USER</code>, and{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_PASSWORD</code>{" "}
+                        to enable it.
                     </p>
-                    <p className="text-muted-foreground">
-                        The administrator hasn't configured SMTP, so reset
-                        emails can't be delivered. Set{" "}
-                        <code className="font-mono text-xs">SMTP_HOST</code>,{" "}
-                        <code className="font-mono text-xs">SMTP_USER</code>,
-                        and{" "}
-                        <code className="font-mono text-xs">SMTP_PASSWORD</code>{" "}
-                        in the server environment to enable it. In the meantime,
-                        ask your administrator to reset your password directly
-                        in the database.
-                    </p>
-                </div>
+                </InfoBlock>
             ) : submitted ? (
-                <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">Check your email.</p>
-                    <p className="text-muted-foreground">
+                <InfoBlock>
+                    <p className="font-medium mb-1.5">Check your inbox</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                         If an account exists for{" "}
                         <span className="font-mono text-xs">{email}</span>,
-                        we've sent a password reset link. The link expires in 1
-                        hour.
+                        we've sent a reset link. It expires in 1 hour.
                     </p>
-                </div>
+                </InfoBlock>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            disabled={isLoading}
-                            autoComplete="email"
-                        />
+                    <div className="space-y-1.5">
+                        <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+                        <Input id="email" type="email" placeholder="you@example.com" value={email}
+                            onChange={(e) => setEmail(e.target.value)} required disabled={isLoading} autoComplete="email" />
                     </div>
-
-                    <MetalButton
-                        type="submit"
-                        className="w-full"
-                        variant="cyan"
-                        disabled={isLoading}
-                    >
-                        {isLoading ? "Sending..." : "Send reset link"}
-                    </MetalButton>
+                    <Button type="submit" className="w-full" variant="glow" disabled={isLoading}>
+                        {isLoading ? "Sending…" : "Send reset link"}
+                    </Button>
                 </form>
             )}
-
-            <div className="text-center text-sm">
-                <Link
-                    href="/login"
-                    className="text-accent-cyan hover:underline"
-                >
-                    Back to sign in
+            <p className="text-center text-sm">
+                <Link href="/login" className="text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline">
+                    ← Back to sign in
                 </Link>
-            </div>
+            </p>
         </div>
     );
 }

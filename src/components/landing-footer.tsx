@@ -51,7 +51,7 @@ const COLUMNS: FooterColumn[] = [
             { label: "Changelog", href: "/changelog" },
             {
                 label: "Roadmap",
-                href: "https://github.com/riffado/riffado/issues",
+                href: "https://github.com/mesynx-ai/mesynx-ai/issues",
                 external: true,
             },
         ],
@@ -62,15 +62,15 @@ const COLUMNS: FooterColumn[] = [
             { label: "Documentation", href: "/docs" },
             {
                 label: "Discussions",
-                href: "https://github.com/riffado/riffado/discussions",
+                href: "https://github.com/mesynx-ai/mesynx-ai/discussions",
                 external: true,
             },
             {
                 label: "Code of Conduct",
-                href: "https://github.com/riffado/riffado/blob/main/CODE_OF_CONDUCT.md",
+                href: "https://github.com/mesynx-ai/mesynx-ai/blob/main/CODE_OF_CONDUCT.md",
                 external: true,
             },
-            { label: "Contact", href: "mailto:support@riffado.com" },
+            { label: "Contact", href: "mailto:support@mesynx-ai.com" },
         ],
     },
     {
@@ -80,12 +80,12 @@ const COLUMNS: FooterColumn[] = [
             { label: "Terms", href: "/terms" },
             {
                 label: "Security",
-                href: "https://github.com/riffado/riffado/blob/main/SECURITY.md",
+                href: "https://github.com/mesynx-ai/mesynx-ai/blob/main/SECURITY.md",
                 external: true,
             },
             {
                 label: "Security disclosure",
-                href: "mailto:security@riffado.com",
+                href: "mailto:security@mesynx-ai.com",
             },
         ],
     },
@@ -121,7 +121,7 @@ export function LandingFooter() {
                         <Link
                             href="/"
                             className="flex items-center hover:opacity-80 transition-opacity w-fit"
-                            aria-label="Riffado"
+                            aria-label="Mesynx AI"
                         >
                             <LogoWordmark className="h-7 w-auto" />
                         </Link>
@@ -132,20 +132,20 @@ export function LandingFooter() {
                         </p>
                         <div className="flex items-center gap-3 mt-1">
                             <Link
-                                href="https://github.com/riffado/riffado"
+                                href="https://github.com/mesynx-ai/mesynx-ai"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Riffado on GitHub"
+                                aria-label="Mesynx AI on GitHub"
                             >
                                 <Github className="size-5" />
                             </Link>
                             <Link
-                                href="https://x.com/riffadohq"
+                                href="https://x.com/mesynx-aihq"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Riffado on X"
+                                aria-label="Mesynx AI on X"
                             >
                                 <X className="size-[18px]" />
                             </Link>
@@ -170,7 +170,7 @@ export function LandingFooter() {
                 </div>
 
                 {/* Honesty rail + copyright share one top border. The
-                    honesty rail is the trust signal Riffado's Slice 2
+                    honesty rail is the trust signal Mesynx AI's Slice 2
                     audience (lawyers/journalists/regulated work)
                     actually responds to -- mirrors the FAQ's HIPAA
                     answer. Previously these sat under two adjacent
@@ -178,14 +178,14 @@ export function LandingFooter() {
                     the bottom of the page. */}
                 <div className="mt-16 pt-6 border-t border-border/40 flex flex-col gap-6">
                     <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-2xl">
-                        Riffado is not HIPAA or SOC 2 certified. For regulated
+                        Mesynx AI is not HIPAA or SOC 2 certified. For regulated
                         work, self-host and plug in an AI provider that signs a
                         BAA you&apos;ve reviewed, or run a local model that
                         never leaves your machine.
                     </p>
                     <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <p className="text-xs text-muted-foreground font-mono">
-                            © {currentYear} Riffado. Licensed under{" "}
+                            © {currentYear} Mesynx AI. Licensed under{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -199,7 +199,7 @@ export function LandingFooter() {
                         <p className="text-xs text-muted-foreground/70 font-mono">
                             Built in the open on{" "}
                             <Link
-                                href="https://github.com/riffado/riffado"
+                                href="https://github.com/mesynx-ai/mesynx-ai"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"

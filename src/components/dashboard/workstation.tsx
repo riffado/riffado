@@ -1,5 +1,13 @@
 "use client";
 
+import {
+    Keyboard,
+    Mic,
+    Search,
+    Settings,
+    Upload,
+} from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -9,9 +17,17 @@ import {
     type RecordingListHandle,
 } from "@/components/dashboard/recording-list";
 import { ShortcutsDialog } from "@/components/dashboard/shortcuts-dialog";
+import { UserMenu } from "@/components/dashboard/user-menu";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
-import { WorkstationHeader } from "@/components/dashboard/workstation-header";
+import { LogoWordmark } from "@/components/icons/logo";
+import { SyncButton } from "@/components/sync-button";
+import { Button } from "@/components/ui/button";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { useAutoSync } from "@/hooks/use-auto-sync";
@@ -38,6 +54,7 @@ interface Provider {
     id: string;
     provider: string;
     baseUrl: string | null;
+    nickname: string | null;
     defaultModel: string | null;
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
@@ -64,7 +81,7 @@ interface WorkstationProps {
     userEmail?: string | null;
     initialSettings: InitialSettings;
     /**
-     * True when running in Riffado's hosted mode (`IS_HOSTED=true`).
+     * True when running in Mesynx AI's hosted mode (`IS_HOSTED=true`).
      * Forwarded into SettingsDialog so hosted-only UI gating reflects
      * the deployment mode. Server-supplied; never derive client-side.
      * Required (no default) so a future caller can't silently regress
@@ -283,26 +300,138 @@ export function Workstation({
 
     return (
         <>
-            <div className="bg-background">
-                <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <WorkstationHeader
-                        isAdmin={isAdmin}
-                        userEmail={userEmail}
-                        initialTheme={initialSettings.theme}
-                        lastSyncTime={lastSyncTime}
-                        nextSyncTime={nextSyncTime}
-                        isAutoSyncing={isAutoSyncing}
-                        lastSyncResult={lastSyncResult}
-                        onSync={handleSync}
-                        isUploading={isUploading}
-                        isProcessing={isProcessing}
-                        uploadInputRef={uploadInputRef}
-                        onTriggerUpload={triggerUpload}
-                        onUploadInputChange={handleUpload}
-                        onOpenPalette={() => setPaletteOpen(true)}
-                        onOpenSettings={() => setSettingsOpen(true)}
-                        onOpenShortcuts={() => setShortcutsOpen(true)}
-                    />
+            <div className="flex min-h-screen bg-background">
+                {/* ── Sidebar ─────────────────────────────────────── */}
+                <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+                    {/* Logo */}
+                    <div className="flex h-14 items-center gap-2 px-5">
+                        <Link href="/dashboard" aria-label="Mesynx AI" className="opacity-90 hover:opacity-100 transition-opacity">
+                            <LogoWordmark className="h-6 w-auto text-primary" />
+                        </Link>
+                    </div>
+
+                    {/* Nav */}
+                    <nav className="flex flex-1 flex-col gap-1 px-3 pt-2">
+                        <button
+                            type="button"
+                            className="flex items-center gap-3 rounded-lg bg-sidebar-accent px-3 py-2 text-sm font-medium text-sidebar-accent-foreground"
+                        >
+                            <Mic className="size-4 text-primary" />
+                            Recordings
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPaletteOpen(true)}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                        >
+                            <Search className="size-4" />
+                            Search
+                            <kbd className="ml-auto rounded border border-sidebar-border px-1.5 py-0.5 font-mono text-[10px] text-sidebar-foreground/40">
+                                ⌘K
+                            </kbd>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShortcutsOpen(true)}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                        >
+                            <Keyboard className="size-4" />
+                            Shortcuts
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSettingsOpen(true)}
+                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+                        >
+                            <Settings className="size-4" />
+                            Settings
+                        </button>
+                    </nav>
+
+                    {/* Sidebar actions */}
+                    <div className="flex flex-col gap-2 border-t border-sidebar-border p-3">
+                        <SyncButton
+                            lastSyncTime={lastSyncTime}
+                            nextSyncTime={nextSyncTime}
+                            isAutoSyncing={isAutoSyncing}
+                            lastSyncResult={lastSyncResult}
+                            onSync={handleSync}
+                        />
+                        <input
+                            ref={uploadInputRef}
+                            type="file"
+                            accept="audio/*"
+                            className="hidden"
+                            onChange={handleUpload}
+                        />
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    onClick={triggerUpload}
+                                    disabled={isProcessing}
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full h-8 gap-2 text-xs"
+                                >
+                                    <Upload className="size-3.5" />
+                                    {isUploading ? "Uploading…" : "Upload"}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                Upload an audio file
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
+
+                    {/* User */}
+                    <div className="border-t border-sidebar-border p-3">
+                        <UserMenu
+                            isAdmin={isAdmin}
+                            initialTheme={initialSettings.theme}
+                            userEmail={userEmail}
+                            onOpenSettings={() => setSettingsOpen(true)}
+                            onOpenShortcuts={() => setShortcutsOpen(true)}
+                        />
+                    </div>
+                </aside>
+
+                {/* ── Main content ────────────────────────────────── */}
+                <div className="flex flex-1 flex-col min-w-0">
+                    {/* Mobile header (hidden on desktop where sidebar shows) */}
+                    <div className="flex items-center gap-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md lg:hidden">
+                        <Link href="/dashboard" aria-label="Mesynx AI" className="shrink-0">
+                            <LogoWordmark className="h-6 w-auto text-primary" />
+                        </Link>
+                        <div className="ml-auto flex items-center gap-1.5">
+                            <Button onClick={() => setPaletteOpen(true)} variant="ghost" size="icon-sm">
+                                <Search className="size-4" />
+                            </Button>
+                            <SyncButton
+                                lastSyncTime={lastSyncTime}
+                                nextSyncTime={nextSyncTime}
+                                isAutoSyncing={isAutoSyncing}
+                                lastSyncResult={lastSyncResult}
+                                onSync={handleSync}
+                            />
+                            <input
+                                ref={!uploadInputRef.current ? uploadInputRef : undefined}
+                                type="file"
+                                accept="audio/*"
+                                className="hidden"
+                                onChange={handleUpload}
+                            />
+                            <Button onClick={triggerUpload} disabled={isProcessing} variant="outline" size="icon-sm">
+                                <Upload className="size-4" />
+                            </Button>
+                            <UserMenu
+                                isAdmin={isAdmin}
+                                initialTheme={initialSettings.theme}
+                                userEmail={userEmail}
+                                onOpenSettings={() => setSettingsOpen(true)}
+                                onOpenShortcuts={() => setShortcutsOpen(true)}
+                            />
+                        </div>
+                    </div>
 
                     {visibleRecordings.length === 0 &&
                     pendingUploads.length === 0 ? (
@@ -312,20 +441,11 @@ export function Workstation({
                             onUpload={triggerUpload}
                         />
                     ) : (
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                            {/*
-                              Mobile master/detail: on <lg, only one
-                              pane renders at a time. `mobileView ===
-                              "detail"` hides the list (via `hidden`)
-                              while keeping its state mounted, so
-                              scroll position, search query, and
-                              selection survive the back-navigation.
-                              The `lg:block` override brings the list
-                              back on desktop where both panes coexist.
-                            */}
+                        <div className="flex flex-1 min-h-0">
+                            {/* Recording list panel */}
                             <div
                                 className={cn(
-                                    "lg:col-span-1 lg:block",
+                                    "w-full border-r border-border/50 lg:block lg:w-80 xl:w-96",
                                     mobileView === "detail" && "hidden",
                                 )}
                             >
@@ -338,9 +458,6 @@ export function Workstation({
                                     inFlightActions={inFlightActions}
                                     onSelect={(r) => {
                                         setCurrentRecording(r);
-                                        // Tapping a row on mobile
-                                        // reveals the detail pane.
-                                        // Desktop ignores this state.
                                         setMobileView("detail");
                                     }}
                                     onDelete={handleDelete}
@@ -357,6 +474,7 @@ export function Workstation({
                                 />
                             </div>
 
+                            {/* Detail pane */}
                             <WorkstationDetailPane
                                 currentRecording={currentRecording}
                                 currentTranscription={currentTranscription}

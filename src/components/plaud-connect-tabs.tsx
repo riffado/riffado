@@ -13,9 +13,9 @@ import {
 } from "@/lib/plaud/servers";
 
 const CONNECTOR_CHROME_URL =
-    "https://github.com/riffado/connector#installation";
+    "https://github.com/mesynx-ai/connector#installation";
 
-// API contract for the Riffado Connector extension; bump `version` on both sides.
+// API contract for the Mesynx AI Connector extension; bump `version` on both sides.
 interface ConnectorBridge {
     version: number;
     connect(): Promise<{
@@ -28,7 +28,7 @@ interface ConnectorBridge {
 
 declare global {
     interface Window {
-        __riffadoConnector?: ConnectorBridge;
+        __mesynxAiConnector?: ConnectorBridge;
     }
 }
 
@@ -36,7 +36,7 @@ type Mode = "connector" | "email" | "token";
 type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
-const ISSUE_URL = "https://github.com/riffado/riffado/issues/65";
+const ISSUE_URL = "https://github.com/mesynx-ai/mesynx-ai/issues/65";
 
 function regionLabel(base: string): string {
     if (base.includes("euc1")) return "EU (Frankfurt)";
@@ -59,7 +59,7 @@ export function PlaudConnectTabs({
         let cancelled = false;
         const check = () => {
             if (cancelled) return;
-            const v = window.__riffadoConnector?.version;
+            const v = window.__mesynxAiConnector?.version;
             if (typeof v === "number" && v >= 1) setHasConnector(true);
         };
         check();
@@ -143,7 +143,7 @@ function ConnectorPane({
     const [isLoading, setIsLoading] = useState(false);
 
     const handleConnect = useCallback(async () => {
-        const bridge = window.__riffadoConnector;
+        const bridge = window.__mesynxAiConnector;
         if (!bridge) {
             toast.error("Connector extension not detected");
             return;
@@ -183,7 +183,7 @@ function ConnectorPane({
             <div className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
                     Easiest path: install the{" "}
-                    <span className="font-medium">Riffado Connector</span>{" "}
+                    <span className="font-medium">Mesynx AI Connector</span>{" "}
                     browser extension. Sign in to Plaud the way you normally do
                     (Google, Apple, or email) and the connector hands the
                     session back here, no copy-pasting.
@@ -194,11 +194,11 @@ function ConnectorPane({
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        Install Riffado Connector
+                        Install Mesynx AI Connector
                     </a>
                 </Button>
                 <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    Already installed? Reload this page so Riffado can detect
+                    Already installed? Reload this page so Mesynx AI can detect
                     it. Or use the{" "}
                     <button
                         type="button"

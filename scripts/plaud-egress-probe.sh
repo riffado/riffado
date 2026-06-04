@@ -105,7 +105,7 @@ region_base() {
 MIN_UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 BROWSER_UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36'
 
-# Returns curl -H args for the "minimal" set (what Riffado sends today).
+# Returns curl -H args for the "minimal" set (what Mesynx AI sends today).
 min_headers() {
     printf -- '-H\0Authorization: Bearer %s\0' "$TOKEN"
     printf -- '-H\0Content-Type: application/json\0'

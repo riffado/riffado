@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     // previews. `APP_URL` is allowed to be unset during `next build`
     // (see `src/lib/env.ts`); the fallback keeps the build green and
     // self-host deployments override it at runtime via env.
-    metadataBase: new URL(env.APP_URL ?? "https://riffado.com"),
-    title: "Riffado - Professional Audio Workstation",
+    metadataBase: new URL(env.APP_URL ?? "https://mesynx-ai.com"),
+    title: "Mesynx AI - Professional Audio Workstation",
     description:
         "Professional audio workstation for Plaud devices with AI-powered transcription",
 };

@@ -17,7 +17,7 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
  * surfaces as 400 `PLAUD_API_ERROR` / `PLAUD_OTP_INVALID` with the
  * upstream `msg` preserved.
  *
- * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/verify/route.ts
+ * Source: https://github.com/mesynx-ai/mesynx-ai/blob/main/src/app/api/plaud/auth/verify/route.ts
  */
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);

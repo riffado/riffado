@@ -22,7 +22,7 @@ const BEATS: Beat[] = [
         step: "01",
         icon: <RefreshCw className="size-5" />,
         title: "Sign in once, sync forever.",
-        body: "Log in with the same email you use for your recorder — Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
+        body: "Log in with the same email you use for your recorder — Mesynx AI sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
     },
     {
         step: "02",
@@ -51,7 +51,7 @@ export function Features() {
                             A workstation around the recorder you already have.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Your recorder keeps recording. Riffado picks up
+                            Your recorder keeps recording. Mesynx AI picks up
                             after the audio leaves the device — and lets you
                             pick the AI, the storage, and where it all lives.
                         </p>

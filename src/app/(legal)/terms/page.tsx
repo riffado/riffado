@@ -28,9 +28,9 @@ import {
  */
 
 export const metadata: Metadata = {
-    title: "Terms of Service — Riffado",
+    title: "Terms of Service — Mesynx AI",
     description:
-        "Terms governing your use of the hosted Riffado service at riffado.com.",
+        "Terms governing your use of the hosted Mesynx AI service at mesynx-ai.com.",
 };
 
 export default function TermsPage() {
@@ -41,8 +41,8 @@ export default function TermsPage() {
                 <em>Effective {EFFECTIVE_DATE_DISPLAY}.</em>
             </p>
             <p>
-                These terms govern your use of the hosted Riffado service at
-                riffado.com. By creating an account or using the service, you
+                These terms govern your use of the hosted Mesynx AI service at
+                mesynx-ai.com. By creating an account or using the service, you
                 agree to them. If you self-host the project instead, your
                 relationship is with the AGPL-3.0 license that governs the
                 source code, not with these terms.
@@ -63,7 +63,7 @@ export default function TermsPage() {
 
             <h2>What the service does</h2>
             <p>
-                Riffado syncs recordings from a connected voice recorder,
+                Mesynx AI syncs recordings from a connected voice recorder,
                 transcribes and summarizes them using the AI provider you choose
                 (or in your browser), stores them, and lets you export
                 everything. To use it you need a compatible browser, internet
@@ -73,13 +73,13 @@ export default function TermsPage() {
 
             <h2>The software vs. the service</h2>
             <p>
-                The Riffado source code is licensed under AGPL-3.0 and lives at{" "}
+                The Mesynx AI source code is licensed under AGPL-3.0 and lives at{" "}
                 <Link
-                    href="https://github.com/riffado/riffado"
+                    href="https://github.com/mesynx-ai/mesynx-ai"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    github.com/riffado/riffado
+                    github.com/mesynx-ai/mesynx-ai
                 </Link>
                 . You are free to run, modify, and redistribute it under that
                 license. These terms apply only to the hosted instance we

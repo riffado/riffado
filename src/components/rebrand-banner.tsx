@@ -4,7 +4,7 @@ import { ArrowRight, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "riffado:rebrand:in-app-banner";
+const STORAGE_KEY = "mesynx-ai:rebrand:in-app-banner";
 const EXPIRES_AT = new Date("2026-07-28T00:00:00Z");
 
 /**
@@ -48,7 +48,7 @@ export function RebrandBanner() {
             className="relative border-b border-primary/20 bg-primary/8 text-foreground"
         >
             <div className="container mx-auto px-4 py-2.5 pr-12 flex items-center justify-center gap-2 text-sm text-pretty">
-                <span className="font-medium">OpenPlaud is now Riffado.</span>
+                <span className="font-medium">OpenPlaud is now Mesynx AI.</span>
                 <span className="text-muted-foreground hidden sm:inline">
                     Same project, same code, same team.
                 </span>

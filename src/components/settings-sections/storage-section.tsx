@@ -206,7 +206,7 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Storage"
-                description="Where Riffado keeps the audio files behind your recordings."
+                description="Where Mesynx AI keeps the audio files behind your recordings."
                 icon={HardDrive}
             />
 

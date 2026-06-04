@@ -1,6 +1,6 @@
 # API Documentation
 
-Riffado API reference for all endpoints.
+Mesynx AI API reference for all endpoints.
 
 ## Base URL
 
@@ -137,7 +137,7 @@ Get current Plaud connection status.
 
 #### DELETE `/plaud/connection`
 
-Disconnect the current Plaud account. Deletes the stored connection and device records; synced recordings are preserved in Riffado storage.
+Disconnect the current Plaud account. Deletes the stored connection and device records; synced recordings are preserved in Mesynx AI storage.
 
 **Response:**
 ```json
@@ -304,7 +304,7 @@ Configure storage provider.
   "storageType": "s3",
   "s3Config": {
     "endpoint": "https://...",
-    "bucket": "riffado",
+    "bucket": "mesynx-ai",
     "region": "us-east-1",
     "accessKeyId": "...",
     "secretAccessKey": "..."
@@ -504,7 +504,7 @@ Forwarding headers such as `X-Forwarded-For` are ignored unless
 `RATE_LIMIT_TRUST_PROXY_HEADERS=true`; only enable it behind a trusted reverse
 proxy that strips or overwrites client-supplied forwarding headers.
 
-When `RATE_LIMIT_TRUST_PROXY_HEADERS=false` or unset, Riffado cannot derive a
+When `RATE_LIMIT_TRUST_PROXY_HEADERS=false` or unset, Mesynx AI cannot derive a
 trusted client IP from the request. The unauthenticated IP limiter therefore
 uses one shared `"unknown"` bucket of 1,200 requests per minute for the whole
 instance. Authenticated identity limits still apply per API key/session at 600
@@ -529,13 +529,13 @@ Supported events:
 - `transcription.completed`
 - `transcription.failed`
 
-Riffado signs each request with HMAC-SHA256:
+Mesynx AI signs each request with HMAC-SHA256:
 
 ```http
-X-Riffado-Event: transcription.completed
-X-Riffado-Delivery: <delivery-id>
-X-Riffado-Timestamp: 1778078610
-X-Riffado-Signature: t=1778078610,v1=<hex hmac>
+X-MesynxAI-Event: transcription.completed
+X-MesynxAI-Delivery: <delivery-id>
+X-MesynxAI-Timestamp: 1778078610
+X-MesynxAI-Signature: t=1778078610,v1=<hex hmac>
 ```
 
 The signature input is:
@@ -574,7 +574,7 @@ Webhook transcript payloads include a bounded preview instead of the full text:
     "created_at": "2026-05-06T12:05:00.000Z"
   },
   "links": {
-    "transcript": "https://riffado.example/api/v1/recordings/abc123/transcript"
+    "transcript": "https://mesynx-ai.example/api/v1/recordings/abc123/transcript"
   }
 }
 ```

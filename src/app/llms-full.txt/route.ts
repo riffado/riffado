@@ -1,7 +1,7 @@
 import { source } from "@/lib/source";
 
 export function GET() {
-    const lines: string[] = ["# Riffado docs", ""];
+    const lines: string[] = ["# Mesynx AI docs", ""];
 
     for (const page of source.getPages()) {
         lines.push(`## ${page.data.title}`);

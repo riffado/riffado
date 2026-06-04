@@ -73,7 +73,7 @@ export function Deploy() {
                             One command. Your server. Yours forever.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Riffado ships as a Docker Compose stack — the app, a
+                            Mesynx AI ships as a Docker Compose stack — the app, a
                             database, your storage. Move from Hosted whenever
                             you want via full-archive export. Same source, your
                             machine.
@@ -133,7 +133,7 @@ export function Deploy() {
                                     <span className="text-green-600 dark:text-green-500">
                                         ✓
                                     </span>{" "}
-                                    Pulled riffado-web, riffado-db
+                                    Pulled mesynx-ai-web, mesynx-ai-db
                                 </div>
                                 <div>
                                     <span className="text-green-600 dark:text-green-500">

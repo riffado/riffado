@@ -33,7 +33,7 @@ export function HeroVisual() {
                 <div className="relative aspect-[16/10] w-full">
                     <Image
                         src="/landing/hero-light.webp"
-                        alt="Riffado dashboard showing a transcribed board meeting with summary and action items"
+                        alt="Mesynx AI dashboard showing a transcribed board meeting with summary and action items"
                         fill
                         priority
                         sizes="(min-width: 1280px) 1216px, 100vw"

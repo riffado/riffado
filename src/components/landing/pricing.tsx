@@ -3,7 +3,7 @@ import Link from "next/link";
 import { MetalButton } from "@/components/metal-button";
 
 /**
- * Three ways to run Riffado. Same source, same features -- the axis
+ * Three ways to run Mesynx AI. Same source, same features -- the axis
  * is "who runs the server."
  *
  * Design rules (read before editing):
@@ -143,7 +143,7 @@ export function Pricing() {
                         Hosted runs the exact AGPL-3.0 source you can self-host
                         — no hidden fork, no proprietary add-ons.{" "}
                         <Link
-                            href="https://github.com/riffado/riffado"
+                            href="https://github.com/mesynx-ai/mesynx-ai"
                             className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground transition-colors"
                         >
                             Read the source

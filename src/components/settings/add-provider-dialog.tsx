@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2, Plug, CheckCircle2, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
@@ -42,15 +43,58 @@ export function AddProviderDialog({
 }: AddProviderDialogProps) {
     const visiblePresets = getVisiblePresets({ isHosted });
     const [provider, setProvider] = useState("");
+    const [nickname, setNickname] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
     const [defaultModel, setDefaultModel] = useState("");
     const [isDefaultTranscription, setIsDefaultTranscription] = useState(false);
     const [isDefaultEnhancement, setIsDefaultEnhancement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{
+        ok: boolean;
+        message: string;
+    } | null>(null);
+    const [discoveredModels, setDiscoveredModels] = useState<
+        { id: string; name: string }[]
+    >([]);
+
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        setDiscoveredModels([]);
+        try {
+            const res = await fetch(
+                "/api/settings/ai/providers/test-connection",
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        provider,
+                        apiKey,
+                        baseUrl: baseUrl || null,
+                    }),
+                },
+            );
+            const data = await res.json();
+            setTestResult({ ok: data.ok, message: data.message });
+            if (data.ok && Array.isArray(data.models)) {
+                setDiscoveredModels(data.models);
+            }
+        } catch {
+            setTestResult({
+                ok: false,
+                message: "Failed to reach the test endpoint.",
+            });
+        } finally {
+            setIsTesting(false);
+        }
+    };
 
     const handleProviderChange = (value: string) => {
         setProvider(value);
+        setTestResult(null);
+        setDiscoveredModels([]);
         const preset = findPreset(value);
         if (preset) {
             setBaseUrl(preset.baseUrl);
@@ -75,6 +119,7 @@ export function AddProviderDialog({
                     provider,
                     apiKey,
                     baseUrl: baseUrl || null,
+                    nickname: nickname.trim() || null,
                     defaultModel: defaultModel || null,
                     isDefaultTranscription,
                     isDefaultEnhancement,
@@ -91,6 +136,7 @@ export function AddProviderDialog({
             onOpenChange(false);
 
             setProvider("");
+            setNickname("");
             setApiKey("");
             setBaseUrl("");
             setDefaultModel("");
@@ -140,6 +186,23 @@ export function AddProviderDialog({
                     </div>
 
                     <div className="space-y-2">
+                        <Label htmlFor="nickname">Nickname (Optional)</Label>
+                        <Input
+                            id="nickname"
+                            type="text"
+                            placeholder="e.g. My Whisper Server"
+                            value={nickname}
+                            onChange={(e) => setNickname(e.target.value)}
+                            disabled={isLoading}
+                            className="text-sm"
+                            maxLength={100}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            A friendly name to help you identify this provider
+                        </p>
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="apiKey">API Key</Label>
                         <Input
                             id="apiKey"
@@ -170,12 +233,41 @@ export function AddProviderDialog({
                                 We can&apos;t reach{" "}
                                 <code className="font-mono">localhost</code> or
                                 other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
+                                use LM Studio or Ollama, self-host Mesynx AI (
                                 <code className="font-mono">
                                     docker compose up
                                 </code>
                                 ).
                             </p>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleTestConnection}
+                            disabled={isTesting || !provider}
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                            {isTesting ? (
+                                <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                                <Plug className="size-3" />
+                            )}
+                            {isTesting ? "Testing..." : "Test Connection"}
+                        </button>
+                        {testResult && (
+                            <div
+                                className={`flex items-start gap-2 rounded-md border p-2 text-xs ${
+                                    testResult.ok
+                                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                        : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                                }`}
+                            >
+                                {testResult.ok ? (
+                                    <CheckCircle2 className="size-3.5 shrink-0 mt-0.5" />
+                                ) : (
+                                    <XCircle className="size-3.5 shrink-0 mt-0.5" />
+                                )}
+                                <span>{testResult.message}</span>
+                            </div>
                         )}
                     </div>
 
@@ -186,6 +278,7 @@ export function AddProviderDialog({
                         value={defaultModel}
                         onChange={setDefaultModel}
                         disabled={isLoading}
+                        discoveredModels={discoveredModels}
                     />
 
                     <Panel variant="inset" className="space-y-2 text-sm">

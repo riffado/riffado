@@ -54,7 +54,7 @@ export function ExportCsvButton() {
             a.href = objUrl;
             // Server sets Content-Disposition with a timestamped filename;
             // browsers respect that, but we set a fallback for safety.
-            a.download = "riffado-pricing-snapshot.csv";
+            a.download = "mesynx-ai-pricing-snapshot.csv";
             document.body.appendChild(a);
             a.click();
             a.remove();

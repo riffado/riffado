@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: RouteContext) {
     return generateOGImage({
         title: page.data.title,
         description: page.data.description,
-        site: "Riffado",
+        site: "Mesynx AI",
         // sRGB of `oklch(0.6171 0.1375 39.0427)` from globals.css. Satori
         // (next/og renderer) does not support `oklch()`; keep both in sync.
         primaryColor: "#c96442",

@@ -15,7 +15,7 @@ import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = {
-    title: "Riffado — open-source AI transcription for voice recorders",
+    title: "Mesynx AI — open-source AI transcription for voice recorders",
     description:
         "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family — Note, Note Pro, and NotePin.",
 };
@@ -29,7 +29,7 @@ export default async function HomePage() {
 
     // Self-host instances don't serve the marketing landing -- send logged-out
     // visitors straight to login. The marketing surface is only meaningful on
-    // the Riffado-operated hosted product, which sets IS_HOSTED=true.
+    // the Mesynx AI-operated hosted product, which sets IS_HOSTED=true.
     if (!env.IS_HOSTED) {
         redirect("/login");
     }
@@ -46,7 +46,7 @@ export default async function HomePage() {
                 <TheMath />
                 <Features />
                 {/* TODO: bring back a testimonials slot once we have
-                    Riffado-specific quotes. The previous RedditQuotes
+                    Mesynx AI-specific quotes. The previous RedditQuotes
                     section republished disparaging Plaud-subscription
                     quotes and was removed for commercial-disparagement
                     risk. Do not reinstate without legal review. */}

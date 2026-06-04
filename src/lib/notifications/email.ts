@@ -54,7 +54,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         }
 
         const fromEmail =
-            env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
+            env.SMTP_FROM || env.SMTP_USER || "noreply@mesynx-ai.com";
 
         await mailer.sendMail({
             from: fromEmail,
@@ -84,7 +84,7 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
         );
     }
 
-    const fromEmail = env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
+    const fromEmail = env.SMTP_FROM || env.SMTP_USER || "noreply@mesynx-ai.com";
 
     try {
         await mailer.sendMail({
@@ -170,7 +170,7 @@ export async function sendPasswordResetEmail(
     email: string,
     resetUrl: string,
 ): Promise<boolean> {
-    const subject = "Reset your Riffado password";
+    const subject = "Reset your Mesynx AI password";
 
     const html = await render(
         React.createElement(PasswordResetEmail, {
@@ -182,7 +182,7 @@ export async function sendPasswordResetEmail(
     const text = `
 ${subject}
 
-We received a request to reset your Riffado password. Click the link below to choose a new password. This link expires in 1 hour.
+We received a request to reset your Mesynx AI password. Click the link below to choose a new password. This link expires in 1 hour.
 
 ${resetUrl}
 
@@ -198,7 +198,7 @@ If you didn't request a password reset, you can safely ignore this email -- your
 }
 
 export async function sendTestEmail(email: string): Promise<void> {
-    const subject = "Test Email from Riffado";
+    const subject = "Test Email from Mesynx AI";
 
     const baseUrl = env.APP_URL;
     const dashboardUrl = `${baseUrl}/dashboard`;
@@ -217,7 +217,7 @@ export async function sendTestEmail(email: string): Promise<void> {
     const text = `
 ${subject}
 
-This is a test email from Riffado to verify your email notification settings.
+This is a test email from Mesynx AI to verify your email notification settings.
 
 If you received this email, your email notifications are configured correctly! You'll receive notifications when new recordings are synced from your Plaud device.
 

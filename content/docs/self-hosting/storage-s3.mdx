@@ -3,13 +3,13 @@ title: S3-compatible storage
 description: Configure AWS S3, Cloudflare R2, MinIO, Backblaze B2, or any S3-compatible service.
 ---
 
-By default, Riffado stores audio on the local filesystem (Docker
+By default, Mesynx AI stores audio on the local filesystem (Docker
 volume mounted at `/app/audio`). That's the right default — zero setup,
 works offline, lives entirely under your control. Switch to S3 when you
 want offsite durability, lower per-byte cost, or to share storage
 between multiple instances.
 
-Riffado talks to any service that implements the S3 wire protocol —
+Mesynx AI talks to any service that implements the S3 wire protocol —
 AWS S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, Wasabi,
 and so on.
 
@@ -45,7 +45,7 @@ S3_SECRET_ACCESS_KEY=YOUR_SECRET
 
 ```bash
 S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_BUCKET=riffado
+S3_BUCKET=mesynx-ai
 S3_REGION=auto
 S3_ACCESS_KEY_ID=YOUR_KEY
 S3_SECRET_ACCESS_KEY=YOUR_SECRET
@@ -58,13 +58,13 @@ default for personal self-host instances.
 
 ```bash
 S3_ENDPOINT=http://minio:9000
-S3_BUCKET=riffado
+S3_BUCKET=mesynx-ai
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=minioadmin
 S3_SECRET_ACCESS_KEY=minioadmin
 ```
 
-If MinIO runs in the same Docker network as Riffado, the endpoint is
+If MinIO runs in the same Docker network as Mesynx AI, the endpoint is
 the service hostname (`http://minio:9000`), not `localhost`.
 
 ### Backblaze B2
@@ -98,7 +98,7 @@ the active backend.
 
 ## Encryption at the storage layer
 
-Riffado's at-rest encryption applies to **database** fields, not audio
+Mesynx AI's at-rest encryption applies to **database** fields, not audio
 objects in storage. For S3, prefer **bucket-level server-side
 encryption** (SSE-S3, SSE-KMS, or the equivalent on your provider). Per-
 object app-layer encryption is a heavier change and not implemented
@@ -109,7 +109,7 @@ explicit scope of the database-layer encryption.
 
 ## Migrating between backends
 
-Riffado does not ship a built-in "move all audio from local to S3"
+Mesynx AI does not ship a built-in "move all audio from local to S3"
 tool. The supported flow today:
 
 1. Stop sync (so no new files are written).

@@ -90,8 +90,8 @@ export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
         items: [
             {
                 tag: "news",
-                title: "OpenPlaud is now Riffado",
-                body: "Same project, same code, same team — new name. The old name tied us to a single vendor; Riffado is a name we can grow into. Your account, recordings, transcripts, settings, and API tokens all keep working unchanged.",
+                title: "OpenPlaud is now Mesynx AI",
+                body: "Same project, same code, same team — new name. The old name tied us to a single vendor; Mesynx AI is a name we can grow into. Your account, recordings, transcripts, settings, and API tokens all keep working unchanged.",
                 link: { href: "/rebrand", label: "Read the full note" },
             },
         ],

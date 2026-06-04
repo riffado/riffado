@@ -3,10 +3,10 @@ import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
 
 export const baseOptions: BaseLayoutProps = {
     nav: {
-        title: "Riffado Docs",
+        title: "Mesynx AI Docs",
         url: "/docs",
     },
-    githubUrl: "https://github.com/riffado/riffado",
+    githubUrl: "https://github.com/mesynx-ai/mesynx-ai",
 };
 
 export const docsTabs: NonNullable<DocsLayoutProps["tabs"]> = [

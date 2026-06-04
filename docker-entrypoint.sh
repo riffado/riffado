@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting Riffado..."
+echo "🚀 Starting Mesynx AI..."
 
 echo "⏳ Running database migrations..."
 bun migrate-idempotent.js

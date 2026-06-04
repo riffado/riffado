@@ -11,7 +11,7 @@ export function LandingNav() {
                 <Link
                     href="/"
                     className="flex items-center hover:opacity-80 transition-opacity"
-                    aria-label="Riffado"
+                    aria-label="Mesynx AI"
                 >
                     <LogoWordmark className="h-8 w-auto" />
                 </Link>

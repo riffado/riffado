@@ -9,7 +9,7 @@ import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 
 type Step = "connect" | "complete";
 
-const GITHUB_REPO = "https://github.com/riffado/riffado";
+const GITHUB_REPO = "https://github.com/mesynx-ai/mesynx-ai";
 
 export function OnboardingForm() {
     const [step, setStep] = useState<Step>("connect");
@@ -98,7 +98,7 @@ export function OnboardingForm() {
                         className="mt-2 space-y-2 text-xs text-muted-foreground leading-relaxed"
                     >
                         <p>
-                            Riffado talks to Plaud's own servers (
+                            Mesynx AI talks to Plaud's own servers (
                             <span className="font-mono">api.plaud.ai</span>) the
                             same way the official Plaud app does. Your email or
                             token is forwarded directly and never stored.

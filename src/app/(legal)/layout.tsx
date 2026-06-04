@@ -33,7 +33,7 @@ export default function LegalLayout({
                     <Link
                         href="/"
                         className="flex items-center hover:opacity-80 transition-opacity"
-                        aria-label="Riffado"
+                        aria-label="Mesynx AI"
                     >
                         <LogoWordmark className="h-7 w-auto" />
                     </Link>

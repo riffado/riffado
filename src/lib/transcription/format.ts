@@ -45,7 +45,12 @@ export function buildTranscriptionParams(args: {
     language?: string;
 }): TranscriptionCreateParamsNonStreaming {
     const { file, model, responseFormat, language } = args;
-    return {
+
+    // gpt-4o-transcribe models use a different parameter set and don't
+    // accept legacy Whisper params like temperature or prompt.
+    const isGpt4oTranscribe = model.startsWith("gpt-4o");
+
+    const params: TranscriptionCreateParamsNonStreaming = {
         file,
         model,
         response_format: responseFormat,
@@ -53,5 +58,25 @@ export function buildTranscriptionParams(args: {
             ? { chunking_strategy: "auto" as const }
             : {}),
         ...(language ? { language } : {}),
+        // Anti-hallucination: force deterministic decoding so the model
+        // doesn't speculatively guess on silence or background noise.
+        ...(!isGpt4oTranscribe ? { temperature: 0 } : {}),
+        // Anti-hallucination: steer the model away from YouTube-style
+        // hallucinations ("Thanks for watching", subtitle URLs, etc.)
+        // by priming it with realistic punctuation.
+        ...(!isGpt4oTranscribe
+            ? { prompt: "Transcribe the spoken audio accurately." }
+            : {}),
     };
+
+    // Anti-hallucination: wipe the decoder's short-term memory after each
+    // chunk so a single glitch can't cascade into a repeat loop. This is a
+    // Whisper-native parameter accepted by self-hosted servers (faster-whisper,
+    // whisper.cpp, etc.) but not part of the OpenAI SDK type definition.
+    if (!isGpt4oTranscribe) {
+        (params as unknown as Record<string, unknown>).condition_on_previous_text =
+            false;
+    }
+
+    return params;
 }

@@ -148,7 +148,7 @@ export function ApiKeysSection() {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="API Keys"
-                description="Personal access tokens for the Riffado public API."
+                description="Personal access tokens for the Mesynx AI public API."
                 icon={KeyRound}
                 action={
                     <Button

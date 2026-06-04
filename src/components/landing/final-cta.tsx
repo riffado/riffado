@@ -34,7 +34,7 @@ export function FinalCTA() {
                     {/* Decorative wordmark -- the nav already exposes Home,
                         so this is a visual sign-off, not a link. Marked
                         aria-hidden so screen readers don't announce a
-                        second "Riffado" between the headline and the CTA. */}
+                        second "Mesynx AI" between the headline and the CTA. */}
                     <LogoWordmark
                         aria-hidden
                         className="mx-auto h-10 w-auto md:h-12 text-auth-brand-foreground"

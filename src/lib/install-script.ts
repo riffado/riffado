@@ -24,7 +24,7 @@ export async function renderInstallScript(version: string): Promise<string> {
 export async function fetchLatestReleaseTag(): Promise<string | null> {
     try {
         const res = await fetch(
-            "https://api.github.com/repos/riffado/riffado/releases/latest",
+            "https://api.github.com/repos/mesynx-ai/mesynx-ai/releases/latest",
             {
                 headers: {
                     Accept: "application/vnd.github+json",

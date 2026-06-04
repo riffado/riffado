@@ -1,7 +1,7 @@
 /**
  * Regression test for the Rybbit analytics proxy 404 bug that survived
  * #127 and #144:
- *   https://riffado.com/api/_int/script.js (and every other path under
+ *   https://mesynx-ai.com/api/_int/script.js (and every other path under
  *   /api/_int/*) returned 404 in production even though IS_HOSTED +
  *   RYBBIT_HOST + RYBBIT_SITE_ID were set.
  *

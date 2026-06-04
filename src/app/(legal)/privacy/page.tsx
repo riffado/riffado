@@ -27,8 +27,8 @@ import {
  */
 
 export const metadata: Metadata = {
-    title: "Privacy Policy — Riffado",
-    description: "How the hosted Riffado service handles your personal data.",
+    title: "Privacy Policy — Mesynx AI",
+    description: "How the hosted Mesynx AI service handles your personal data.",
 };
 
 export default function PrivacyPage() {
@@ -40,11 +40,11 @@ export default function PrivacyPage() {
             </p>
             <p>
                 This policy explains how we handle personal data on the hosted
-                Riffado service at riffado.com. Riffado is also open-source
+                Mesynx AI service at mesynx-ai.com. Mesynx AI is also open-source
                 software you can run yourself under the AGPL-3.0 license. If you
                 self-host, your data never touches our infrastructure and this
                 policy does not apply to you — see the{" "}
-                <Link href="https://github.com/riffado/riffado#readme">
+                <Link href="https://github.com/mesynx-ai/mesynx-ai#readme">
                     project README
                 </Link>{" "}
                 for self-host guidance.
@@ -243,7 +243,7 @@ export default function PrivacyPage() {
 
             <h2>Compliance posture</h2>
             <p>
-                Riffado is not HIPAA or SOC 2 certified. For regulated work,
+                Mesynx AI is not HIPAA or SOC 2 certified. For regulated work,
                 self-host the project and plug in an AI provider that signs a
                 data processing agreement you have reviewed, or run a local
                 model.

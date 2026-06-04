@@ -79,7 +79,7 @@ export function FinalCtaActions() {
             >
                 <Link
                     href="/register"
-                    aria-label="Start Riffado free — no card required"
+                    aria-label="Start Mesynx AI free — no card required"
                     onClick={() =>
                         track("final_cta_primary_click", {
                             location: "final_cta",
@@ -95,7 +95,7 @@ export function FinalCtaActions() {
                 opens and closes on the same two paths. */}
             <Link
                 href="/install"
-                aria-label="Self-host Riffado in one command"
+                aria-label="Self-host Mesynx AI in one command"
                 onClick={() =>
                     track("final_cta_self_host_click", {
                         location: "final_cta",

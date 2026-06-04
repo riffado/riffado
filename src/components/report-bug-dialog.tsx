@@ -32,7 +32,7 @@ interface ReportBugDialogProps {
  * Renders the bug-report dialog with two action buttons:
  *   - "Report on GitHub" \u2014 always.
  *   - "Email us" \u2014 hosted only. Self-hosters aren't our customers and
- *     `support@riffado.com` would just confuse them; they should file
+ *     `support@mesynx-ai.com` would just confuse them; they should file
  *     on GitHub.
  *
  * The preview is shown so users see exactly what gets sent before

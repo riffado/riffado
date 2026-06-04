@@ -4,7 +4,7 @@
  *
  * Default behavior is self-host (IS_HOSTED=false): the marketing landing
  * page at `/` should not be served, and logged-out visitors are redirected
- * to /login. Only the Riffado-operated hosted instance sets IS_HOSTED=true
+ * to /login. Only the Mesynx AI-operated hosted instance sets IS_HOSTED=true
  * to render Hero / Pricing / FinalCTA / etc.
  *
  * This test verifies the env-schema contract: IS_HOSTED parses string-boolean
@@ -124,7 +124,7 @@ describe("issue #70: IS_HOSTED env contract", () => {
         const runtimeEnv = {
             APP_URL: "http://localhost:3000",
             BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
-            DATABASE_URL: "postgresql://user:password@localhost:5432/riffado",
+            DATABASE_URL: "postgresql://user:password@localhost:5432/mesynx-ai",
             ENCRYPTION_KEY:
                 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             IS_HOSTED: "true",

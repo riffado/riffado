@@ -3,7 +3,7 @@ title: AI providers
 description: Configure OpenAI-compatible transcription and summarization providers.
 ---
 
-Riffado uses the OpenAI SDK with a configurable `baseURL`. Any provider
+Mesynx AI uses the OpenAI SDK with a configurable `baseURL`. Any provider
 that exposes an OpenAI-compatible API works: OpenAI itself, Groq,
 OpenRouter, Together, Azure OpenAI, LM Studio, Ollama, and anything else
 that speaks the same wire format.
@@ -45,7 +45,7 @@ LM Studio and Ollama presets default to `http://localhost`. From inside
 a Docker container, `localhost` is the container itself, not the host
 machine — use `http://host.docker.internal:<port>` on Mac/Windows, or
 the Docker bridge IP on Linux, to reach an AI server running on the
-host. If you run Ollama in the same Docker network as Riffado, use the
+host. If you run Ollama in the same Docker network as Mesynx AI, use the
 service hostname (`http://ollama:11434/v1`).
 
 ## Choosing models
@@ -66,7 +66,7 @@ specific reason to use a larger model.
 
 Plaintext audio (for transcription) and plaintext transcript text
 (for summarization). The trust boundary is the provider you picked.
-Riffado's at-rest encryption protects the database, not the network
+Mesynx AI's at-rest encryption protects the database, not the network
 hop to your AI provider — see
 [Encryption at rest](../reference/encryption-at-rest) for the explicit
 list of what that layer does and does not cover.

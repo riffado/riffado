@@ -117,7 +117,7 @@ export async function sendNewRecordingBarkNotification(
             subtitle,
             body,
             url: dashboardUrl,
-            group: "riffado-recordings",
+            group: "mesynx-ai-recordings",
             sound: "minuet",
             badge: count,
         },

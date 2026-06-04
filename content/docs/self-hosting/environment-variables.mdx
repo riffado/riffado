@@ -1,9 +1,9 @@
 ---
 title: Environment variables
-description: Every env var that Riffado reads, what it does, and what it defaults to.
+description: Every env var that Mesynx AI reads, what it does, and what it defaults to.
 ---
 
-Riffado validates every environment variable through a Zod schema in
+Mesynx AI validates every environment variable through a Zod schema in
 `src/lib/env.ts` at process start. A misconfigured env crashes the
 server with a precise error message rather than booting into a broken
 state — that's intentional. Read this page as the source of truth for
@@ -19,7 +19,7 @@ on production secrets.
 | --------------------------- | -------- | ---------------------------------------------------------------------- |
 | `DATABASE_URL`              | string   | Postgres connection string                                             |
 | `BETTER_AUTH_SECRET`        | string   | At least 32 chars; signs session cookies                               |
-| `APP_URL`                   | URL      | Public origin (e.g. `https://riffado.example.com`)                   |
+| `APP_URL`                   | URL      | Public origin (e.g. `https://mesynx-ai.example.com`)                   |
 | `ENCRYPTION_KEY`            | hex(64)  | Exactly 64 hex chars (32 bytes); see [Encryption](../reference/encryption-at-rest)|
 
 ## Optional knobs
@@ -28,7 +28,7 @@ on production secrets.
 | ----------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `DISABLE_REGISTRATION`              | `false`                            | When `true`, sign-up is rejected server-side and the `/register` page is disabled. Existing users keep working.     |
 | `DISABLE_UPDATE_CHECK`              | `false`                            | When `true`, the footer never calls `api.github.com` to check for new release tags.                                 |
-| `RIFFADO_VERSION`                 | `latest`                           | Read by Docker Compose, not the app. Sets which image tag Compose pulls.                                            |
+| `MESYNX_AI_VERSION`                 | `latest`                           | Read by Docker Compose, not the app. Sets which image tag Compose pulls.                                            |
 | `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`   | `false`                            | When `true`, webhook URLs must be HTTPS and resolve to public IPs. Useful when your instance is exposed to others.  |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS`    | `false`                            | When `true`, trust `X-Forwarded-For` for rate-limit buckets. Only safe behind a reverse proxy that overwrites the header. |
 | `API_TOKEN_HASH_SECRET`             | falls back to `BETTER_AUTH_SECRET` | At least 32 chars. HMAC key for personal API token hashing. Set independently if you want token-hash rotation without rotating session secrets. |

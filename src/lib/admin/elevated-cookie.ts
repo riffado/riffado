@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 
-export const ADMIN_ELEVATED_COOKIE = "riffado_admin_elev";
+export const ADMIN_ELEVATED_COOKIE = "mesynx-ai_admin_elev";
 
 interface ElevatedPayload {
     userId: string;

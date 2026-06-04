@@ -4,13 +4,13 @@ import { ArrowRight, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "riffado:rebrand:announcement";
+const STORAGE_KEY = "mesynx-ai:rebrand:announcement";
 const EXPIRES_AT = new Date("2026-07-28T00:00:00Z");
 
 /**
  * Top-of-landing rebrand announcement.
  *
- * Catches signed-out visitors and anyone who hit `riffado.com` via a
+ * Catches signed-out visitors and anyone who hit `mesynx-ai.com` via a
  * stale `openplaud` link or memory. Sits above `LandingNav` (not part
  * of the sticky header) so it scrolls away after one read instead of
  * permanently eating viewport, especially on mobile.
@@ -51,7 +51,7 @@ export function RebrandAnnouncementBar() {
             className="relative border-b border-primary/20 bg-primary/8 text-foreground"
         >
             <div className="container mx-auto px-4 py-2.5 pr-12 flex items-center justify-center gap-2 text-sm text-pretty">
-                <span className="font-medium">OpenPlaud is now Riffado.</span>
+                <span className="font-medium">OpenPlaud is now Mesynx AI.</span>
                 <Link
                     href="/rebrand"
                     className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"

@@ -1,11 +1,11 @@
 # Development overlay: builds the app image from local source instead of
-# pulling from GHCR. Use this when working on Riffado itself.
+# pulling from GHCR. Use this when working on Mesynx AI itself.
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 #
 # End users should use docker-compose.yml alone, which pulls the published
-# image from ghcr.io/riffado/riffado.
+# image from ghcr.io/mesynx-ai/mesynx-ai.
 
 services:
   app:
@@ -14,4 +14,4 @@ services:
       context: .
       dockerfile: Dockerfile
     # Unset the image reference so compose doesn't try to pull it first.
-    image: riffado:dev
+    image: mesynx-ai:dev

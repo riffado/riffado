@@ -93,7 +93,7 @@ export const POST = apiHandler(async (request: Request) => {
     return new NextResponse(csv, {
         headers: {
             "Content-Type": "text/csv; charset=utf-8",
-            "Content-Disposition": `attachment; filename="riffado-pricing-snapshot-${stamp}.csv"`,
+            "Content-Disposition": `attachment; filename="mesynx-ai-pricing-snapshot-${stamp}.csv"`,
             // Don't let intermediaries cache PII.
             "Cache-Control": "no-store, private",
         },

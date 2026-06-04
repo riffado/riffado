@@ -12,8 +12,8 @@
  */
 
 export const INSTALL_ONELINER =
-    "curl -fsSL https://riffado.com/install.sh | sh";
+    "curl -fsSL https://mesynx-ai.com/install.sh | sh";
 
 export function pinnedInstallCommand(versionTag: string): string {
-    return `curl -fsSL https://riffado.com/${versionTag}/install.sh | sh`;
+    return `curl -fsSL https://mesynx-ai.com/${versionTag}/install.sh | sh`;
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Bot, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Bot, Loader2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
 import { AddProviderDialog } from "@/components/settings/add-provider-dialog";
@@ -16,6 +16,7 @@ interface Provider {
     id: string;
     provider: string;
     baseUrl: string | null;
+    nickname: string | null;
     defaultModel: string | null;
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
@@ -50,6 +51,7 @@ export function ProvidersSection({
 }: ProvidersSectionProps) {
     const confirm = useConfirm();
     const [providers, setProviders] = useState<Provider[]>(initialProviders);
+    const [isLoading, setIsLoading] = useState(initialProviders.length === 0);
     const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
     const [isEditProviderOpen, setIsEditProviderOpen] = useState(false);
     const [editingProvider, setEditingProvider] = useState<Provider | null>(
@@ -58,16 +60,22 @@ export function ProvidersSection({
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
 
-    const refreshProviders = async () => {
+    const refreshProviders = useCallback(async () => {
         try {
             const response = await fetch("/api/settings/ai/providers");
             if (!response.ok) throw new Error("Failed to fetch");
             const data = await response.json();
-            setProviders(data.providers);
+            setProviders(data.providers ?? []);
         } catch {
             toast.error("Failed to refresh providers");
+        } finally {
+            setIsLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        refreshProviders();
+    }, [refreshProviders]);
 
     const handleEdit = (provider: Provider) => {
         setEditingProvider(provider);
@@ -149,7 +157,12 @@ export function ProvidersSection({
                     </button>
                 </div>
 
-                {aiSubSection === "providers" && (
+                {aiSubSection === "providers" && isLoading && (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    </div>
+                )}
+                {aiSubSection === "providers" && !isLoading && (
                     <ProvidersList
                         providers={providers}
                         deletingId={deletingId}
@@ -234,8 +247,13 @@ function ProvidersList({
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold">
-                                {provider.provider}
+                                {provider.nickname || provider.provider}
                             </h3>
+                            {provider.nickname && (
+                                <span className="text-xs text-muted-foreground">
+                                    {provider.provider}
+                                </span>
+                            )}
                             {provider.isDefaultTranscription && (
                                 <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
                                     Transcription

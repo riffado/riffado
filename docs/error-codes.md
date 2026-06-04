@@ -1,6 +1,6 @@
 # Error codes
 
-Riffado's API returns a single error envelope on every failure, with one
+Mesynx AI's API returns a single error envelope on every failure, with one
 documented exception (HTTP `416` audio range responses, see below):
 
 ```json

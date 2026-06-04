@@ -51,20 +51,20 @@ const GROUPS: FaqGroup[] = [
         label: "Getting started",
         items: [
             {
-                q: "Is hosted Riffado really free? What does it cost?",
-                a: "The hosted free tier is real and stays real — sign up, connect your recorder, and use it. A paid Pro tier with higher limits and priority transcription is on a waitlist, but nothing about the free tier expires into it. And if you ever want zero cost and full control, self-hosting Riffado is free forever — same code, your machine.",
+                q: "Is hosted Mesynx AI really free? What does it cost?",
+                a: "The hosted free tier is real and stays real — sign up, connect your recorder, and use it. A paid Pro tier with higher limits and priority transcription is on a waitlist, but nothing about the free tier expires into it. And if you ever want zero cost and full control, self-hosting Mesynx AI is free forever — same code, your machine.",
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
-                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. The browser path is on by default and stays free forever.",
+                a: "No. Mesynx AI transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. The browser path is on by default and stays free forever.",
             },
             {
-                q: "Which voice recorders does Riffado work with?",
+                q: "Which voice recorders does Mesynx AI work with?",
                 a: "Today, the Plaud Note family — Note, Note Pro, and NotePin. Support for more recorders is on the roadmap. If you own a Plaud, you can sign in with your existing account and your recordings start syncing in under a minute.",
             },
             {
-                q: "Is Riffado really open source? What does that mean for me?",
-                a: "Yes — the full source is on GitHub under AGPL-3.0. In practice: you can read every line, run it on your own machine, fork it, and leave whenever you want. The AGPL only adds obligations if you offer Riffado as a service to other people. For personal or team use, it's just free, forever, with the code in the open.",
+                q: "Is Mesynx AI really open source? What does that mean for me?",
+                a: "Yes — the full source is on GitHub under AGPL-3.0. In practice: you can read every line, run it on your own machine, fork it, and leave whenever you want. The AGPL only adds obligations if you offer Mesynx AI as a service to other people. For personal or team use, it's just free, forever, with the code in the open.",
             },
             {
                 q: "How long does setup take?",
@@ -128,7 +128,7 @@ const GROUPS: FaqGroup[] = [
             },
             {
                 q: "Does this affect my recorder's warranty or break the official app?",
-                a: "No. Riffado signs into your Plaud account the same way the official web app does — through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Riffado.",
+                a: "No. Mesynx AI signs into your Plaud account the same way the official web app does — through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Mesynx AI.",
             },
             {
                 q: "What happens if Plaud changes their API?",
@@ -149,7 +149,7 @@ const GROUPS: FaqGroup[] = [
             },
             {
                 q: "What about HIPAA, privileged legal work, or regulated financial data?",
-                a: "We don't self-attest HIPAA compliance, and you should be skeptical of any transcription product that does. The meaningful privacy claim belongs to your AI provider, not to us. For regulated work, the right setup is self-hosting Riffado and plugging in a provider that signs a BAA you've reviewed (OpenAI Enterprise, Azure Speech, Deepgram), or running a local Whisper model so nothing leaves your machine. We give you the knobs; you own the compliance story.",
+                a: "We don't self-attest HIPAA compliance, and you should be skeptical of any transcription product that does. The meaningful privacy claim belongs to your AI provider, not to us. For regulated work, the right setup is self-hosting Mesynx AI and plugging in a provider that signs a BAA you've reviewed (OpenAI Enterprise, Azure Speech, Deepgram), or running a local Whisper model so nothing leaves your machine. We give you the knobs; you own the compliance story.",
             },
         ],
     },
@@ -236,7 +236,7 @@ export function FAQ() {
                     <p className="text-sm text-muted-foreground mt-8 text-center">
                         Didn't see yours?{" "}
                         <Link
-                            href="https://github.com/riffado/riffado"
+                            href="https://github.com/mesynx-ai/mesynx-ai"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-foreground underline-offset-4 hover:underline"
@@ -245,7 +245,7 @@ export function FAQ() {
                         </Link>{" "}
                         or{" "}
                         <Link
-                            href="https://github.com/riffado/riffado/issues/new/choose"
+                            href="https://github.com/mesynx-ai/mesynx-ai/issues/new/choose"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-foreground underline-offset-4 hover:underline"

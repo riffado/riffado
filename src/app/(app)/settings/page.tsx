@@ -14,6 +14,7 @@ export default async function SettingsPage() {
             id: apiCredentials.id,
             provider: apiCredentials.provider,
             baseUrl: apiCredentials.baseUrl,
+            nickname: apiCredentials.nickname,
             defaultModel: apiCredentials.defaultModel,
             isDefaultTranscription: apiCredentials.isDefaultTranscription,
             isDefaultEnhancement: apiCredentials.isDefaultEnhancement,

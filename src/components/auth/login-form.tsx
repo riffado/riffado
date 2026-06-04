@@ -4,35 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { MetalButton } from "@/components/metal-button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
 
 interface LoginFormProps {
-    /**
-     * Whether the "Don't have an account? Register" footer link should be
-     * shown. Default `true`. Set to `false` when `DISABLE_REGISTRATION=true`
-     * so we don't dangle a link to a disabled-state page. The server-side
-     * security boundary lives in `src/lib/auth.ts` (`disableSignUp`); this
-     * is UX only.
-     */
     registrationEnabled?: boolean;
-    /**
-     * Whether SMTP is configured on this instance. When false we hide the
-     * "Forgot password?" link entirely because the reset email cannot be
-     * delivered -- end users shouldn't see a non-functional affordance on
-     * the sign-in screen. Self-host operators get the explanatory panel
-     * (with the SMTP env-var names) by navigating to /forgot-password
-     * directly, which is also linked from the README.
-     */
     smtpConfigured?: boolean;
 }
 
-/**
- * Renders only the form (fields + submit + optional register footer).
- * Page chrome (logo, headings, panel, background) is owned by the route.
- */
 export function LoginForm({
     registrationEnabled = true,
     smtpConfigured = false,
@@ -47,15 +28,10 @@ export function LoginForm({
         setIsLoading(true);
 
         try {
-            const result = await signIn.email({
-                email,
-                password,
-            });
+            const result = await signIn.email({ email, password });
 
             if (result.error) {
-                toast.error(
-                    result.error.message || "Invalid email or password",
-                );
+                toast.error(result.error.message || "Invalid email or password");
                 return;
             }
 
@@ -64,9 +40,7 @@ export function LoginForm({
             refresh();
         } catch (error) {
             const message =
-                error instanceof Error
-                    ? error.message
-                    : "Invalid email or password";
+                error instanceof Error ? error.message : "Invalid email or password";
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -74,10 +48,12 @@ export function LoginForm({
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-sm font-medium">
+                        Email
+                    </Label>
                     <Input
                         id="email"
                         type="email"
@@ -90,17 +66,19 @@ export function LoginForm({
                     />
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
-                        {smtpConfigured ? (
+                        <Label htmlFor="password" className="text-sm font-medium">
+                            Password
+                        </Label>
+                        {smtpConfigured && (
                             <Link
                                 href="/forgot-password"
-                                className="text-xs text-muted-foreground hover:text-accent-cyan hover:underline"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
                             >
                                 Forgot password?
                             </Link>
-                        ) : null}
+                        )}
                     </div>
                     <Input
                         id="password"
@@ -114,28 +92,26 @@ export function LoginForm({
                     />
                 </div>
 
-                <MetalButton
+                <Button
                     type="submit"
                     className="w-full"
-                    variant="cyan"
+                    variant="glow"
                     disabled={isLoading}
                 >
-                    {isLoading ? "Signing in..." : "Sign In"}
-                </MetalButton>
+                    {isLoading ? "Signing in…" : "Sign in"}
+                </Button>
             </form>
 
             {registrationEnabled && (
-                <div className="text-center text-sm">
-                    <span className="text-muted-foreground">
-                        Don't have an account?{" "}
-                    </span>
+                <p className="text-center text-sm text-muted-foreground">
+                    Don't have an account?{" "}
                     <Link
                         href="/register"
-                        className="text-accent-cyan hover:underline"
+                        className="text-foreground font-medium hover:underline underline-offset-2 transition-colors"
                     >
                         Register
                     </Link>
-                </div>
+                </p>
             )}
         </div>
     );

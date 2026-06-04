@@ -1,11 +1,11 @@
 import { Star } from "lucide-react";
 import { Github } from "@/components/icons/icons";
 
-export const RIFFADO_REPO = "riffado/riffado";
-export const RIFFADO_REPO_URL = `https://github.com/${RIFFADO_REPO}`;
+export const MESYNX_AI_REPO = "mesynx-ai/mesynx-ai";
+export const MESYNX_AI_REPO_URL = `https://github.com/${MESYNX_AI_REPO}`;
 
 /**
- * Fetch the live GitHub star count for the Riffado repo.
+ * Fetch the live GitHub star count for the Mesynx AI repo.
  *
  * Runtime fetch, cached for 1 hour via Next.js ISR. Visitors always see a
  * pre-rendered page; the first request after expiry triggers a background
@@ -18,7 +18,7 @@ export const RIFFADO_REPO_URL = `https://github.com/${RIFFADO_REPO}`;
 export async function fetchStarCount(): Promise<number | null> {
     try {
         const res = await fetch(
-            `https://api.github.com/repos/${RIFFADO_REPO}`,
+            `https://api.github.com/repos/${MESYNX_AI_REPO}`,
             {
                 next: { revalidate: 3600 },
                 headers: { Accept: "application/vnd.github+json" },
@@ -49,7 +49,7 @@ export async function GitHubStarsPill() {
 
     return (
         <a
-            href={RIFFADO_REPO_URL}
+            href={MESYNX_AI_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={label}

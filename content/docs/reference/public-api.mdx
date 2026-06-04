@@ -3,7 +3,7 @@ title: Public API
 description: The /api/v1/* read surface — authentication, endpoints, errors, rate limits.
 ---
 
-The `/api/v1/*` surface is Riffado's public, stable, read-only API.
+The `/api/v1/*` surface is Mesynx AI's public, stable, read-only API.
 Personal API keys authenticate it; integrations like Zapier, n8n, and
 your own scripts call into it.
 
@@ -12,7 +12,7 @@ For creating keys and configuring webhooks, see
 
 ## Base URL
 
-`https://<your-riffado-host>/api/v1`
+`https://<your-mesynx-ai-host>/api/v1`
 
 That's whatever you set `APP_URL` to in your `.env`.
 
@@ -107,7 +107,7 @@ curl -H "Authorization: Bearer op_K7vR8x..." \
 ```js
 const res = await fetch(
   "https://your-host/api/v1/recordings?limit=20",
-  { headers: { Authorization: `Bearer ${process.env.RIFFADO_KEY}` } },
+  { headers: { Authorization: `Bearer ${process.env.MESYNX_AI_KEY}` } },
 );
 const { data, next_cursor, has_more } = await res.json();
 ```
@@ -212,7 +212,7 @@ curl -L -H "Authorization: Bearer op_..." \
 - For recordings on **S3 storage**, the response is a `302` redirect
   to a 5-minute pre-signed URL. Follow the redirect (`curl -L`); your
   HTTP client will fetch the audio directly from S3 with no extra
-  egress through Riffado.
+  egress through Mesynx AI.
 
 `416` with a `Content-Range: bytes */<size>` header is returned only
 for unsatisfiable starts (past EOF or `start > end`). Oversized `end`
@@ -222,7 +222,7 @@ values are clamped to `fileSize - 1` per RFC 7233.
 
 There are no public write endpoints. The `/api/v1/*` surface is
 read-only by design today. If you need to push data *in*, run the
-Riffado UI or sync the source Plaud account via the configured
+Mesynx AI UI or sync the source Plaud account via the configured
 sync loop.
 
 ## Stability

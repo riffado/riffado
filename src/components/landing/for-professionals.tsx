@@ -33,7 +33,7 @@ export function ForProfessionals() {
                         <Pillar
                             kicker="02 / Source"
                             headline="Auditable, line by line."
-                            body="Every line of Riffado is AGPL-3.0. Read it, fork it, show clients exactly what it does."
+                            body="Every line of Mesynx AI is AGPL-3.0. Read it, fork it, show clients exactly what it does."
                         />
                         <Pillar
                             kicker="03 / AI"
@@ -52,7 +52,7 @@ export function ForProfessionals() {
                                 <ArrowRight className="size-4" />
                             </Link>
                             <Link
-                                href="https://github.com/riffado/riffado"
+                                href="https://github.com/mesynx-ai/mesynx-ai"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-border bg-background hover:bg-secondary/40 transition-colors text-sm font-medium"
@@ -64,10 +64,10 @@ export function ForProfessionals() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Need an air-gapped or in-house setup? Write to{" "}
                             <Link
-                                href="mailto:support@riffado.com?subject=In-house%20Riffado%20setup"
+                                href="mailto:support@mesynx-ai.com?subject=In-house%20Mesynx AI%20setup"
                                 className="text-foreground font-medium hover:text-primary transition-colors underline-offset-4 hover:underline"
                             >
-                                support@riffado.com
+                                support@mesynx-ai.com
                             </Link>{" "}
                             — I'll reply personally.
                         </p>

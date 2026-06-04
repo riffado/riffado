@@ -28,9 +28,9 @@ import { APP_VERSION_TAG } from "@/lib/version";
  */
 
 export const metadata: Metadata = {
-    title: "Install Riffado — Self-host in one command",
+    title: "Install Mesynx AI — Self-host in one command",
     description:
-        "Self-host Riffado with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
+        "Self-host Mesynx AI with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
 };
 
 const ONE_LINER = INSTALL_ONELINER;
@@ -44,7 +44,7 @@ export default function InstallPage() {
                     <Link
                         href="/"
                         className="flex items-center hover:opacity-80 transition-opacity"
-                        aria-label="Riffado"
+                        aria-label="Mesynx AI"
                     >
                         <LogoWordmark className="h-7 w-auto" />
                     </Link>
@@ -72,7 +72,7 @@ export default function InstallPage() {
                             Self-host
                         </div>
                         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight mb-6">
-                            Install Riffado
+                            Install Mesynx AI
                         </h1>
                         <p className="text-lg text-muted-foreground leading-relaxed">
                             One command on a machine with Docker and Compose v2.
@@ -125,7 +125,7 @@ export default function InstallPage() {
                             <code className="font-mono">{APP_VERSION_TAG}</code>{" "}
                             with any released tag from{" "}
                             <Link
-                                href="https://github.com/riffado/riffado/releases"
+                                href="https://github.com/mesynx-ai/mesynx-ai/releases"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
@@ -192,7 +192,7 @@ export default function InstallPage() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Fair. Read the source at{" "}
                             <Link
-                                href="https://github.com/riffado/riffado/blob/main/scripts/install.sh"
+                                href="https://github.com/mesynx-ai/mesynx-ai/blob/main/scripts/install.sh"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"
@@ -201,7 +201,7 @@ export default function InstallPage() {
                             </Link>{" "}
                             on GitHub, or follow the manual{" "}
                             <Link
-                                href="https://github.com/riffado/riffado#self-host"
+                                href="https://github.com/mesynx-ai/mesynx-ai#self-host"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"
