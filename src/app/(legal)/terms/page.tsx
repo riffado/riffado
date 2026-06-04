@@ -30,7 +30,7 @@ import {
 export const metadata: Metadata = {
     title: "Terms of Service — Mesynx AI",
     description:
-        "Terms governing your use of the hosted Mesynx AI service at mesynx-ai.com.",
+        "Terms governing your use of the hosted Mesynx AI service at mesynx.r0073dl053r.com.",
 };
 
 export default function TermsPage() {
@@ -42,10 +42,10 @@ export default function TermsPage() {
             </p>
             <p>
                 These terms govern your use of the hosted Mesynx AI service at
-                mesynx-ai.com. By creating an account or using the service, you
-                agree to them. If you self-host the project instead, your
-                relationship is with the AGPL-3.0 license that governs the
-                source code, not with these terms.
+                mesynx.r0073dl053r.com. By creating an account or using the
+                service, you agree to them. If you self-host the project
+                instead, your relationship is with the AGPL-3.0 license that
+                governs the source code, not with these terms.
             </p>
 
             <h2>Who provides the service</h2>

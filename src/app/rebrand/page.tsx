@@ -148,10 +148,10 @@ export default function RebrandPage() {
                         <p className="text-muted-foreground leading-relaxed">
                             Write to{" "}
                             <Link
-                                href="mailto:support@mesynx-ai.com?subject=Rebrand%20issue"
+                                href="mailto:support@mesynx.r0073dl053r.com?subject=Rebrand%20issue"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80"
                             >
-                                support@mesynx-ai.com
+                                support@mesynx.r0073dl053r.com
                             </Link>{" "}
                             and I&apos;ll fix it.
                         </p>
@@ -167,7 +167,7 @@ export default function RebrandPage() {
                             className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <ArrowLeft className="size-3.5" aria-hidden />
-                            Back to mesynx-ai.com
+                            Back to mesynx.r0073dl053r.com
                         </Link>
                     </p>
                 </article>

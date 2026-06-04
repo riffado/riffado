@@ -10,7 +10,7 @@ const EXPIRES_AT = new Date("2026-07-28T00:00:00Z");
 /**
  * Top-of-landing rebrand announcement.
  *
- * Catches signed-out visitors and anyone who hit `mesynx-ai.com` via a
+ * Catches signed-out visitors and anyone who hit `mesynx.r0073dl053r.com` via a
  * stale `openplaud` link or memory. Sits above `LandingNav` (not part
  * of the sticky header) so it scrolls away after one read instead of
  * permanently eating viewport, especially on mobile.

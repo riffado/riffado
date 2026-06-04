@@ -40,7 +40,7 @@ export default function PrivacyPage() {
             </p>
             <p>
                 This policy explains how we handle personal data on the hosted
-                Mesynx AI service at mesynx-ai.com. Mesynx AI is also
+                Mesynx AI service at mesynx.r0073dl053r.com. Mesynx AI is also
                 open-source software you can run yourself under the AGPL-3.0
                 license. If you self-host, your data never touches our
                 infrastructure and this policy does not apply to you — see the{" "}

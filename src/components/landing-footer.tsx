@@ -70,7 +70,7 @@ const COLUMNS: FooterColumn[] = [
                 href: "https://github.com/mesynx-ai/mesynx-ai/blob/main/CODE_OF_CONDUCT.md",
                 external: true,
             },
-            { label: "Contact", href: "mailto:support@mesynx-ai.com" },
+            { label: "Contact", href: "mailto:support@mesynx.r0073dl053r.com" },
         ],
     },
     {
@@ -85,7 +85,7 @@ const COLUMNS: FooterColumn[] = [
             },
             {
                 label: "Security disclosure",
-                href: "mailto:security@mesynx-ai.com",
+                href: "mailto:security@mesynx.r0073dl053r.com",
             },
         ],
     },

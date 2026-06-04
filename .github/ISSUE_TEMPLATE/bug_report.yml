@@ -55,7 +55,7 @@ body:
       description: How are you running Mesynx AI?
       options:
         - Self-hosted
-        - Hosted (mesynx-ai.com)
+        - Hosted (mesynx.r0073dl053r.com)
     validations:
       required: true
 

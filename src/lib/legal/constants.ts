@@ -63,10 +63,10 @@ export const EFFECTIVE_DATE_DISPLAY = new Date(
 
 /** Contact mailboxes referenced by the legal pages. */
 export const CONTACT_EMAILS = {
-    support: "support@mesynx-ai.com",
-    security: "security@mesynx-ai.com",
+    support: "support@mesynx.r0073dl053r.com",
+    security: "security@mesynx.r0073dl053r.com",
     /** Dedicated mailbox for GDPR data-subject requests. */
-    privacy: "privacy@mesynx-ai.com",
+    privacy: "privacy@mesynx.r0073dl053r.com",
 } as const;
 
 /** Polish data-protection supervisory authority (GDPR right to complain). */

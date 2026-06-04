@@ -7,9 +7,9 @@
 *Bring your own AI provider, own your transcripts, self-host or hosted.*
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://mesynx-ai.com/discord)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://mesynx.r0073dl053r.com/discord)
 
-[Quick start](#quick-start) • [What's new vs. Riffado](#whats-new-in-mesynx-ai-vs-riffado) • [Documentation](https://mesynx-ai.com/docs) • [Discord](https://mesynx-ai.com/discord)
+[Quick start](#quick-start) • [What's new vs. Riffado](#whats-new-in-mesynx-ai-vs-riffado) • [Documentation](https://mesynx.r0073dl053r.com/docs) • [Discord](https://mesynx.r0073dl053r.com/discord)
 
 </div>
 
@@ -19,7 +19,7 @@
 
 Mesynx AI is an open-source companion app for AI voice recorders. It syncs your recordings from the manufacturer's cloud, transcribes them with any OpenAI-compatible API — **a remote provider, the browser for free, or your own GPU** — and stores everything on infrastructure you control. **Currently supports the Plaud Note family — Note, Note Pro, and NotePin. More device support on the way.** AGPL-3.0.
 
-![Mesynx AI dashboard](.github/assets/dashboard.webp)
+![Mesynx AI dashboard — dark mode](.github/assets/dashboard-dark.png)
 
 ## Features
 
@@ -91,22 +91,16 @@ Each recording's AI summary becomes a navigable mind-map — **Overview**, **Key
 
 ### 🔌 Hardened AI provider management
 
-<table>
-<tr>
-<td width="57%" valign="top">
-
 - **Nickname any server.** Custom and self-hosted endpoints get a friendly label, so "Home GPU · faster-whisper" beats squinting at a base URL.
 - **Searchable model picker.** Run **Test Connection** and Mesynx AI discovers the server's models, then offers a type-to-filter dropdown instead of a blank text box — no more guessing exact model IDs.
 - **Reliable loading.** The Providers section now fetches its own data on open (with a loading state), fixing the Riffado race condition where saved configs — or their API keys — sometimes failed to appear.
 
-</td>
-<td width="43%" valign="top">
-
-<img src=".github/assets/ai-providers.png" width="380" alt="Add AI Provider dialog with nickname field and searchable model picker" />
-
-</td>
-</tr>
-</table>
+<p align="center">
+<img src=".github/assets/providers-list.png" width="620" alt="AI Providers list with nicknames and role badges" />
+</p>
+<p align="center">
+<img src=".github/assets/ai-providers.png" width="380" alt="Add Provider dialog — nickname field and searchable model picker" />
+</p>
 
 ## Quick start
 
@@ -115,7 +109,7 @@ You need Docker, a Plaud account at [plaud.ai](https://plaud.ai), and (optionall
 **One-liner (Linux / macOS):**
 
 ```bash
-curl -fsSL https://mesynx-ai.com/install.sh | sh
+curl -fsSL https://mesynx.r0073dl053r.com/install.sh | sh
 ```
 
 Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` and `.env`, generates secrets, starts the stack, and waits for `/api/health`. Source: [`scripts/install.sh`](scripts/install.sh).
@@ -138,7 +132,7 @@ Open <http://localhost:3000/register> and create your account. The onboarding wi
 
 **Upgrade:** `docker compose pull && docker compose up -d`. Migrations run on container start.
 
-Full install guide, version pinning, image tags, and Windows/WSL notes: [mesynx-ai.com/docs/self-hosting/install](https://mesynx-ai.com/docs/self-hosting/install).
+Full install guide, version pinning, image tags, and Windows/WSL notes: [mesynx.r0073dl053r.com/docs/self-hosting/install](https://mesynx.r0073dl053r.com/docs/self-hosting/install).
 
 > `main` is a rolling integration branch. Deploy from tagged image releases, not by building `main`. See [BRANCHING.md](BRANCHING.md).
 
@@ -146,29 +140,29 @@ Full install guide, version pinning, image tags, and Windows/WSL notes: [mesynx-
 
 Mesynx AI signs into Plaud using your email — the same OTP flow as the official app. The verification code is forwarded directly to Plaud and never stored. Your access token is encrypted with AES-256-GCM before hitting the database. Region (Global, EU, APAC) is auto-detected.
 
-If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [Mesynx AI Connector browser extension](https://github.com/mesynx-ai/connector), or paste a token manually. Full instructions: [mesynx-ai.com/docs/guides/connect-plaud-account](https://mesynx-ai.com/docs/guides/connect-plaud-account).
+If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [Mesynx AI Connector browser extension](https://github.com/mesynx-ai/connector), or paste a token manually. Full instructions: [mesynx.r0073dl053r.com/docs/guides/connect-plaud-account](https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account).
 
 > Every line that handles your credentials is open source — [send-code route](src/app/api/plaud/auth/send-code/route.ts) · [verify route](src/app/api/plaud/auth/verify/route.ts) · [encryption](src/lib/encryption.ts).
 
 ## Documentation
 
-Everything lives at **[mesynx-ai.com/docs](https://mesynx-ai.com/docs)**. Direct links:
+Everything lives at **[mesynx.r0073dl053r.com/docs](https://mesynx.r0073dl053r.com/docs)**. Direct links:
 
-- [Install & first run](https://mesynx-ai.com/docs/self-hosting/install)
+- [Install & first run](https://mesynx.r0073dl053r.com/docs/self-hosting/install)
 - [Self-hosted GPU transcription (Whisper)](whisper-server/) — model selection + VAD for long recordings
-- [Environment variables](https://mesynx-ai.com/docs/self-hosting/environment-variables)
-- [Upgrading](https://mesynx-ai.com/docs/self-hosting/upgrading)
-- [S3-compatible storage](https://mesynx-ai.com/docs/self-hosting/storage-s3)
-- [Email / SMTP](https://mesynx-ai.com/docs/self-hosting/email-smtp)
-- [Connect your Plaud account](https://mesynx-ai.com/docs/guides/connect-plaud-account)
-- [AI providers](https://mesynx-ai.com/docs/guides/ai-providers)
-- [Backup & restore](https://mesynx-ai.com/docs/guides/backup-and-restore)
-- [Notifications](https://mesynx-ai.com/docs/guides/notifications)
-- [Automation & webhooks](https://mesynx-ai.com/docs/guides/automation-and-webhooks)
-- [Public API reference](https://mesynx-ai.com/docs/reference/public-api)
-- [Encryption at rest](https://mesynx-ai.com/docs/reference/encryption-at-rest)
-- [Security model](https://mesynx-ai.com/docs/reference/security-model)
-- [Architecture](https://mesynx-ai.com/docs/reference/architecture)
+- [Environment variables](https://mesynx.r0073dl053r.com/docs/self-hosting/environment-variables)
+- [Upgrading](https://mesynx.r0073dl053r.com/docs/self-hosting/upgrading)
+- [S3-compatible storage](https://mesynx.r0073dl053r.com/docs/self-hosting/storage-s3)
+- [Email / SMTP](https://mesynx.r0073dl053r.com/docs/self-hosting/email-smtp)
+- [Connect your Plaud account](https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account)
+- [AI providers](https://mesynx.r0073dl053r.com/docs/guides/ai-providers)
+- [Backup & restore](https://mesynx.r0073dl053r.com/docs/guides/backup-and-restore)
+- [Notifications](https://mesynx.r0073dl053r.com/docs/guides/notifications)
+- [Automation & webhooks](https://mesynx.r0073dl053r.com/docs/guides/automation-and-webhooks)
+- [Public API reference](https://mesynx.r0073dl053r.com/docs/reference/public-api)
+- [Encryption at rest](https://mesynx.r0073dl053r.com/docs/reference/encryption-at-rest)
+- [Security model](https://mesynx.r0073dl053r.com/docs/reference/security-model)
+- [Architecture](https://mesynx.r0073dl053r.com/docs/reference/architecture)
 
 ## Contributing
 

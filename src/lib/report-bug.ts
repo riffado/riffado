@@ -1,6 +1,6 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-export const SUPPORT_EMAIL = "support@mesynx-ai.com";
+export const SUPPORT_EMAIL = "support@mesynx.r0073dl053r.com";
 
 const GITHUB_NEW_ISSUE_URL =
     "https://github.com/mesynx-ai/mesynx-ai/issues/new";
@@ -27,7 +27,7 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
     if (opts.isHosted !== undefined) {
         params.set(
             "deployment",
-            opts.isHosted ? "Hosted (mesynx-ai.com)" : "Self-hosted",
+            opts.isHosted ? "Hosted (mesynx.r0073dl053r.com)" : "Self-hosted",
         );
     }
 
@@ -78,7 +78,7 @@ function buildAdditional(opts: ReportBugOptions): string {
     lines.push(`Version: ${APP_VERSION_TAG}`);
     if (opts.isHosted !== undefined) {
         lines.push(
-            `Mode: ${opts.isHosted ? "Hosted (mesynx-ai.com)" : "Self-hosted"}`,
+            `Mode: ${opts.isHosted ? "Hosted (mesynx.r0073dl053r.com)" : "Self-hosted"}`,
         );
     }
     return lines.join("\n");

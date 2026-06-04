@@ -1,7 +1,7 @@
 /**
  * Regression tests for the runtime contract of the Rybbit analytics
  * proxy route handlers. There have been two distinct 404 regressions
- * on these endpoints, both surfaced as 404 at `mesynx-ai.com` despite
+ * on these endpoints, both surfaced as 404 at `mesynx.r0073dl053r.com` despite
  * `IS_HOSTED` + `RYBBIT_HOST` + `RYBBIT_SITE_ID` being set:
  *
  *   1. Original (#127): the proxy lived in `next.config.ts` as a

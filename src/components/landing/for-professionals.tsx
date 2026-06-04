@@ -64,10 +64,10 @@ export function ForProfessionals() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Need an air-gapped or in-house setup? Write to{" "}
                             <Link
-                                href="mailto:support@mesynx-ai.com?subject=In-house%20Mesynx AI%20setup"
+                                href="mailto:support@mesynx.r0073dl053r.com?subject=In-house%20Mesynx AI%20setup"
                                 className="text-foreground font-medium hover:text-primary transition-colors underline-offset-4 hover:underline"
                             >
-                                support@mesynx-ai.com
+                                support@mesynx.r0073dl053r.com
                             </Link>{" "}
                             — I'll reply personally.
                         </p>
