@@ -43,7 +43,7 @@ Everything Riffado does, Mesynx AI does too — these are the changes layered on
 |---|---|---|
 | **Transcription backend** | Bring-your-own OpenAI-compatible API | **+ Bundled self-hosted GPU Whisper** service (NVIDIA), turnkey in `docker-compose.yml` |
 | **Local AI servers** | Chat / text only (Ollama, Open WebUI) — `405` on `/v1/audio/transcriptions` | Real `/v1/audio/transcriptions` via faster-whisper — **your local box can finally transcribe** |
-| **Memory Map** | Static tree, labels prone to overlap | **Interactive mind-map** — hover-to-trace a branch, click a node to expand, full-screen modal |
+| **Memory Map** | None | **Interactive mind-map** — hover-to-trace a branch, click a node to expand, full-screen modal |
 | **Provider setup** | Provider + key + model | **+ Nickname** per server · **+ searchable model picker** (auto-discovered on *Test Connection*) |
 | **Provider reliability** | Saved configs occasionally failed to load / lost the key on open | Section self-loads with a spinner; **configs and keys load reliably** |
 | **Brand** | Riffado (formerly OpenPlaud) | **Mesynx AI** |
