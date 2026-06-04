@@ -1,12 +1,6 @@
 "use client";
 
-import {
-    Keyboard,
-    Mic,
-    Search,
-    Settings,
-    Upload,
-} from "lucide-react";
+import { Keyboard, Mic, Search, Settings, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +15,8 @@ import { UserMenu } from "@/components/dashboard/user-menu";
 import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
 import { LogoWordmark } from "@/components/icons/logo";
+import { OnboardingDialog } from "@/components/onboarding-dialog";
+import { SettingsDialog } from "@/components/settings-dialog";
 import { SyncButton } from "@/components/sync-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +24,6 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { OnboardingDialog } from "@/components/onboarding-dialog";
-import { SettingsDialog } from "@/components/settings-dialog";
 import { useAutoSync } from "@/hooks/use-auto-sync";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
@@ -305,7 +299,11 @@ export function Workstation({
                 <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
                     {/* Logo */}
                     <div className="flex h-14 items-center gap-2 px-5">
-                        <Link href="/dashboard" aria-label="Mesynx AI" className="opacity-90 hover:opacity-100 transition-opacity">
+                        <Link
+                            href="/dashboard"
+                            aria-label="Mesynx AI"
+                            className="opacity-90 hover:opacity-100 transition-opacity"
+                        >
                             <LogoWordmark className="h-6 w-auto text-primary" />
                         </Link>
                     </div>
@@ -399,11 +397,19 @@ export function Workstation({
                 <div className="flex flex-1 flex-col min-w-0">
                     {/* Mobile header (hidden on desktop where sidebar shows) */}
                     <div className="flex items-center gap-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md lg:hidden">
-                        <Link href="/dashboard" aria-label="Mesynx AI" className="shrink-0">
+                        <Link
+                            href="/dashboard"
+                            aria-label="Mesynx AI"
+                            className="shrink-0"
+                        >
                             <LogoWordmark className="h-6 w-auto text-primary" />
                         </Link>
                         <div className="ml-auto flex items-center gap-1.5">
-                            <Button onClick={() => setPaletteOpen(true)} variant="ghost" size="icon-sm">
+                            <Button
+                                onClick={() => setPaletteOpen(true)}
+                                variant="ghost"
+                                size="icon-sm"
+                            >
                                 <Search className="size-4" />
                             </Button>
                             <SyncButton
@@ -414,13 +420,22 @@ export function Workstation({
                                 onSync={handleSync}
                             />
                             <input
-                                ref={!uploadInputRef.current ? uploadInputRef : undefined}
+                                ref={
+                                    !uploadInputRef.current
+                                        ? uploadInputRef
+                                        : undefined
+                                }
                                 type="file"
                                 accept="audio/*"
                                 className="hidden"
                                 onChange={handleUpload}
                             />
-                            <Button onClick={triggerUpload} disabled={isProcessing} variant="outline" size="icon-sm">
+                            <Button
+                                onClick={triggerUpload}
+                                disabled={isProcessing}
+                                variant="outline"
+                                size="icon-sm"
+                            >
                                 <Upload className="size-4" />
                             </Button>
                             <UserMenu

@@ -76,7 +76,8 @@ export const POST = apiHandler(async (request: Request) => {
         return NextResponse.json(
             {
                 ok: false,
-                message: "Server is reachable but rejected the API key (401/403).",
+                message:
+                    "Server is reachable but rejected the API key (401/403).",
             },
             { status: 200 },
         );

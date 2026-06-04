@@ -58,7 +58,9 @@ export function CopyableCommand({
     return (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950 text-zinc-50 overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800 bg-zinc-900">
-                <div className="text-xs font-mono text-zinc-500">~/mesynx-ai</div>
+                <div className="text-xs font-mono text-zinc-500">
+                    ~/mesynx-ai
+                </div>
             </div>
             <div className="flex items-center gap-3 p-4 font-mono text-sm">
                 <div className="flex-1 overflow-x-auto">

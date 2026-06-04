@@ -94,18 +94,41 @@ export function RecordingListToolbar({
                                 aria-label="Sort"
                             >
                                 <ArrowDownAZ className="size-3" />
-                                {sortOrder === "newest" ? "Newest" : sortOrder === "oldest" ? "Oldest" : "Name"}
+                                {sortOrder === "newest"
+                                    ? "Newest"
+                                    : sortOrder === "oldest"
+                                      ? "Oldest"
+                                      : "Name"}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-36">
-                            <DropdownMenuLabel className="text-[11px]">Sort by</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-[11px]">
+                                Sort by
+                            </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={sortOrder}
-                                onValueChange={(v) => onSortOrderChange(v as SortOrder)}
+                                onValueChange={(v) =>
+                                    onSortOrderChange(v as SortOrder)
+                                }
                             >
-                                <DropdownMenuRadioItem value="newest" className="text-xs">Newest first</DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="oldest" className="text-xs">Oldest first</DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="name" className="text-xs">Name</DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem
+                                    value="newest"
+                                    className="text-xs"
+                                >
+                                    Newest first
+                                </DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem
+                                    value="oldest"
+                                    className="text-xs"
+                                >
+                                    Oldest first
+                                </DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem
+                                    value="name"
+                                    className="text-xs"
+                                >
+                                    Name
+                                </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -119,17 +142,33 @@ export function RecordingListToolbar({
                                 aria-label="Density"
                             >
                                 <Rows3 className="size-3" />
-                                {density === "compact" ? "Compact" : "Comfortable"}
+                                {density === "compact"
+                                    ? "Compact"
+                                    : "Comfortable"}
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-36">
-                            <DropdownMenuLabel className="text-[11px]">Density</DropdownMenuLabel>
+                            <DropdownMenuLabel className="text-[11px]">
+                                Density
+                            </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={density}
-                                onValueChange={(v) => onDensityChange(v as ListDensity)}
+                                onValueChange={(v) =>
+                                    onDensityChange(v as ListDensity)
+                                }
                             >
-                                <DropdownMenuRadioItem value="comfortable" className="text-xs">Comfortable</DropdownMenuRadioItem>
-                                <DropdownMenuRadioItem value="compact" className="text-xs">Compact</DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem
+                                    value="comfortable"
+                                    className="text-xs"
+                                >
+                                    Comfortable
+                                </DropdownMenuRadioItem>
+                                <DropdownMenuRadioItem
+                                    value="compact"
+                                    className="text-xs"
+                                >
+                                    Compact
+                                </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
                     </DropdownMenu>

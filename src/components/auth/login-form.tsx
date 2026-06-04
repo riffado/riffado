@@ -31,7 +31,9 @@ export function LoginForm({
             const result = await signIn.email({ email, password });
 
             if (result.error) {
-                toast.error(result.error.message || "Invalid email or password");
+                toast.error(
+                    result.error.message || "Invalid email or password",
+                );
                 return;
             }
 
@@ -40,7 +42,9 @@ export function LoginForm({
             refresh();
         } catch (error) {
             const message =
-                error instanceof Error ? error.message : "Invalid email or password";
+                error instanceof Error
+                    ? error.message
+                    : "Invalid email or password";
             toast.error(message);
         } finally {
             setIsLoading(false);
@@ -68,7 +72,10 @@ export function LoginForm({
 
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="password" className="text-sm font-medium">
+                        <Label
+                            htmlFor="password"
+                            className="text-sm font-medium"
+                        >
                             Password
                         </Label>
                         {smtpConfigured && (

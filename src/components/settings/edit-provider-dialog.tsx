@@ -2,10 +2,10 @@
 
 import {
     AlertTriangle,
-    Shield,
+    CheckCircle2,
     Loader2,
     Plug,
-    CheckCircle2,
+    Shield,
     XCircle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -277,8 +277,8 @@ export function EditProviderDialog({
                                     {legacyLocalProvider} isn&apos;t usable on
                                     the hosted app — we can&apos;t reach your
                                     machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host Mesynx AI
-                                    (
+                                    with a public endpoint, or self-host Mesynx
+                                    AI (
                                     <code className="font-mono">
                                         docker compose up
                                     </code>

@@ -74,9 +74,9 @@ export function TheMath() {
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             Most voice-AI services don't transcribe audio
-                            themselves — OpenAI, Groq, and Deepgram do. Mesynx AI
-                            connects you to those providers directly, with your
-                            own key.
+                            themselves — OpenAI, Groq, and Deepgram do. Mesynx
+                            AI connects you to those providers directly, with
+                            your own key.
                         </p>
                     </div>
 

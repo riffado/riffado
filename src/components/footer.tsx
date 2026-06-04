@@ -43,11 +43,17 @@ export function Footer() {
                             {APP_VERSION_TAG}
                         </Link>
                         {env.IS_HOSTED ? (
-                            <Link href="/changelog" className="hover:text-muted-foreground transition-colors">
+                            <Link
+                                href="/changelog"
+                                className="hover:text-muted-foreground transition-colors"
+                            >
                                 What&apos;s new
                             </Link>
                         ) : null}
-                        <Link href="/docs" className="hover:text-muted-foreground transition-colors">
+                        <Link
+                            href="/docs"
+                            className="hover:text-muted-foreground transition-colors"
+                        >
                             Docs
                         </Link>
                         <ReportBugButton

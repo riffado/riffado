@@ -2,6 +2,7 @@
 
 import { Command, Upload } from "lucide-react";
 import Link from "next/link";
+import { UserMenu } from "@/components/dashboard/user-menu";
 import { LogoWordmark } from "@/components/icons/logo";
 import { SyncButton } from "@/components/sync-button";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { UserMenu } from "@/components/dashboard/user-menu";
 
 interface Props {
     isAdmin: boolean;
@@ -56,12 +56,19 @@ export function WorkstationHeader({
     return (
         <div className="sticky top-0 z-30 -mx-4 mb-8 flex items-center gap-4 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
             {/* Logo */}
-            <Link href="/dashboard" aria-label="Mesynx AI" className="shrink-0 opacity-90 hover:opacity-100 transition-opacity">
+            <Link
+                href="/dashboard"
+                aria-label="Mesynx AI"
+                className="shrink-0 opacity-90 hover:opacity-100 transition-opacity"
+            >
                 <LogoWordmark className="h-7 w-auto text-foreground" />
             </Link>
 
             {/* Divider */}
-            <div className="h-5 w-px bg-border/60 shrink-0 hidden sm:block" aria-hidden />
+            <div
+                className="h-5 w-px bg-border/60 shrink-0 hidden sm:block"
+                aria-hidden
+            />
 
             {/* Page title */}
             <h1 className="hidden sm:block truncate text-sm font-medium text-muted-foreground select-none">
@@ -115,7 +122,9 @@ export function WorkstationHeader({
                             variant="outline"
                             size="sm"
                             className="h-8 gap-2 text-xs"
-                            aria-label={isUploading ? "Uploading audio" : "Upload audio"}
+                            aria-label={
+                                isUploading ? "Uploading audio" : "Upload audio"
+                            }
                         >
                             <Upload className="size-3.5" />
                             <span className="hidden sm:inline">

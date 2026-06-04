@@ -4,6 +4,8 @@ services:
     container_name: mesynx-ai-whisper
     restart: unless-stopped
     ports:
+      # Host 8397 -> container 8000. Point Mesynx AI's provider Base URL at
+      # http://<this-host>:8397/v1
       - "8397:8000"
     deploy:
       resources:
@@ -12,9 +14,17 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    volumes:
+      # Persist downloaded Whisper models across container recreates.
+      # large-v3 is ~3 GB; without this it re-downloads every restart.
+      - whisper_cache:/root/.cache/huggingface
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
       interval: 30s
       timeout: 5s
       start_period: 60s
       retries: 3
+
+volumes:
+  whisper_cache:
+    driver: local

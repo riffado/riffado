@@ -55,7 +55,8 @@ export function HostedAuthChrome({
 
                 <div className="relative space-y-10">
                     <p className="max-w-md text-2xl font-semibold leading-tight tracking-tight">
-                        Open-source AI transcription for the recorder you already own.
+                        Open-source AI transcription for the recorder you
+                        already own.
                     </p>
                     <ul className="space-y-6 max-w-md">
                         {bullets.map((b) => (
@@ -114,17 +115,25 @@ export function HostedAuthChrome({
                             {title}
                         </h1>
                         {subtitle && (
-                            <p className="text-sm text-muted-foreground">{subtitle}</p>
+                            <p className="text-sm text-muted-foreground">
+                                {subtitle}
+                            </p>
                         )}
                     </div>
                     {children}
                     <p className="text-center text-xs text-muted-foreground/60">
                         By continuing you agree to our{" "}
-                        <Link href="/terms" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                        <Link
+                            href="/terms"
+                            className="underline underline-offset-2 hover:text-foreground transition-colors"
+                        >
                             Terms
                         </Link>{" "}
                         and{" "}
-                        <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground transition-colors">
+                        <Link
+                            href="/privacy"
+                            className="underline underline-offset-2 hover:text-foreground transition-colors"
+                        >
                             Privacy Policy
                         </Link>
                         .
@@ -169,7 +178,9 @@ export function SelfHostAuthChrome({
                             {title}
                         </h1>
                         {subtitle && (
-                            <p className="text-sm text-muted-foreground">{subtitle}</p>
+                            <p className="text-sm text-muted-foreground">
+                                {subtitle}
+                            </p>
                         )}
                     </div>
                     {children}
@@ -193,7 +204,9 @@ function InstanceFooter() {
                 >
                     Docs
                 </Link>
-                <span aria-hidden className="opacity-40">·</span>
+                <span aria-hidden className="opacity-40">
+                    ·
+                </span>
                 <Link
                     href="https://github.com/mesynx-ai/mesynx-ai"
                     target="_blank"
@@ -202,7 +215,9 @@ function InstanceFooter() {
                 >
                     GitHub
                 </Link>
-                <span aria-hidden className="opacity-40">·</span>
+                <span aria-hidden className="opacity-40">
+                    ·
+                </span>
                 <Link
                     href="https://mesynx-ai.com/discord"
                     target="_blank"

@@ -40,7 +40,11 @@ export function RegisterForm() {
             push("/onboarding");
             refresh();
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Failed to create account");
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to create account",
+            );
         } finally {
             setIsLoading(false);
         }
@@ -50,34 +54,84 @@ export function RegisterForm() {
         <div className="space-y-5">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1.5">
-                    <Label htmlFor="name" className="text-sm font-medium">Name</Label>
-                    <Input id="name" type="text" placeholder="Jane Smith" value={name}
-                        onChange={(e) => setName(e.target.value)} required disabled={isLoading} autoComplete="name" />
+                    <Label htmlFor="name" className="text-sm font-medium">
+                        Name
+                    </Label>
+                    <Input
+                        id="name"
+                        type="text"
+                        placeholder="Jane Smith"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        autoComplete="name"
+                    />
                 </div>
                 <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-                    <Input id="email" type="email" placeholder="you@example.com" value={email}
-                        onChange={(e) => setEmail(e.target.value)} required disabled={isLoading} autoComplete="email" />
+                    <Label htmlFor="email" className="text-sm font-medium">
+                        Email
+                    </Label>
+                    <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        autoComplete="email"
+                    />
                 </div>
                 <div className="space-y-1.5">
-                    <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                    <Input id="password" type="password" placeholder="••••••••" value={password}
-                        onChange={(e) => setPassword(e.target.value)} required disabled={isLoading}
-                        minLength={8} autoComplete="new-password" />
+                    <Label htmlFor="password" className="text-sm font-medium">
+                        Password
+                    </Label>
+                    <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        minLength={8}
+                        autoComplete="new-password"
+                    />
                 </div>
                 <div className="space-y-1.5">
-                    <Label htmlFor="confirmPassword" className="text-sm font-medium">Confirm password</Label>
-                    <Input id="confirmPassword" type="password" placeholder="••••••••" value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)} required disabled={isLoading}
-                        autoComplete="new-password" />
+                    <Label
+                        htmlFor="confirmPassword"
+                        className="text-sm font-medium"
+                    >
+                        Confirm password
+                    </Label>
+                    <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        disabled={isLoading}
+                        autoComplete="new-password"
+                    />
                 </div>
-                <Button type="submit" className="w-full" variant="glow" disabled={isLoading}>
+                <Button
+                    type="submit"
+                    className="w-full"
+                    variant="glow"
+                    disabled={isLoading}
+                >
                     {isLoading ? "Creating account…" : "Create account"}
                 </Button>
             </form>
             <p className="text-center text-sm text-muted-foreground">
                 Already have an account?{" "}
-                <Link href="/login" className="text-foreground font-medium hover:underline underline-offset-2 transition-colors">
+                <Link
+                    href="/login"
+                    className="text-foreground font-medium hover:underline underline-offset-2 transition-colors"
+                >
                     Sign in
                 </Link>
             </p>

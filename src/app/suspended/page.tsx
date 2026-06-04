@@ -43,7 +43,10 @@ export default async function SuspendedPage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                     Reach out at{" "}
-                    <a href="mailto:support@mesynx-ai.com" className="underline">
+                    <a
+                        href="mailto:support@mesynx-ai.com"
+                        className="underline"
+                    >
                         support@mesynx-ai.com
                     </a>{" "}
                     if you think this is a mistake.

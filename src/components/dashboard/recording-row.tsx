@@ -54,10 +54,7 @@ export function RecordingRow({
                 ref={(el) => registerRef(recording.id, el)}
                 type="button"
                 onClick={() => onSelect(recording)}
-                className={cn(
-                    "w-full text-left pr-10",
-                    rowPadding,
-                )}
+                className={cn("w-full text-left pr-10", rowPadding)}
             >
                 <div className="min-w-0 flex-1 space-y-0.5">
                     {/* Filename + status */}
@@ -75,8 +72,13 @@ export function RecordingRow({
 
                         {inFlight && (
                             <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                                <Loader2 className="size-2.5 animate-spin" aria-hidden />
-                                {inFlight === "transcribing" ? "Transcribing" : "Summarizing"}
+                                <Loader2
+                                    className="size-2.5 animate-spin"
+                                    aria-hidden
+                                />
+                                {inFlight === "transcribing"
+                                    ? "Transcribing"
+                                    : "Summarizing"}
                             </span>
                         )}
                     </div>
@@ -95,7 +97,12 @@ export function RecordingRow({
                         <p className="text-xs text-muted-foreground/70 tabular-nums">
                             <span>{formatDurationMs(recording.duration)}</span>
                             <span className="mx-1 opacity-40">·</span>
-                            <span>{formatDateTime(recording.startTime, dateTimeFormat)}</span>
+                            <span>
+                                {formatDateTime(
+                                    recording.startTime,
+                                    dateTimeFormat,
+                                )}
+                            </span>
                         </p>
                     )}
                 </div>
@@ -133,8 +140,9 @@ export function RecordingRow({
                                                 {recording.filename}
                                             </span>
                                             <br />
-                                            The audio file and any transcript or summary will be
-                                            removed. If the file is still on your Plaud device, the
+                                            The audio file and any transcript or
+                                            summary will be removed. If the file
+                                            is still on your Plaud device, the
                                             next sync will re-download it.
                                         </>
                                     ),

@@ -74,8 +74,9 @@ export function buildTranscriptionParams(args: {
     // Whisper-native parameter accepted by self-hosted servers (faster-whisper,
     // whisper.cpp, etc.) but not part of the OpenAI SDK type definition.
     if (!isGpt4oTranscribe) {
-        (params as unknown as Record<string, unknown>).condition_on_previous_text =
-            false;
+        (
+            params as unknown as Record<string, unknown>
+        ).condition_on_previous_text = false;
     }
 
     return params;

@@ -151,7 +151,10 @@ export function SyncButton({
                         <AlertCircle className="size-3.5" aria-hidden="true" />
                     ) : (
                         <RefreshCw
-                            className={cn("size-3.5", isAutoSyncing && "animate-spin")}
+                            className={cn(
+                                "size-3.5",
+                                isAutoSyncing && "animate-spin",
+                            )}
                             aria-hidden="true"
                         />
                     )}

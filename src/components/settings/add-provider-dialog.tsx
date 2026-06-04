@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Plug, CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, Plug, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";

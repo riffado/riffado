@@ -73,8 +73,8 @@ export function Deploy() {
                             One command. Your server. Yours forever.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Mesynx AI ships as a Docker Compose stack — the app, a
-                            database, your storage. Move from Hosted whenever
+                            Mesynx AI ships as a Docker Compose stack — the app,
+                            a database, your storage. Move from Hosted whenever
                             you want via full-archive export. Same source, your
                             machine.
                         </p>

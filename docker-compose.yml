@@ -86,9 +86,15 @@ services:
       timeout: 5s
       start_period: 60s
       retries: 3
+    volumes:
+      # Persist downloaded Whisper models across container recreates.
+      # large-v3 is ~3 GB; without this it re-downloads every restart.
+      - whisper_cache:/root/.cache/huggingface
 
 volumes:
   pgdata:
     driver: local
   audio:
+    driver: local
+  whisper_cache:
     driver: local

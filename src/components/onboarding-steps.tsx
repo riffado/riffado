@@ -16,8 +16,8 @@ export function OnboardingStepWelcome() {
                     Your AI-Powered Recording Hub
                 </h3>
                 <p className="text-muted-foreground">
-                    Mesynx AI helps you manage, transcribe, and enhance your Plaud
-                    recordings with AI. Let's set up your account.
+                    Mesynx AI helps you manage, transcribe, and enhance your
+                    Plaud recordings with AI. Let's set up your account.
                 </p>
             </div>
 

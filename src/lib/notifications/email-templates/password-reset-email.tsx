@@ -53,8 +53,8 @@ export function PasswordResetEmail({ resetUrl }: PasswordResetEmailProps) {
 
                         <Text style={emailStyles.text}>
                             We received a request to reset the password for your
-                            Mesynx AI account. Click the button below to choose a
-                            new password. This link expires in 1 hour.
+                            Mesynx AI account. Click the button below to choose
+                            a new password. This link expires in 1 hour.
                         </Text>
 
                         <Section style={emailStyles.buttonSection}>

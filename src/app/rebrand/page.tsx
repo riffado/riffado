@@ -72,8 +72,8 @@ export default function RebrandPage() {
                             has always been broader than one recorder, and every
                             conversation about it started with the same
                             question: &quot;is this only for Plaud?&quot; The
-                            old name kept boxing us in. Mesynx AI is a name we can
-                            grow into without explaining a contradiction.
+                            old name kept boxing us in. Mesynx AI is a name we
+                            can grow into without explaining a contradiction.
                         </p>
                         <p className="text-muted-foreground leading-relaxed">
                             We&apos;re giving up the &quot;Open&quot; in the

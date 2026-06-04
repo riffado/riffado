@@ -33,7 +33,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
                 } as React.CSSProperties
             }
             toastOptions={{
-                className: "backdrop-blur-sm shadow-lg dark:shadow-[0_0_0_1px_var(--border),0_8px_24px_oklch(0_0_0_/_0.6)]",
+                className:
+                    "backdrop-blur-sm shadow-lg dark:shadow-[0_0_0_1px_var(--border),0_8px_24px_oklch(0_0_0_/_0.6)]",
             }}
             {...props}
         />

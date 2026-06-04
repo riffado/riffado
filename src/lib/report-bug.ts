@@ -2,7 +2,8 @@ import { APP_VERSION_TAG } from "@/lib/version";
 
 export const SUPPORT_EMAIL = "support@mesynx-ai.com";
 
-const GITHUB_NEW_ISSUE_URL = "https://github.com/mesynx-ai/mesynx-ai/issues/new";
+const GITHUB_NEW_ISSUE_URL =
+    "https://github.com/mesynx-ai/mesynx-ai/issues/new";
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
 export interface ReportBugOptions {

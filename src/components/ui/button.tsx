@@ -17,12 +17,9 @@ const buttonVariants = cva(
                     "border border-border bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground active:scale-[0.98] dark:border-border dark:bg-transparent dark:hover:bg-accent/80 dark:text-foreground",
                 secondary:
                     "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 active:scale-[0.98] dark:bg-secondary dark:text-secondary-foreground dark:hover:bg-accent",
-                ghost:
-                    "hover:bg-accent hover:text-accent-foreground active:scale-[0.98] dark:hover:bg-accent/80",
-                link:
-                    "text-primary underline-offset-4 hover:underline",
-                glow:
-                    "bg-primary text-primary-foreground [box-shadow:0_0_0_1px_oklch(0.72_0.19_200_/_0.3),0_4px_14px_oklch(0.72_0.19_200_/_0.35)] hover:[box-shadow:0_0_0_1px_oklch(0.72_0.19_200_/_0.5),0_6px_20px_oklch(0.72_0.19_200_/_0.5)] active:scale-[0.98] transition-all",
+                ghost: "hover:bg-accent hover:text-accent-foreground active:scale-[0.98] dark:hover:bg-accent/80",
+                link: "text-primary underline-offset-4 hover:underline",
+                glow: "bg-primary text-primary-foreground [box-shadow:0_0_0_1px_oklch(0.72_0.19_200_/_0.3),0_4px_14px_oklch(0.72_0.19_200_/_0.35)] hover:[box-shadow:0_0_0_1px_oklch(0.72_0.19_200_/_0.5),0_6px_20px_oklch(0.72_0.19_200_/_0.5)] active:scale-[0.98] transition-all",
             },
             size: {
                 default: "h-9 px-4 py-2 has-[>svg]:px-3",

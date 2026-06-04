@@ -26,11 +26,26 @@ export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
             </p>
 
             <div className="flex items-center gap-3">
-                <Button onClick={onSync} disabled={isSyncing} variant="glow" size="sm" className="gap-2">
-                    <RefreshCw className={isSyncing ? "size-3.5 animate-spin" : "size-3.5"} />
+                <Button
+                    onClick={onSync}
+                    disabled={isSyncing}
+                    variant="glow"
+                    size="sm"
+                    className="gap-2"
+                >
+                    <RefreshCw
+                        className={
+                            isSyncing ? "size-3.5 animate-spin" : "size-3.5"
+                        }
+                    />
                     {isSyncing ? "Syncing…" : "Sync device"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={onUpload} className="gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUpload}
+                    className="gap-2"
+                >
                     <Upload className="size-3.5" />
                     Upload audio
                 </Button>

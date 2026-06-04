@@ -12,7 +12,9 @@ interface ForgotPasswordFormProps {
     smtpConfigured: boolean;
 }
 
-export function ForgotPasswordForm({ smtpConfigured }: ForgotPasswordFormProps) {
+export function ForgotPasswordForm({
+    smtpConfigured,
+}: ForgotPasswordFormProps) {
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
@@ -25,7 +27,11 @@ export function ForgotPasswordForm({ smtpConfigured }: ForgotPasswordFormProps) 
             await forgetPassword({ email, redirectTo: "/reset-password" });
             setSubmitted(true);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : "Could not send reset email. Please try again.");
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Could not send reset email. Please try again.",
+            );
         } finally {
             setIsLoading(false);
         }
@@ -41,12 +47,22 @@ export function ForgotPasswordForm({ smtpConfigured }: ForgotPasswordFormProps) 
         <div className="space-y-5">
             {!smtpConfigured ? (
                 <InfoBlock>
-                    <p className="font-medium mb-1.5">Password reset unavailable</p>
+                    <p className="font-medium mb-1.5">
+                        Password reset unavailable
+                    </p>
                     <p className="text-sm text-muted-foreground leading-relaxed">
                         SMTP isn't configured on this instance. Set{" "}
-                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_HOST</code>,{" "}
-                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_USER</code>, and{" "}
-                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">SMTP_PASSWORD</code>{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+                            SMTP_HOST
+                        </code>
+                        ,{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+                            SMTP_USER
+                        </code>
+                        , and{" "}
+                        <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+                            SMTP_PASSWORD
+                        </code>{" "}
                         to enable it.
                     </p>
                 </InfoBlock>
@@ -62,17 +78,35 @@ export function ForgotPasswordForm({ smtpConfigured }: ForgotPasswordFormProps) 
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-1.5">
-                        <Label htmlFor="email" className="text-sm font-medium">Email</Label>
-                        <Input id="email" type="email" placeholder="you@example.com" value={email}
-                            onChange={(e) => setEmail(e.target.value)} required disabled={isLoading} autoComplete="email" />
+                        <Label htmlFor="email" className="text-sm font-medium">
+                            Email
+                        </Label>
+                        <Input
+                            id="email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            disabled={isLoading}
+                            autoComplete="email"
+                        />
                     </div>
-                    <Button type="submit" className="w-full" variant="glow" disabled={isLoading}>
+                    <Button
+                        type="submit"
+                        className="w-full"
+                        variant="glow"
+                        disabled={isLoading}
+                    >
                         {isLoading ? "Sending…" : "Send reset link"}
                     </Button>
                 </form>
             )}
             <p className="text-center text-sm">
-                <Link href="/login" className="text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline">
+                <Link
+                    href="/login"
+                    className="text-muted-foreground hover:text-foreground transition-colors underline-offset-2 hover:underline"
+                >
                     ← Back to sign in
                 </Link>
             </p>

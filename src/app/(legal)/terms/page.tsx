@@ -73,7 +73,8 @@ export default function TermsPage() {
 
             <h2>The software vs. the service</h2>
             <p>
-                The Mesynx AI source code is licensed under AGPL-3.0 and lives at{" "}
+                The Mesynx AI source code is licensed under AGPL-3.0 and lives
+                at{" "}
                 <Link
                     href="https://github.com/mesynx-ai/mesynx-ai"
                     target="_blank"

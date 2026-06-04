@@ -27,7 +27,7 @@
     --secondary: oklch(0.954 0.006 230);
     --secondary-foreground: oklch(0.32 0.015 230);
     --muted: oklch(0.954 0.006 230);
-    --muted-foreground: oklch(0.50 0.018 230);
+    --muted-foreground: oklch(0.5 0.018 230);
     --accent: oklch(0.945 0.007 230);
     --accent-foreground: oklch(0.145 0.015 230);
 
@@ -42,7 +42,7 @@
 
     /* Charts */
     --chart-1: oklch(0.55 0.18 220);
-    --chart-2: oklch(0.60 0.18 264);
+    --chart-2: oklch(0.6 0.18 264);
     --chart-3: oklch(0.75 0.12 150);
     --chart-4: oklch(0.65 0.18 290);
     --chart-5: oklch(0.65 0.18 180);
@@ -62,21 +62,44 @@
     --auth-brand-foreground: oklch(0.925 0.008 230);
 
     /* Typography */
-    --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+    --font-sans: var(
+        --font-geist-sans,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif
+    );
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-    --font-mono: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    --font-mono: var(
+        --font-geist-mono,
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace
+    );
 
     /* Shape */
     --radius: 0.625rem;
 
     /* Shadows — light */
     --shadow-2xs: 0 1px 2px 0 oklch(0 0 0 / 0.04);
-    --shadow-xs: 0 1px 3px 0 oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.04);
-    --shadow-sm: 0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
-    --shadow: 0 2px 4px 0 oklch(0 0 0 / 0.08), 0 1px 3px -1px oklch(0 0 0 / 0.06);
-    --shadow-md: 0 4px 8px -2px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.06);
-    --shadow-lg: 0 8px 16px -4px oklch(0 0 0 / 0.12), 0 4px 6px -4px oklch(0 0 0 / 0.06);
-    --shadow-xl: 0 16px 24px -6px oklch(0 0 0 / 0.14), 0 6px 10px -4px oklch(0 0 0 / 0.08);
+    --shadow-xs:
+        0 1px 3px 0 oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.04);
+    --shadow-sm:
+        0 1px 3px 0 oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.06);
+    --shadow:
+        0 2px 4px 0 oklch(0 0 0 / 0.08), 0 1px 3px -1px oklch(0 0 0 / 0.06);
+    --shadow-md:
+        0 4px 8px -2px oklch(0 0 0 / 0.1), 0 2px 4px -2px oklch(0 0 0 / 0.06);
+    --shadow-lg:
+        0 8px 16px -4px oklch(0 0 0 / 0.12), 0 4px 6px -4px oklch(0 0 0 / 0.06);
+    --shadow-xl:
+        0 16px 24px -6px oklch(0 0 0 / 0.14), 0 6px 10px -4px
+        oklch(0 0 0 / 0.08);
     --shadow-2xl: 0 24px 40px -8px oklch(0 0 0 / 0.18);
 
     /* Semantic surface aliases */
@@ -87,8 +110,8 @@
 
     /* Status */
     --accent-green: oklch(0.62 0.19 145);
-    --accent-blue: oklch(0.60 0.18 264);
-    --accent-purple: oklch(0.62 0.20 290);
+    --accent-blue: oklch(0.6 0.18 264);
+    --accent-purple: oklch(0.62 0.2 290);
     --led-active: oklch(0.62 0.19 145);
     --led-warning: oklch(0.72 0.16 85);
     --led-error: var(--destructive);
@@ -109,7 +132,7 @@
 
     /* Brand — bright cyan that pops */
     --primary: oklch(0.72 0.19 200);
-    --primary-foreground: oklch(0.10 0.02 220);
+    --primary-foreground: oklch(0.1 0.02 220);
 
     /* Secondary / Muted */
     --secondary: oklch(0.165 0.015 230);
@@ -131,15 +154,15 @@
     /* Charts */
     --chart-1: oklch(0.72 0.19 200);
     --chart-2: oklch(0.65 0.18 264);
-    --chart-3: oklch(0.70 0.16 150);
-    --chart-4: oklch(0.68 0.20 290);
+    --chart-3: oklch(0.7 0.16 150);
+    --chart-4: oklch(0.68 0.2 290);
     --chart-5: oklch(0.68 0.18 180);
 
     /* Sidebar — slightly darker than background */
     --sidebar: oklch(0.105 0.012 230);
     --sidebar-foreground: oklch(0.925 0.008 220);
     --sidebar-primary: oklch(0.72 0.19 200);
-    --sidebar-primary-foreground: oklch(0.10 0.02 220);
+    --sidebar-primary-foreground: oklch(0.1 0.02 220);
     --sidebar-accent: oklch(0.155 0.015 230);
     --sidebar-accent-foreground: oklch(0.88 0.008 220);
     --sidebar-border: oklch(0.22 0.015 230);
@@ -162,10 +185,10 @@
     --panel-inset: var(--muted);
 
     /* Status */
-    --accent-green: oklch(0.70 0.20 145);
+    --accent-green: oklch(0.7 0.2 145);
     --accent-blue: oklch(0.65 0.18 264);
-    --accent-purple: oklch(0.68 0.20 290);
-    --led-active: oklch(0.70 0.20 145);
+    --accent-purple: oklch(0.68 0.2 290);
+    --led-active: oklch(0.7 0.2 145);
     --led-warning: oklch(0.75 0.15 85);
     --led-error: var(--destructive);
     --led-record: var(--destructive);
@@ -232,24 +255,51 @@
     --animate-slide-up: slide-up 0.2s ease-out;
 
     @keyframes accordion-down {
-        from { height: 0; }
-        to { height: var(--radix-accordion-content-height); }
+        from {
+            height: 0;
+        }
+        to {
+            height: var(--radix-accordion-content-height);
+        }
     }
     @keyframes accordion-up {
-        from { height: var(--radix-accordion-content-height); }
-        to { height: 0; }
+        from {
+            height: var(--radix-accordion-content-height);
+        }
+        to {
+            height: 0;
+        }
     }
     @keyframes fade-in {
-        from { opacity: 0; transform: translateY(4px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     @keyframes slide-up {
-        from { opacity: 0; transform: translateY(8px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
     @keyframes pulse {
-        0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        50% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.95); }
+        0%,
+        100% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        50% {
+            opacity: 0.6;
+            transform: translate(-50%, -50%) scale(0.95);
+        }
     }
 }
 
@@ -262,18 +312,19 @@
         @apply text-foreground antialiased;
         background: var(--app-background);
         font-family: var(--font-sans);
-        font-feature-settings: "rlig" 1, "calt" 1;
+        font-feature-settings:
+            "rlig" 1,
+            "calt" 1;
     }
 
     /* Dark mode: subtle ambient cyan glow from top */
     .dark body {
         background-color: var(--background);
-        background-image:
-            radial-gradient(
-                ellipse 80% 40% at 50% -10%,
-                oklch(0.72 0.19 200 / 0.06) 0%,
-                transparent 70%
-            );
+        background-image: radial-gradient(
+            ellipse 80% 40% at 50% -10%,
+            oklch(0.72 0.19 200 / 0.06) 0%,
+            transparent 70%
+        );
         background-attachment: fixed;
     }
 
@@ -286,11 +337,21 @@
 
     *:hover,
     *:focus-within {
-        scrollbar-color: color-mix(in oklch, var(--muted-foreground) 55%, transparent) transparent;
+        scrollbar-color: color-mix(
+                in oklch,
+                var(--muted-foreground) 55%,
+                transparent
+            )
+            transparent;
     }
 
-    *::-webkit-scrollbar { width: 6px; height: 6px; }
-    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    *::-webkit-scrollbar-track {
+        background: transparent;
+    }
     *::-webkit-scrollbar-thumb {
         background-color: transparent;
         border-radius: 9999px;
@@ -300,18 +361,37 @@
     }
     *:hover::-webkit-scrollbar-thumb,
     *:focus-within::-webkit-scrollbar-thumb {
-        background-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+        background-color: color-mix(
+            in oklch,
+            var(--muted-foreground) 45%,
+            transparent
+        );
     }
     *::-webkit-scrollbar-thumb:hover {
-        background-color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+        background-color: color-mix(
+            in oklch,
+            var(--muted-foreground) 70%,
+            transparent
+        );
     }
-    *::-webkit-scrollbar-corner { background: transparent; }
+    *::-webkit-scrollbar-corner {
+        background: transparent;
+    }
 
     html {
-        scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+        scrollbar-color: color-mix(
+                in oklch,
+                var(--muted-foreground) 35%,
+                transparent
+            )
+            transparent;
     }
     html::-webkit-scrollbar-thumb {
-        background-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+        background-color: color-mix(
+            in oklch,
+            var(--muted-foreground) 35%,
+            transparent
+        );
     }
 
     /* ── Focus rings ─────────────────────────────────────────── */
@@ -331,7 +411,8 @@
 
     .dark .glass-surface {
         background: oklch(from var(--popover) l c h / 0.75);
-        border: 1px solid color-mix(in oklch, var(--border) 60%, oklch(0.72 0.19 200 / 0.08));
+        border: 1px solid
+            color-mix(in oklch, var(--border) 60%, oklch(0.72 0.19 200 / 0.08));
     }
 
     /* ── Elevated card ───────────────────────────────────────── */
@@ -354,15 +435,21 @@
 
     /* ── Shimmer border (for selected / active states) ───────── */
     .border-glow {
-        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.5), 0 0 12px oklch(0.72 0.19 200 / 0.2);
+        box-shadow:
+            0 0 0 1px oklch(0.72 0.19 200 / 0.5),
+            0 0 12px oklch(0.72 0.19 200 / 0.2);
     }
 
     /* ── Primary glow button ─────────────────────────────────── */
     .btn-glow {
-        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.3), 0 4px 14px oklch(0.72 0.19 200 / 0.35);
+        box-shadow:
+            0 0 0 1px oklch(0.72 0.19 200 / 0.3),
+            0 4px 14px oklch(0.72 0.19 200 / 0.35);
     }
     .btn-glow:hover {
-        box-shadow: 0 0 0 1px oklch(0.72 0.19 200 / 0.45), 0 6px 20px oklch(0.72 0.19 200 / 0.45);
+        box-shadow:
+            0 0 0 1px oklch(0.72 0.19 200 / 0.45),
+            0 6px 20px oklch(0.72 0.19 200 / 0.45);
     }
 
     /* ── Panel utilities ─────────────────────────────────────── */
@@ -385,9 +472,15 @@
     }
 
     /* ── LED indicators ──────────────────────────────────────── */
-    .led-active { color: var(--led-active); }
-    .led-warning { color: var(--led-warning); }
-    .led-error { color: var(--led-error); }
+    .led-active {
+        color: var(--led-active);
+    }
+    .led-warning {
+        color: var(--led-warning);
+    }
+    .led-error {
+        color: var(--led-error);
+    }
 
     /* ── Status badge chips ──────────────────────────────────── */
     .chip {
@@ -416,7 +509,11 @@
 
     /* ── Gradient text ───────────────────────────────────────── */
     .text-gradient {
-        background: linear-gradient(135deg, var(--primary) 0%, oklch(0.80 0.14 190) 100%);
+        background: linear-gradient(
+            135deg,
+            var(--primary) 0%,
+            oklch(0.8 0.14 190) 100%
+        );
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -471,7 +568,9 @@
         overflow-y: auto;
     }
 
-    .settings-panel.open { transform: translateX(0); }
+    .settings-panel.open {
+        transform: translateX(0);
+    }
 
     /* ── Toggle switch ───────────────────────────────────────── */
     .toggle-switch {
@@ -486,12 +585,16 @@
         cursor: pointer;
     }
 
-    .toggle-switch:hover { border-color: var(--primary); }
+    .toggle-switch:hover {
+        border-color: var(--primary);
+    }
 
     .toggle-switch.active {
         background: var(--primary);
         border-color: var(--primary);
-        box-shadow: var(--shadow-sm), 0 0 10px oklch(0.72 0.19 200 / 0.35);
+        box-shadow:
+            var(--shadow-sm),
+            0 0 10px oklch(0.72 0.19 200 / 0.35);
     }
 
     .toggle-thumb {
@@ -528,7 +631,9 @@
 
     /* ── Print ────────────────────────────────────────────────── */
     @media print {
-        .rack-container, .panel, .hardware-display {
+        .rack-container,
+        .panel,
+        .hardware-display {
             box-shadow: none;
             border: 1px solid #ccc;
         }
