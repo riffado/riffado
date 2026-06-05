@@ -69,11 +69,29 @@ export default async function RecordingDetailPage({
         ? (recording.waveformPeaks as number[])
         : null;
 
+    let filename = recording.filename;
+    try {
+        filename = decryptText(recording.filename);
+    } catch (error) {
+        console.error("Failed to decrypt recording filename:", error);
+        filename = "[Decryption Failed - Key Mismatch]";
+    }
+
+    let transcriptionText: string | undefined;
+    if (transcription) {
+        try {
+            transcriptionText = decryptText(transcription.text);
+        } catch (error) {
+            console.error("Failed to decrypt transcription text:", error);
+            transcriptionText = "[Decryption Failed - Key Mismatch]";
+        }
+    }
+
     return (
         <RecordingWorkstation
             recording={{
                 ...recording,
-                filename: decryptText(recording.filename),
+                filename,
                 startTime: recording.startTime.toISOString(),
                 waveformPeaks,
             }}
@@ -82,9 +100,9 @@ export default async function RecordingDetailPage({
             initialAutoPlayNext={settingsRow?.autoPlayNext ?? false}
             scrubberStyle={scrubberStyle}
             transcription={
-                transcription
+                transcription && transcriptionText !== undefined
                     ? {
-                          text: decryptText(transcription.text),
+                          text: transcriptionText,
                           detectedLanguage:
                               transcription.detectedLanguage || undefined,
                           transcriptionType: transcription.transcriptionType,

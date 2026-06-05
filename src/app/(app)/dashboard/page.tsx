@@ -63,9 +63,16 @@ export default async function DashboardPage() {
     // Content fields are encrypted at rest; decrypt server-side (this is
     // an RSC — client never sees a key) before serializing for the
     // workstation. Legacy plaintext rows pass through verbatim.
-    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) =>
-        serializeRecording(
-            { ...r, filename: decryptText(r.filename) },
+    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) => {
+        let filename = r.filename;
+        try {
+            filename = decryptText(r.filename);
+        } catch (error) {
+            console.error("Failed to decrypt recording filename:", error);
+            filename = "[Decryption Failed - Key Mismatch]";
+        }
+        return serializeRecording(
+            { ...r, filename },
             {
                 hasTranscript: transcriptIds.has(r.id),
                 hasSummary: summaryIds.has(r.id),
@@ -74,14 +81,20 @@ export default async function DashboardPage() {
                     ? (waveformPeaks as number[])
                     : null,
             },
-        ),
-    );
+        );
+    });
 
     const transcriptionMap = new Map(
-        userTranscriptions.map((t) => [
-            t.recordingId,
-            { text: decryptText(t.text), language: t.language || undefined },
-        ]),
+        userTranscriptions.map((t) => {
+            let text = t.text;
+            try {
+                text = decryptText(t.text);
+            } catch (error) {
+                console.error("Failed to decrypt transcription text:", error);
+                text = "[Decryption Failed - Key Mismatch]";
+            }
+            return [t.recordingId, { text, language: t.language || undefined }];
+        }),
     );
 
     // Load user settings server-side so the Workstation, list, and player
