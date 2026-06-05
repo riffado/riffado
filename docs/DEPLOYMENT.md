@@ -40,22 +40,19 @@ git clone https://github.com/mesynx-ai/mesynx-ai.git
 cd mesynx-ai
 ```
 
-### 2. Generate Secrets
+### 2. Configure Environment
+
+Create the `.env` file from the template:
 
 ```bash
-# Generate BETTER_AUTH_SECRET
-openssl rand -hex 32
-
-# Generate ENCRYPTION_KEY
-openssl rand -hex 32
+cp .env.example .env
 ```
 
-### 3. Configure Environment
-
-Create `.env` file:
+Automatically generate and configure the required `BETTER_AUTH_SECRET` and `ENCRYPTION_KEY` secrets:
 
 ```bash
-cp .env.example .env.local
+sed -i.bak "s/BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 32)/" .env && rm -f .env.bak
+sed -i.bak "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env && rm -f .env.bak
 ```
 
 Edit `.env` with your values:
@@ -88,7 +85,7 @@ SMTP_PASSWORD=your-app-password
 SMTP_FROM=noreply@your-domain.com
 ```
 
-### 4. Start Services
+### 3. Start Services
 
 Start the containerized services using the consolidated Compose file. This builds the application locally from the source files and runs all services (`app`, `db`, and `whisper`) on a unified named network (`mesynx-network`):
 
@@ -96,7 +93,7 @@ Start the containerized services using the consolidated Compose file. This build
 docker compose up -d --build
 ```
 
-### 5. Verify Deployment
+### 4. Verify Deployment
 
 ```bash
 # Check logs
@@ -106,7 +103,7 @@ docker compose logs -f app
 curl http://localhost:8790/api/health
 ```
 
-### 6. Run Database Migrations
+### 5. Run Database Migrations
 
 Migrations run automatically on container start. To run manually:
 

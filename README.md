@@ -124,9 +124,14 @@ Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` a
 git clone https://github.com/mesynx-ai/mesynx-ai.git
 cd mesynx-ai
 
-# Generate secrets, paste into .env
+# Create .env from template
 cp .env.example .env
-# Edit .env and set BETTER_AUTH_SECRET, ENCRYPTION_KEY, etc.
+
+# Automatically generate and configure required secrets
+sed -i.bak "s/BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=\$(openssl rand -hex 32)/" .env && rm -f .env.bak
+sed -i.bak "s/ENCRYPTION_KEY=.*/ENCRYPTION_KEY=\$(openssl rand -hex 32)/" .env && rm -f .env.bak
+
+# Edit .env and customize options (e.g. SMTP or S3) if needed
 
 sudo docker compose up -d --build
 ```
