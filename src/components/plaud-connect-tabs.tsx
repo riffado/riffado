@@ -13,7 +13,7 @@ import {
 } from "@/lib/plaud/servers";
 
 const CONNECTOR_CHROME_URL =
-    "https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account";
+    "https://github.com/r0073d-l053r/mesynx/tree/main/chrome-extension";
 
 // API contract for the Mesynx AI Connector extension; bump `version` on both sides.
 interface ConnectorBridge {

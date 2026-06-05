@@ -91,16 +91,18 @@ Each recording's AI summary becomes a navigable mind-map — **Overview**, **Key
 
 ### 🔌 Hardened AI provider management
 
-- **Nickname any server.** Custom and self-hosted endpoints get a friendly label, so "Home GPU · faster-whisper" beats squinting at a base URL.
-- **Searchable model picker.** Run **Test Connection** and Mesynx AI discovers the server's models, then offers a type-to-filter dropdown instead of a blank text box — no more guessing exact model IDs.
-- **Reliable loading.** The Providers section now fetches its own data on open (with a loading state), fixing the Riffado race condition where saved configs — or their API keys — sometimes failed to appear.
+- **Nickname any server.** Custom and self-hosted endpoints get a friendly label — "Home GPU · faster-whisper" is a lot easier to manage than a bare IP address.
+- **Searchable model picker.** Hit **Test Connection** and Mesynx AI queries the server's `/v1/models` endpoint, then replaces the blank text field with a live type-to-filter dropdown. No more guessing exact model IDs.
+- **Reliable loading.** The Providers section self-fetches on open with a loading state, fixing the race condition in Riffado where saved configs — or their API keys — sometimes failed to appear.
 
 <p align="center">
 <img src=".github/assets/providers-list.png" width="620" alt="AI Providers list with nicknames and role badges" />
 </p>
+
 <p align="center">
-<img src=".github/assets/ai-providers.png" width="380" alt="Add Provider dialog — nickname field and searchable model picker" />
+  <video src=".github/assets/add-provider-demo.mp4" width="480" autoplay loop muted playsinline controls></video>
 </p>
+<p align="center"><sub>Adding a custom provider — nickname, test connection, and searchable model picker in action.</sub></p>
 
 ## Quick start
 
@@ -140,7 +142,7 @@ Full install guide, version pinning, image tags, and Windows/WSL notes: [mesynx.
 
 Mesynx AI signs into Plaud using your email — the same OTP flow as the official app. The verification code is forwarded directly to Plaud and never stored. Your access token is encrypted with AES-256-GCM before hitting the database. Region (Global, EU, APAC) is auto-detected.
 
-If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [Mesynx AI Connector browser extension](https://github.com/mesynx-ai/connector), or paste a token manually. Full instructions: [mesynx.r0073dl053r.com/docs/guides/connect-plaud-account](https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account).
+If you signed up to Plaud with **Continue with Google** or **Continue with Apple**, the email-code flow won't return any recordings — that's a different identity on Plaud's side. Use the [Mesynx AI Connector browser extension](https://github.com/r0073d-l053r/mesynx/tree/main/chrome-extension), or paste a token manually. Full instructions: [mesynx.r0073dl053r.com/docs/guides/connect-plaud-account](https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account).
 
 > Every line that handles your credentials is open source — [send-code route](src/app/api/plaud/auth/send-code/route.ts) · [verify route](src/app/api/plaud/auth/verify/route.ts) · [encryption](src/lib/encryption.ts).
 
