@@ -34,11 +34,12 @@ Chrome Web Store submission is pending review. Until then, load the extension as
 
 ## Running Mesynx AI on a custom URL?
 
-By default the extension injects on `http://localhost:*` and `https://mesynx.r0073dl053r.com`. If you're running Mesynx AI at a different URL (Tailscale IP, custom domain, etc.):
+By default, the extension injects on `http://localhost:8790` and `https://mesynx.r0073dl053r.com`. If you are running Mesynx AI at a custom URL (Tailscale IP, custom domain, etc.):
 
-1. Open `manifest.json`.
-2. Add your URL to both `content_scripts[*].matches` **and** `host_permissions`.
-3. Reload the extension in `chrome://extensions`.
+1. Open the extension popup by clicking the extension icon in your toolbar.
+2. Type your custom address into the **"Mesynx AI instance URL"** field (e.g. `http://100.77.248.40:8790` or `https://mesynx.example.com`).
+3. Accept the browser's permission prompt. This allows the extension to dynamically register its communication script on your custom host at runtime.
+4. Reload your Mesynx AI tab, and it is ready to connect. No manual modification of `manifest.json` is needed.
 
 ## Security model
 
@@ -50,7 +51,7 @@ By default the extension injects on `http://localhost:*` and `https://mesynx.r00
 
 ## Technical architecture
 
-```
+```text
 web.plaud.ai (user's browser session)
       │
       │  chrome.cookies.getAll / onChanged

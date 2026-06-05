@@ -7,7 +7,7 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const DEFAULT_URL = 'http://localhost:3000';
+const DEFAULT_URL = 'http://localhost:8790';
 const STORAGE_KEY = 'mesynxInstanceUrl';
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
@@ -23,6 +23,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const val = $('instance-url').value.trim() || DEFAULT_URL;
     $('instance-url').value = val;
     chrome.storage.local.set({ [STORAGE_KEY]: val });
+
+    try {
+      const origin = new URL(val).origin;
+      if (origin && !origin.includes('localhost:8790') && !origin.includes('mesynx.r0073dl053r.com')) {
+        chrome.permissions.request({ origins: [origin + '/*'] }, (granted) => {
+          if (granted) {
+            chrome.runtime.sendMessage({ type: 'REGISTER_DYNAMIC_SCRIPT', url: origin });
+          }
+        });
+      }
+    } catch (err) {
+      // Ignore invalid URL
+    }
   });
 
   await renderStatus();

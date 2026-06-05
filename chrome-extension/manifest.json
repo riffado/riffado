@@ -29,7 +29,7 @@
   "content_scripts": [
     {
       "matches": [
-        "http://localhost:*/*",
+        "http://localhost:8790/*",
         "https://mesynx.r0073dl053r.com/*"
       ],
       "js": ["content-app-main.js"],
@@ -38,7 +38,7 @@
     },
     {
       "matches": [
-        "http://localhost:*/*",
+        "http://localhost:8790/*",
         "https://mesynx.r0073dl053r.com/*"
       ],
       "js": ["content-app-isolated.js"],
@@ -51,13 +51,19 @@
     "cookies",
     "tabs",
     "storage",
-    "windows"
+    "windows",
+    "scripting"
+  ],
+
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
 
   "host_permissions": [
     "https://web.plaud.ai/*",
     "https://*.plaud.ai/*",
-    "http://localhost:*/*",
+    "http://localhost:8790/*",
     "https://mesynx.r0073dl053r.com/*"
   ]
 }

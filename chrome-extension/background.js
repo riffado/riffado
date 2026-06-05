@@ -18,7 +18,7 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAUD_DOMAIN = 'plaud.ai';
-const DEFAULT_MESYNX_URL = 'http://localhost:3000';
+const DEFAULT_MESYNX_URL = 'http://localhost:8790';
 
 // Cookie names to try, most-likely-first.
 const TOKEN_COOKIE_NAMES = ['pld_ut', 'pld_at', 'access_token', 'pld_token'];
@@ -52,6 +52,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case 'CONNECT_TO_MESYNX': {
       handleConnectToMesynx(message.mesynxUrl, sendResponse);
+      return true;
+    }
+
+    case 'REGISTER_DYNAMIC_SCRIPT': {
+      registerDynamicScriptsForUrl(message.url)
+        .then(() => sendResponse({ ok: true }))
+        .catch((err) => sendResponse({ ok: false, error: err.message }));
       return true;
     }
 
@@ -340,3 +347,51 @@ async function getStatus() {
     return { connected: true, region: token.region, apiBase: token.apiBase, expiresAt: null };
   }
 }
+
+// ─── Dynamic content script registration (for custom user-hosted domains) ──────
+
+async function registerDynamicScriptsForUrl(url) {
+  if (!url) return;
+  try {
+    const origin = new URL(url).origin;
+    if (origin.includes('localhost:8790') || origin.includes('mesynx.r0073dl053r.com')) {
+      return;
+    }
+
+    const existing = await chrome.scripting.getRegisteredContentScripts();
+    const idsToUnregister = existing
+      .map((s) => s.id)
+      .filter((id) => id.startsWith('mesynx-dynamic-'));
+
+    if (idsToUnregister.length > 0) {
+      await chrome.scripting.unregisterContentScripts({ ids: idsToUnregister });
+    }
+
+    await chrome.scripting.registerContentScripts([
+      {
+        id: 'mesynx-dynamic-main',
+        matches: [origin + '/*'],
+        js: ['content-app-main.js'],
+        runAt: 'document_idle',
+        world: 'MAIN',
+      },
+      {
+        id: 'mesynx-dynamic-isolated',
+        matches: [origin + '/*'],
+        js: ['content-app-isolated.js'],
+        runAt: 'document_idle',
+        world: 'ISOLATED',
+      },
+    ]);
+  } catch (err) {
+    console.error('Failed to register dynamic content script:', err);
+  }
+}
+
+// Register saved dynamic scripts on startup/load
+chrome.storage.local.get('mesynxInstanceUrl', (data) => {
+  const url = data.mesynxInstanceUrl;
+  if (url) {
+    registerDynamicScriptsForUrl(url).catch(() => {});
+  }
+});
