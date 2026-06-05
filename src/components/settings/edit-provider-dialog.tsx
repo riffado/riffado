@@ -103,7 +103,7 @@ export function EditProviderDialog({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        provider: providerName,
+                        provider: providerName || "Custom",
                         apiKey: apiKey || undefined,
                         baseUrl: baseUrl || null,
                         // Pass the saved provider's ID so the server can
@@ -321,7 +321,12 @@ export function EditProviderDialog({
                                 "Enter a new key to replace the current one"
                             }
                             value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
+                            onChange={(e) => {
+                                setApiKey(e.target.value);
+                                if (!providerName) {
+                                    setProviderName("Custom");
+                                }
+                            }}
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
@@ -342,7 +347,12 @@ export function EditProviderDialog({
                             type="text"
                             placeholder="https://api.example.com/v1"
                             value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
+                            onChange={(e) => {
+                                setBaseUrl(e.target.value);
+                                if (!providerName) {
+                                    setProviderName("Custom");
+                                }
+                            }}
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
@@ -361,7 +371,7 @@ export function EditProviderDialog({
                         <button
                             type="button"
                             onClick={handleTestConnection}
-                            disabled={isTesting || !providerName}
+                            disabled={isTesting || (!providerName && !baseUrl)}
                             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                         >
                             {isTesting ? (

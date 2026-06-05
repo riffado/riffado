@@ -70,7 +70,7 @@ export function AddProviderDialog({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        provider,
+                        provider: provider || "Custom",
                         apiKey,
                         baseUrl: baseUrl || null,
                     }),
@@ -211,7 +211,12 @@ export function AddProviderDialog({
                                 selectedPreset?.placeholder || "Your API key"
                             }
                             value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
+                            onChange={(e) => {
+                                setApiKey(e.target.value);
+                                if (!provider) {
+                                    setProvider("Custom");
+                                }
+                            }}
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
@@ -224,7 +229,12 @@ export function AddProviderDialog({
                             type="text"
                             placeholder="https://api.example.com/v1"
                             value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
+                            onChange={(e) => {
+                                setBaseUrl(e.target.value);
+                                if (!provider) {
+                                    setProvider("Custom");
+                                }
+                            }}
                             disabled={isLoading}
                             className="font-mono text-sm"
                         />
@@ -243,7 +253,7 @@ export function AddProviderDialog({
                         <button
                             type="button"
                             onClick={handleTestConnection}
-                            disabled={isTesting || !provider}
+                            disabled={isTesting || (!provider && !baseUrl)}
                             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                         >
                             {isTesting ? (

@@ -9,6 +9,7 @@
 
 ### Added
 
+- **Mobile PWA standalone support.** Added dynamic web app manifest, service worker registration client hook, iOS-specific mobile standalone headers, and high-resolution logo icons to support installing Mesynx AI as a native full-screen app on iOS and Android.
 - **Local AI Auto-scan & Provisioning.** Added a "Scan for Local Services" feature to the self-hosted AI settings that discovers and configures local Faster Whisper, Ollama, and Open WebUI services automatically. Also enabled silent auto-provisioning of the compose Whisper container on first load.
 
 - **Self-hosted GPU transcription.** Bundled a [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) `whisper` service in `docker-compose.yml` (NVIDIA GPU, host port `8397`) plus a standalone [`whisper-server/`](whisper-server/) compose file for running Whisper on a separate box. This closes the gap where chat-only local servers (Ollama, Open WebUI) return `405` on `/v1/audio/transcriptions` and can't transcribe at all. A persistent `whisper_cache` volume keeps downloaded models across container recreates (large-v3 is ~3 GB). [`whisper-server/README.md`](whisper-server/README.md) documents model selection and VAD-based anti-hallucination guidance for long recordings.
@@ -27,6 +28,7 @@
 
 ### Fixed
 
+- **Test Connection button validation.** Enabled testing connection when a custom Base URL is entered without needing to select a provider preset, and added automatic "Custom" provider dropdown selection when typing keys or URLs.
 - **AI Providers settings race condition.** The Providers section now fetches its own data on open (with a loading spinner) instead of relying on a server-rendered seed that could resolve too late. Fixes the intermittent bug where saved provider configs — or their API keys — failed to appear when opening Settings.
 
 ## [0.5.6] - 2026-05-30

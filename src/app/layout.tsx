@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
+import { PWARegister } from "@/components/pwa-register";
 import { RybbitAnalytics } from "@/components/rybbit-analytics";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -39,9 +40,18 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" suppressHydrationWarning>
+            <head>
+                <meta name="apple-mobile-web-app-capable" content="yes" />
+                <meta
+                    name="apple-mobile-web-app-status-bar-style"
+                    content="black-translucent"
+                />
+                <meta name="theme-color" content="#0a0a0a" />
+            </head>
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
+                <PWARegister />
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="system"
