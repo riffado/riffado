@@ -59,6 +59,39 @@ export function ProvidersSection({
     );
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
+    const [isScanning, setIsScanning] = useState(false);
+
+    const handleAutoScan = async () => {
+        setIsScanning(true);
+        try {
+            const response = await fetch(
+                "/api/settings/ai/providers/auto-scan",
+                {
+                    method: "POST",
+                },
+            );
+            if (!response.ok) throw new Error("Failed to scan");
+            const data = await response.json();
+            if (data.provisioned && data.provisioned.length > 0) {
+                toast.success(
+                    `Discovered and configured: ${data.provisioned.join(", ")}`,
+                );
+                await refreshProviders();
+            } else if (data.found && data.found.length > 0) {
+                toast.info(
+                    `Found local services (${data.found.join(", ")}), but they were already configured.`,
+                );
+            } else {
+                toast.info(
+                    "No local AI services (Whisper, Ollama, Open WebUI) were found.",
+                );
+            }
+        } catch {
+            toast.error("An error occurred while scanning for local services.");
+        } finally {
+            setIsScanning(false);
+        }
+    };
 
     const refreshProviders = useCallback(async () => {
         try {
@@ -120,13 +153,35 @@ export function ProvidersSection({
                         icon={Bot}
                     />
                     {aiSubSection === "providers" && (
-                        <Button
-                            onClick={() => setIsAddProviderOpen(true)}
-                            size="sm"
-                        >
-                            <Plus className="size-4 mr-2" />
-                            Add Provider
-                        </Button>
+                        <div className="flex gap-2">
+                            {!isHosted && (
+                                <Button
+                                    onClick={handleAutoScan}
+                                    disabled={isScanning}
+                                    variant="outline"
+                                    size="sm"
+                                >
+                                    {isScanning ? (
+                                        <>
+                                            <Loader2 className="size-4 mr-2 animate-spin" />
+                                            Scanning…
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="size-4 mr-2" />
+                                            Scan for Local Services
+                                        </>
+                                    )}
+                                </Button>
+                            )}
+                            <Button
+                                onClick={() => setIsAddProviderOpen(true)}
+                                size="sm"
+                            >
+                                <Plus className="size-4 mr-2" />
+                                Add Provider
+                            </Button>
+                        </div>
                     )}
                 </div>
 

@@ -9,6 +9,8 @@
 
 ### Added
 
+- **Local AI Auto-scan & Provisioning.** Added a "Scan for Local Services" feature to the self-hosted AI settings that discovers and configures local Faster Whisper, Ollama, and Open WebUI services automatically. Also enabled silent auto-provisioning of the compose Whisper container on first load.
+
 - **Self-hosted GPU transcription.** Bundled a [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) `whisper` service in `docker-compose.yml` (NVIDIA GPU, host port `8397`) plus a standalone [`whisper-server/`](whisper-server/) compose file for running Whisper on a separate box. This closes the gap where chat-only local servers (Ollama, Open WebUI) return `405` on `/v1/audio/transcriptions` and can't transcribe at all. A persistent `whisper_cache` volume keeps downloaded models across container recreates (large-v3 is ~3 GB). [`whisper-server/README.md`](whisper-server/README.md) documents model selection and VAD-based anti-hallucination guidance for long recordings.
 - **Provider nickname.** Optional user-facing label for custom / self-hosted providers (`ai_providers.nickname`), so a base URL like `http://100.x.x.x:8397/v1` can read as "Home GPU · faster-whisper" in the providers list and dialogs.
 - **Searchable model picker.** After a successful **Test Connection**, Mesynx AI discovers the server's available models and offers a type-to-filter dropdown (with model count) instead of a free-text model field — no more guessing exact model IDs.

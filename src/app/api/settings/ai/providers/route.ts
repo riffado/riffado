@@ -12,7 +12,7 @@ import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 export const GET = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
 
-    const providers = await db
+    let providers = await db
         .select({
             id: apiCredentials.id,
             provider: apiCredentials.provider,
@@ -25,6 +25,63 @@ export const GET = apiHandler(async (request: Request) => {
         })
         .from(apiCredentials)
         .where(eq(apiCredentials.userId, session.user.id));
+
+    // Silent auto-provision of Whisper container on same network if 0 providers exist
+    if (!env.IS_HOSTED && providers.length === 0) {
+        const WHISPER_DOCKER_TARGETS = [
+            "http://whisper:8000/v1",
+            "http://mesynx-ai-whisper:8000/v1",
+        ];
+
+        let foundUrl: string | null = null;
+        let defaultModel = "faster-whisper";
+
+        for (const url of WHISPER_DOCKER_TARGETS) {
+            try {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 500);
+                const res = await fetch(`${url}/models`, {
+                    signal: controller.signal,
+                });
+                clearTimeout(id);
+                if (res.ok) {
+                    const data = await res.json();
+                    defaultModel = data?.data?.[0]?.id || "faster-whisper";
+                    foundUrl = url;
+                    break;
+                }
+            } catch {}
+        }
+
+        if (foundUrl) {
+            await db.insert(apiCredentials).values({
+                userId: session.user.id,
+                provider: "openai",
+                apiKey: encrypt("local-bypass"),
+                baseUrl: foundUrl,
+                nickname: "Local Whisper",
+                defaultModel,
+                isDefaultTranscription: true,
+                isDefaultEnhancement: false,
+            });
+
+            // Re-fetch providers
+            providers = await db
+                .select({
+                    id: apiCredentials.id,
+                    provider: apiCredentials.provider,
+                    baseUrl: apiCredentials.baseUrl,
+                    nickname: apiCredentials.nickname,
+                    defaultModel: apiCredentials.defaultModel,
+                    isDefaultTranscription:
+                        apiCredentials.isDefaultTranscription,
+                    isDefaultEnhancement: apiCredentials.isDefaultEnhancement,
+                    createdAt: apiCredentials.createdAt,
+                })
+                .from(apiCredentials)
+                .where(eq(apiCredentials.userId, session.user.id));
+        }
+    }
 
     return NextResponse.json({ providers });
 });
