@@ -1,11 +1,12 @@
 "use client";
 
-import { Keyboard, Mic, Search, Settings, Upload } from "lucide-react";
+import { Mic, Search, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CommandPalette } from "@/components/dashboard/command-palette";
+import { PlaudHealthBanner } from "@/components/dashboard/plaud-health-banner";
 import {
     RecordingList,
     type RecordingListHandle,
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAutoSync } from "@/hooks/use-auto-sync";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
+import { usePlaudHealth } from "@/hooks/use-plaud-health";
 import { useTheme } from "@/hooks/use-theme";
 import { useTranscribeQueue } from "@/hooks/use-transcribe-queue";
 import { useUploadQueue } from "@/hooks/use-upload-queue";
@@ -238,6 +240,9 @@ export function Workstation({
         inFlightActions.get(currentRecording.id) === "transcribing";
     const isProcessing = anyTranscribing || isUploading;
 
+    // ── Background Plaud connection health check ─────────────────
+    const { status: plaudStatus, probe: retryPlaudProbe } = usePlaudHealth();
+
     const handleTranscribe = useCallback(async () => {
         if (!currentRecording) return;
         await transcribeById(currentRecording.id);
@@ -294,7 +299,9 @@ export function Workstation({
 
     return (
         <>
-            <div className="flex min-h-screen bg-background">
+            {/* Plaud health warning — shown top-right when token expired */}
+            <PlaudHealthBanner status={plaudStatus} onRetry={retryPlaudProbe} />
+            <div className="flex h-screen overflow-hidden bg-background">
                 {/* ── Sidebar ─────────────────────────────────────── */}
                 <aside className="hidden w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
                     {/* Logo */}
@@ -327,22 +334,6 @@ export function Workstation({
                             <kbd className="ml-auto rounded border border-sidebar-border px-1.5 py-0.5 font-mono text-[10px] text-sidebar-foreground/40">
                                 ⌘K
                             </kbd>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShortcutsOpen(true)}
-                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                        >
-                            <Keyboard className="size-4" />
-                            Shortcuts
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSettingsOpen(true)}
-                            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-                        >
-                            <Settings className="size-4" />
-                            Settings
                         </button>
                     </nav>
 
@@ -394,7 +385,7 @@ export function Workstation({
                 </aside>
 
                 {/* ── Main content ────────────────────────────────── */}
-                <div className="flex flex-1 flex-col min-w-0">
+                <div className="flex flex-1 flex-col min-w-0 min-h-0">
                     {/* Mobile header (hidden on desktop where sidebar shows) */}
                     <div className="flex items-center gap-3 border-b border-border/60 bg-background/90 px-4 py-3 backdrop-blur-md lg:hidden">
                         <Link
@@ -496,6 +487,7 @@ export function Workstation({
                                 isCurrentTranscribing={isCurrentTranscribing}
                                 visibleRecordings={visibleRecordings}
                                 onTranscribe={handleTranscribe}
+                                onDataRefresh={refresh}
                                 onSelectRecording={setCurrentRecording}
                                 onBackToList={() => setMobileView("list")}
                                 hiddenOnMobile={mobileView === "list"}

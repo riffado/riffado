@@ -51,16 +51,23 @@ interface TranscriptionPanelProps {
     showSummary?: boolean;
     /** Called by the pipeline when generation completes to auto-switch tab. */
     onPipelineComplete?: () => void;
+    /**
+     * Called after any successful generation (transcription and/or summary)
+     * so the parent can refresh server data — otherwise the freshly created
+     * transcript/summary won't appear without a manual page reload.
+     */
+    onGenerated?: () => void;
 }
 
 export function TranscriptionPanel({
     recording,
     transcription,
     isTranscribing,
-    onTranscribe,
+    onTranscribe: _onTranscribe,
     showTranscript = true,
     showSummary = true,
     onPipelineComplete,
+    onGenerated,
 }: TranscriptionPanelProps) {
     const {
         summaryData,
@@ -71,6 +78,7 @@ export function TranscriptionPanel({
         setSummaryPreset,
         handleSummarize,
         handleDeleteSummary,
+        refetchSummary,
     } = useTranscriptionSummary({
         recordingId: recording?.id,
         transcriptionText: transcription?.text,
@@ -151,6 +159,11 @@ export function TranscriptionPanel({
                 setPipelineStage("complete");
                 toast.success("Transcription and summary complete!");
 
+                // Refresh server data now (during the complete animation) so
+                // the new transcript + summary are available when we switch
+                // to the Notes tab — without a manual page reload.
+                onGenerated?.();
+
                 // Auto-switch to Notes tab after a brief moment
                 setTimeout(() => {
                     setPipelineStage("idle");
@@ -167,7 +180,7 @@ export function TranscriptionPanel({
                 setTimeout(() => setPipelineStage("idle"), 5000);
             }
         },
-        [recording.id, onPipelineComplete],
+        [recording.id, onPipelineComplete, onGenerated],
     );
 
     const handleAutoGenerate = useCallback(() => {
@@ -180,6 +193,71 @@ export function TranscriptionPanel({
         },
         [runPipeline],
     );
+
+    // ── Re-run transcription only (shows animation, no tab-switch) ──
+    const handleReRunTranscription = useCallback(async () => {
+        setPipelineStage("transcribing");
+        setPipelineError(null);
+        try {
+            const res = await fetch(
+                `/api/recordings/${recording.id}/transcribe`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                },
+            );
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(
+                    e.error || `Transcription failed (${res.status})`,
+                );
+            }
+            setPipelineStage("complete");
+            toast.success("Re-transcription complete!");
+            onGenerated?.();
+            setTimeout(() => setPipelineStage("idle"), 1800);
+        } catch (err) {
+            setPipelineStage("error");
+            const msg =
+                err instanceof Error ? err.message : "Transcription failed";
+            setPipelineError(msg);
+            toast.error(msg);
+            setTimeout(() => setPipelineStage("idle"), 5000);
+        }
+    }, [recording.id, onGenerated]);
+
+    // ── Re-generate summary only (shows animation) ──────────────────
+    const handleReGenerateSummary = useCallback(async () => {
+        setPipelineStage("summarizing");
+        setPipelineError(null);
+        try {
+            const res = await fetch(`/api/recordings/${recording.id}/summary`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ preset: summaryPreset }),
+            });
+            if (!res.ok) {
+                const e = await res.json().catch(() => ({}));
+                throw new Error(e.error || `Summary failed (${res.status})`);
+            }
+            setPipelineStage("complete");
+            toast.success("Summary regenerated!");
+            onGenerated?.();
+            setTimeout(() => {
+                setPipelineStage("idle");
+                // GET the freshly saved summary into the hook's state (the
+                // POST above already created it — don't POST again).
+                refetchSummary();
+            }, 1800);
+        } catch (err) {
+            setPipelineStage("error");
+            const msg = err instanceof Error ? err.message : "Summary failed";
+            setPipelineError(msg);
+            toast.error(msg);
+            setTimeout(() => setPipelineStage("idle"), 5000);
+        }
+    }, [recording.id, summaryPreset, refetchSummary, onGenerated]);
 
     const wordCount = transcription?.text?.trim()
         ? transcription.text.trim().split(/\s+/).length
@@ -233,10 +311,12 @@ export function TranscriptionPanel({
                                             summaryData={summaryData}
                                         />
                                         <Button
-                                            onClick={() => onTranscribe()}
+                                            onClick={handleReRunTranscription}
                                             size="sm"
                                             variant="ghost"
-                                            disabled={isTranscribing}
+                                            disabled={
+                                                isGenerating || isTranscribing
+                                            }
                                             className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                                         >
                                             <RefreshCw className="size-3" />
@@ -340,10 +420,14 @@ export function TranscriptionPanel({
                                     </Select>
                                 )}
                                 <Button
-                                    onClick={handleSummarize}
+                                    onClick={
+                                        summaryData
+                                            ? handleReGenerateSummary
+                                            : handleSummarize
+                                    }
                                     size="sm"
                                     variant={summaryData ? "ghost" : "default"}
-                                    disabled={isSummarizing}
+                                    disabled={isSummarizing || isGenerating}
                                     className="h-7 gap-1.5 text-xs"
                                 >
                                     {isSummarizing ? (
@@ -500,6 +584,32 @@ export function TranscriptionPanel({
                                 </p>
                             </div>
                         )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Notes tab with nothing generated yet — offer the Generate flow
+                instead of leaving the pane blank. */}
+            {showSummary && !transcription?.text && (
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex flex-col items-center justify-center gap-4 py-10">
+                            <p className="text-sm text-muted-foreground text-center max-w-xs">
+                                Nothing here yet. Generate a transcription and
+                                summary to see your notes and memory map.
+                            </p>
+                            <GenerateButton
+                                onClick={() => setShowOptions(true)}
+                                disabled={isGenerating}
+                            />
+                            <GenerateOptionsMenu
+                                open={showOptions}
+                                onClose={() => setShowOptions(false)}
+                                onGenerate={handleConfiguredGenerate}
+                                onAutoGenerate={handleAutoGenerate}
+                                isGenerating={isGenerating}
+                            />
+                        </div>
                     </CardContent>
                 </Card>
             )}
