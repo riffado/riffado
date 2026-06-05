@@ -430,6 +430,16 @@ docker compose logs app
 # - Port already in use
 ```
 
+### Invalid Origin / 403 Forbidden on Sign-Up/Sign-In
+
+If you see an "Invalid origin" toast message and a `403 (FORBIDDEN)` error in your browser console when trying to register or sign in:
+
+- **Cause**: Better Auth strictly validates request origins against your configured `APP_URL`. If you access the server using a local IP, domain name, or a personal tunnel (such as Tailscale) that differs from what is configured in `APP_URL`, the request is blocked.
+- **Solution**: Edit the `.env` file on your server and update the `APP_URL` variable to match the exact URL/IP address you use to access the dashboard in your browser.
+  - Tailscale example: `APP_URL=http://100.11.22.33:8790`
+  - Local network IP example: `APP_URL=http://192.168.1.50:8790`
+- **Apply changes**: Restart the containers by running `docker compose up -d`.
+
 ### Database Connection Issues
 
 ```bash
