@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 MD041 -->
+
 <div align="center">
 
 ![Mesynx AI](.github/assets/banner.png)
@@ -40,7 +42,7 @@ Mesynx AI is an open-source companion app for AI voice recorders. It syncs your 
 Everything Riffado does, Mesynx AI does too — these are the changes layered on top.
 
 | Area | Riffado | Mesynx AI |
-|---|---|---|
+| --- | --- | --- |
 | **Transcription backend** | Bring-your-own OpenAI-compatible API | **+ Bundled self-hosted GPU Whisper** service (NVIDIA), turnkey in `docker-compose.yml` |
 | **Local AI servers** | Chat / text only (Ollama, Open WebUI) — `405` on `/v1/audio/transcriptions` | Real `/v1/audio/transcriptions` via faster-whisper — **your local box can finally transcribe** |
 | **Memory Map** | None | **Interactive mind-map** — hover-to-trace a branch, click a node to expand, full-screen modal |
