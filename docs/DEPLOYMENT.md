@@ -88,8 +88,10 @@ SMTP_FROM=noreply@your-domain.com
 
 ### 4. Start Services
 
+Start the containerized services using the consolidated Compose file. This builds the application locally from the source files and runs all services (`app`, `db`, and `whisper`) on a unified named network (`mesynx-network`):
+
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 ### 5. Verify Deployment

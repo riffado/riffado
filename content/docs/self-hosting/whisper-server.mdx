@@ -1,10 +1,10 @@
 ---
-title: GPU Transcription (Whisper)
-description: Run faster-whisper on your own NVIDIA GPU for local transcription without any cloud API.
+title: Standalone Transcription Server (Whisper)
+description: Run faster-whisper on your own GPU or CPU for local transcription without any cloud API.
 ---
 
 A standalone [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) you can run on
-any NVIDIA GPU box. It exposes the **OpenAI-compatible** `/v1/audio/transcriptions` endpoint, which is
+any NVIDIA GPU box or a CPU-only server. It exposes the **OpenAI-compatible** `/v1/audio/transcriptions` endpoint, which is
 what Mesynx AI needs to transcribe your recordings on your own hardware — no cloud transcription API.
 
 > **Why this exists.** Chat-only local servers like **Ollama** and **Open WebUI** don't implement the
@@ -16,8 +16,8 @@ rather run Whisper on a **separate machine** from the app.
 
 ## Requirements
 
-- An NVIDIA GPU + recent drivers
-- Docker + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+- **For GPU execution (CUDA)**: An NVIDIA GPU + recent drivers + the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+- **For CPU execution**: Any standard x86/ARM64 server (no GPU required)
 
 ## Quick start
 

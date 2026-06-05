@@ -116,19 +116,20 @@ curl -fsSL https://mesynx.r0073dl053r.com/install.sh | sh
 
 Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` and `.env`, generates secrets, starts the stack, and waits for `/api/health`. Source: [`scripts/install.sh`](scripts/install.sh).
 
-**Manual install:**
+**Clone and Build from Source:**
 
 ```bash
-mkdir mesynx-ai && cd mesynx-ai
-curl -fLO https://github.com/mesynx-ai/mesynx-ai/releases/latest/download/docker-compose.yml
-curl -fL  https://github.com/mesynx-ai/mesynx-ai/releases/latest/download/env.example -o .env
+git clone https://github.com/mesynx-ai/mesynx-ai.git
+cd mesynx-ai
 
 # Generate secrets, paste into .env
-echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)"
-echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
+cp .env.example .env
+# Edit .env and set BETTER_AUTH_SECRET, ENCRYPTION_KEY, etc.
 
-docker compose up -d
+sudo docker compose up -d --build
 ```
+
+The stack runs all necessary services (app, database, and whisper server) in the same Docker network (`mesynx-network`), resolving each other out of the box.
 
 Open <http://localhost:3000/register> and create your account. The onboarding wizard handles Plaud connection, AI providers, storage, and sync preferences.
 

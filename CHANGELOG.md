@@ -11,8 +11,12 @@
 - **Searchable model picker.** After a successful **Test Connection**, Mesynx AI discovers the server's available models and offers a type-to-filter dropdown (with model count) instead of a free-text model field — no more guessing exact model IDs.
 
 ### Changed
+- **Consolidated Docker Compose configuration.** Updated `docker-compose.yml` to support building the app locally from source via `build: .` out of the box. Configured all services (`app`, `db`, and `whisper`) to run under an explicit unified bridge network (`mesynx-network`). Added clear comments for running on CPU-only machines as a fallback.
 - **Redesigned Memory Map.** The recording summary mind-map is now interactive: hover a node to trace and highlight its branch (with animated edges), click a leaf to expand its full text, and **Show full map** opens a centered, full-screen modal. The layout engine was rebuilt to eliminate the label overlap present in the previous version.
 - **Rebrand: Riffado → Mesynx AI** across the app, docs, `package.json`, and brand assets. New README banner and a "What's new vs. Riffado" section documenting the differences.
+
+### Removed
+- **Redundant Docker Dev Configuration.** Removed `docker-compose.dev.yml` as local development builds are now supported natively in the consolidated `docker-compose.yml` via the `--build` flag.
 
 ### Fixed
 - **AI Providers settings race condition.** The Providers section now fetches its own data on open (with a loading spinner) instead of relying on a server-rendered seed that could resolve too late. Fixes the intermittent bug where saved provider configs — or their API keys — failed to appear when opening Settings.

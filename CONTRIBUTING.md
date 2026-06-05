@@ -37,7 +37,7 @@ Open http://localhost:3000.
 To run the full containerized stack against your local code instead:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose up --build
 ```
 
 ## Submitting a PR
