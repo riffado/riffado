@@ -131,7 +131,7 @@ sudo docker compose up -d --build
 
 The stack runs all necessary services (app, database, and whisper server) in the same Docker network (`mesynx-network`), resolving each other out of the box.
 
-Open <http://localhost:3000/register> and create your account. The onboarding wizard handles Plaud connection, AI providers, storage, and sync preferences.
+Open <http://localhost:8790/register> and create your account. The onboarding wizard handles Plaud connection, AI providers, storage, and sync preferences.
 
 **Upgrade:** `docker compose pull && docker compose up -d`. Migrations run on container start.
 

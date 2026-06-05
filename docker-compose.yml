@@ -33,14 +33,14 @@ services:
     container_name: mesynx-ai-app
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-8790}:3000"
     environment:
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/mesynx-ai
 
       # Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
-      APP_URL: ${APP_URL:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:8790}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-}
 
       # Encryption

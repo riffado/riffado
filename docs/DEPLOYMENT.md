@@ -103,7 +103,7 @@ docker compose up -d --build
 docker compose logs -f app
 
 # Check health
-curl http://localhost:3000/api/health
+curl http://localhost:8790/api/health
 ```
 
 ### 6. Run Database Migrations
