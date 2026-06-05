@@ -12,9 +12,9 @@ We release patches for security vulnerabilities for the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@mesynx.r0073dl053r.com** (or create a private GitHub security advisory)
+Instead, please use a [**GitHub private security advisory**](https://github.com/r0073d-l053r/mesynx/security/advisories/new) — this keeps the report confidential and notifies the maintainer directly.
 
-You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
+You should receive a response within 48 hours.
 
 Please include the following information in your report:
 
@@ -128,6 +128,6 @@ We appreciate the security research community and will acknowledge researchers w
 
 ## Contact
 
-For security concerns: security@mesynx.r0073dl053r.com
-For general issues: GitHub Issues
-For discussions: GitHub Discussions
+For security concerns: [GitHub private security advisory](https://github.com/r0073d-l053r/mesynx/security/advisories/new)
+For general issues: [GitHub Issues](https://github.com/r0073d-l053r/mesynx/issues)
+For discussions: [GitHub Discussions](https://github.com/r0073d-l053r/mesynx/discussions) · [Discord](https://discord.gg/JygWxS2VA8)

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-    CONTACT_EMAILS,
+    CONTACT_LINKS,
     EFFECTIVE_DATE_DISPLAY,
     GOVERNING_LAW,
     LEGAL_ADDRESS_LINE,
@@ -54,9 +54,21 @@ export default function TermsPage() {
                 {LEGAL_ENTITY.name}), {LEGAL_ENTITY.form}, registered office at{" "}
                 {LEGAL_ADDRESS_LINE}, KRS {LEGAL_ENTITY.krs}, NIP{" "}
                 {LEGAL_ENTITY.nip}, REGON {LEGAL_ENTITY.regon}, share capital{" "}
-                {LEGAL_ENTITY.shareCapital}. You can reach us at{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
-                    {CONTACT_EMAILS.support}
+                {LEGAL_ENTITY.shareCapital}. You can reach us on{" "}
+                <Link
+                    href={CONTACT_LINKS.support}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Discord
+                </Link>{" "}
+                or via{" "}
+                <Link
+                    href="https://github.com/r0073d-l053r/mesynx/discussions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>
                 .
             </p>
@@ -155,9 +167,13 @@ export default function TermsPage() {
             <h2>Reporting illegal or infringing content</h2>
             <p>
                 If you believe content on the service is illegal or infringes
-                your rights, email{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
-                    {CONTACT_EMAILS.support}
+                your rights, open a thread on{" "}
+                <Link
+                    href="https://github.com/r0073d-l053r/mesynx/discussions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>{" "}
                 with enough detail to identify the content and the basis for
                 your report. We will review and act on valid reports.
@@ -174,9 +190,21 @@ export default function TermsPage() {
 
             <h2>Complaints</h2>
             <p>
-                If something goes wrong, email{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
-                    {CONTACT_EMAILS.support}
+                If something goes wrong, open a thread on{" "}
+                <Link
+                    href={CONTACT_LINKS.support}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Discord
+                </Link>{" "}
+                or{" "}
+                <Link
+                    href="https://github.com/r0073d-l053r/mesynx/discussions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>{" "}
                 describing the issue and your account email. We will confirm
                 receipt and respond within the time required by applicable law,
@@ -202,8 +230,20 @@ export default function TermsPage() {
 
             <h2>Contact</h2>
             <p>
-                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
-                    {CONTACT_EMAILS.support}
+                <Link
+                    href={CONTACT_LINKS.support}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Discord
+                </Link>{" "}
+                ·{" "}
+                <Link
+                    href="https://github.com/r0073d-l053r/mesynx/discussions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>
             </p>
         </>

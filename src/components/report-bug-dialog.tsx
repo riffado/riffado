@@ -1,6 +1,5 @@
 "use client";
 
-import { Mail } from "lucide-react";
 import { useState } from "react";
 import { Github } from "@/components/icons/icons";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import {
     buildReportBugBodyPreview,
-    buildReportBugMailto,
+    buildReportBugDiscordUrl,
     buildReportBugUrl,
 } from "@/lib/report-bug";
 
@@ -31,13 +30,9 @@ interface ReportBugDialogProps {
 /**
  * Renders the bug-report dialog with two action buttons:
  *   - "Report on GitHub" \u2014 always.
- *   - "Email us" \u2014 hosted only. Self-hosters aren't our customers and
- *     `support@mesynx.r0073dl053r.com` would just confuse them; they should file
- *     on GitHub.
+ *   - "Join Discord" \u2014 hosted only, as a quick support channel.
  *
- * The preview is shown so users see exactly what gets sent before
- * clicking. Both buttons open in a new tab via `<a target="_blank">`
- * (the mailto opens the user's mail client; effectively the same UX).
+ * The preview is shown so users see exactly what gets sent before clicking.
  */
 export function ReportBugDialog({
     isHosted,
@@ -50,7 +45,7 @@ export function ReportBugDialog({
         typeof window !== "undefined" ? window.location.pathname : undefined;
     const opts = { isHosted, errorId, errorContext, page };
     const githubUrl = buildReportBugUrl(opts);
-    const mailtoUrl = buildReportBugMailto(opts);
+    const discordUrl = buildReportBugDiscordUrl();
     const preview = buildReportBugBodyPreview(opts);
 
     return (
@@ -78,12 +73,12 @@ export function ReportBugDialog({
                     {isHosted ? (
                         <Button variant="outline" asChild>
                             <a
-                                href={mailtoUrl}
+                                href={discordUrl}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={() => onOpenChange(false)}
                             >
-                                <Mail className="size-4" />
-                                Email us
+                                Join Discord
                             </a>
                         </Button>
                     ) : null}

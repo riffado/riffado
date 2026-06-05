@@ -10,8 +10,7 @@
   },
 
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
 
   "content_scripts": [
@@ -21,7 +20,7 @@
         "https://mesynx.r0073dl053r.com/*"
       ],
       "js": ["content-app-main.js"],
-      "run_at": "document_start",
+      "run_at": "document_idle",
       "world": "MAIN"
     },
     {
@@ -30,7 +29,7 @@
         "https://mesynx.r0073dl053r.com/*"
       ],
       "js": ["content-app-isolated.js"],
-      "run_at": "document_start",
+      "run_at": "document_idle",
       "world": "ISOLATED"
     }
   ],

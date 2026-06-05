@@ -7,9 +7,9 @@
 *Bring your own AI provider, own your transcripts, self-host or hosted.*
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
-[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://mesynx.r0073dl053r.com/discord)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/JygWxS2VA8)
 
-[Quick start](#quick-start) • [What's new vs. Riffado](#whats-new-in-mesynx-ai-vs-riffado) • [Documentation](https://mesynx.r0073dl053r.com/docs) • [Discord](https://mesynx.r0073dl053r.com/discord)
+[Quick start](#quick-start) • [What's new vs. Riffado](#whats-new-in-mesynx-ai-vs-riffado) • [Documentation](https://mesynx.r0073dl053r.com/docs) • [Discord](https://discord.gg/JygWxS2VA8)
 
 </div>
 

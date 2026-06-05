@@ -10,25 +10,25 @@
  *                    for chrome.cookies.onChanged to fire with a JWT cookie.
  *       d. Once the token is found, close the popup and resolve the caller.
  *  3. Handle `GET_STATUS` so the extension popup can show connection state.
+ *  4. Handle `CONNECT_TO_MESYNX` — the main action. Gets the Plaud token,
+ *     opens/finds the Mesynx AI tab, and delivers the token to the content
+ *     script which POSTs it to the connect-token API.
  */
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PLAUD_DOMAIN = 'plaud.ai';
+const DEFAULT_MESYNX_URL = 'http://localhost:3000';
 
 // Cookie names to try, most-likely-first.
-// The visible name in the Network tab was `pld_ut`; the others are fallbacks.
 const TOKEN_COOKIE_NAMES = ['pld_ut', 'pld_at', 'access_token', 'pld_token'];
 
 const AUTH_TIMEOUT_MS = 120_000; // 2 minutes
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-/** The pending sendResponse callback, or null when idle. */
 let pendingAuth = null;
-/** Tab ID of the web.plaud.ai popup we opened, or null. */
 let authPopupTabId = null;
-/** Timeout handle. */
 let authTimeoutId = null;
 
 // ─── Message listener ─────────────────────────────────────────────────────────
@@ -42,7 +42,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case 'START_AUTH': {
       handleStartAuth(sendResponse);
-      // Return true to keep the message channel open for the async response.
       return true;
     }
 
@@ -51,28 +50,133 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
 
+    case 'CONNECT_TO_MESYNX': {
+      handleConnectToMesynx(message.mesynxUrl, sendResponse);
+      return true;
+    }
+
     default:
       return false;
   }
 });
 
-// ─── Auth flow ────────────────────────────────────────────────────────────────
+// ─── Connect to Mesynx AI ─────────────────────────────────────────────────────
+
+async function handleConnectToMesynx(mesynxUrl, sendResponse) {
+  const baseUrl = mesynxUrl || DEFAULT_MESYNX_URL;
+
+  // 1. Get the Plaud token from cookies.
+  const token = await findPlaudToken();
+  if (!token) {
+    sendResponse({ ok: false, error: 'No Plaud session found. Sign in to web.plaud.ai first.' });
+    return;
+  }
+
+  // 2. Find an existing Mesynx AI tab or open a new one.
+  let tab;
+  try {
+    const matchPatterns = [
+      `${baseUrl}/*`,
+    ];
+    // Also match common variants (with/without trailing slash).
+    const tabs = await chrome.tabs.query({});
+    tab = tabs.find((t) => t.url && t.url.startsWith(baseUrl));
+
+    if (tab) {
+      await chrome.tabs.update(tab.id, { active: true });
+      await chrome.windows.update(tab.windowId, { focused: true });
+    } else {
+      tab = await chrome.tabs.create({ url: baseUrl, active: true });
+    }
+  } catch (err) {
+    sendResponse({ ok: false, error: `Could not open Mesynx AI: ${err.message}` });
+    return;
+  }
+
+  // 3. Wait for the tab to finish loading so the content script is injected.
+  const tabId = tab.id;
+  try {
+    await waitForTabComplete(tabId);
+  } catch {
+    sendResponse({ ok: false, error: 'Mesynx AI tab took too long to load.' });
+    return;
+  }
+
+  // 4. Small delay for the content script to initialise after page load.
+  await sleep(600);
+
+  // 5. Send the token to the content script on that tab.
+  try {
+    const result = await chrome.tabs.sendMessage(tabId, {
+      type: 'DELIVER_TOKEN',
+      payload: token,
+    });
+    sendResponse(result || { ok: true });
+  } catch (err) {
+    // Content script might not be ready — retry once after a longer delay.
+    await sleep(1500);
+    try {
+      const result = await chrome.tabs.sendMessage(tabId, {
+        type: 'DELIVER_TOKEN',
+        payload: token,
+      });
+      sendResponse(result || { ok: true });
+    } catch {
+      sendResponse({
+        ok: false,
+        error: 'Could not deliver the token. Make sure Mesynx AI is fully loaded and try again.',
+      });
+    }
+  }
+}
+
+function waitForTabComplete(tabId) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('timeout'));
+    }, 15_000);
+
+    function listener(id, changeInfo) {
+      if (id === tabId && changeInfo.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        clearTimeout(timeout);
+        resolve();
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(listener);
+
+    // Already complete?
+    chrome.tabs.get(tabId, (t) => {
+      if (chrome.runtime.lastError) return;
+      if (t && t.status === 'complete') {
+        chrome.tabs.onUpdated.removeListener(listener);
+        clearTimeout(timeout);
+        resolve();
+      }
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// ─── Auth flow (used by the bridge when starting from the Mesynx AI page) ────
 
 async function handleStartAuth(sendResponse) {
-  // Cancel any in-progress auth before starting a new one.
   if (pendingAuth) {
     pendingAuth({ error: 'Superseded by a new auth request.' });
     cleanupAuth();
   }
 
-  // Fast path: user is already signed in to web.plaud.ai.
   const existing = await findPlaudToken();
   if (existing) {
     sendResponse({ payload: existing });
     return;
   }
 
-  // Slow path: open the Plaud web app and wait for the user to sign in.
   pendingAuth = sendResponse;
 
   try {
@@ -90,7 +194,6 @@ async function handleStartAuth(sendResponse) {
     return;
   }
 
-  // Fail-safe: reject after AUTH_TIMEOUT_MS regardless.
   authTimeoutId = setTimeout(() => {
     if (!pendingAuth) return;
     const respond = pendingAuth;
@@ -113,10 +216,6 @@ function cleanupAuth() {
 
 // ─── Cookie watchers ──────────────────────────────────────────────────────────
 
-/**
- * Fires whenever any cookie in any domain changes.
- * We only care about JWT-shaped cookies on *.plaud.ai while an auth is pending.
- */
 chrome.cookies.onChanged.addListener((changeInfo) => {
   if (!pendingAuth) return;
   if (changeInfo.removed) return;
@@ -131,9 +230,6 @@ chrome.cookies.onChanged.addListener((changeInfo) => {
   respond({ payload });
 });
 
-/**
- * If the user closes the popup window before signing in, surface a clear error.
- */
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (tabId !== authPopupTabId || !pendingAuth) return;
   const respond = pendingAuth;
@@ -153,12 +249,10 @@ async function findPlaudToken() {
 }
 
 function extractBestToken(cookies) {
-  // Try known names first.
   for (const name of TOKEN_COOKIE_NAMES) {
     const c = cookies.find((c) => c.name === name && looksLikeJWT(c.value));
     if (c) return buildPayload(c.value, c.domain);
   }
-  // Fallback: any JWT-shaped cookie on the plaud.ai domain.
   const c = cookies.find((c) => looksLikeJWT(c.value));
   return c ? buildPayload(c.value, c.domain) : null;
 }
@@ -174,12 +268,10 @@ function buildPayload(token, cookieDomain) {
 }
 
 function detectRegion(token, domain) {
-  // 1. Infer from the cookie's domain (most reliable for EU/APAC subdomains).
   if (typeof domain === 'string') {
     if (domain.includes('euc1')) return 'euc1';
     if (domain.includes('apse1')) return 'apse1';
   }
-  // 2. Inspect the JWT payload for an `iss` or `region` claim.
   try {
     const payload = decodeJWTPayload(token);
     if (payload?.region) return normalizeRegion(payload.region);
@@ -225,7 +317,6 @@ function decodeJWTPayload(token) {
 }
 
 function decodeBase64JSON(b64url) {
-  // Convert URL-safe base64 → standard base64, then decode.
   const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
   return JSON.parse(atob(b64));
 }

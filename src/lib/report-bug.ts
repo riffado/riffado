@@ -1,6 +1,6 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-export const SUPPORT_EMAIL = "support@mesynx.r0073dl053r.com";
+export const DISCORD_URL = "https://discord.gg/JygWxS2VA8";
 
 const GITHUB_NEW_ISSUE_URL =
     "https://github.com/mesynx-ai/mesynx-ai/issues/new";
@@ -39,16 +39,9 @@ export function buildReportBugUrl(opts: ReportBugOptions): string {
     return `${GITHUB_NEW_ISSUE_URL}?${params.toString()}`;
 }
 
-export function buildReportBugMailto(opts: ReportBugOptions): string {
-    const subject = opts.errorId
-        ? `Mesynx AI bug report (${opts.errorId})`
-        : "Mesynx AI bug report";
-    const body = [buildDescription(opts), "", "---", buildAdditional(opts)]
-        .filter(Boolean)
-        .join("\n");
-
-    const qs = `subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    return `mailto:${SUPPORT_EMAIL}?${qs}`;
+/** Returns the Discord server URL for support (replaces the old mailto fallback). */
+export function buildReportBugDiscordUrl(): string {
+    return DISCORD_URL;
 }
 
 export function buildReportBugBodyPreview(opts: ReportBugOptions): string {

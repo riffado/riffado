@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-conduct@mesynx.r0073dl053r.com.
+reported to the community leaders via a private message on the project's
+[Discord server](https://discord.gg/JygWxS2VA8) or through a
+[GitHub Discussion](https://github.com/r0073d-l053r/mesynx/discussions).
 
 All complaints will be reviewed and investigated promptly and fairly.
 

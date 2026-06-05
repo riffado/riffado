@@ -16,10 +16,11 @@
       --muted:   #737373;
       --green:   #22c55e;
       --red:     #ef4444;
+      --amber:   #eab308;
     }
 
     body {
-      width: 320px;
+      width: 340px;
       min-height: 200px;
       background: var(--bg);
       color: var(--text);
@@ -77,7 +78,7 @@
       flex-shrink: 0;
     }
     .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .dot-yellow { background: #eab308;      box-shadow: 0 0 6px #eab308; }
+    .dot-amber  { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
     .dot-grey   { background: var(--muted); }
 
     .status-label { font-weight: 500; }
@@ -96,6 +97,29 @@
     .detail-key   { color: var(--muted); }
     .detail-value { font-family: monospace; color: var(--text); }
 
+    /* ── Instance URL ── */
+    .instance-section {
+      padding: 0 12px 8px;
+    }
+    .instance-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .instance-input {
+      width: 100%;
+      padding: 5px 8px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 11px;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .instance-input:focus { border-color: var(--brand); }
+
     /* ── Actions ── */
     .actions {
       padding: 0 12px 12px;
@@ -110,7 +134,7 @@
       justify-content: center;
       gap: 6px;
       width: 100%;
-      padding: 7px 12px;
+      padding: 8px 12px;
       border-radius: 6px;
       border: 1px solid var(--border);
       background: var(--surface);
@@ -119,22 +143,32 @@
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
-      transition: border-color 0.15s, background 0.15s;
+      transition: border-color 0.15s, background 0.15s, opacity 0.15s;
     }
     .btn:hover { border-color: #444; background: #222; }
     .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
     .btn-primary:hover { background: #b5593a; border-color: #b5593a; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── Loading skeleton ── */
-    .skeleton {
-      height: 14px;
-      border-radius: 4px;
-      background: var(--surface);
-      animation: pulse 1.5s ease-in-out infinite;
+    /* ── Result toast ── */
+    .result {
+      margin: 0 12px 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      display: none;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
+    .result-success {
+      display: block;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+    }
+    .result-error {
+      display: block;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
     }
 
     /* ── Footer ── */
@@ -161,13 +195,22 @@
     </div>
   </div>
 
-  <!-- Status -->
+  <!-- Plaud session status -->
   <div class="status-card" id="status-card">
     <div class="status-row">
       <div class="dot dot-grey" id="dot"></div>
-      <span class="status-label" id="status-label">Checking…</span>
+      <span class="status-label" id="status-label">Checking&hellip;</span>
     </div>
     <div class="status-detail" id="status-detail" style="display:none"></div>
+  </div>
+
+  <!-- Result toast -->
+  <div class="result" id="result"></div>
+
+  <!-- Instance URL -->
+  <div class="instance-section">
+    <div class="instance-label">Mesynx AI instance URL</div>
+    <input type="text" class="instance-input" id="instance-url" placeholder="http://localhost:3000" />
   </div>
 
   <!-- Actions -->
@@ -176,7 +219,7 @@
   <!-- Footer -->
   <div class="footer">
     <span>v1.0.0</span>
-    <a href="https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account" target="_blank">Docs ↗</a>
+    <a href="https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account" target="_blank">Docs &#8599;</a>
   </div>
 
   <script src="popup.js"></script>

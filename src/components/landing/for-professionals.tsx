@@ -62,12 +62,14 @@ export function ForProfessionals() {
                             </Link>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            Need an air-gapped or in-house setup? Write to{" "}
+                            Need an air-gapped or in-house setup?{" "}
                             <Link
-                                href="mailto:support@mesynx.r0073dl053r.com?subject=In-house%20Mesynx AI%20setup"
+                                href="https://github.com/r0073d-l053r/mesynx/discussions"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-foreground font-medium hover:text-primary transition-colors underline-offset-4 hover:underline"
                             >
-                                support@mesynx.r0073dl053r.com
+                                Start a GitHub Discussion
                             </Link>{" "}
                             — I'll reply personally.
                         </p>

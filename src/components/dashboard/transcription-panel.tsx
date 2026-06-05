@@ -11,6 +11,18 @@ import {
     Sparkles,
     Trash2,
 } from "lucide-react";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
+import { ExportMenu } from "@/components/dashboard/export-menu";
+import { GenerateButton } from "@/components/dashboard/generate-button";
+import {
+    type GenerateConfig,
+    GenerateOptionsMenu,
+} from "@/components/dashboard/generate-options-menu";
+import {
+    GeneratePipeline,
+    type PipelineStage,
+} from "@/components/dashboard/generate-pipeline";
 import { MemoryMap } from "@/components/dashboard/memory-map";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,9 +46,11 @@ interface TranscriptionPanelProps {
     recording: Recording;
     transcription?: Transcription;
     isTranscribing: boolean;
-    onTranscribe: () => void;
+    onTranscribe: (providerId?: string, model?: string) => void;
     showTranscript?: boolean;
     showSummary?: boolean;
+    /** Called by the pipeline when generation completes to auto-switch tab. */
+    onPipelineComplete?: () => void;
 }
 
 export function TranscriptionPanel({
@@ -46,6 +60,7 @@ export function TranscriptionPanel({
     onTranscribe,
     showTranscript = true,
     showSummary = true,
+    onPipelineComplete,
 }: TranscriptionPanelProps) {
     const {
         summaryData,
@@ -61,9 +76,132 @@ export function TranscriptionPanel({
         transcriptionText: transcription?.text,
     });
 
+    // ── Generate pipeline state ──────────────────────────────────
+    const [showOptions, setShowOptions] = useState(false);
+    const [pipelineStage, setPipelineStage] = useState<PipelineStage>("idle");
+    const [pipelineError, setPipelineError] = useState<string | null>(null);
+
+    const isGenerating =
+        pipelineStage === "transcribing" || pipelineStage === "summarizing";
+
+    // ── Run the full pipeline: transcribe → summarize ────────────
+    const runPipeline = useCallback(
+        async (config?: GenerateConfig | null) => {
+            setShowOptions(false);
+            setPipelineStage("transcribing");
+            setPipelineError(null);
+
+            try {
+                // Step 1: Transcribe
+                const transcribeBody: Record<string, unknown> = {};
+                if (config?.transcriptionProviderId) {
+                    transcribeBody.providerId = config.transcriptionProviderId;
+                }
+                if (config?.transcriptionModel) {
+                    transcribeBody.model = config.transcriptionModel;
+                }
+
+                const transcribeRes = await fetch(
+                    `/api/recordings/${recording.id}/transcribe`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(transcribeBody),
+                    },
+                );
+
+                if (!transcribeRes.ok) {
+                    const errData = await transcribeRes
+                        .json()
+                        .catch(() => ({}));
+                    throw new Error(
+                        errData.error ||
+                            `Transcription failed (${transcribeRes.status})`,
+                    );
+                }
+
+                // Step 2: Summarize
+                setPipelineStage("summarizing");
+
+                const summaryBody: Record<string, unknown> = {
+                    preset: config?.summaryPreset || "general",
+                };
+                if (config?.language && config.language !== "auto") {
+                    summaryBody.language = config.language;
+                }
+
+                const summaryRes = await fetch(
+                    `/api/recordings/${recording.id}/summary`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(summaryBody),
+                    },
+                );
+
+                if (!summaryRes.ok) {
+                    const errData = await summaryRes.json().catch(() => ({}));
+                    throw new Error(
+                        errData.error ||
+                            `Summary failed (${summaryRes.status})`,
+                    );
+                }
+
+                // Done!
+                setPipelineStage("complete");
+                toast.success("Transcription and summary complete!");
+
+                // Auto-switch to Notes tab after a brief moment
+                setTimeout(() => {
+                    setPipelineStage("idle");
+                    onPipelineComplete?.();
+                }, 1800);
+            } catch (err) {
+                setPipelineStage("error");
+                const msg =
+                    err instanceof Error ? err.message : "Pipeline failed";
+                setPipelineError(msg);
+                toast.error(msg);
+
+                // Reset after showing the error
+                setTimeout(() => setPipelineStage("idle"), 5000);
+            }
+        },
+        [recording.id, onPipelineComplete],
+    );
+
+    const handleAutoGenerate = useCallback(() => {
+        runPipeline(null);
+    }, [runPipeline]);
+
+    const handleConfiguredGenerate = useCallback(
+        (config: GenerateConfig) => {
+            runPipeline(config);
+        },
+        [runPipeline],
+    );
+
     const wordCount = transcription?.text?.trim()
         ? transcription.text.trim().split(/\s+/).length
         : 0;
+
+    // ── Is the pipeline running? Show the pipeline view ──────────
+    if (
+        isGenerating ||
+        pipelineStage === "complete" ||
+        pipelineStage === "error"
+    ) {
+        return (
+            <Card>
+                <CardContent className="pt-6">
+                    <GeneratePipeline
+                        stage={pipelineStage}
+                        error={pipelineError}
+                    />
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
         <div className="space-y-3">
@@ -83,28 +221,28 @@ export function TranscriptionPanel({
                             </CardTitle>
                             <div className="flex items-center gap-2 shrink-0">
                                 {transcription?.text && (
-                                    <Button
-                                        onClick={onTranscribe}
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={isTranscribing}
-                                        className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                                    >
-                                        <RefreshCw className="size-3" />
-                                        Re-run
-                                    </Button>
-                                )}
-                                {!transcription?.text && !isTranscribing && (
-                                    <Button
-                                        onClick={onTranscribe}
-                                        size="sm"
-                                        variant="default"
-                                        disabled={isTranscribing}
-                                        className="h-7 gap-1.5 text-xs"
-                                    >
-                                        <Sparkles className="size-3" />
-                                        Transcribe
-                                    </Button>
+                                    <>
+                                        <ExportMenu
+                                            recordingTitle={
+                                                recording.filename ??
+                                                "Recording"
+                                            }
+                                            transcriptionText={
+                                                transcription.text
+                                            }
+                                            summaryData={summaryData}
+                                        />
+                                        <Button
+                                            onClick={() => onTranscribe()}
+                                            size="sm"
+                                            variant="ghost"
+                                            disabled={isTranscribing}
+                                            className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                        >
+                                            <RefreshCw className="size-3" />
+                                            Re-run
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -141,13 +279,18 @@ export function TranscriptionPanel({
                                 )}
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                                <div className="rounded-full bg-muted/60 p-3">
-                                    <FileText className="size-5 text-muted-foreground/50" />
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                    No transcription yet
-                                </p>
+                            <div className="flex flex-col items-center justify-center gap-4 py-10">
+                                <GenerateButton
+                                    onClick={() => setShowOptions(true)}
+                                    disabled={isGenerating}
+                                />
+                                <GenerateOptionsMenu
+                                    open={showOptions}
+                                    onClose={() => setShowOptions(false)}
+                                    onGenerate={handleConfiguredGenerate}
+                                    onAutoGenerate={handleAutoGenerate}
+                                    isGenerating={isGenerating}
+                                />
                             </div>
                         )}
                     </CardContent>
@@ -164,6 +307,15 @@ export function TranscriptionPanel({
                                 Summary
                             </CardTitle>
                             <div className="flex items-center gap-2 shrink-0">
+                                {summaryData?.summary && (
+                                    <ExportMenu
+                                        recordingTitle={
+                                            recording.filename ?? "Recording"
+                                        }
+                                        transcriptionText={transcription.text}
+                                        summaryData={summaryData}
+                                    />
+                                )}
                                 {!isSummarizing && (
                                     <Select
                                         value={summaryPreset}

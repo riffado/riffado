@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-    CONTACT_EMAILS,
+    CONTACT_LINKS,
     EFFECTIVE_DATE_DISPLAY,
     LEGAL_ADDRESS_LINE,
     LEGAL_ENTITY,
@@ -59,9 +59,14 @@ export default function PrivacyPage() {
                 {LEGAL_ENTITY.registrationCourt}; NIP {LEGAL_ENTITY.nip}, REGON{" "}
                 {LEGAL_ENTITY.regon}; share capital {LEGAL_ENTITY.shareCapital}.
                 We are the data controller for the personal data described
-                below. For privacy questions or to exercise your rights, contact{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.privacy}`}>
-                    {CONTACT_EMAILS.privacy}
+                below. For privacy questions or to exercise your rights, open a
+                thread on{" "}
+                <Link
+                    href={CONTACT_LINKS.privacy}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>
                 .
             </p>
@@ -207,9 +212,13 @@ export default function PrivacyPage() {
                 and the right to data portability. You can act on most of these
                 yourself: export every recording, transcript, and summary at any
                 time via the full-archive export, and delete your account to
-                erase your data. For anything else, contact{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.privacy}`}>
-                    {CONTACT_EMAILS.privacy}
+                erase your data. For anything else, open a thread on{" "}
+                <Link
+                    href={CONTACT_LINKS.privacy}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>{" "}
                 and we will respond within the time the GDPR allows.
             </p>
@@ -227,9 +236,13 @@ export default function PrivacyPage() {
             <p>
                 Connected recorder tokens and other sensitive credentials are
                 encrypted at rest with AES-256-GCM. Report suspected
-                vulnerabilities to{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.security}`}>
-                    {CONTACT_EMAILS.security}
+                vulnerabilities via a{" "}
+                <Link
+                    href={CONTACT_LINKS.security}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub private security advisory
                 </Link>
                 .
             </p>
@@ -259,12 +272,20 @@ export default function PrivacyPage() {
             <h2>Contact</h2>
             <p>
                 Privacy and data requests:{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.privacy}`}>
-                    {CONTACT_EMAILS.privacy}
+                <Link
+                    href={CONTACT_LINKS.privacy}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    GitHub Discussions
                 </Link>
-                . General support:{" "}
-                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
-                    {CONTACT_EMAILS.support}
+                . General support and questions:{" "}
+                <Link
+                    href={CONTACT_LINKS.support}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Discord
                 </Link>
                 .
             </p>

@@ -140,6 +140,9 @@ export function WorkstationDetailPane({
                                     isTranscribing={isCurrentTranscribing}
                                     onTranscribe={onTranscribe}
                                     showSummary={false}
+                                    onPipelineComplete={() =>
+                                        setActiveTab("notes")
+                                    }
                                 />
                             </div>
                         ) : (

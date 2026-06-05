@@ -60,13 +60,23 @@ export function PlaudConnectTabs({
         const check = () => {
             if (cancelled) return;
             const v = window.__mesynxAiConnector?.version;
-            if (typeof v === "number" && v >= 1) setHasConnector(true);
+            if (typeof v === "number" && v >= 1) {
+                // Defer the state update to the next frame so it never fires
+                // during React's render/hydration phase (avoids the "state
+                // update on a component that hasn't mounted yet" warning when
+                // the Connector extension injects the bridge early).
+                requestAnimationFrame(() => {
+                    if (!cancelled) setHasConnector(true);
+                });
+            }
         };
-        check();
+        // Small initial delay — let React finish mounting before the first check.
+        const boot = window.setTimeout(check, 50);
         const id = window.setInterval(check, 750);
         const stop = window.setTimeout(() => window.clearInterval(id), 10_000);
         return () => {
             cancelled = true;
+            window.clearTimeout(boot);
             window.clearInterval(id);
             window.clearTimeout(stop);
         };

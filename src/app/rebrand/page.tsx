@@ -146,12 +146,14 @@ export default function RebrandPage() {
                             If anything broke for you
                         </h2>
                         <p className="text-muted-foreground leading-relaxed">
-                            Write to{" "}
+                            Open a thread on{" "}
                             <Link
-                                href="mailto:support@mesynx.r0073dl053r.com?subject=Rebrand%20issue"
+                                href="https://discord.gg/JygWxS2VA8"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80"
                             >
-                                support@mesynx.r0073dl053r.com
+                                Discord
                             </Link>{" "}
                             and I&apos;ll fix it.
                         </p>

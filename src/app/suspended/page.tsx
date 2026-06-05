@@ -42,12 +42,14 @@ export default async function SuspendedPage() {
                     while we review your account.
                 </p>
                 <p className="text-sm text-muted-foreground">
-                    Reach out at{" "}
+                    Reach out on{" "}
                     <a
-                        href="mailto:support@mesynx.r0073dl053r.com"
+                        href="https://discord.gg/JygWxS2VA8"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="underline"
                     >
-                        support@mesynx.r0073dl053r.com
+                        Discord
                     </a>{" "}
                     if you think this is a mistake.
                 </p>

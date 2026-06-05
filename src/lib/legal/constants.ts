@@ -61,12 +61,14 @@ export const EFFECTIVE_DATE_DISPLAY = new Date(
     timeZone: "UTC",
 });
 
-/** Contact mailboxes referenced by the legal pages. */
-export const CONTACT_EMAILS = {
-    support: "support@mesynx.r0073dl053r.com",
-    security: "security@mesynx.r0073dl053r.com",
-    /** Dedicated mailbox for GDPR data-subject requests. */
-    privacy: "privacy@mesynx.r0073dl053r.com",
+/** Contact channels — Discord and GitHub. No support email. */
+export const CONTACT_LINKS = {
+    /** General support and questions — Discord server. */
+    support: "https://discord.gg/JygWxS2VA8",
+    /** Security vulnerabilities — GitHub private security advisory. */
+    security: "https://github.com/r0073d-l053r/mesynx/security/advisories/new",
+    /** Privacy / GDPR data-subject requests — GitHub Discussions. */
+    privacy: "https://github.com/r0073d-l053r/mesynx/discussions",
 } as const;
 
 /** Polish data-protection supervisory authority (GDPR right to complain). */
