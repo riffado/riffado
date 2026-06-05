@@ -18,6 +18,7 @@ This guide covers deploying Mesynx AI to production environments.
 ## Prerequisites
 
 ### Required
+
 - Docker & Docker Compose (for Docker deployment)
 - PostgreSQL 16+ (if not using Docker)
 - Node.js 20+ (for manual deployment)
@@ -25,6 +26,7 @@ This guide covers deploying Mesynx AI to production environments.
 - SSL certificate (Let's Encrypt recommended)
 
 ### Recommended
+
 - Reverse proxy (nginx, Caddy, Traefik)
 - S3-compatible storage (for backups and file storage)
 - SMTP server (for email notifications)
@@ -171,7 +173,7 @@ pm2 startup
 ### Required Variables
 
 | Variable | Description | Example |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db` |
 | `BETTER_AUTH_SECRET` | Auth secret (32+ chars) | Generate with `openssl rand -hex 32` |
 | `ENCRYPTION_KEY` | Encryption key (64 hex chars) | Generate with `openssl rand -hex 32` |
@@ -180,7 +182,7 @@ pm2 startup
 ### Optional Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `DEFAULT_STORAGE_TYPE` | Storage backend (`local` or `s3`) | `local` |
 | `LOCAL_STORAGE_PATH` | Local storage directory | `./storage` |
 | `S3_ENDPOINT` | S3-compatible endpoint | AWS default |
@@ -255,6 +257,7 @@ default_pool_size = 25
 ```
 
 Update `DATABASE_URL` to use PgBouncer:
+
 ```env
 DATABASE_URL=postgresql://user:pass@localhost:6432/mesynx-ai
 ```
@@ -410,6 +413,7 @@ tail -f /var/log/nginx/error.log
 ### Uptime Monitoring
 
 Use external monitoring services:
+
 - UptimeRobot
 - Pingdom
 - Better Uptime
@@ -468,11 +472,13 @@ docker compose exec db psql -U postgres mesynx-ai
 ### Performance Issues
 
 1. **Check resource usage**
+
    ```bash
    docker stats
    ```
 
 2. **Optimize database**
+
    ```bash
    docker compose exec db vacuumdb -U postgres -z mesynx-ai
    ```
@@ -505,6 +511,7 @@ docker compose exec db psql -U postgres mesynx-ai
 ## Security Hardening
 
 1. **Firewall**
+
    ```bash
    # UFW example
    ufw allow 22/tcp   # SSH
@@ -514,12 +521,14 @@ docker compose exec db psql -U postgres mesynx-ai
    ```
 
 2. **Fail2Ban**
+
    ```bash
    apt-get install fail2ban
    systemctl enable fail2ban
    ```
 
 3. **Regular Updates**
+
    ```bash
    # System updates
    apt-get update && apt-get upgrade
@@ -538,6 +547,7 @@ docker compose exec db psql -U postgres mesynx-ai
 For high-traffic deployments:
 
 1. **Horizontal Scaling**
+
    ```yaml
    # docker-compose.yml
    services:
@@ -564,6 +574,7 @@ For high-traffic deployments:
 ## Support
 
 For deployment help:
-- GitHub Discussions: https://github.com/mesynx-ai/mesynx-ai/discussions
-- Documentation: https://github.com/mesynx-ai/mesynx-ai/tree/main/docs
-- Issues: https://github.com/mesynx-ai/mesynx-ai/issues
+
+- GitHub Discussions: <https://github.com/mesynx-ai/mesynx-ai/discussions>
+- Documentation: <https://github.com/mesynx-ai/mesynx-ai/tree/main/docs>
+- Issues: <https://github.com/mesynx-ai/mesynx-ai/issues>

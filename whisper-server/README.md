@@ -50,7 +50,7 @@ touching the server.
 ## Choosing a model
 
 | Model | Best for | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `Systran/faster-whisper-large-v3` | Highest accuracy | Most accurate, but **most prone to hallucinating on long silences** — pair it with VAD (below). |
 | `deepdml/faster-whisper-large-v3-turbo-ct2` | **Long recordings (recommended default)** | Near large-v3 quality, much faster, noticeably fewer runaway repetitions. Great for hour-long audio. |
 | `Systran/faster-whisper-medium` | Modest GPUs | Solid quality at lower VRAM. |

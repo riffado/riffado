@@ -32,7 +32,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open http://localhost:3000.
+Open <http://localhost:3000>.
 
 To run the full containerized stack against your local code instead:
 
@@ -46,12 +46,14 @@ docker compose up --build
 2. Write clean, tested code. Follow existing patterns.
 3. Use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `refactor:`, `chore:`, `perf:`, `docs:`). Same prefixes as our issue titles.
 4. Run everything before pushing:
+
    ```bash
    pnpm format-and-lint:fix
    pnpm type-check
    pnpm test
    pnpm build
    ```
+
    All four must pass.
 5. Open the PR against `main`, link the related issue, and explain **why** the change is needed (not just what it does).
 
