@@ -8,7 +8,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --brand:   #c96442;
+      --brand:   #0ea5e9;
       --bg:      #0f0f0f;
       --surface: #1a1a1a;
       --border:  #2a2a2a;
@@ -42,13 +42,6 @@
       width: 28px;
       height: 28px;
       border-radius: 6px;
-      background: var(--brand);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
-      color: #fff;
       flex-shrink: 0;
     }
 
@@ -147,7 +140,7 @@
     }
     .btn:hover { border-color: #444; background: #222; }
     .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
-    .btn-primary:hover { background: #b5593a; border-color: #b5593a; }
+    .btn-primary:hover { background: #0284c7; border-color: #0284c7; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* ── Result toast ── */
@@ -188,7 +181,7 @@
 
   <!-- Header -->
   <div class="header">
-    <div class="logo">M</div>
+    <img src="../icons/icon32.png" alt="Logo" class="logo" />
     <div class="header-text">
       <div class="header-title">Mesynx AI Connector</div>
       <div class="header-sub">Plaud SSO bridge</div>
