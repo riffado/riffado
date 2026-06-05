@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mesynx AI Connector</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --brand:   #c96442;
+      --bg:      #0f0f0f;
+      --surface: #1a1a1a;
+      --border:  #2a2a2a;
+      --text:    #e5e5e5;
+      --muted:   #737373;
+      --green:   #22c55e;
+      --red:     #ef4444;
+    }
+
+    body {
+      width: 320px;
+      min-height: 200px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .header-text { flex: 1; min-width: 0; }
+    .header-title { font-weight: 600; font-size: 13px; }
+    .header-sub   { font-size: 11px; color: var(--muted); }
+
+    /* ── Status card ── */
+    .status-card {
+      margin: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-yellow { background: #eab308;      box-shadow: 0 0 6px #eab308; }
+    .dot-grey   { background: var(--muted); }
+
+    .status-label { font-weight: 500; }
+    .status-detail {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 4px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+    .detail-key   { color: var(--muted); }
+    .detail-value { font-family: monospace; color: var(--text); }
+
+    /* ── Actions ── */
+    .actions {
+      padding: 0 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .btn:hover { border-color: #444; background: #222; }
+    .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+    .btn-primary:hover { background: #b5593a; border-color: #b5593a; }
+
+    /* ── Loading skeleton ── */
+    .skeleton {
+      height: 14px;
+      border-radius: 4px;
+      background: var(--surface);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ── Footer ── */
+    .footer {
+      padding: 8px 16px 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .footer a { color: var(--muted); text-decoration: none; }
+    .footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">M</div>
+    <div class="header-text">
+      <div class="header-title">Mesynx AI Connector</div>
+      <div class="header-sub">Plaud SSO bridge</div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-card" id="status-card">
+    <div class="status-row">
+      <div class="dot dot-grey" id="dot"></div>
+      <span class="status-label" id="status-label">Checking…</span>
+    </div>
+    <div class="status-detail" id="status-detail" style="display:none"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions" id="actions"></div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>v1.0.0</span>
+    <a href="https://mesynx.r0073dl053r.com/docs/guides/connect-plaud-account" target="_blank">Docs ↗</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

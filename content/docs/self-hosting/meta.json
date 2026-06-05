@@ -6,6 +6,7 @@
         "environment-variables",
         "storage-s3",
         "email-smtp",
-        "upgrading"
+        "upgrading",
+        "whisper-server"
     ]
 }

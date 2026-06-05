@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Mesynx AI Connector",
+  "version": "1.0.0",
+  "description": "One-click Plaud sign-in for Mesynx AI — works with Google and Apple SSO accounts.",
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Mesynx AI Connector"
+  },
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "https://mesynx.r0073dl053r.com/*"
+      ],
+      "js": ["content-app-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "https://mesynx.r0073dl053r.com/*"
+      ],
+      "js": ["content-app-isolated.js"],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+
+  "permissions": [
+    "cookies",
+    "tabs",
+    "storage",
+    "windows"
+  ],
+
+  "host_permissions": [
+    "https://web.plaud.ai/*",
+    "https://*.plaud.ai/*",
+    "http://localhost:*/*",
+    "https://mesynx.r0073dl053r.com/*"
+  ]
+}
