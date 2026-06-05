@@ -229,7 +229,16 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
 
     // Decrypt the transcript before sending it to the LLM. Plaintext is
     // the LLM's input contract; ciphertext lives only in the DB.
-    const transcriptText = decryptText(transcription.text);
+    let transcriptText = "";
+    try {
+        transcriptText = decryptText(transcription.text);
+    } catch (error) {
+        console.error(
+            "Failed to decrypt transcription text for summarization:",
+            error,
+        );
+        transcriptText = "[Decryption Failed - Key Mismatch]";
+    }
 
     // Truncate transcription if too long
     const maxLength = 8000;
@@ -475,10 +484,32 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
 
     // Decrypt content fields before returning to the client. Legacy
     // plaintext rows pass through verbatim during the backfill window.
+    let summary: string | null = null;
+    try {
+        summary = decryptText(enhancement.summary) ?? null;
+    } catch (error) {
+        console.error("Failed to decrypt summary:", error);
+        summary = "[Decryption Failed - Key Mismatch]";
+    }
+
+    let keyPoints: string[] | null = null;
+    try {
+        keyPoints = decryptJsonField<string[]>(enhancement.keyPoints);
+    } catch (error) {
+        console.error("Failed to decrypt keyPoints:", error);
+    }
+
+    let actionItems: string[] | null = null;
+    try {
+        actionItems = decryptJsonField<string[]>(enhancement.actionItems);
+    } catch (error) {
+        console.error("Failed to decrypt actionItems:", error);
+    }
+
     return NextResponse.json({
-        summary: decryptText(enhancement.summary),
-        keyPoints: decryptJsonField<string[]>(enhancement.keyPoints),
-        actionItems: decryptJsonField<string[]>(enhancement.actionItems),
+        summary,
+        keyPoints,
+        actionItems,
         provider: enhancement.provider,
         model: enhancement.model,
         createdAt: enhancement.createdAt,

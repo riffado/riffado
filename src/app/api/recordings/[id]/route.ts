@@ -59,14 +59,33 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     // Decrypt content fields before returning to the client. The DB
     // holds ciphertext (or, during the deploy → backfill window, legacy
     // plaintext); the client always sees plaintext.
+    let filename = recording.filename;
+    try {
+        filename = decryptText(recording.filename);
+    } catch (error) {
+        console.error("Failed to decrypt recording filename:", error);
+        filename = "[Decryption Failed - Key Mismatch]";
+    }
+
+    let transcriptionText: string | undefined;
+    if (transcription) {
+        try {
+            transcriptionText = decryptText(transcription.text);
+        } catch (error) {
+            console.error("Failed to decrypt transcription text:", error);
+            transcriptionText = "[Decryption Failed - Key Mismatch]";
+        }
+    }
+
     return NextResponse.json({
         recording: {
             ...recording,
-            filename: decryptText(recording.filename),
+            filename,
         },
-        transcription: transcription
-            ? { ...transcription, text: decryptText(transcription.text) }
-            : null,
+        transcription:
+            transcription && transcriptionText !== undefined
+                ? { ...transcription, text: transcriptionText }
+                : null,
     });
 });
 

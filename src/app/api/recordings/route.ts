@@ -21,9 +21,18 @@ export const GET = apiHandler(async (request: Request) => {
         .orderBy(desc(recordings.startTime));
 
     return NextResponse.json({
-        recordings: userRecordings.map((recording) => ({
-            ...recording,
-            filename: decryptText(recording.filename),
-        })),
+        recordings: userRecordings.map((recording) => {
+            let filename = recording.filename;
+            try {
+                filename = decryptText(recording.filename);
+            } catch (error) {
+                console.error("Failed to decrypt recording filename:", error);
+                filename = "[Decryption Failed - Key Mismatch]";
+            }
+            return {
+                ...recording,
+                filename,
+            };
+        }),
     });
 });

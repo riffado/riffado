@@ -112,9 +112,20 @@ export function serializeTranscript(
 ): V1Transcript | null {
     if (!transcription) return null;
 
+    let text = "";
+    try {
+        text = decryptText(transcription.text);
+    } catch (error) {
+        console.error(
+            "Failed to decrypt transcription text for API v1:",
+            error,
+        );
+        text = "[Decryption Failed - Key Mismatch]";
+    }
+
     return {
         language: transcription.detectedLanguage,
-        text: decryptText(transcription.text),
+        text,
         provider: transcription.provider,
         model: transcription.model,
         created_at: toIso(transcription.createdAt),
@@ -125,11 +136,29 @@ export function serializeSummary(
     enhancement: AiEnhancementRow | null,
 ): V1Summary | null {
     if (!enhancement) return null;
-    const actionItems = decryptJsonField<unknown>(enhancement.actionItems);
-    const keyPoints = decryptJsonField<unknown>(enhancement.keyPoints);
+    let actionItems: unknown = null;
+    let keyPoints: unknown = null;
+    try {
+        actionItems = decryptJsonField<unknown>(enhancement.actionItems);
+    } catch (error) {
+        console.error("Failed to decrypt actionItems for API v1:", error);
+    }
+    try {
+        keyPoints = decryptJsonField<unknown>(enhancement.keyPoints);
+    } catch (error) {
+        console.error("Failed to decrypt keyPoints for API v1:", error);
+    }
+
+    let text: string | null = null;
+    try {
+        text = decryptText(enhancement.summary) ?? null;
+    } catch (error) {
+        console.error("Failed to decrypt summary text for API v1:", error);
+        text = "[Decryption Failed - Key Mismatch]";
+    }
 
     return {
-        text: decryptText(enhancement.summary) ?? null,
+        text,
         action_items: stringArrayOrNull(actionItems),
         key_points: stringArrayOrNull(keyPoints),
         provider: enhancement.provider,
@@ -146,9 +175,20 @@ export function serializeRecording(
 ): V1Recording {
     const self = `/api/v1/recordings/${recording.id}`;
 
+    let title = "";
+    try {
+        title = decryptText(recording.filename);
+    } catch (error) {
+        console.error(
+            "Failed to decrypt recording filename for API v1:",
+            error,
+        );
+        title = "[Decryption Failed - Key Mismatch]";
+    }
+
     return {
         id: recording.id,
-        title: decryptText(recording.filename),
+        title,
         created_at: toIso(recording.createdAt),
         updated_at: toIso(recording.updatedAt),
         recorded_at: toIso(recording.startTime),

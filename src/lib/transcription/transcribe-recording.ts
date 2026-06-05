@@ -109,9 +109,19 @@ export async function transcribeRecording(
             // auto-transcribes are no-ops. The manual "Re-transcribe"
             // route passes `force: true` to bypass it (so provider/model
             // overrides actually take effect).
+            let text = "";
+            try {
+                text = decryptText(existingTranscription.text);
+            } catch (error) {
+                console.error(
+                    "Failed to decrypt existing transcription:",
+                    error,
+                );
+                text = "[Decryption Failed - Key Mismatch]";
+            }
             return {
                 success: true,
-                text: decryptText(existingTranscription.text),
+                text,
                 detectedLanguage: existingTranscription.detectedLanguage,
             };
         }
@@ -183,7 +193,13 @@ export async function transcribeRecording(
 
         // `recording.filename` is encrypted at rest; decrypt before passing
         // to the transcription provider as a filename hint.
-        const decryptedFilename = decryptText(recording.filename);
+        let decryptedFilename = "recording";
+        try {
+            decryptedFilename = decryptText(recording.filename);
+        } catch (error) {
+            console.error("Failed to decrypt recording filename hint:", error);
+            decryptedFilename = "[Decryption Failed - Key Mismatch]";
+        }
         const { file: audioFile, contentType } = buildAudioFile(
             audioBuffer,
             recording.storagePath,
