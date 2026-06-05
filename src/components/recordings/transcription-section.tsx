@@ -140,7 +140,7 @@ export function TranscriptionSection({
                             {isProcessing
                                 ? "Processing…"
                                 : transcription
-                                  ? "Re-transcribe"
+                                  ? "Re-generate"
                                   : "Transcribe"}
                         </MetalButton>
                     </div>

@@ -34,6 +34,21 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     const { id } = await (context as IdContext).params;
     const body = await request.json().catch(() => ({}));
     const presetId = (body.preset as string) || undefined;
+    // Optional per-request overrides from the Generate / Re-generate menu.
+    // When absent, we fall back to the user's default enhancement provider
+    // and that provider's default model (legacy behavior).
+    const overrideProviderId =
+        typeof body.providerId === "string" && body.providerId.trim()
+            ? body.providerId.trim()
+            : undefined;
+    const overrideModel =
+        typeof body.model === "string" && body.model.trim()
+            ? body.model.trim()
+            : undefined;
+    const overrideLanguage =
+        typeof body.language === "string" && body.language.trim()
+            ? body.language.trim()
+            : undefined;
 
     const [recording] = await db
         .select()
@@ -111,29 +126,59 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         }
     }
 
-    const [enhancementCredentials] = await db
-        .select()
-        .from(apiCredentials)
-        .where(
-            and(
-                eq(apiCredentials.userId, session.user.id),
-                eq(apiCredentials.isDefaultEnhancement, true),
-            ),
-        )
-        .limit(1);
+    // Provider selection precedence:
+    //   1. Explicit `providerId` override from the Re-generate menu
+    //      (user-scoped lookup by id).
+    //   2. The user's default *enhancement* provider.
+    //   3. Fall back to the default *transcription* provider so a user
+    //      who only configured one provider can still summarize.
+    let credentials: typeof apiCredentials.$inferSelect | undefined;
 
-    const [transcriptionCredentials] = await db
-        .select()
-        .from(apiCredentials)
-        .where(
-            and(
-                eq(apiCredentials.userId, session.user.id),
-                eq(apiCredentials.isDefaultTranscription, true),
-            ),
-        )
-        .limit(1);
+    if (overrideProviderId) {
+        const [chosen] = await db
+            .select()
+            .from(apiCredentials)
+            .where(
+                and(
+                    eq(apiCredentials.id, overrideProviderId),
+                    eq(apiCredentials.userId, session.user.id),
+                ),
+            )
+            .limit(1);
+        credentials = chosen;
 
-    const credentials = enhancementCredentials || transcriptionCredentials;
+        if (!credentials) {
+            throw new AppError(
+                ErrorCode.AI_PROVIDER_NOT_CONFIGURED,
+                "The selected AI provider could not be found",
+                400,
+            );
+        }
+    } else {
+        const [enhancementCredentials] = await db
+            .select()
+            .from(apiCredentials)
+            .where(
+                and(
+                    eq(apiCredentials.userId, session.user.id),
+                    eq(apiCredentials.isDefaultEnhancement, true),
+                ),
+            )
+            .limit(1);
+
+        const [transcriptionCredentials] = await db
+            .select()
+            .from(apiCredentials)
+            .where(
+                and(
+                    eq(apiCredentials.userId, session.user.id),
+                    eq(apiCredentials.isDefaultTranscription, true),
+                ),
+            )
+            .limit(1);
+
+        credentials = enhancementCredentials || transcriptionCredentials;
+    }
 
     if (!credentials) {
         throw new AppError(
@@ -143,18 +188,32 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    const apiKey = decrypt(credentials.apiKey);
+    let apiKey: string;
+    try {
+        apiKey = decrypt(credentials.apiKey);
+    } catch {
+        throw new AppError(
+            ErrorCode.AI_PROVIDER_NOT_CONFIGURED,
+            `Could not decrypt the API key for provider "${credentials.provider}". The encryption key may have changed. Re-enter the API key in Settings → AI Providers.`,
+            500,
+        );
+    }
 
     const openai = new OpenAI({
         apiKey,
         baseURL: credentials.baseUrl || undefined,
     });
 
-    // Use a chat model, not whisper
-    // If the configured model is a transcription-only model,
-    // fall back to a reasonable chat model for the provider
-    let model = credentials.defaultModel || "gpt-4o-mini";
-    if (model.includes("whisper")) {
+    // Model selection precedence:
+    //   1. Explicit `model` override from the Re-generate menu — the user
+    //      hand-picked it, so respect it verbatim (even if unusual).
+    //   2. The provider's configured default model.
+    //   3. A safe chat default.
+    // The whisper→chat fallback only applies to (2)/(3): a transcription
+    // model can't drive chat-completions, but if the user explicitly chose
+    // a model we don't second-guess it.
+    let model = overrideModel || credentials.defaultModel || "gpt-4o-mini";
+    if (!overrideModel && model.includes("whisper")) {
         // Pick a lightweight chat model appropriate for the provider
         const baseUrl = credentials.baseUrl || "";
         if (baseUrl.includes("groq")) {
@@ -185,8 +244,13 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     // system message carries the output-language preference. Smaller
     // models tend to honor this split more reliably than a combined
     // prompt where language and JSON-shape rules compete.
+    // Per-request language override (from the Re-generate menu) wins over
+    // the user's saved default. "auto" / empty falls through to the saved
+    // preference (which itself may be "match transcript").
     const languageDirective = getAiOutputLanguageDirective(
-        userSettingsRow?.aiOutputLanguage ?? null,
+        overrideLanguage && overrideLanguage !== "auto"
+            ? overrideLanguage
+            : (userSettingsRow?.aiOutputLanguage ?? null),
     );
 
     const prompt = promptTemplate.replace(

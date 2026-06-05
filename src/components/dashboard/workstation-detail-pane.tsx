@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Mic } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DotGridBackground } from "@/components/dashboard/dot-grid-background";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,13 @@ interface Props {
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
     scrubberStyle: "waveform" | "slider" | undefined;
+}
+
+interface Ripple {
+    id: number;
+    x: number;
+    y: number;
+    startedAt: number;
 }
 
 export function WorkstationDetailPane({
@@ -65,36 +73,45 @@ export function WorkstationDetailPane({
         }
     }, [currentRecording]);
 
-    // ── Cursor-trail dots over the empty background around the panels ──
-    // Only fires when the cursor is directly over the scroll container's
-    // own background (the negative space beside / below the centered
-    // max-w-3xl column) — never over a panel, because hovering a panel
-    // makes the panel the event target, not the scroll container.
-    const [dots, setDots] = useState<{ id: number; x: number; y: number }[]>(
-        [],
-    );
-    const dotIdRef = useRef(0);
-    const lastDotRef = useRef({ x: 0, y: 0, t: 0 });
+    // ── Dot-grid background: cursor + ripple refs ─────────────────
+    // We use plain refs (not state) so mouse-move never triggers a
+    // React re-render — the canvas reads from these on every RAF frame.
+    const cursorRef = useRef<{ x: number; y: number } | null>(null);
+    const ripplesRef = useRef<Ripple[]>([]);
+    const rippleIdRef = useRef(0);
 
+    // Cursor position — only active when the pointer is directly over
+    // the scroll container background (not over a panel child).
     const handleBackgroundMove = useCallback((e: React.MouseEvent) => {
-        // Restrict to the bare background: the scroll container itself.
-        if (e.target !== e.currentTarget) return;
-        const now = performance.now();
-        const dx = e.clientX - lastDotRef.current.x;
-        const dy = e.clientY - lastDotRef.current.y;
-        // Throttle by time + distance so we emit a sparse trail, not a flood.
-        if (now - lastDotRef.current.t < 45 || Math.hypot(dx, dy) < 16) {
+        if (e.target !== e.currentTarget) {
+            // Cursor moved onto a panel — dim the grid
+            cursorRef.current = null;
             return;
         }
-        lastDotRef.current = { x: e.clientX, y: e.clientY, t: now };
-        const id = dotIdRef.current++;
-        setDots((prev) => [
-            ...prev.slice(-28),
-            { id, x: e.clientX, y: e.clientY },
-        ]);
+        cursorRef.current = { x: e.clientX, y: e.clientY };
+    }, []);
+
+    const handleBackgroundLeave = useCallback(() => {
+        cursorRef.current = null;
+    }, []);
+
+    // Click — add a ripple that the canvas will expand outward
+    const handleBackgroundClick = useCallback((e: React.MouseEvent) => {
+        if (e.target !== e.currentTarget) return;
+        const id = rippleIdRef.current++;
+        const ripple: Ripple = {
+            id,
+            x: e.clientX,
+            y: e.clientY,
+            startedAt: performance.now(),
+        };
+        ripplesRef.current = [...ripplesRef.current.slice(-4), ripple];
+        // Clean up after the ripple has fully faded
         window.setTimeout(() => {
-            setDots((prev) => prev.filter((d) => d.id !== id));
-        }, 850);
+            ripplesRef.current = ripplesRef.current.filter(
+                (r) => r.id !== id,
+            );
+        }, 2000);
     }, []);
 
     // Derive a clean display title from the filename
@@ -158,89 +175,97 @@ export function WorkstationDetailPane({
                         </button>
                     </div>
 
-                    {/* Tab content */}
-                    <div
-                        className="relative flex-1 overflow-y-auto"
-                        onMouseMove={handleBackgroundMove}
-                    >
-                        {activeTab === "sources" ? (
-                            <div className="mx-auto max-w-3xl space-y-6 p-6">
-                                {/* Player */}
-                                <RecordingPlayer
-                                    recording={currentRecording}
-                                    initialPlaybackSpeed={initialPlaybackSpeed}
-                                    initialVolume={initialVolume}
-                                    initialAutoPlayNext={initialAutoPlayNext}
-                                    scrubberStyle={scrubberStyle}
-                                    onEnded={() => {
-                                        const currentIndex =
-                                            visibleRecordings.findIndex(
-                                                (r) =>
-                                                    r.id ===
-                                                    currentRecording.id,
-                                            );
-                                        if (
-                                            currentIndex >= 0 &&
-                                            currentIndex <
-                                                visibleRecordings.length - 1
-                                        ) {
-                                            onSelectRecording(
-                                                visibleRecordings[
-                                                    currentIndex + 1
-                                                ],
-                                            );
-                                        }
-                                    }}
-                                />
-                                {/* Transcript section */}
-                                <TranscriptionPanel
-                                    recording={currentRecording}
-                                    transcription={currentTranscription}
-                                    isTranscribing={isCurrentTranscribing}
-                                    onTranscribe={onTranscribe}
-                                    onGenerated={onDataRefresh}
-                                    showSummary={false}
-                                    onPipelineComplete={() =>
-                                        setActiveTab("notes")
-                                    }
-                                />
-                            </div>
-                        ) : (
-                            <div className="mx-auto max-w-3xl p-6 space-y-4">
-                                {/* Recording title above the summary */}
-                                {recordingTitle && (
-                                    <div className="pb-1 border-b border-border/40">
-                                        <h2 className="text-lg font-semibold leading-tight truncate">
-                                            {recordingTitle}
-                                        </h2>
-                                    </div>
-                                )}
-                                {/* Notes tab — summary / AI notes */}
-                                <TranscriptionPanel
-                                    recording={currentRecording}
-                                    transcription={currentTranscription}
-                                    isTranscribing={isCurrentTranscribing}
-                                    onTranscribe={onTranscribe}
-                                    onGenerated={onDataRefresh}
-                                    showTranscript={false}
-                                />
-                            </div>
-                        )}
-                    </div>
+                    {/* Tab content — two-layer stack:
+                         Layer 0 (absolute): canvas dot-grid, never scrolls
+                         Layer 1 (absolute): transparent scroll container
+                        The scroll container is transparent so the canvas
+                        shows through; its e.target === e.currentTarget fires
+                        for ALL empty background pixels (left, right, and
+                        below the content column) — not only near the bottom. */}
+                    <div className="relative flex-1 min-h-0">
+                        {/* Dot-grid canvas — always covers visible area */}
+                        <DotGridBackground
+                            cursorRef={cursorRef}
+                            ripplesRef={ripplesRef}
+                        />
 
-                    {/* Cursor-trail dots over the empty background. Fixed +
-                        pointer-events-none so they never block interaction. */}
-                    {dots.length > 0 && (
-                        <div className="pointer-events-none fixed inset-0 z-50">
-                            {dots.map((d) => (
-                                <span
-                                    key={d.id}
-                                    className="hover-dot"
-                                    style={{ left: d.x, top: d.y }}
-                                />
-                            ))}
+                        {/* Transparent scroll overlay — receives mouse events */}
+                        <div
+                            className="absolute inset-0 overflow-y-auto"
+                            onMouseMove={handleBackgroundMove}
+                            onMouseLeave={handleBackgroundLeave}
+                            onClick={handleBackgroundClick}
+                        >
+                            {activeTab === "sources" ? (
+                                <div className="mx-auto max-w-3xl space-y-6 p-6">
+                                    {/* Player */}
+                                    <RecordingPlayer
+                                        recording={currentRecording}
+                                        initialPlaybackSpeed={
+                                            initialPlaybackSpeed
+                                        }
+                                        initialVolume={initialVolume}
+                                        initialAutoPlayNext={
+                                            initialAutoPlayNext
+                                        }
+                                        scrubberStyle={scrubberStyle}
+                                        onEnded={() => {
+                                            const currentIndex =
+                                                visibleRecordings.findIndex(
+                                                    (r) =>
+                                                        r.id ===
+                                                        currentRecording.id,
+                                                );
+                                            if (
+                                                currentIndex >= 0 &&
+                                                currentIndex <
+                                                    visibleRecordings.length -
+                                                        1
+                                            ) {
+                                                onSelectRecording(
+                                                    visibleRecordings[
+                                                        currentIndex + 1
+                                                    ],
+                                                );
+                                            }
+                                        }}
+                                    />
+                                    {/* Transcript section */}
+                                    <TranscriptionPanel
+                                        recording={currentRecording}
+                                        transcription={currentTranscription}
+                                        isTranscribing={isCurrentTranscribing}
+                                        onTranscribe={onTranscribe}
+                                        onGenerated={onDataRefresh}
+                                        showSummary={false}
+                                        onPipelineComplete={() =>
+                                            setActiveTab("notes")
+                                        }
+                                    />
+                                </div>
+                            ) : (
+                                <div className="mx-auto max-w-3xl p-6 space-y-4">
+                                    {/* Recording title above the summary */}
+                                    {recordingTitle && (
+                                        <div className="pb-1 border-b border-border/40">
+                                            <h2 className="text-lg font-semibold leading-tight truncate">
+                                                {recordingTitle}
+                                            </h2>
+                                        </div>
+                                    )}
+                                    {/* Notes tab — summary / AI notes */}
+                                    <TranscriptionPanel
+                                        recording={currentRecording}
+                                        transcription={currentTranscription}
+                                        isTranscribing={isCurrentTranscribing}
+                                        onTranscribe={onTranscribe}
+                                        onGenerated={onDataRefresh}
+                                        showTranscript={false}
+                                    />
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             ) : (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">

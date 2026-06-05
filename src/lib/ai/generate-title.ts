@@ -89,7 +89,15 @@ export async function generateTitleFromTranscription(
         }
 
         // Decrypt API key
-        const apiKey = decrypt(credentials.apiKey);
+        let apiKey: string;
+        try {
+            apiKey = decrypt(credentials.apiKey);
+        } catch {
+            console.error(
+                `Could not decrypt API key for provider "${credentials.provider}" — encryption key may have changed`,
+            );
+            return null;
+        }
 
         // Create OpenAI client
         const openai = new OpenAI({

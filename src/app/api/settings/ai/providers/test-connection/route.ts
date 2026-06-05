@@ -1,24 +1,34 @@
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { db } from "@/db";
+import { apiCredentials } from "@/db/schema";
 import { findPreset } from "@/lib/ai/provider-presets";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
+import { decrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 const UPSTREAM_TIMEOUT_MS = 10_000;
 
 export const POST = apiHandler(async (request: Request) => {
-    await requireApiSession(request);
+    const session = await requireApiSession(request);
 
     const body = (await request.json().catch(() => null)) as {
         provider?: unknown;
         apiKey?: unknown;
         baseUrl?: unknown;
+        /** When testing an existing saved provider, pass its ID so we
+         *  can decrypt and use the stored API key from the database
+         *  instead of requiring the user to re-enter it. */
+        providerId?: unknown;
     } | null;
 
     const provider = typeof body?.provider === "string" ? body.provider : "";
-    const apiKey = typeof body?.apiKey === "string" ? body.apiKey : "";
+    let apiKey = typeof body?.apiKey === "string" ? body.apiKey : "";
     const baseUrl = typeof body?.baseUrl === "string" ? body.baseUrl : "";
+    const providerId =
+        typeof body?.providerId === "string" ? body.providerId : "";
 
     if (!provider) {
         throw new AppError(
@@ -26,6 +36,43 @@ export const POST = apiHandler(async (request: Request) => {
             "provider is required",
             400,
         );
+    }
+
+    // ── Resolve the API key ──────────────────────────────────────
+    // 1. If the client sent a non-empty apiKey (user typed a new one
+    //    in the form), use it directly — they want to test *this* key.
+    // 2. Otherwise, if a providerId was sent, look up the saved
+    //    credentials row and decrypt the stored key. This is the
+    //    "test existing provider" path: the user hasn't changed the
+    //    key, but wants to verify the connection still works.
+    // 3. If neither is present, proceed with an empty key. Local
+    //    servers (Ollama) may not require auth.
+    if (!apiKey && providerId) {
+        const [stored] = await db
+            .select({ apiKey: apiCredentials.apiKey })
+            .from(apiCredentials)
+            .where(
+                and(
+                    eq(apiCredentials.id, providerId),
+                    eq(apiCredentials.userId, session.user.id),
+                ),
+            )
+            .limit(1);
+
+        if (stored) {
+            try {
+                apiKey = decrypt(stored.apiKey);
+            } catch {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        message:
+                            "Could not decrypt the stored API key. The encryption key may have changed since this provider was saved. Re-enter the API key and save to fix this.",
+                    },
+                    { status: 200 },
+                );
+            }
+        }
     }
 
     const urlCheck = validateAiBaseUrl(baseUrl, { isHosted: env.IS_HOSTED });

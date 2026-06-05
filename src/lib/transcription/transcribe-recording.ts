@@ -163,7 +163,16 @@ export async function transcribeRecording(
 
         void quality;
 
-        const apiKey = decrypt(credentials.apiKey);
+        let apiKey: string;
+        try {
+            apiKey = decrypt(credentials.apiKey);
+        } catch {
+            return {
+                success: false,
+                error: `Could not decrypt the API key for provider "${credentials.provider}". The encryption key may have changed. Re-enter the API key in Settings → AI Providers.`,
+                errorCode: "NO_TRANSCRIPTION_PROVIDER",
+            };
+        }
         const openai = new OpenAI({
             apiKey,
             baseURL: credentials.baseUrl || undefined,

@@ -106,6 +106,12 @@ export function EditProviderDialog({
                         provider: providerName,
                         apiKey: apiKey || undefined,
                         baseUrl: baseUrl || null,
+                        // Pass the saved provider's ID so the server can
+                        // decrypt and use the stored API key when the user
+                        // hasn't entered a new one in the form. Without
+                        // this, testing an existing provider would always
+                        // fail for servers that require auth.
+                        providerId: provider?.id || undefined,
                     }),
                 },
             );

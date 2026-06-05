@@ -76,7 +76,6 @@ export function TranscriptionPanel({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
-        handleSummarize,
         handleDeleteSummary,
         refetchSummary,
     } = useTranscriptionSummary({
@@ -86,6 +85,12 @@ export function TranscriptionPanel({
 
     // ── Generate pipeline state ──────────────────────────────────
     const [showOptions, setShowOptions] = useState(false);
+    // Re-generate option menus (transcription / summary) — open on demand
+    // from the card headers so the user can pick a server, model, template
+    // and language before re-running, just like first-time generation.
+    const [showReTranscribeOptions, setShowReTranscribeOptions] =
+        useState(false);
+    const [showReSummarizeOptions, setShowReSummarizeOptions] = useState(false);
     const [pipelineStage, setPipelineStage] = useState<PipelineStage>("idle");
     const [pipelineError, setPipelineError] = useState<string | null>(null);
 
@@ -194,70 +199,108 @@ export function TranscriptionPanel({
         [runPipeline],
     );
 
-    // ── Re-run transcription only (shows animation, no tab-switch) ──
-    const handleReRunTranscription = useCallback(async () => {
-        setPipelineStage("transcribing");
-        setPipelineError(null);
-        try {
-            const res = await fetch(
-                `/api/recordings/${recording.id}/transcribe`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({}),
-                },
-            );
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}));
-                throw new Error(
-                    e.error || `Transcription failed (${res.status})`,
+    // ── Re-generate transcription only (shows animation, no tab-switch) ──
+    // Accepts an optional config from the Re-generate menu so the user can
+    // override the server + model for this single pass. Called with `null`
+    // by the menu's "Use Defaults" button.
+    const handleReRunTranscription = useCallback(
+        async (config?: GenerateConfig | null) => {
+            setShowReTranscribeOptions(false);
+            setPipelineStage("transcribing");
+            setPipelineError(null);
+            try {
+                const body: Record<string, unknown> = {};
+                if (config?.transcriptionProviderId) {
+                    body.providerId = config.transcriptionProviderId;
+                }
+                if (config?.transcriptionModel) {
+                    body.model = config.transcriptionModel;
+                }
+                const res = await fetch(
+                    `/api/recordings/${recording.id}/transcribe`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    },
                 );
+                if (!res.ok) {
+                    const e = await res.json().catch(() => ({}));
+                    throw new Error(
+                        e.error || `Transcription failed (${res.status})`,
+                    );
+                }
+                setPipelineStage("complete");
+                toast.success("Re-generation complete!");
+                onGenerated?.();
+                setTimeout(() => setPipelineStage("idle"), 1800);
+            } catch (err) {
+                setPipelineStage("error");
+                const msg =
+                    err instanceof Error ? err.message : "Transcription failed";
+                setPipelineError(msg);
+                toast.error(msg);
+                setTimeout(() => setPipelineStage("idle"), 5000);
             }
-            setPipelineStage("complete");
-            toast.success("Re-transcription complete!");
-            onGenerated?.();
-            setTimeout(() => setPipelineStage("idle"), 1800);
-        } catch (err) {
-            setPipelineStage("error");
-            const msg =
-                err instanceof Error ? err.message : "Transcription failed";
-            setPipelineError(msg);
-            toast.error(msg);
-            setTimeout(() => setPipelineStage("idle"), 5000);
-        }
-    }, [recording.id, onGenerated]);
+        },
+        [recording.id, onGenerated],
+    );
 
     // ── Re-generate summary only (shows animation) ──────────────────
-    const handleReGenerateSummary = useCallback(async () => {
-        setPipelineStage("summarizing");
-        setPipelineError(null);
-        try {
-            const res = await fetch(`/api/recordings/${recording.id}/summary`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ preset: summaryPreset }),
-            });
-            if (!res.ok) {
-                const e = await res.json().catch(() => ({}));
-                throw new Error(e.error || `Summary failed (${res.status})`);
+    // Accepts an optional config so the user can override server, model,
+    // template and output language for this pass. `null` = use defaults.
+    const handleReGenerateSummary = useCallback(
+        async (config?: GenerateConfig | null) => {
+            setShowReSummarizeOptions(false);
+            setPipelineStage("summarizing");
+            setPipelineError(null);
+            try {
+                const body: Record<string, unknown> = {
+                    preset: config?.summaryPreset || summaryPreset || "general",
+                };
+                if (config?.summaryProviderId) {
+                    body.providerId = config.summaryProviderId;
+                }
+                if (config?.summaryModel) {
+                    body.model = config.summaryModel;
+                }
+                if (config?.language && config.language !== "auto") {
+                    body.language = config.language;
+                }
+                const res = await fetch(
+                    `/api/recordings/${recording.id}/summary`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    },
+                );
+                if (!res.ok) {
+                    const e = await res.json().catch(() => ({}));
+                    throw new Error(
+                        e.error || `Summary failed (${res.status})`,
+                    );
+                }
+                setPipelineStage("complete");
+                toast.success("Summary regenerated!");
+                onGenerated?.();
+                setTimeout(() => {
+                    setPipelineStage("idle");
+                    // GET the freshly saved summary into the hook's state (the
+                    // POST above already created it — don't POST again).
+                    refetchSummary();
+                }, 1800);
+            } catch (err) {
+                setPipelineStage("error");
+                const msg =
+                    err instanceof Error ? err.message : "Summary failed";
+                setPipelineError(msg);
+                toast.error(msg);
+                setTimeout(() => setPipelineStage("idle"), 5000);
             }
-            setPipelineStage("complete");
-            toast.success("Summary regenerated!");
-            onGenerated?.();
-            setTimeout(() => {
-                setPipelineStage("idle");
-                // GET the freshly saved summary into the hook's state (the
-                // POST above already created it — don't POST again).
-                refetchSummary();
-            }, 1800);
-        } catch (err) {
-            setPipelineStage("error");
-            const msg = err instanceof Error ? err.message : "Summary failed";
-            setPipelineError(msg);
-            toast.error(msg);
-            setTimeout(() => setPipelineStage("idle"), 5000);
-        }
-    }, [recording.id, summaryPreset, refetchSummary, onGenerated]);
+        },
+        [recording.id, summaryPreset, refetchSummary, onGenerated],
+    );
 
     const wordCount = transcription?.text?.trim()
         ? transcription.text.trim().split(/\s+/).length
@@ -311,7 +354,11 @@ export function TranscriptionPanel({
                                             summaryData={summaryData}
                                         />
                                         <Button
-                                            onClick={handleReRunTranscription}
+                                            onClick={() =>
+                                                setShowReTranscribeOptions(
+                                                    (v) => !v,
+                                                )
+                                            }
                                             size="sm"
                                             variant="ghost"
                                             disabled={
@@ -320,7 +367,7 @@ export function TranscriptionPanel({
                                             className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                                         >
                                             <RefreshCw className="size-3" />
-                                            Re-run
+                                            Re-generate
                                         </Button>
                                     </>
                                 )}
@@ -328,6 +375,23 @@ export function TranscriptionPanel({
                         </div>
                     </CardHeader>
                     <CardContent>
+                        {/* Re-generate transcription options menu */}
+                        {showReTranscribeOptions && transcription?.text && (
+                            <div className="mb-4">
+                                <GenerateOptionsMenu
+                                    open={showReTranscribeOptions}
+                                    mode="transcription"
+                                    onClose={() =>
+                                        setShowReTranscribeOptions(false)
+                                    }
+                                    onGenerate={handleReRunTranscription}
+                                    onAutoGenerate={() =>
+                                        handleReRunTranscription(null)
+                                    }
+                                    isGenerating={isGenerating}
+                                />
+                            </div>
+                        )}
                         {isTranscribing ? (
                             <div className="flex flex-col items-center justify-center gap-3 py-12">
                                 <Loader2 className="size-6 animate-spin text-primary" />
@@ -420,10 +484,8 @@ export function TranscriptionPanel({
                                     </Select>
                                 )}
                                 <Button
-                                    onClick={
-                                        summaryData
-                                            ? handleReGenerateSummary
-                                            : handleSummarize
+                                    onClick={() =>
+                                        setShowReSummarizeOptions((v) => !v)
                                     }
                                     size="sm"
                                     variant={summaryData ? "ghost" : "default"}
@@ -451,6 +513,24 @@ export function TranscriptionPanel({
                         </div>
                     </CardHeader>
                     <CardContent>
+                        {/* Re-generate summary options menu */}
+                        {showReSummarizeOptions && (
+                            <div className="mb-4">
+                                <GenerateOptionsMenu
+                                    open={showReSummarizeOptions}
+                                    mode="summary"
+                                    initialSummaryPreset={summaryPreset}
+                                    onClose={() =>
+                                        setShowReSummarizeOptions(false)
+                                    }
+                                    onGenerate={handleReGenerateSummary}
+                                    onAutoGenerate={() =>
+                                        handleReGenerateSummary(null)
+                                    }
+                                    isGenerating={isGenerating}
+                                />
+                            </div>
+                        )}
                         {isSummarizing ? (
                             <div className="flex flex-col items-center justify-center gap-3 py-10">
                                 <Loader2 className="size-6 animate-spin text-primary" />
