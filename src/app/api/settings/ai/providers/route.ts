@@ -57,7 +57,10 @@ export const GET = apiHandler(async (request: Request) => {
             await db.insert(apiCredentials).values({
                 userId: session.user.id,
                 provider: "openai",
-                apiKey: encrypt("local-bypass"),
+                // Faster Whisper's documented placeholder key works out of the
+                // box; lock it in so this auto-provisioned server is usable
+                // immediately (the user can edit it later).
+                apiKey: encrypt("sk-placeholder"),
                 baseUrl: foundUrl,
                 nickname: "Local Whisper",
                 defaultModel,

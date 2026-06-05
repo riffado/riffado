@@ -13,6 +13,7 @@ import {
     Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SearchableModelDropdown } from "@/components/ai/searchable-model-dropdown";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -176,30 +177,17 @@ function ProviderModelControls({
     return (
         <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-                <Select
-                    value={model || "default"}
-                    onValueChange={(v) =>
-                        onModelChange(v === "default" ? "" : v)
-                    }
-                >
-                    <SelectTrigger className="h-8 flex-1 text-xs">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="default" className="text-xs">
-                            Provider default
-                        </SelectItem>
-                        {modelOptions.map((m) => (
-                            <SelectItem
-                                key={m.id}
-                                value={m.id}
-                                className="text-xs font-mono"
-                            >
-                                {m.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <div className="flex-1">
+                    <SearchableModelDropdown
+                        models={modelOptions}
+                        value={model}
+                        onChange={onModelChange}
+                        emptyOption={{ value: "", label: "Provider default" }}
+                        allowCustomText
+                        placeholder="Provider default"
+                        triggerClassName="h-8 text-xs"
+                    />
+                </div>
                 <button
                     type="button"
                     onClick={handleTest}
