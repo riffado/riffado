@@ -159,7 +159,6 @@ export function WorkstationDetailPane({
                     </div>
 
                     {/* Tab content */}
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: Background captures cursor movement for aesthetic dot trail */}
                     <div
                         className="relative flex-1 overflow-y-auto"
                         onMouseMove={handleBackgroundMove}

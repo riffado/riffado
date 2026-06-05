@@ -63,7 +63,7 @@ export function TranscriptionPanel({
     recording,
     transcription,
     isTranscribing,
-    onTranscribe: _onTranscribe,
+    onTranscribe,
     showTranscript = true,
     showSummary = true,
     onPipelineComplete,
