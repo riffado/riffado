@@ -167,6 +167,12 @@ export const envSchema = z.object({
         .optional()
         .transform((val) => (val ? Number(val) : 10))
         .pipe(z.number().int().positive().max(60)),
+
+    /** Comma-separated list of IPs or hostnames to scan for LLMs/whisper servers. */
+    LLM_HOSTS: z.string().optional(),
+    OLLAMA_BASE_URL: z.string().optional(),
+    OLLAMA_URL: z.string().optional(),
+    LM_STUDIO_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -216,6 +222,10 @@ function validateEnv(): Env {
             ADMIN_IP_ALLOWLIST: process.env.ADMIN_IP_ALLOWLIST,
             ADMIN_REAUTH_TTL_MINUTES: process.env.ADMIN_REAUTH_TTL_MINUTES,
             ADMIN_MUTATION_TTL_MINUTES: process.env.ADMIN_MUTATION_TTL_MINUTES,
+            LLM_HOSTS: process.env.LLM_HOSTS,
+            OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
+            OLLAMA_URL: process.env.OLLAMA_URL,
+            LM_STUDIO_URL: process.env.LM_STUDIO_URL,
         });
 
         const isProductionBuildPhase =
