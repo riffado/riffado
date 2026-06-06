@@ -143,7 +143,7 @@ export function Pricing() {
                         Hosted runs the exact AGPL-3.0 source you can self-host
                         — no hidden fork, no proprietary add-ons.{" "}
                         <Link
-                            href="https://github.com/mesynx-ai/mesynx-ai"
+                            href="https://github.com/r0073d-l053r/mesynx"
                             className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground transition-colors"
                         >
                             Read the source

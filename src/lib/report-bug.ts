@@ -3,7 +3,7 @@ import { APP_VERSION_TAG } from "@/lib/version";
 export const DISCORD_URL = "https://discord.gg/JygWxS2VA8";
 
 const GITHUB_NEW_ISSUE_URL =
-    "https://github.com/mesynx-ai/mesynx-ai/issues/new";
+    "https://github.com/r0073d-l053r/mesynx/issues/new";
 const BUG_REPORT_TEMPLATE = "bug_report.yml";
 
 export interface ReportBugOptions {

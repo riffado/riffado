@@ -36,7 +36,7 @@ This guide covers deploying Mesynx AI to production environments.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/mesynx-ai/mesynx-ai.git
+git clone https://github.com/r0073d-l053r/mesynx.git
 cd mesynx-ai
 ```
 
@@ -582,6 +582,6 @@ For high-traffic deployments:
 
 For deployment help:
 
-- GitHub Discussions: <https://github.com/mesynx-ai/mesynx-ai/discussions>
-- Documentation: <https://github.com/mesynx-ai/mesynx-ai/tree/main/docs>
-- Issues: <https://github.com/mesynx-ai/mesynx-ai/issues>
+- GitHub Discussions: <https://github.com/r0073d-l053r/mesynx/discussions>
+- Documentation: <https://github.com/r0073d-l053r/mesynx/tree/main/docs>
+- Issues: <https://github.com/r0073d-l053r/mesynx/issues>

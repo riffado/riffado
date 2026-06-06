@@ -6,12 +6,12 @@
     "license": "AGPL-3.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mesynx-ai/mesynx-ai.git"
+        "url": "https://github.com/r0073d-l053r/mesynx.git"
     },
     "bugs": {
-        "url": "https://github.com/mesynx-ai/mesynx-ai/issues"
+        "url": "https://github.com/r0073d-l053r/mesynx/issues"
     },
-    "homepage": "https://github.com/mesynx-ai/mesynx-ai#readme",
+    "homepage": "https://github.com/r0073d-l053r/mesynx#readme",
     "keywords": [
         "plaud",
         "plaud-note",

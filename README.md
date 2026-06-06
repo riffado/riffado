@@ -121,7 +121,7 @@ Prompts for an install directory and `APP_URL`, downloads `docker-compose.yml` a
 **Clone and Build from Source:**
 
 ```bash
-git clone https://github.com/mesynx-ai/mesynx-ai.git
+git clone https://github.com/r0073d-l053r/mesynx.git
 cd mesynx-ai
 
 # Create .env from template

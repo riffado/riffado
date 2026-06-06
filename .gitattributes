@@ -1,3 +1,3 @@
 # Enforce LF line endings for shell scripts to ensure Docker compatibility
-# on Windows checkouts. See: https://github.com/mesynx-ai/mesynx-ai/issues/17
+# on Windows checkouts. See: https://github.com/r0073d-l053r/mesynx/issues/17
 *.sh text eol=lf

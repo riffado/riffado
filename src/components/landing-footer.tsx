@@ -51,7 +51,7 @@ const COLUMNS: FooterColumn[] = [
             { label: "Changelog", href: "/changelog" },
             {
                 label: "Roadmap",
-                href: "https://github.com/mesynx-ai/mesynx-ai/issues",
+                href: "https://github.com/r0073d-l053r/mesynx/issues",
                 external: true,
             },
         ],
@@ -84,7 +84,7 @@ const COLUMNS: FooterColumn[] = [
             { label: "Terms", href: "/terms" },
             {
                 label: "Security",
-                href: "https://github.com/mesynx-ai/mesynx-ai/blob/main/SECURITY.md",
+                href: "https://github.com/r0073d-l053r/mesynx/blob/main/SECURITY.md",
                 external: true,
             },
             {
@@ -204,7 +204,7 @@ export function LandingFooter() {
                         <p className="text-xs text-muted-foreground/70 font-mono">
                             Built in the open on{" "}
                             <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai"
+                                href="https://github.com/r0073d-l053r/mesynx"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-foreground transition-colors underline decoration-dotted underline-offset-2"

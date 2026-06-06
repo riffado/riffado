@@ -6,7 +6,7 @@ export const baseOptions: BaseLayoutProps = {
         title: "Mesynx AI Docs",
         url: "/docs",
     },
-    githubUrl: "https://github.com/mesynx-ai/mesynx-ai",
+    githubUrl: "https://github.com/r0073d-l053r/mesynx",
 };
 
 export const docsTabs: NonNullable<DocsLayoutProps["tabs"]> = [

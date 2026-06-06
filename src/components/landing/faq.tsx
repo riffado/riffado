@@ -236,7 +236,7 @@ export function FAQ() {
                     <p className="text-sm text-muted-foreground mt-8 text-center">
                         Didn't see yours?{" "}
                         <Link
-                            href="https://github.com/mesynx-ai/mesynx-ai"
+                            href="https://github.com/r0073d-l053r/mesynx"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-foreground underline-offset-4 hover:underline"
@@ -245,7 +245,7 @@ export function FAQ() {
                         </Link>{" "}
                         or{" "}
                         <Link
-                            href="https://github.com/mesynx-ai/mesynx-ai/issues/new/choose"
+                            href="https://github.com/r0073d-l053r/mesynx/issues/new/choose"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-foreground underline-offset-4 hover:underline"

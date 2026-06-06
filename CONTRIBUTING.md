@@ -10,7 +10,7 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 
 ## Before you submit
 
-- **Search first.** Check [open issues](https://github.com/mesynx-ai/mesynx-ai/issues) and PRs — don't duplicate work in flight.
+- **Search first.** Check [open issues](https://github.com/r0073d-l053r/mesynx/issues) and PRs — don't duplicate work in flight.
 - **Open an issue for anything non-trivial.** Discuss the approach before you write 500 lines.
 - **Read [AGENTS.md](AGENTS.md).** It documents the product principles (self-host is first-class, export parity, no vendor lock-in) and code conventions. PRs that violate them will likely be rejected.
 - **Read [BRANCHING.md](BRANCHING.md).** `main` is a rolling integration branch; your PR targets it.
@@ -18,7 +18,7 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 ## Development setup
 
 ```bash
-git clone https://github.com/mesynx-ai/mesynx-ai.git
+git clone https://github.com/r0073d-l053r/mesynx.git
 cd mesynx-ai
 pnpm install
 

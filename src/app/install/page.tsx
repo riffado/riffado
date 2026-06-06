@@ -125,7 +125,7 @@ export default function InstallPage() {
                             <code className="font-mono">{APP_VERSION_TAG}</code>{" "}
                             with any released tag from{" "}
                             <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai/releases"
+                                href="https://github.com/r0073d-l053r/mesynx/releases"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
@@ -192,7 +192,7 @@ export default function InstallPage() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             Fair. Read the source at{" "}
                             <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai/blob/main/scripts/install.sh"
+                                href="https://github.com/r0073d-l053r/mesynx/blob/main/scripts/install.sh"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"
@@ -201,7 +201,7 @@ export default function InstallPage() {
                             </Link>{" "}
                             on GitHub, or follow the manual{" "}
                             <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai#self-host"
+                                href="https://github.com/r0073d-l053r/mesynx#self-host"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80 transition-colors"

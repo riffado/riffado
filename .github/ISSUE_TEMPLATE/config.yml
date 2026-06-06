@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussions
-    url: https://github.com/mesynx-ai/mesynx-ai/discussions
+    url: https://github.com/r0073d-l053r/mesynx/discussions
     about: Ask questions and discuss ideas with the community
   - name: Security Vulnerability
-    url: https://github.com/mesynx-ai/mesynx-ai/security/advisories/new
+    url: https://github.com/r0073d-l053r/mesynx/security/advisories/new
     about: Report security vulnerabilities privately
   - name: Documentation
-    url: https://github.com/mesynx-ai/mesynx-ai/tree/main/docs
+    url: https://github.com/r0073d-l053r/mesynx/tree/main/docs
     about: Read the documentation

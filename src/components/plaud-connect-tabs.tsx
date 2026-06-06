@@ -36,7 +36,7 @@ type Mode = "connector" | "email" | "token";
 type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
-const ISSUE_URL = "https://github.com/mesynx-ai/mesynx-ai/issues/65";
+const ISSUE_URL = "https://github.com/r0073d-l053r/mesynx/issues/65";
 
 function regionLabel(base: string): string {
     if (base.includes("euc1")) return "EU (Frankfurt)";

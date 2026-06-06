@@ -44,7 +44,7 @@ export default function PrivacyPage() {
                 open-source software you can run yourself under the AGPL-3.0
                 license. If you self-host, your data never touches our
                 infrastructure and this policy does not apply to you — see the{" "}
-                <Link href="https://github.com/mesynx-ai/mesynx-ai#readme">
+                <Link href="https://github.com/r0073d-l053r/mesynx#readme">
                     project README
                 </Link>{" "}
                 for self-host guidance.

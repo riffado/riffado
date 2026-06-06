@@ -6,7 +6,7 @@ This guide covers setting up a local development environment for Mesynx AI.
 
 ```bash
 # Clone repository
-git clone https://github.com/mesynx-ai/mesynx-ai.git
+git clone https://github.com/r0073d-l053r/mesynx.git
 cd mesynx-ai
 
 # Install dependencies

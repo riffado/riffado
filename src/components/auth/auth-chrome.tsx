@@ -81,12 +81,12 @@ export function HostedAuthChrome({
                 <p className="relative text-[11px] text-auth-brand-foreground/40 font-mono">
                     AGPL-3.0 ·{" "}
                     <Link
-                        href="https://github.com/mesynx-ai/mesynx-ai"
+                        href="https://github.com/r0073d-l053r/mesynx"
                         className="hover:text-auth-brand-foreground/70 transition-colors"
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        github.com/mesynx-ai/mesynx-ai
+                        github.com/r0073d-l053r/mesynx
                     </Link>
                 </p>
             </aside>
@@ -197,7 +197,7 @@ function InstanceFooter() {
         <div className="flex justify-center text-[11px] text-muted-foreground/50 font-mono">
             <div className="flex items-center gap-4">
                 <Link
-                    href="https://mesynx.r0073dl053r.com/docs"
+                    href="https://mesynx.r0073dl053r.com/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-muted-foreground transition-colors"
@@ -208,7 +208,7 @@ function InstanceFooter() {
                     ·
                 </span>
                 <Link
-                    href="https://github.com/mesynx-ai/mesynx-ai"
+                    href="https://github.com/r0073d-l053r/mesynx"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-muted-foreground transition-colors"
@@ -219,7 +219,7 @@ function InstanceFooter() {
                     ·
                 </span>
                 <Link
-                    href="https://mesynx.r0073dl053r.com/discord"
+                    href="https://discord.gg/mgBKaEGUvc"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="hover:text-muted-foreground transition-colors"

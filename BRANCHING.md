@@ -15,7 +15,7 @@ Mesynx AI uses a **rolling-trunk + tagged-release** model. Self-hosters consume 
 
 Stable versions are cut as **git tags** (`v0.1.0`, `v0.2.0`, …) from `main` when the tree is in a known-good state. Tagging triggers two workflows:
 
-- **`docker.yml`** — builds multi-arch images on `ghcr.io/mesynx-ai/mesynx-ai` and tags them `:X.Y.Z`, `:X.Y`, and `:latest`.
+- **`docker.yml`** — builds multi-arch images on `ghcr.io/r0073d-l053r/mesynx` and tags them `:X.Y.Z`, `:X.Y`, and `:latest`.
 - **`release.yml`** — drafts a GitHub Release with generated notes and attaches `docker-compose.yml` + `.env.example` as install artifacts.
 
 Every push to `main` additionally publishes `:dev` — opt-in rolling image for users who explicitly want the bleeding edge. `:latest` deliberately does **not** track `main`.

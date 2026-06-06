@@ -177,8 +177,8 @@ Entries go under `## [Unreleased]`. Subsections:
 
 ### Attribution format
 
-- Internal changes: `Fixed sync stall on 429 ([#123](https://github.com/mesynx-ai/mesynx-ai/issues/123))`
-- External contributions: `Added Groq provider ([#456](https://github.com/mesynx-ai/mesynx-ai/pull/456) by [@username](https://github.com/username))`
+- Internal changes: `Fixed sync stall on 429 ([#123](https://github.com/r0073d-l053r/mesynx/issues/123))`
+- External contributions: `Added Groq provider ([#456](https://github.com/r0073d-l053r/mesynx/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 

@@ -52,7 +52,7 @@ export function ForProfessionals() {
                                 <ArrowRight className="size-4" />
                             </Link>
                             <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai"
+                                href="https://github.com/r0073d-l053r/mesynx"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md border border-border bg-background hover:bg-secondary/40 transition-colors text-sm font-medium"

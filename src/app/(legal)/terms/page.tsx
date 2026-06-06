@@ -88,11 +88,11 @@ export default function TermsPage() {
                 The Mesynx AI source code is licensed under AGPL-3.0 and lives
                 at{" "}
                 <Link
-                    href="https://github.com/mesynx-ai/mesynx-ai"
+                    href="https://github.com/r0073d-l053r/mesynx"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    github.com/mesynx-ai/mesynx-ai
+                    github.com/r0073d-l053r/mesynx
                 </Link>
                 . You are free to run, modify, and redistribute it under that
                 license. These terms apply only to the hosted instance we

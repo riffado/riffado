@@ -22,8 +22,8 @@ Audit `CHANGELOG.md` against commits since the last release. **This is a maintai
    - Determine the right subsection: `Breaking Changes`, `Added`, `Changed`, `Fixed`, `Removed`, `Security`
    - Verify a corresponding entry exists under `## [Unreleased]`
    - Use `git show <hash> --stat` and `git show <hash>` to confirm scope and intent
-   - For external contributions (PRs from non-maintainers), entry must include PR link and author: `Added Groq provider ([#456](https://github.com/mesynx-ai/mesynx-ai/pull/456) by [@username](https://github.com/username))`
-   - For internal changes: `Fixed sync stall on 429 ([#123](https://github.com/mesynx-ai/mesynx-ai/issues/123))`
+   - For external contributions (PRs from non-maintainers), entry must include PR link and author: `Added Groq provider ([#456](https://github.com/r0073d-l053r/mesynx/pull/456) by [@username](https://github.com/username))`
+   - For internal changes: `Fixed sync stall on 429 ([#123](https://github.com/r0073d-l053r/mesynx/issues/123))`
 
 5. **Deploy-surface flagging:** any commit that touches `src/db/schema.ts`, `src/lib/env.ts`, `docker-compose.yml`, or the install flow must have a `Breaking Changes` entry with a migration note if it's not strictly additive. Per AGENTS.md, breaking changes ship with loud logging + Sentry context + CHANGELOG notes.
 

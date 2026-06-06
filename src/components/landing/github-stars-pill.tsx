@@ -1,7 +1,7 @@
 import { Star } from "lucide-react";
 import { Github } from "@/components/icons/icons";
 
-export const MESYNX_AI_REPO = "mesynx-ai/mesynx-ai";
+export const MESYNX_AI_REPO = "r0073d-l053r/mesynx";
 export const MESYNX_AI_REPO_URL = `https://github.com/${MESYNX_AI_REPO}`;
 
 /**

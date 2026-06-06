@@ -9,7 +9,7 @@ import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 
 type Step = "connect" | "complete";
 
-const GITHUB_REPO = "https://github.com/mesynx-ai/mesynx-ai";
+const GITHUB_REPO = "https://github.com/r0073d-l053r/mesynx";
 
 export function OnboardingForm() {
     const [step, setStep] = useState<Step>("connect");
