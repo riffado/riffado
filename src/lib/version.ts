@@ -2,7 +2,7 @@ import packageJson from "../../package.json" with { type: "json" };
 
 export const APP_VERSION = packageJson.version;
 export const APP_VERSION_TAG = `v${packageJson.version}`;
-export const APP_RELEASE_URL = `https://github.com/riffado/riffado/releases/tag/${APP_VERSION_TAG}`;
+export const APP_RELEASE_URL = `https://github.com/r0073d-l053r/mesynx/releases/tag/${APP_VERSION_TAG}`;
 
 /** Compare `vX.Y.Z` strings. Returns `null` (not 0) on unparseable input. */
 export function compareSemver(a: string, b: string): -1 | 0 | 1 | null {
@@ -25,5 +25,5 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 | null {
 }
 
 export function releaseUrlFor(tag: string): string {
-    return `https://github.com/riffado/riffado/releases/tag/${tag}`;
+    return `https://github.com/r0073d-l053r/mesynx/releases/tag/${tag}`;
 }

@@ -5,8 +5,8 @@
 # than building from source.
 #
 # Quick start (after running the installer, or manually):
-#   curl -fLO https://github.com/riffado/riffado/releases/latest/download/docker-compose.yml
-#   curl -fL  https://github.com/riffado/riffado/releases/latest/download/env.example -o .env
+#   curl -fLO https://github.com/r0073d-l053r/mesynx/releases/latest/download/docker-compose.yml
+#   curl -fL  https://github.com/r0073d-l053r/mesynx/releases/latest/download/env.example -o .env
 #   # Edit .env — set BETTER_AUTH_SECRET, ENCRYPTION_KEY, and APP_URL at minimum
 #   docker compose pull
 #   docker compose up -d
@@ -43,7 +43,7 @@ services:
     # Pulls the pre-built image from GitHub Container Registry.
     # MESYNX_AI_VERSION is written to .env by the installer (e.g. "0.5.6").
     # Leave it unset or set to "latest" to always track the newest stable release.
-    image: ghcr.io/riffado/riffado:${MESYNX_AI_VERSION:-latest}
+    image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-latest}
     container_name: mesynx-app
     restart: unless-stopped
     ports:
