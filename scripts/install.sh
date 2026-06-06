@@ -114,7 +114,10 @@ ok "Using $INSTALL_DIR"
 
 # ---- download release artifacts --------------------------------------------
 
-if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
+# VERSION is the literal placeholder when run directly from raw main (not a
+# published release). Use the release download URL only when VERSION looks
+# like a real semver tag (vX.Y.Z); fall back to raw main otherwise.
+if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
     BASE_URL="https://raw.githubusercontent.com/$REPO/main"
     info "Downloading configuration files from $BASE_URL..."
     CACHE_BUSTER="?v=$(date +%s)"
