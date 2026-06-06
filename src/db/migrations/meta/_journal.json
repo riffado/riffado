@@ -176,6 +176,13 @@
       "when": 1780675200000,
       "tag": "0024_provider_nickname",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1780760553113,
+      "tag": "0025_light_captain_stacy",
+      "breakpoints": true
     }
   ]
 }
