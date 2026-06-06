@@ -58,14 +58,15 @@ export function ArchiveVaultSection() {
 
         setIsSaving(true);
         try {
-            const body: Record<string, string> = {};
+            const body: Record<string, string | null> = {};
             if (mode === "set") {
-                body.newPin = newPin;
+                body.pin = newPin;
             } else if (mode === "change") {
                 body.currentPin = currentPin;
-                body.newPin = newPin;
+                body.pin = newPin;
             } else if (mode === "remove") {
                 body.currentPin = currentPin;
+                body.pin = null;
             }
 
             const res = await fetch("/api/archive/vault", {

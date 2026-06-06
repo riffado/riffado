@@ -9,6 +9,14 @@ services:
       # Host 8397 -> container 8000. Point Mesynx AI's provider Base URL at
       # http://<this-host>:8397/v1
       - "8397:8000"
+    environment:
+      # Enable Voice Activity Detection — skips non-speech segments before
+      # they reach Whisper. Single biggest fix for hallucinations on long
+      # recordings with pauses. Set to false only if VAD trims real speech.
+      WHISPER__VAD_ENABLED: "true"
+      # Allow larger chunked uploads (default 10 MB is too small for
+      # recordings over ~15 minutes at standard bitrate).
+      WHISPER__MAX_AUDIO_FILE_SIZE_MB: "500"
     # GPU: Enable deploy reservations. CPU: Comment out the entire deploy block below.
     deploy:
       resources:
@@ -29,7 +37,10 @@ services:
       retries: 3
 
   whisperx:
-    # High-performance WhisperX server with forced alignment and diarization.
+    # WhisperX: forced-alignment + speaker diarization over an OpenAI-compatible API.
+    # GPU only — there is no CPU image for this service.
+    # Diarization requires a Hugging Face token (HF_TOKEN) and a licence
+    # acceptance on https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
     container_name: mesynx-ai-whisperx
     restart: unless-stopped
@@ -38,11 +49,17 @@ services:
       # http://<this-host>:8398/v1
       - "8398:8000"
     environment:
+      # API key the server will require on every request. Must match the
+      # API key you enter in Mesynx AI → Settings → AI Providers.
       - API_KEY=${WHISPERX_API_KEY:-sk-placeholder}
-      # Hugging Face token is required to download pyannote diarization models.
+      # Required for pyannote diarization models. Obtain a read token from
+      # https://hf.co/settings/tokens after accepting the pyannote licence.
       - HF_TOKEN=${HF_TOKEN:-}
+      # Default Whisper model. Append "-diarize" to a model name in Mesynx AI
+      # (e.g. "large-v3-turbo-diarize") to activate speaker diarization.
       - TRANSCRIBE_MODEL=${WHISPERX_MODEL:-large-v3-turbo}
-      - BATCH_SIZE=16
+      # Number of audio chunks processed in parallel. Reduce to 8 on <16 GB VRAM.
+      - BATCH_SIZE=${WHISPERX_BATCH_SIZE:-16}
     deploy:
       resources:
         reservations:
@@ -50,14 +67,16 @@ services:
             - driver: nvidia
               device_ids: [ "0", "1" ]
               capabilities: [ gpu ]
+    volumes:
+      # Cache downloaded Whisper + diarization models across restarts.
+      # pyannote models are ~3 GB; whisperx models are another ~3 GB.
+      - whisperx_cache:/data/models
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]
       interval: 30s
       timeout: 5s
-      start_period: 60s
-      retries: 3
-    volumes:
-      - whisperx_cache:/data/models
+      start_period: 90s
+      retries: 5
 
 volumes:
   whisper_cache:

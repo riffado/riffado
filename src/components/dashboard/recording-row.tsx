@@ -182,8 +182,9 @@ export function RecordingRow({
                         {/* Filename + status */}
                         <div className="flex items-center gap-2">
                             {editing ? (
-                                /* ── Inline title input ── */
+                                /* biome-ignore lint/a11y/noStaticElementInteractions: propagation-stop wrapper around a keyboard-accessible <input>; keyboard interaction is handled by the input itself */
                                 <div
+                                    role="presentation"
                                     className="flex flex-1 items-center gap-1.5 min-w-0"
                                     onClick={(e) => e.stopPropagation()}
                                     onKeyDown={(e) => e.stopPropagation()}

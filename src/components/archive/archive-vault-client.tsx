@@ -127,7 +127,7 @@ export function ArchiveVaultClient({ hasPinLock }: ArchiveVaultClientProps) {
         setPinError(false);
 
         try {
-            const res = await fetch("/api/archive/vault/verify", {
+            const res = await fetch("/api/archive/vault", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ pin }),

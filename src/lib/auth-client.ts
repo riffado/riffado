@@ -9,11 +9,8 @@ export const authClient = createAuthClient({
             : "http://localhost:3000",
 });
 
-export const {
-    useSession,
-    signIn,
-    signOut,
-    signUp,
-    forgetPassword,
-    resetPassword,
-} = authClient;
+export const { useSession, signIn, signOut, signUp, resetPassword } =
+    authClient;
+
+/** @deprecated better-auth renamed forgetPassword → requestPasswordReset in v1.4 */
+export const forgetPassword = authClient.requestPasswordReset;

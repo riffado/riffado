@@ -14,7 +14,7 @@
 #   6. Waits for /api/health to return 200.
 #
 # This script is part of the Mesynx AI deploy surface (see AGENTS.md).
-# Source: https://github.com/mesynx-ai/mesynx-ai/blob/main/scripts/install.sh
+# Source: https://github.com/r0073d-l053r/mesynx/blob/main/scripts/install.sh
 
 set -eu
 

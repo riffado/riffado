@@ -37,6 +37,24 @@
 
 ## [0.5.6] - 2026-05-30
 
+### Security
+- Upgraded `better-auth` from `^1.3.34` to `^1.4.9` (resolves prototype-pollution via `defu` and related auth-chain CVEs).
+- Upgraded `nodemailer` from `^7.0.x` to `^8.0.5` (patches SMTP command-injection CVE GHSA-vvjj-xcjg-gr5g; `<=8.0.4` vulnerable).
+- Upgraded `drizzle-orm` from `^0.44.7` to `^0.45.2` (patches SQL-injection CVE in raw-query helpers; `<0.45.2` vulnerable).
+- Upgraded `next` from `16.0.7` to `16.2.7` (picks up upstream security patches).
+- Added `pnpm-workspace.yaml` overrides for `fast-xml-parser`, `rollup`, `minimatch`, `fast-uri`, `socket.io-parser`, `defu`, `ajv`, `vite`, and `postcss` to pull in their security patches transitively.
+- Moved `vitest` from `dependencies` to `devDependencies` so it is excluded from the production Docker image.
+
+### Fixed
+- `forgetPassword` API renamed to `requestPasswordReset` in `better-auth` v1.4 — added backward-compat alias so existing callers are unaffected.
+- `pnpm-workspace.yaml` `allowBuilds.core-js` was a string placeholder (`"set this to true or false"`) instead of a boolean; fixed to `true`, eliminating the `ERR_PNPM_IGNORED_BUILDS` error on fresh installs.
+- Removed dead `pnpm` block from `package.json` (ignored by pnpm v11 with a warning); all settings now live in `pnpm-workspace.yaml`.
+
+### Infrastructure
+- Added `workflow_dispatch` trigger to `.github/workflows/docker.yml` with a `push_latest` input so a production image can be pushed to GHCR without requiring a git tag.
+- Added `deploy/docker-compose.yml` — the production compose used by the one-line installer. Uses `image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-latest}` instead of the dev `build: context: .` block.
+- `release.yml` now attaches `deploy/docker-compose.yml` (the production compose) instead of the root `docker-compose.yml` (the dev compose) as the `docker-compose.yml` release asset.
+
 ## [0.5.5] - 2026-05-30
 
 ### Fixed

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { DiarizedTranscript } from "@/components/dashboard/diarized-transcript";
 import { ExportMenu } from "@/components/dashboard/export-menu";
 import { GenerateButton } from "@/components/dashboard/generate-button";
 import {
@@ -38,6 +39,7 @@ import {
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import { SUMMARY_PRESETS } from "@/lib/ai/summary-presets";
+import { isDiarized } from "@/lib/transcription/parse-diarized";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -66,7 +68,7 @@ export function TranscriptionPanel({
     recording,
     transcription,
     isTranscribing,
-    onTranscribe,
+    onTranscribe: _onTranscribe,
     showTranscript = true,
     showSummary = true,
     onPipelineComplete,
@@ -544,9 +546,15 @@ export function TranscriptionPanel({
                                 ) : (
                                     <div className="group/transcript relative">
                                         <div className="rounded-lg bg-muted/60 p-4 max-h-96 overflow-y-auto border border-border/50 dark:bg-muted/30">
-                                            <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
-                                                {transcription.text}
-                                            </p>
+                                            {isDiarized(transcription.text) ? (
+                                                <DiarizedTranscript
+                                                    text={transcription.text}
+                                                />
+                                            ) : (
+                                                <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+                                                    {transcription.text}
+                                                </p>
+                                            )}
                                         </div>
                                         <button
                                             type="button"

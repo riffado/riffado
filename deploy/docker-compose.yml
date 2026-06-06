@@ -1,3 +1,23 @@
+# Mesynx AI — production docker-compose (self-hosted install)
+#
+# This file is published as a release asset and downloaded by the one-line
+# installer (scripts/install.sh). It pulls pre-built images from GHCR rather
+# than building from source.
+#
+# Quick start (after running the installer, or manually):
+#   curl -fLO https://github.com/r0073d-l053r/mesynx/releases/latest/download/docker-compose.yml
+#   curl -fL  https://github.com/r0073d-l053r/mesynx/releases/latest/download/env.example -o .env
+#   # Edit .env — set BETTER_AUTH_SECRET, ENCRYPTION_KEY, and APP_URL at minimum
+#   docker compose pull
+#   docker compose up -d
+#
+# Upgrade:
+#   docker compose pull && docker compose up -d
+#
+# GPU note: `whisper` and `whisperx` are GPU services. If you are running
+# CPU-only, comment out the `deploy: resources: reservations:` block for
+# `whisper` and remove the `whisperx` service entirely (it has no CPU image).
+
 services:
   db:
     image: postgres:16-alpine
@@ -5,11 +25,6 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      # Default preserved for backward compat with existing self-host
-      # deploys. The one-line installer (scripts/install.sh) generates a
-      # random POSTGRES_PASSWORD and writes it to .env. Existing operators
-      # can rotate by setting POSTGRES_PASSWORD in .env, recreating the
-      # `db` volume, and restoring from a backup.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: mesynx-ai
     volumes:
@@ -25,11 +40,10 @@ services:
       - mesynx-network
 
   app:
-    # Build from local source code
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-dev}
+    # Pulls the pre-built image from GitHub Container Registry.
+    # MESYNX_AI_VERSION is written to .env by the installer (e.g. "0.5.6").
+    # Leave it unset or set to "latest" to always track the newest stable release.
+    image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-latest}
     container_name: mesynx-ai-app
     restart: unless-stopped
     ports:
@@ -46,7 +60,7 @@ services:
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
 
-      # Storage (optional defaults)
+      # Storage (optional — defaults to local disk under /app/audio)
       DEFAULT_STORAGE_TYPE: ${DEFAULT_STORAGE_TYPE:-local}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/app/audio}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -69,7 +83,7 @@ services:
       - mesynx-network
 
   whisper:
-    # GPU: Use cuda image. CPU: Comment out cuda image and uncomment cpu image below.
+    # GPU: Use the cuda image below (default). CPU: swap to the -cpu image.
     image: fedirz/faster-whisper-server:latest-cuda
     # image: fedirz/faster-whisper-server:latest-cpu
     container_name: mesynx-ai-whisper
@@ -77,14 +91,13 @@ services:
     ports:
       - "8397:8000"
     environment:
-      # Enable Voice Activity Detection — skips non-speech segments before
-      # they reach Whisper. Single biggest fix for hallucinations on long
-      # recordings with pauses. Set to false only if VAD trims real speech.
+      # VAD eliminates hallucinations on recordings with pauses.
+      # Set to false only if VAD clips real speech at the start of sentences.
       WHISPER__VAD_ENABLED: "true"
-      # Allow larger chunked uploads (default 10 MB is too small for
-      # recordings over ~15 minutes at standard bitrate).
+      # Raise the upload cap — 10 MB (default) is too small for recordings
+      # longer than ~15 min at standard bitrate.
       WHISPER__MAX_AUDIO_FILE_SIZE_MB: "500"
-    # GPU: Enable deploy reservations. CPU: Comment out the entire deploy block below.
+    # GPU: Enable the deploy block below. CPU: comment it out entirely.
     deploy:
       resources:
         reservations:
@@ -99,33 +112,24 @@ services:
       start_period: 60s
       retries: 3
     volumes:
-      # Persist downloaded Whisper models across container recreates.
-      # large-v3 is ~3 GB; without this it re-downloads every restart.
+      # Persist downloaded Whisper models (large-v3 is ~3 GB).
       - whisper_cache:/root/.cache/huggingface
     networks:
       - mesynx-network
 
   whisperx:
-    # WhisperX: forced-alignment + speaker diarization over an OpenAI-compatible API.
-    # GPU only — there is no CPU image for this service.
-    # Diarization requires a Hugging Face token (HF_TOKEN) and a licence
-    # acceptance on https://hf.co/pyannote/speaker-diarization-community-1
+    # WhisperX: forced-alignment + speaker diarization. GPU only.
+    # To enable diarization, set HF_TOKEN and accept the pyannote licence:
+    # https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
     container_name: mesynx-ai-whisperx
     restart: unless-stopped
     ports:
       - "8398:8000"
     environment:
-      # API key the server will require on every request. Must match the
-      # API key you enter in Mesynx AI → Settings → AI Providers.
       - API_KEY=${WHISPERX_API_KEY:-sk-placeholder}
-      # Required for pyannote diarization models. Obtain a read token from
-      # https://hf.co/settings/tokens after accepting the pyannote licence.
       - HF_TOKEN=${HF_TOKEN:-}
-      # Default Whisper model. Append "-diarize" to a model name in Mesynx AI
-      # (e.g. "large-v3-turbo-diarize") to activate speaker diarization.
       - TRANSCRIBE_MODEL=${WHISPERX_MODEL:-large-v3-turbo}
-      # Number of audio chunks processed in parallel. Reduce to 8 on <16 GB VRAM.
       - BATCH_SIZE=${WHISPERX_BATCH_SIZE:-16}
     deploy:
       resources:
@@ -141,8 +145,6 @@ services:
       start_period: 90s
       retries: 5
     volumes:
-      # Cache downloaded Whisper + diarization models across restarts.
-      # pyannote models are ~3 GB; whisperx models are another ~3 GB.
       - whisperx_cache:/data/models
     networks:
       - mesynx-network

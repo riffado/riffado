@@ -190,7 +190,9 @@ export function WorkstationDetailPane({
                             ripplesRef={ripplesRef}
                         />
 
-                        {/* Transparent scroll overlay — receives mouse events */}
+                        {/* Transparent scroll overlay — receives mouse events for dot-grid effect */}
+                        {/* biome-ignore lint/a11y/noStaticElementInteractions: visual-effect overlay; interactive content within is fully keyboard-accessible */}
+                        {/* biome-ignore lint/a11y/useKeyWithClickEvents: mouse-only interaction; no keyboard equivalent is meaningful here */}
                         <div
                             className="absolute inset-0 overflow-y-auto"
                             onMouseMove={handleBackgroundMove}

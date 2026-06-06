@@ -1,5 +1,36 @@
 allowBuilds:
-  core-js: set this to true or false
+  "@biomejs/biome": true
+  core-js: true
   esbuild: true
   protobufjs: true
   sharp: true
+
+overrides:
+  # CVE GHSA-m7jm-9gc2-mpf2: fast-xml-parser entity encoding bypass via DOCTYPE
+  # Pulled in transitively by @aws-sdk/client-s3 → @aws-sdk/xml-builder
+  fast-xml-parser: ">=5.3.5"
+  # CVE GHSA-4qx3-x5hm-fgv4: rollup path traversal arbitrary file write
+  # Pulled in transitively by vite/vitest toolchain
+  rollup: ">=4.59.0"
+  # CVE GHSA-3ppc-4f35-3m26: minimatch ReDoS via repeated wildcards
+  # Pulled in transitively by react-email → glob
+  minimatch: ">=10.2.1"
+  # CVE GHSA-q3j6-qgpj-74h6 / GHSA-v39h-62p7-jpjc: fast-uri path traversal + host confusion
+  # Pulled in transitively by react-email → conf → ajv
+  fast-uri: ">=3.1.2"
+  # CVE: socket.io-parser unbounded binary attachments DoS
+  # Pulled in transitively by react-email → socket.io
+  socket.io-parser: ">=4.2.5"
+  # CVE GHSA-737v-mqg7-c878: defu prototype pollution via __proto__ key
+  # Pulled in directly by better-auth (runtime dep — must patch)
+  defu: "^6.1.5"
+  # CVE GHSA-2g4f-4pwh-qvx6: ajv ReDoS with $data option
+  # Pulled in by react-email → conf (used for email rendering in production)
+  ajv: "^8.18.0"
+  # CVE GHSA-v2wj-q39q-566r / GHSA-67mh-4wv8-2f99: vite dev-server vulnerabilities
+  # Pulled in by vitest + fumadocs-mdx (dev tools only; not in production image)
+  # Now also pinned as direct devDep at ^7.3.5 — this override kept for safety
+  vite: "^7.3.5"
+  # CVE: PostCSS XSS via unescaped </style> in CSS output (>=8.5.10 patched)
+  # Pulled in by next → postcss
+  postcss: ">=8.5.10"

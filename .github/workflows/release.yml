@@ -109,8 +109,15 @@ jobs:
       # by prefixing them with `default.` on upload, which breaks predictable
       # download URLs. Copy to a non-hidden name so the asset is uploaded as
       # `env.example` and stays curl-friendly.
+      #
+      # The root docker-compose.yml is the DEV compose (uses `build: context: .`).
+      # For a self-hosted install the user needs the PRODUCTION compose that pulls
+      # the pre-built GHCR image instead. Stage it from deploy/docker-compose.yml
+      # so softprops uploads it under the expected `docker-compose.yml` asset name.
       - name: Prepare install artifacts
-        run: cp .env.example env.example
+        run: |
+          cp .env.example env.example
+          cp deploy/docker-compose.yml /tmp/docker-compose.yml
 
       - name: Create draft release
         uses: softprops/action-gh-release@v2
@@ -124,7 +131,7 @@ jobs:
           #   curl -fL  .../releases/latest/download/env.example -o .env
           # without cloning the repo.
           files: |
-            docker-compose.yml
+            /tmp/docker-compose.yml
             env.example
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
