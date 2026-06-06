@@ -117,10 +117,11 @@ ok "Using $INSTALL_DIR"
 if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
     BASE_URL="https://raw.githubusercontent.com/$REPO/main"
     info "Downloading configuration files from $BASE_URL..."
-    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
+    CACHE_BUSTER="?v=$(date +%s)"
+    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml$CACHE_BUSTER" \
         || die "Failed to download docker-compose.yml from $BASE_URL"
-    curl -fsSL -o .env "$BASE_URL/env.example" \
-        || curl -fsSL -o .env "$BASE_URL/.env.example" \
+    curl -fsSL -o .env "$BASE_URL/env.example$CACHE_BUSTER" \
+        || curl -fsSL -o .env "$BASE_URL/.env.example$CACHE_BUSTER" \
         || die "Failed to download env.example from $BASE_URL"
 else
     BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
