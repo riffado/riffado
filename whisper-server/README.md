@@ -74,9 +74,10 @@ sentences that were never spoken. Two things help, in order of impact:
 
 For advanced transcription needs including speaker diarization (identifying who spoke when) and word-level forced alignment, we also ship a **WhisperX API Server** based on the [`etalab-ia/whisperx-openai-api`](https://github.com/etalab-ia/whisperx-openai-api) wrapper.
 
-### Requirements
+### WhisperX Requirements
 
 To enable speaker diarization via PyAnnote audio models:
+
 1. Create a free account at [huggingface.co](https://huggingface.co).
 2. Visit [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and accept the user license agreement.
 3. Generate a User Access Token (read permission) at **Hugging Face Settings → Access Tokens**.
@@ -92,6 +93,7 @@ docker compose up -d whisperx
 ```
 
 Verify that it is online and serving the OpenAI audio API:
+
 ```bash
 curl http://localhost:8398/v1/models
 ```
