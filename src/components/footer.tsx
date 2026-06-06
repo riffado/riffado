@@ -64,7 +64,7 @@ export function Footer() {
                             aria-label="View source code on GitHub"
                         >
                             <Github className="size-3.5" />
-                        </Link>>
+                        </Link>
                     </div>
                 </div>
             </div>

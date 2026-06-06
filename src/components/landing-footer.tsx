@@ -56,35 +56,23 @@ const COLUMNS: FooterColumn[] = [
             },
         ],
     },
+    {
+        title: "Community",
+        links: [
+            { label: "Documentation", href: "https://mesynx.r0073dl053r.com/" },
             {
-                title: "Community",
-                links: [
-                    { label: "Documentation", href: "https://mesynx.r0073dl053r.com/" },
-                    {
-                        label: "Discussions",
-                        href: "https://github.com/r0073d-l053r/mesynx/discussions",
-                        external: true,
-                    },
-                    {
-                        label: "Code of Conduct",
-                        href: "https://github.com/r0073d-l053r/mesynx/blob/main/CODE_OF_CONDUCT.md",
-                        external: true,
-                    },
-                    {
-                        label: "Discord",
-                        href: "https://discord.gg/mgBKaEGUvc",
-                        external: true,
-                    },
-                ],
+                label: "Discussions",
+                href: "https://github.com/r0073d-l053r/mesynx/discussions",
+                external: true,
             },
             {
                 label: "Code of Conduct",
-                href: "https://github.com/mesynx-ai/mesynx-ai/blob/main/CODE_OF_CONDUCT.md",
+                href: "https://github.com/r0073d-l053r/mesynx/blob/main/CODE_OF_CONDUCT.md",
                 external: true,
             },
             {
                 label: "Discord",
-                href: "https://discord.gg/JygWxS2VA8",
+                href: "https://discord.gg/mgBKaEGUvc",
                 external: true,
             },
         ],
