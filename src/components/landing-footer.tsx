@@ -135,16 +135,16 @@ export function LandingFooter() {
                             already own. Your recordings, your transcripts,
                             yours to keep.
                         </p>
-            <div className="flex items-center gap-3 mt-1">
-                <Link
-                    href="https://github.com/r0073d-l053r/mesynx"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Mesynx AI on GitHub"
-                >
-                    <Github className="size-5" />
-                </Link>
+                        <div className="flex items-center gap-3 mt-1">
+                            <Link
+                                href="https://github.com/r0073d-l053r/mesynx"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label="Mesynx AI on GitHub"
+                            >
+                                <Github className="size-5" />
+                            </Link>
                             <Link
                                 href="https://x.com/mesynx-aihq"
                                 target="_blank"

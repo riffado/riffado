@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Github } from "@/components/icons/icons";
 import { Logo } from "@/components/icons/logo";
-import { ReportBugButton } from "@/components/report-bug-dialog";
 import { UpdateBadge } from "@/components/update-badge";
 import { env } from "@/lib/env";
 import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
