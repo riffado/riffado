@@ -11,6 +11,9 @@ interface UseLongPressOptions {
 /**
  * Detects a long-press gesture on any element.
  *
+ * Touch/pen only — mouse input is ignored so the gesture never fires
+ * on desktop (where hover affordances are used instead).
+ *
  * Attach the returned handlers to the element's `onPointerDown`,
  * `onPointerMove`, `onPointerUp`, and `onPointerCancel` props.
  * The long-press callback fires after `delay` ms if the pointer
@@ -38,8 +41,10 @@ export function useLongPress({
 
     const onPointerDown = useCallback(
         (e: React.PointerEvent) => {
-            // Only primary pointer (left mouse / first touch).
-            if (e.button !== 0 && e.pointerType === "mouse") return;
+            // Long-press is a touch/pen gesture only. On desktop the row
+            // already exposes a hover dropdown menu, so a held mouse
+            // button must not open the mobile context sheet.
+            if (e.pointerType === "mouse") return;
             didFireRef.current = false;
             startPosRef.current = { x: e.clientX, y: e.clientY };
             timerRef.current = setTimeout(() => {
