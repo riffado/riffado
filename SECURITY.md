@@ -130,4 +130,4 @@ We appreciate the security research community and will acknowledge researchers w
 
 For security concerns: [GitHub private security advisory](https://github.com/r0073d-l053r/mesynx/security/advisories/new)
 For general issues: [GitHub Issues](https://github.com/r0073d-l053r/mesynx/issues)
-For discussions: [GitHub Discussions](https://github.com/r0073d-l053r/mesynx/discussions) · [Discord](https://discord.gg/JygWxS2VA8)
+For discussions: [GitHub Discussions](https://github.com/r0073d-l053r/mesynx/discussions) · [Discord](https://discord.gg/mgBKaEGUvc)

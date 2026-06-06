@@ -44,7 +44,7 @@ export default async function SuspendedPage() {
                 <p className="text-sm text-muted-foreground">
                     Reach out on{" "}
                     <a
-                        href="https://discord.gg/JygWxS2VA8"
+                        href="https://discord.gg/mgBKaEGUvc"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline"

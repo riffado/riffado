@@ -148,7 +148,7 @@ export default function RebrandPage() {
                         <p className="text-muted-foreground leading-relaxed">
                             Open a thread on{" "}
                             <Link
-                                href="https://discord.gg/JygWxS2VA8"
+                                href="https://discord.gg/mgBKaEGUvc"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-foreground underline decoration-dotted underline-offset-2 hover:text-foreground/80"

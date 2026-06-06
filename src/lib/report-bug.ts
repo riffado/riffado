@@ -1,6 +1,6 @@
 import { APP_VERSION_TAG } from "@/lib/version";
 
-export const DISCORD_URL = "https://discord.gg/JygWxS2VA8";
+export const DISCORD_URL = "https://discord.gg/mgBKaEGUvc";
 
 const GITHUB_NEW_ISSUE_URL =
     "https://github.com/r0073d-l053r/mesynx/issues/new";

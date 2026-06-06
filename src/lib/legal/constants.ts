@@ -64,7 +64,7 @@ export const EFFECTIVE_DATE_DISPLAY = new Date(
 /** Contact channels — Discord and GitHub. No support email. */
 export const CONTACT_LINKS = {
     /** General support and questions — Discord server. */
-    support: "https://discord.gg/JygWxS2VA8",
+    support: "https://discord.gg/mgBKaEGUvc",
     /** Security vulnerabilities — GitHub private security advisory. */
     security: "https://github.com/r0073d-l053r/mesynx/security/advisories/new",
     /** Privacy / GDPR data-subject requests — GitHub Discussions. */
