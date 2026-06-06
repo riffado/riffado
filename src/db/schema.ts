@@ -245,6 +245,10 @@ export const recordings = pgTable(
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.
         deletedAt: timestamp("deleted_at"),
+        // Archive timestamp. Set when the user sends a recording to the vault.
+        // Archived recordings are excluded from the main dashboard but remain
+        // fully intact (audio, transcript, summary). Unarchiving clears this.
+        archivedAt: timestamp("archived_at"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
@@ -445,6 +449,8 @@ export const userSettings = pgTable("user_settings", {
     onboardingCompleted: boolean("onboarding_completed")
         .notNull()
         .default(false),
+    // Archive vault PIN (encrypted). Null = no PIN lock.
+    vaultPin: text("vault_pin"),
     // Title generation
     autoGenerateTitle: boolean("auto_generate_title").notNull().default(true),
     syncTitleToPlaud: boolean("sync_title_to_plaud").notNull().default(false),
@@ -458,6 +464,61 @@ export const userSettings = pgTable("user_settings", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// ── Archive Vault ────────────────────────────────────────────────────────────
+
+/**
+ * User-defined categories for organising archived recordings.
+ * Each user can create their own set; categories are personal and never shared.
+ */
+export const archiveCategories = pgTable(
+    "archive_categories",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        name: text("name").notNull(),
+        // Tailwind colour token stored as a short key: "gray", "red", "blue" …
+        color: varchar("color", { length: 20 }).notNull().default("gray"),
+        // Lucide icon name, e.g. "folder", "star", "briefcase". Null = default.
+        icon: varchar("icon", { length: 40 }),
+        sortOrder: integer("sort_order").notNull().default(0),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("archive_categories_user_id_idx").on(table.userId),
+    }),
+);
+
+/**
+ * Junction table: which categories a recording belongs to.
+ * A recording can have multiple categories.
+ */
+export const archiveCategoryAssignments = pgTable(
+    "archive_category_assignments",
+    {
+        recordingId: text("recording_id")
+            .notNull()
+            .references(() => recordings.id, { onDelete: "cascade" }),
+        categoryId: text("category_id")
+            .notNull()
+            .references(() => archiveCategories.id, { onDelete: "cascade" }),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.recordingId, table.categoryId] }),
+        recordingIdIdx: index("archive_assignments_recording_id_idx").on(
+            table.recordingId,
+        ),
+    }),
+);
 
 export const apiKeySourceEnum = pgEnum("api_key_source", [
     "manual",

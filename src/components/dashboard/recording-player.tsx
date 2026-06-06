@@ -21,6 +21,8 @@ interface RecordingPlayerProps {
      * slider otherwise. Read from userSettings.playerScrubber.
      */
     scrubberStyle?: "waveform" | "slider";
+    /** Called after the user successfully renames the recording. */
+    onTitleChange?: (newTitle: string) => void;
 }
 
 /**
@@ -37,6 +39,7 @@ export function RecordingPlayer({
     initialVolume = 75,
     initialAutoPlayNext = false,
     scrubberStyle = "waveform",
+    onTitleChange,
 }: RecordingPlayerProps) {
     const {
         audioRef,
@@ -93,6 +96,7 @@ export function RecordingPlayer({
                 scrubberStyle={scrubberStyle}
                 waveformStatus={waveformStatus}
                 onDecodeWaveform={triggerWaveformDecode}
+                onTitleChange={onTitleChange}
             />
             <CardContent>
                 <RecordingPlayerControls

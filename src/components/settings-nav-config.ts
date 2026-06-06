@@ -1,4 +1,5 @@
 import {
+    Archive,
     Bell,
     Bot,
     Download,
@@ -58,6 +59,7 @@ export const settingsNavGroups: { label: string; items: NavItem[] }[] = [
         items: [
             { name: "Storage", id: "storage", icon: HardDrive },
             { name: "Export/Backup", id: "export", icon: Download },
+            { name: "Archive Vault", id: "archive", icon: Archive },
         ],
     },
     {

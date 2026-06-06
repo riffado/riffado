@@ -8,7 +8,7 @@ import {
     webhookDeliveries,
 } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -87,6 +87,49 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                 ? { ...transcription, text: transcriptionText }
                 : null,
     });
+});
+
+/**
+ * PATCH /api/recordings/[id]
+ * Update mutable recording fields. Currently supports: filename (title).
+ */
+export const PATCH = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
+    const { id } = await (context as IdContext).params;
+    const userId = session.user.id;
+
+    const body = await request.json().catch(() => ({}));
+    const newFilename = typeof body.filename === "string" ? body.filename.trim() : null;
+
+    if (!newFilename) {
+        throw new AppError(ErrorCode.INVALID_INPUT, "filename is required", 400);
+    }
+    if (newFilename.length > 500) {
+        throw new AppError(ErrorCode.INVALID_INPUT, "filename too long (max 500 chars)", 400);
+    }
+
+    const [recording] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, userId),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
+
+    if (!recording) {
+        throw new AppError(ErrorCode.RECORDING_NOT_FOUND, "Recording not found", 404);
+    }
+
+    await db
+        .update(recordings)
+        .set({ filename: encryptText(newFilename), updatedAt: new Date() })
+        .where(and(eq(recordings.id, id), eq(recordings.userId, userId)));
+
+    return NextResponse.json({ success: true, filename: newFilename });
 });
 
 /**

@@ -43,6 +43,8 @@ interface RecordingListProps {
     inFlightActions: Map<string, "transcribing" | "summarizing">;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    onArchive: (recording: Recording) => Promise<void>;
+    onTitleChange: (recording: Recording, newTitle: string) => void;
     initialDateTimeFormat: DateTimeFormat;
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
@@ -86,6 +88,8 @@ export function RecordingList({
     inFlightActions,
     onSelect,
     onDelete,
+    onArchive,
+    onTitleChange,
     initialDateTimeFormat,
     initialSortOrder,
     initialDensity,
@@ -298,6 +302,8 @@ export function RecordingList({
                                     dateTimeFormat={dateTimeFormat}
                                     onSelect={onSelect}
                                     onDelete={onDelete}
+                                    onArchive={onArchive}
+                                    onTitleChange={onTitleChange}
                                     registerRef={registerRowRef}
                                 />
                             ))}

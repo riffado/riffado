@@ -1,6 +1,7 @@
 "use client";
 
 import type { SettingsSection } from "@/types/settings";
+import { ArchiveVaultSection } from "./settings-sections/archive-vault-section";
 import { ApiKeysSection } from "./settings/api-keys-section";
 import { WebhooksSection } from "./settings/webhooks-section";
 import { DevSection } from "./settings-sections/dev-section";
@@ -71,6 +72,8 @@ export function SettingsContent({
             return <ExportSection onReRunOnboarding={onReRunOnboarding} />;
         case "storage":
             return <StorageSection isHosted={isHosted} />;
+        case "archive":
+            return <ArchiveVaultSection />;
         case "dev":
             if (process.env.NODE_ENV === "production") return null;
             return <DevSection />;

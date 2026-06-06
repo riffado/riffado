@@ -422,6 +422,62 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     });
 });
 
+// PATCH - Manual edit of summary text only (no AI regeneration).
+// Caller provides plaintext; server encrypts. keyPoints / actionItems are
+// intentionally NOT touched here — the user is editing the prose summary.
+export const PATCH = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
+    const { id } = await (context as IdContext).params;
+
+    const body = await request.json().catch(() => ({}));
+    const newSummary = typeof body.summary === "string" ? body.summary : null;
+
+    if (newSummary === null) {
+        throw new AppError(ErrorCode.INVALID_INPUT, "summary is required", 400);
+    }
+
+    const [recording] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .limit(1);
+
+    if (!recording) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
+
+    const updated = await db
+        .update(aiEnhancements)
+        .set({ summary: encryptText(newSummary) })
+        .where(
+            and(
+                eq(aiEnhancements.recordingId, id),
+                eq(aiEnhancements.userId, session.user.id),
+            ),
+        )
+        .returning({ id: aiEnhancements.id });
+
+    if (updated.length === 0) {
+        throw new AppError(
+            ErrorCode.NOT_FOUND,
+            "No summary found for this recording",
+            404,
+        );
+    }
+
+    return NextResponse.json({ success: true });
+});
+
 // GET - Fetch existing summary
 export const GET = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);

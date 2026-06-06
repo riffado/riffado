@@ -5,10 +5,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
 import {
-    type DiscoveredServiceType,
     discoverLocalAiServices,
     parseTailscaleHosts,
 } from "@/lib/ai/local-discovery";
+import { planProvisioning } from "@/lib/ai/provision-plan";
 import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
@@ -49,23 +49,18 @@ async function discoverTailscaleHosts(): Promise<string[]> {
     }
 }
 
-// --- Default-role assignment for newly provisioned services ----------------
-const TRANSCRIPTION_TYPES: ReadonlySet<DiscoveredServiceType> = new Set([
-    "Faster Whisper",
-]);
-const ENHANCEMENT_TYPES: ReadonlySet<DiscoveredServiceType> = new Set([
-    "Ollama",
-    "LM Studio",
-    "Open WebUI",
-]);
-
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
 
     // Never network-scan from the hosted multi-tenant app: it would probe
     // Mesynx-internal infrastructure, not the user's machine.
     if (env.IS_HOSTED) {
-        return NextResponse.json({ success: true, found: [], provisioned: [] });
+        return NextResponse.json({
+            success: true,
+            found: [],
+            provisioned: [],
+            manual: [],
+        });
     }
 
     const userId = session.user.id;
@@ -80,14 +75,15 @@ export const POST = apiHandler(async (request: Request) => {
         .where(eq(apiCredentials.userId, userId));
 
     const existingBaseUrls = new Set(
-        existingProviders
-            .map((p) => p.baseUrl?.toLowerCase().trim())
-            .filter(Boolean),
+        existingProviders.flatMap((p) => {
+            const url = p.baseUrl?.toLowerCase().trim();
+            return url ? [url] : [];
+        }),
     );
-    let hasDefaultTranscription = existingProviders.some(
+    const hasDefaultTranscription = existingProviders.some(
         (p) => p.isDefaultTranscription,
     );
-    let hasDefaultEnhancement = existingProviders.some(
+    const hasDefaultEnhancement = existingProviders.some(
         (p) => p.isDefaultEnhancement,
     );
 
@@ -97,48 +93,32 @@ export const POST = apiHandler(async (request: Request) => {
 
     const { services } = await discoverLocalAiServices({ env, tailscaleHosts });
 
-    const found: DiscoveredServiceType[] = [];
-    const provisioned: DiscoveredServiceType[] = [];
+    // Decide what to provision, what to leave for manual setup (Open WebUI),
+    // and what was found. Pure policy — see provision-plan.ts.
+    const { inserts, manual, found } = planProvisioning(services, {
+        existingBaseUrls,
+        hasDefaultTranscription,
+        hasDefaultEnhancement,
+    });
 
-    for (const svc of services) {
-        found.push(svc.type);
-
-        const baseUrlKey = svc.baseUrl.toLowerCase().trim();
-        if (existingBaseUrls.has(baseUrlKey)) continue;
-
-        const isDefaultTranscription =
-            TRANSCRIPTION_TYPES.has(svc.type) && !hasDefaultTranscription;
-        const isDefaultEnhancement =
-            ENHANCEMENT_TYPES.has(svc.type) && !hasDefaultEnhancement;
-        if (isDefaultTranscription) hasDefaultTranscription = true;
-        if (isDefaultEnhancement) hasDefaultEnhancement = true;
-
-        // Faster Whisper ships with a working placeholder key the project's
-        // docs tell users to use ("sk-placeholder"); lock it in so the server
-        // works out of the box. Other local backends accept any key.
-        const apiKey =
-            svc.type === "Faster Whisper" ? "sk-placeholder" : "local-bypass";
-
+    for (const item of inserts) {
         await db.insert(apiCredentials).values({
             userId,
             provider: "openai",
-            apiKey: encrypt(apiKey),
-            baseUrl: svc.baseUrl,
-            nickname: `Local ${svc.type} (Auto-detected)`,
-            defaultModel: svc.defaultModel || null,
-            isDefaultTranscription,
-            isDefaultEnhancement,
+            apiKey: encrypt(item.apiKey),
+            baseUrl: item.baseUrl,
+            nickname: item.nickname,
+            defaultModel: item.defaultModel,
+            isDefaultTranscription: item.isDefaultTranscription,
+            isDefaultEnhancement: item.isDefaultEnhancement,
         });
-        // Guard against two discovered endpoints sharing a baseUrl in one scan.
-        existingBaseUrls.add(baseUrlKey);
-        provisioned.push(svc.type);
     }
 
-    // De-duplicate the type labels so the UI toast reads "Ollama, LM Studio"
-    // rather than "Ollama, Ollama".
     return NextResponse.json({
         success: true,
-        found: [...new Set(found)],
-        provisioned: [...new Set(provisioned)],
+        found,
+        // De-duplicated so the toast reads "Ollama, LM Studio", not repeats.
+        provisioned: [...new Set(inserts.map((i) => i.type))],
+        manual,
     });
 });

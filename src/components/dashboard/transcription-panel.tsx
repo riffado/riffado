@@ -1,15 +1,18 @@
 "use client";
 
 import {
+    Check,
     ChevronDown,
     ChevronUp,
     FileText,
     Languages,
     ListChecks,
     Loader2,
+    Pencil,
     RefreshCw,
     Sparkles,
     Trash2,
+    X,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -82,6 +85,91 @@ export function TranscriptionPanel({
         recordingId: recording?.id,
         transcriptionText: transcription?.text,
     });
+
+    // ── Inline transcript editing ────────────────────────────────
+    const [editingTranscript, setEditingTranscript] = useState(false);
+    const [transcriptEditValue, setTranscriptEditValue] = useState("");
+    const [isSavingTranscript, setIsSavingTranscript] = useState(false);
+
+    const startEditTranscript = useCallback(() => {
+        setTranscriptEditValue(transcription?.text ?? "");
+        setEditingTranscript(true);
+    }, [transcription?.text]);
+
+    const cancelEditTranscript = useCallback(() => {
+        setEditingTranscript(false);
+        setTranscriptEditValue("");
+    }, []);
+
+    const commitEditTranscript = useCallback(async () => {
+        const trimmed = transcriptEditValue.trim();
+        if (trimmed === (transcription?.text ?? "").trim()) {
+            cancelEditTranscript();
+            return;
+        }
+        setIsSavingTranscript(true);
+        try {
+            const res = await fetch(
+                `/api/recordings/${recording.id}/transcription`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text: trimmed }),
+                },
+            );
+            if (!res.ok) throw new Error("Failed");
+            toast.success("Transcription saved");
+            setEditingTranscript(false);
+            onGenerated?.();
+        } catch {
+            toast.error("Couldn't save transcription — please try again.");
+        } finally {
+            setIsSavingTranscript(false);
+        }
+    }, [transcriptEditValue, transcription?.text, recording.id, cancelEditTranscript, onGenerated]);
+
+    // ── Inline summary editing ───────────────────────────────────
+    const [editingSummary, setEditingSummary] = useState(false);
+    const [summaryEditValue, setSummaryEditValue] = useState("");
+    const [isSavingSummary, setIsSavingSummary] = useState(false);
+
+    const startEditSummary = useCallback(() => {
+        setSummaryEditValue(summaryData?.summary ?? "");
+        setEditingSummary(true);
+    }, [summaryData?.summary]);
+
+    const cancelEditSummary = useCallback(() => {
+        setEditingSummary(false);
+        setSummaryEditValue("");
+    }, []);
+
+    const commitEditSummary = useCallback(async () => {
+        const trimmed = summaryEditValue.trim();
+        if (trimmed === (summaryData?.summary ?? "").trim()) {
+            cancelEditSummary();
+            return;
+        }
+        setIsSavingSummary(true);
+        try {
+            const res = await fetch(
+                `/api/recordings/${recording.id}/summary`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ summary: trimmed }),
+                },
+            );
+            if (!res.ok) throw new Error("Failed");
+            toast.success("Summary saved");
+            setEditingSummary(false);
+            // Re-fetch the summary so the displayed text reflects edits.
+            refetchSummary();
+        } catch {
+            toast.error("Couldn't save summary — please try again.");
+        } finally {
+            setIsSavingSummary(false);
+        }
+    }, [summaryEditValue, summaryData?.summary, recording.id, cancelEditSummary, refetchSummary]);
 
     // ── Generate pipeline state ──────────────────────────────────
     const [showOptions, setShowOptions] = useState(false);
@@ -401,12 +489,67 @@ export function TranscriptionPanel({
                             </div>
                         ) : transcription?.text ? (
                             <div className="space-y-3">
-                                <div className="rounded-lg bg-muted/60 p-4 max-h-96 overflow-y-auto border border-border/50 dark:bg-muted/30">
-                                    <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
-                                        {transcription.text}
-                                    </p>
-                                </div>
-                                {transcription.language && (
+                                {editingTranscript ? (
+                                    <div className="space-y-2">
+                                        <textarea
+                                            value={transcriptEditValue}
+                                            onChange={(e) =>
+                                                setTranscriptEditValue(
+                                                    e.target.value,
+                                                )
+                                            }
+                                            disabled={isSavingTranscript}
+                                            rows={12}
+                                            className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-sm leading-relaxed outline-none ring-1 ring-primary/30 focus:ring-primary resize-y"
+                                        />
+                                        <div className="flex items-center justify-end gap-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={cancelEditTranscript}
+                                                disabled={isSavingTranscript}
+                                                className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                            >
+                                                <X className="size-3" />
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() =>
+                                                    void commitEditTranscript()
+                                                }
+                                                disabled={isSavingTranscript}
+                                                className="h-7 gap-1 text-xs"
+                                            >
+                                                {isSavingTranscript ? (
+                                                    <Loader2 className="size-3 animate-spin" />
+                                                ) : (
+                                                    <Check className="size-3" />
+                                                )}
+                                                Save
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="group/transcript relative">
+                                        <div className="rounded-lg bg-muted/60 p-4 max-h-96 overflow-y-auto border border-border/50 dark:bg-muted/30">
+                                            <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground/90">
+                                                {transcription.text}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={startEditTranscript}
+                                            title="Edit transcription"
+                                            className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/transcript:opacity-100"
+                                        >
+                                            <Pencil className="size-3.5" />
+                                        </button>
+                                    </div>
+                                )}
+                                {!editingTranscript && transcription.language && (
                                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
                                         <Languages className="size-3" />
                                         <span className="font-mono">
@@ -559,11 +702,72 @@ export function TranscriptionPanel({
 
                                 {summaryExpanded && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                                        <div className="rounded-lg bg-muted/60 border border-border/50 p-4 dark:bg-muted/30">
-                                            <p className="text-sm leading-relaxed text-foreground/90">
-                                                {summaryData.summary}
-                                            </p>
-                                        </div>
+                                        {editingSummary ? (
+                                            <div className="space-y-2">
+                                                <textarea
+                                                    value={summaryEditValue}
+                                                    onChange={(e) =>
+                                                        setSummaryEditValue(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    disabled={isSavingSummary}
+                                                    rows={8}
+                                                    className="w-full rounded-lg border border-primary/40 bg-background px-3 py-2 text-sm leading-relaxed outline-none ring-1 ring-primary/30 focus:ring-primary resize-y"
+                                                />
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={
+                                                            cancelEditSummary
+                                                        }
+                                                        disabled={
+                                                            isSavingSummary
+                                                        }
+                                                        className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <X className="size-3" />
+                                                        Cancel
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            void commitEditSummary()
+                                                        }
+                                                        disabled={
+                                                            isSavingSummary
+                                                        }
+                                                        className="h-7 gap-1 text-xs"
+                                                    >
+                                                        {isSavingSummary ? (
+                                                            <Loader2 className="size-3 animate-spin" />
+                                                        ) : (
+                                                            <Check className="size-3" />
+                                                        )}
+                                                        Save
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="group/summary relative">
+                                                <div className="rounded-lg bg-muted/60 border border-border/50 p-4 dark:bg-muted/30">
+                                                    <p className="text-sm leading-relaxed text-foreground/90">
+                                                        {summaryData.summary}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={startEditSummary}
+                                                    title="Edit summary"
+                                                    className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover/summary:opacity-100"
+                                                >
+                                                    <Pencil className="size-3.5" />
+                                                </button>
+                                            </div>
+                                        )}
 
                                         {summaryData.keyPoints &&
                                             summaryData.keyPoints.length >

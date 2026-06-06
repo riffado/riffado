@@ -119,6 +119,9 @@ export function Workstation({
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+    const [titleOverrides, setTitleOverrides] = useState<Map<string, string>>(
+        new Map(),
+    );
     // On <lg viewports the list and detail panes can't coexist -- we
     // toggle between them instead of stacking. Desktop ignores this
     // state entirely (both panes render via the grid).
@@ -128,10 +131,17 @@ export function Workstation({
     const { theme, setTheme } = useTheme(initialSettings.theme);
     const listRef = useRef<RecordingListHandle>(null);
 
-    // Filter out optimistically-hidden (deleted) rows.
+    // Filter out optimistically-hidden (deleted/archived) rows and apply
+    // local title overrides so renames are reflected instantly.
     const visibleRecordings = useMemo(
-        () => recordings.filter((r) => !hiddenIds.has(r.id)),
-        [recordings, hiddenIds],
+        () =>
+            recordings
+                .filter((r) => !hiddenIds.has(r.id))
+                .map((r) => {
+                    const override = titleOverrides.get(r.id);
+                    return override ? { ...r, filename: override } : r;
+                }),
+        [recordings, hiddenIds, titleOverrides],
     );
 
     const currentTranscription = currentRecording
@@ -278,6 +288,55 @@ export function Workstation({
                 });
                 if (wasCurrent) setCurrentRecording(recording);
                 throw err;
+            }
+        },
+        [currentRecording, visibleRecordings, refresh],
+    );
+
+    const handleTitleChange = useCallback(
+        (recording: Recording, newTitle: string) => {
+            setTitleOverrides((prev) => new Map(prev).set(recording.id, newTitle));
+            setCurrentRecording((prev) =>
+                prev?.id === recording.id
+                    ? { ...prev, filename: newTitle }
+                    : prev,
+            );
+        },
+        [],
+    );
+
+    const handleArchive = useCallback(
+        async (recording: Recording) => {
+            const id = recording.id;
+            // Optimistically hide the row immediately.
+            setHiddenIds((prev) => new Set(prev).add(id));
+            const wasCurrent = currentRecording?.id === id;
+            if (wasCurrent) {
+                const idx = visibleRecordings.findIndex((r) => r.id === id);
+                const next =
+                    visibleRecordings[idx + 1] ??
+                    visibleRecordings[idx - 1] ??
+                    null;
+                setCurrentRecording(next);
+            }
+            try {
+                const res = await fetch(`/api/recordings/${id}/archive`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ archive: true }),
+                });
+                if (!res.ok) throw new Error("Archive failed");
+                toast.success("Recording archived");
+                refresh();
+            } catch {
+                // Rollback optimistic hide on failure.
+                setHiddenIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+                if (wasCurrent) setCurrentRecording(recording);
+                toast.error("Couldn't archive recording — please try again.");
             }
         },
         [currentRecording, visibleRecordings, refresh],
@@ -467,6 +526,8 @@ export function Workstation({
                                         setMobileView("detail");
                                     }}
                                     onDelete={handleDelete}
+                                    onArchive={handleArchive}
+                                    onTitleChange={handleTitleChange}
                                     initialDateTimeFormat={
                                         initialSettings.dateTimeFormat
                                     }
@@ -499,6 +560,7 @@ export function Workstation({
                                     initialSettings.autoPlayNext
                                 }
                                 scrubberStyle={initialSettings.playerScrubber}
+                                onTitleChange={handleTitleChange}
                             />
                         </div>
                     )}

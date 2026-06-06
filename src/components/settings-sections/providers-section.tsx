@@ -72,18 +72,37 @@ export function ProvidersSection({
             );
             if (!response.ok) throw new Error("Failed to scan");
             const data = await response.json();
-            if (data.provisioned && data.provisioned.length > 0) {
+            const provisioned: string[] = data.provisioned ?? [];
+            const manual: string[] = data.manual ?? [];
+            const found: string[] = data.found ?? [];
+
+            // Services we detect but can't auto-configure (Open WebUI needs the
+            // user's own API key) get called out so they don't look "missed".
+            const manualNote =
+                manual.length > 0
+                    ? ` Also found ${manual.join(", ")} — add ${
+                          manual.length > 1 ? "them" : "it"
+                      } manually with your API key.`
+                    : "";
+
+            if (provisioned.length > 0) {
                 toast.success(
-                    `Discovered and configured: ${data.provisioned.join(", ")}`,
+                    `Discovered and configured: ${provisioned.join(", ")}.${manualNote}`,
                 );
                 await refreshProviders();
-            } else if (data.found && data.found.length > 0) {
+            } else if (manual.length > 0) {
                 toast.info(
-                    `Found local services (${data.found.join(", ")}), but they were already configured.`,
+                    `Found ${manual.join(", ")} — add ${
+                        manual.length > 1 ? "them" : "it"
+                    } manually with your API key in provider settings.`,
+                );
+            } else if (found.length > 0) {
+                toast.info(
+                    `Found local services (${found.join(", ")}), but they were already configured.`,
                 );
             } else {
                 toast.info(
-                    "No local AI services (Whisper, Ollama, Open WebUI) were found.",
+                    "No local AI services were found.",
                 );
             }
         } catch {

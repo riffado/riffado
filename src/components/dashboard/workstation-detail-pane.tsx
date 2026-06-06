@@ -31,6 +31,8 @@ interface Props {
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
     scrubberStyle: "waveform" | "slider" | undefined;
+    /** Called after the user renames the currently-playing recording. */
+    onTitleChange?: (recording: Recording, newTitle: string) => void;
 }
 
 interface Ripple {
@@ -54,6 +56,7 @@ export function WorkstationDetailPane({
     initialVolume,
     initialAutoPlayNext,
     scrubberStyle,
+    onTitleChange,
 }: Props) {
     const [activeTab, setActiveTab] = useState<DetailTab>("sources");
 
@@ -209,6 +212,15 @@ export function WorkstationDetailPane({
                                             initialAutoPlayNext
                                         }
                                         scrubberStyle={scrubberStyle}
+                                        onTitleChange={
+                                            onTitleChange
+                                                ? (t) =>
+                                                      onTitleChange(
+                                                          currentRecording,
+                                                          t,
+                                                      )
+                                                : undefined
+                                        }
                                         onEnded={() => {
                                             const currentIndex =
                                                 visibleRecordings.findIndex(

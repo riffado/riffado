@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { PWARegister } from "@/components/pwa-register";
@@ -19,6 +19,15 @@ const geistMono = Geist_Mono({
     subsets: ["latin"],
 });
 
+// `theme-color` and `viewport` belong here in Next.js 13+, not in <meta>.
+export const viewport: Viewport = {
+    themeColor: "#0a0a0a",
+    width: "device-width",
+    initialScale: 1,
+    minimumScale: 1,
+    viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
     // Resolves relative URLs in `openGraph.images` / `twitter.images`
     // (e.g. `/docs-og/<slug>.png` emitted by per-doc `generateMetadata`)
@@ -31,6 +40,19 @@ export const metadata: Metadata = {
     title: "Mesynx AI - Professional Audio Workstation",
     description:
         "Professional audio workstation for Plaud devices with AI-powered transcription",
+    manifest: "/manifest.json",
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: "black-translucent",
+        title: "Mesynx AI",
+    },
+    icons: {
+        // Used by iOS Safari for the home screen icon when the manifest
+        // isn't parsed (e.g. iOS 15 and older).
+        apple: [
+            { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+        ],
+    },
 };
 
 export default function RootLayout({
@@ -40,14 +62,7 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <head>
-                <meta name="apple-mobile-web-app-capable" content="yes" />
-                <meta
-                    name="apple-mobile-web-app-status-bar-style"
-                    content="black-translucent"
-                />
-                <meta name="theme-color" content="#0a0a0a" />
-            </head>
+            <head />
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >

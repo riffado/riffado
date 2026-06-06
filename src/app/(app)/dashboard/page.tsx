@@ -32,6 +32,7 @@ export default async function DashboardPage() {
             and(
                 eq(recordings.userId, session.user.id),
                 isNull(recordings.deletedAt),
+                isNull(recordings.archivedAt),
             ),
         )
         .orderBy(desc(recordings.startTime));
