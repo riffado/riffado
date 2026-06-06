@@ -9,6 +9,8 @@
 
 ### Added
 
+- **WhisperX alignment and speaker diarization.** Integrated WhisperX into the docker compose stacks (with GPU and PyAnnote model caching support), extended local discovery to auto-fingerprint WhisperX endpoints, and updated the settings to support automatic diarization when a `-diarize` model is selected.
+- **Recording player, transcription panel, and archive vault.** Implemented a comprehensive workstation dashboard, recording player, transcription panel, and dynamic category management and archival vault for recording history.
 - **Mobile PWA standalone support.** Added dynamic web app manifest, service worker registration client hook, iOS-specific mobile standalone headers, and high-resolution logo icons to support installing Mesynx AI as a native full-screen app on iOS and Android.
 - **Parallel Multi-host AI Auto-scan.** Re-implemented the auto-scan settings backend using parallel endpoint probing (50 concurrent workers) and fingerprinting of LM Studio, Ollama, Faster Whisper, and Open WebUI backends. Supports scanning targets configured via `LLM_HOSTS` or parsed from preset URLs, alongside automatic Tailscale status peer discovery and deduplication of hosts.
 - **Local AI Auto-scan & Provisioning.** Added a "Scan for Local Services" feature to the self-hosted AI settings that discovers and configures local Faster Whisper, Ollama, and Open WebUI services automatically. Also enabled silent auto-provisioning of the compose Whisper container on first load.
@@ -29,6 +31,7 @@
 
 ### Fixed
 
+- **Decryption key mismatch resilience.** Hardened all rendering pages, REST APIs, background transcription pipelines, and serialization layers to catch decryption integrity errors and fallback gracefully to placeholder texts when the app's encryption key changes, preventing blank screens/500 crashes.
 - **Test Connection button validation.** Enabled testing connection when a custom Base URL is entered without needing to select a provider preset, and added automatic "Custom" provider dropdown selection when typing keys or URLs.
 - **AI Providers settings race condition.** The Providers section now fetches its own data on open (with a loading spinner) instead of relying on a server-rendered seed that could resolve too late. Fixes the intermittent bug where saved provider configs — or their API keys — failed to appear when opening Settings.
 
