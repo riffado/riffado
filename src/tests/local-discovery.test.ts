@@ -136,6 +136,8 @@ describe("resolveScanPlan", () => {
         expect(plan.ports).toContain(11434);
         expect(plan.ports).toContain(1234);
         expect(plan.ports).toContain(WHISPER_PORT);
+        expect(plan.ports).toContain(8398); // WHISPERX_PORT
+        expect(plan.ports).toContain(9000); // ASR_WEBSERVICE_PORT
     });
 
     test("de-duplicates repeated hosts", () => {
@@ -188,6 +190,33 @@ describe("classifyOpenAiCompat", () => {
                 models: ["default"],
             }).type,
         ).toBe("Faster Whisper");
+    });
+
+    test("whisperx detected by dedicated port 8398 or 9000", () => {
+        const svc1 = classifyOpenAiCompat({
+            ...base,
+            port: 8398,
+            models: ["large-v3-turbo"],
+        });
+        expect(svc1.type).toBe("WhisperX");
+        expect(svc1.defaultModel).toBe("large-v3-turbo");
+
+        const svc2 = classifyOpenAiCompat({
+            ...base,
+            port: 9000,
+            models: ["large-v3-turbo-diarize"],
+        });
+        expect(svc2.type).toBe("WhisperX");
+        expect(svc2.defaultModel).toBe("large-v3-turbo-diarize");
+    });
+
+    test("whisperx detected by diarize model name and prefers it", () => {
+        const svc = classifyOpenAiCompat({
+            ...base,
+            models: ["large-v3-turbo", "large-v3-turbo-diarize"],
+        });
+        expect(svc.type).toBe("WhisperX");
+        expect(svc.defaultModel).toBe("large-v3-turbo-diarize");
     });
 
     test("REGRESSION: a vLLM server on port 8000 is Custom, not Faster Whisper", () => {

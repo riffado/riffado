@@ -31,6 +31,8 @@ export const GET = apiHandler(async (request: Request) => {
         const WHISPER_DOCKER_TARGETS = [
             "http://whisper:8000/v1",
             "http://mesynx-ai-whisper:8000/v1",
+            "http://whisperx:8000/v1",
+            "http://mesynx-ai-whisperx:8000/v1",
         ];
 
         let foundUrl: string | null = null;
@@ -54,15 +56,18 @@ export const GET = apiHandler(async (request: Request) => {
         }
 
         if (foundUrl) {
+            const nickname = foundUrl.includes("whisperx")
+                ? "Local WhisperX"
+                : "Local Whisper";
             await db.insert(apiCredentials).values({
                 userId: session.user.id,
                 provider: "openai",
-                // Faster Whisper's documented placeholder key works out of the
+                // Faster Whisper's / WhisperX's documented placeholder key works out of the
                 // box; lock it in so this auto-provisioned server is usable
                 // immediately (the user can edit it later).
                 apiKey: encrypt("sk-placeholder"),
                 baseUrl: foundUrl,
-                nickname: "Local Whisper",
+                nickname,
                 defaultModel,
                 isDefaultTranscription: true,
                 isDefaultEnhancement: false,

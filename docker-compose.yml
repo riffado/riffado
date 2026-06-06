@@ -97,12 +97,45 @@ services:
     networks:
       - mesynx-network
 
+  whisperx:
+    # High-performance WhisperX server with forced alignment and diarization.
+    image: ghcr.io/etalab-ia/whisperx-openai-api:latest
+    container_name: mesynx-ai-whisperx
+    restart: unless-stopped
+    ports:
+      - "8398:8000"
+    environment:
+      - API_KEY=${WHISPERX_API_KEY:-sk-placeholder}
+      # Hugging Face token is required to download pyannote diarization models.
+      - HF_TOKEN=${HF_TOKEN:-}
+      - TRANSCRIBE_MODEL=${WHISPERX_MODEL:-large-v3-turbo}
+      - BATCH_SIZE=16
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ "0", "1" ]
+              capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    volumes:
+      - whisperx_cache:/data/models
+    networks:
+      - mesynx-network
+
 volumes:
   pgdata:
     driver: local
   audio:
     driver: local
   whisper_cache:
+    driver: local
+  whisperx_cache:
     driver: local
 
 networks:

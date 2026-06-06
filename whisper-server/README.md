@@ -70,6 +70,46 @@ sentences that were never spoken. Two things help, in order of impact:
    for enabling it on your version.
 2. **Prefer a turbo / distil model** (table above) — they drift less on long inputs than `large-v3`.
 
+## Standalone WhisperX (Diarization & Alignment)
+
+For advanced transcription needs including speaker diarization (identifying who spoke when) and word-level forced alignment, we also ship a **WhisperX API Server** based on the [`etalab-ia/whisperx-openai-api`](https://github.com/etalab-ia/whisperx-openai-api) wrapper.
+
+### Requirements
+
+To enable speaker diarization via PyAnnote audio models:
+1. Create a free account at [huggingface.co](https://huggingface.co).
+2. Visit [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and accept the user license agreement.
+3. Generate a User Access Token (read permission) at **Hugging Face Settings → Access Tokens**.
+4. Set the token in your environment/`.env` file as `HF_TOKEN`.
+
+### Quick Start
+
+Start the WhisperX service alongside or instead of the standard Whisper server:
+
+```bash
+# In whisper-server directory
+docker compose up -d whisperx
+```
+
+Verify that it is online and serving the OpenAI audio API:
+```bash
+curl http://localhost:8398/v1/models
+```
+
+### Connecting WhisperX to Mesynx AI
+
+1. In Mesynx AI, navigate to **Settings → AI Providers → Add Provider**.
+2. **Provider**: `Custom (OpenAI-compatible)`.
+3. **Nickname**: `Home GPU · WhisperX`.
+4. **Base URL**:
+   - `http://whisperx:8000/v1` if Mesynx AI runs in the same Docker Compose network, or
+   - `http://<gpu-host>:8398/v1` from a separate host.
+5. Click **Test Connection** to fetch models and save.
+
+> **Diarization Trigger**: Any transcription request using a model containing the word **`diarize`** in its name (e.g. `large-v3-turbo-diarize`) will automatically route through the WhisperX diarization and alignment pipeline.
+
+---
+
 > **Note on LLMs vs. transcription models.** Models like **Gemma**, Llama, or GPT are *text* LLMs — they
 > do **not** transcribe audio and can't be pointed at `/v1/audio/transcriptions`. Use a **Whisper-family**
 > model for transcription. An LLM is the right tool for the *summary / enhancement* provider instead

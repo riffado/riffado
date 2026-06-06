@@ -25,6 +25,7 @@ export const LOCAL_BYPASS_KEY = "local-bypass";
 /** Provisioned as the default transcription provider when none exists yet. */
 const TRANSCRIPTION_TYPES: ReadonlySet<DiscoveredServiceType> = new Set([
     "Faster Whisper",
+    "WhisperX",
 ]);
 /** Provisioned as the default enhancement provider when none exists yet. */
 const ENHANCEMENT_TYPES: ReadonlySet<DiscoveredServiceType> = new Set([
@@ -103,10 +104,10 @@ export function planProvisioning(
             type: svc.type,
             baseUrl: svc.baseUrl,
             nickname: `Local ${svc.type} (Auto-detected)`,
-            // Faster Whisper ships with a working documented placeholder key;
+            // Faster Whisper and WhisperX ship with a working documented placeholder key;
             // lock it in. Other local backends accept any key.
             apiKey:
-                svc.type === "Faster Whisper"
+                svc.type === "Faster Whisper" || svc.type === "WhisperX"
                     ? WHISPER_PLACEHOLDER_KEY
                     : LOCAL_BYPASS_KEY,
             defaultModel: svc.defaultModel || null,

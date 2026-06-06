@@ -97,6 +97,23 @@ describe("planProvisioning — keys & default roles", () => {
         expect(plan.inserts[0]?.isDefaultEnhancement).toBe(false);
     });
 
+    test("WhisperX provisions with the placeholder key + default transcription", () => {
+        const plan = planProvisioning(
+            [
+                svc({
+                    type: "WhisperX",
+                    baseUrl: "http://127.0.0.1:8398/v1",
+                    models: ["large-v3-turbo-diarize"],
+                }),
+            ],
+            FRESH,
+        );
+        expect(plan.inserts).toHaveLength(1);
+        expect(plan.inserts[0]?.apiKey).toBe(WHISPER_PLACEHOLDER_KEY);
+        expect(plan.inserts[0]?.isDefaultTranscription).toBe(true);
+        expect(plan.inserts[0]?.isDefaultEnhancement).toBe(false);
+    });
+
     test("Whisper does NOT claim the transcription default when one already exists", () => {
         const plan = planProvisioning(
             [

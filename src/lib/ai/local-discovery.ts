@@ -16,6 +16,7 @@
 
 export type DiscoveredServiceType =
     | "Faster Whisper"
+    | "WhisperX"
     | "Ollama"
     | "LM Studio"
     | "Open WebUI"
@@ -48,6 +49,10 @@ export const OLLAMA_PORT = 11434;
 export const LM_STUDIO_PORT = 1234;
 /** Dedicated GPU faster-whisper container (Mesynx AI). */
 export const WHISPER_PORT = 8397;
+/** Dedicated GPU WhisperX container (Mesynx AI). */
+export const WHISPERX_PORT = 8398;
+/** Alternative port used by whisper-asr-webservice. */
+export const ASR_WEBSERVICE_PORT = 9000;
 // 8000–8020 is the vLLM / llama.cpp / SGLang / cookbook range.
 const OPENAI_COMPAT_RANGE_START = 8000;
 const OPENAI_COMPAT_RANGE_END = 8020;
@@ -59,6 +64,8 @@ export const DEFAULT_SCAN_HOSTS: readonly string[] = [
     "host.docker.internal",
     "whisper",
     "mesynx-ai-whisper",
+    "whisperx",
+    "mesynx-ai-whisperx",
     "ollama",
     "open-webui",
     "openwebui",
@@ -70,6 +77,8 @@ const DEFAULT_PORTS: readonly number[] = [
     3000,
     8080,
     WHISPER_PORT,
+    WHISPERX_PORT,
+    ASR_WEBSERVICE_PORT,
 ];
 
 const PROBE_TIMEOUT_MS = 1000;
@@ -234,14 +243,36 @@ export function classifyOpenAiCompat(args: {
         };
     }
 
+    // WhisperX: detected by port 8398 or 9000, or a model list containing diarization models.
+    const hasWhisperModel = models.some((m) =>
+        m.toLowerCase().includes("whisper"),
+    );
+    const hasDiarizeModel = models.some((m) =>
+        m.toLowerCase().includes("diarize"),
+    );
+    if (
+        port === WHISPERX_PORT ||
+        port === ASR_WEBSERVICE_PORT ||
+        hasDiarizeModel
+    ) {
+        const defaultModel =
+            models.find((m) => m.toLowerCase().includes("diarize")) ||
+            pickDefaultModel(models, true);
+        return {
+            type: "WhisperX",
+            host,
+            port,
+            baseUrl,
+            defaultModel,
+            models,
+        };
+    }
+
     // Faster Whisper: detected by a whisper-named model OR the dedicated
     // whisper port (8397) ONLY — never the generic 8000, which is the
     // vLLM / llama.cpp / SGLang range. Treating 8000 as Whisper would mislabel
     // a chat server and auto-wire it as the default transcription provider,
     // routing audio to a model that can't transcribe.
-    const hasWhisperModel = models.some((m) =>
-        m.toLowerCase().includes("whisper"),
-    );
     if (port === WHISPER_PORT || hasWhisperModel) {
         return {
             type: "Faster Whisper",
