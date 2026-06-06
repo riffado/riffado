@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/riffado/riffado:${MESYNX_AI_VERSION:-dev}
+    image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-dev}
     container_name: mesynx-ai-app
     restart: unless-stopped
     ports:

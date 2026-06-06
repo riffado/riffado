@@ -66,9 +66,9 @@ export const CONTACT_LINKS = {
     /** General support and questions — Discord server. */
     support: "https://discord.gg/JygWxS2VA8",
     /** Security vulnerabilities — GitHub private security advisory. */
-    security: "https://github.com/riffado/riffado/security/advisories/new",
+    security: "https://github.com/r0073d-l053r/mesynx/security/advisories/new",
     /** Privacy / GDPR data-subject requests — GitHub Discussions. */
-    privacy: "https://github.com/riffado/riffado/discussions",
+    privacy: "https://github.com/r0073d-l053r/mesynx/discussions",
 } as const;
 
 /** Polish data-protection supervisory authority (GDPR right to complain). */
