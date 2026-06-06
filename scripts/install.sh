@@ -14,12 +14,12 @@
 #   6. Waits for /api/health to return 200.
 #
 # This script is part of the Mesynx AI deploy surface (see AGENTS.md).
-# Source: https://github.com/r0073d-l053r/mesynx/blob/main/scripts/install.sh
+# Source: https://github.com/riffado/riffado/blob/main/scripts/install.sh
 
 set -eu
 
 VERSION="{{VERSION}}"
-REPO="r0073d-l053r/mesynx"
+REPO="riffado/riffado"
 DEFAULT_DIR="$HOME/mesynx"
 DEFAULT_APP_URL="http://localhost:8790"
 HEALTH_TIMEOUT=60
