@@ -7,7 +7,7 @@
 #
 # What this does:
 #   1. Verifies Docker + docker compose v2 are installed and running.
-#   2. Creates an install directory (default $HOME/mesynx-ai).
+#   2. Creates an install directory (default $HOME/mesynx).
 #   3. Downloads docker-compose.yml + env.example from the GitHub release.
 #   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY).
 #   5. Pulls images and starts the stack.
@@ -20,7 +20,7 @@ set -eu
 
 VERSION="{{VERSION}}"
 REPO="r0073d-l053r/mesynx"
-DEFAULT_DIR="$HOME/mesynx-ai"
+DEFAULT_DIR="$HOME/mesynx"
 DEFAULT_APP_URL="http://localhost:8790"
 HEALTH_TIMEOUT=60
 
@@ -173,11 +173,23 @@ ok "Generated secrets and wrote .env"
 
 # ---- start the stack -------------------------------------------------------
 
-info "Pulling images (this can take a minute on first run)..."
-docker compose pull
+# Pull core services first so a flaky optional GPU service (whisperx) can't
+# interrupt the download of the main app image and leave the install half-done.
+# whisperx is a large (~20 GB) CUDA image that requires a GPU and a HF token;
+# pulling it is best-effort — the core stack runs without it.
+info "Pulling core images (this may take a few minutes on first run)..."
+docker compose pull db app whisper \
+    || die "Failed to pull core images. Check your network and try again."
+
+info "Pulling whisperx image (GPU/diarization — optional, may be slow)..."
+if ! docker compose pull whisperx 2>/dev/null; then
+    warn "whisperx image pull failed (TLS timeout or no network route to ghcr.io/etalab-ia)."
+    warn "The core stack will start without it. Retry later:"
+    warn "  cd $INSTALL_DIR && docker compose pull whisperx && docker compose up -d whisperx"
+fi
 
 info "Starting Mesynx AI..."
-docker compose up -d
+docker compose up -d db app whisper
 
 # ---- health check ----------------------------------------------------------
 

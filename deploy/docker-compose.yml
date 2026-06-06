@@ -21,12 +21,12 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: mesynx-ai-db
+    container_name: mesynx-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: mesynx-ai
+      POSTGRES_DB: mesynx
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -44,13 +44,13 @@ services:
     # MESYNX_AI_VERSION is written to .env by the installer (e.g. "0.5.6").
     # Leave it unset or set to "latest" to always track the newest stable release.
     image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-latest}
-    container_name: mesynx-ai-app
+    container_name: mesynx-app
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8790}:3000"
     environment:
       # Database
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/mesynx-ai
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/mesynx
 
       # Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -86,7 +86,7 @@ services:
     # GPU: Use the cuda image below (default). CPU: swap to the -cpu image.
     image: fedirz/faster-whisper-server:latest-cuda
     # image: fedirz/faster-whisper-server:latest-cpu
-    container_name: mesynx-ai-whisper
+    container_name: mesynx-whisper
     restart: unless-stopped
     ports:
       - "8397:8000"
@@ -122,7 +122,7 @@ services:
     # To enable diarization, set HF_TOKEN and accept the pyannote licence:
     # https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
-    container_name: mesynx-ai-whisperx
+    container_name: mesynx-whisperx
     restart: unless-stopped
     ports:
       - "8398:8000"
