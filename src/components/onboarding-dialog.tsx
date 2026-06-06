@@ -109,7 +109,10 @@ export function OnboardingDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+            <DialogContent
+                className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]"
+                aria-describedby={undefined}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-2xl" hidden>
                         Welcome to Mesynx AI

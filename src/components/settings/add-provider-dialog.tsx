@@ -9,6 +9,7 @@ import { TranscriptionModelPicker } from "@/components/settings/transcription-mo
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -160,6 +161,9 @@ export function AddProviderDialog({
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>Add AI Provider</DialogTitle>
+                    <DialogDescription>
+                        Configure a new AI provider.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">

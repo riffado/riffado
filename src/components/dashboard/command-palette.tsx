@@ -127,6 +127,7 @@ export function CommandPalette({
             <DialogContent
                 className="max-w-xl gap-0 overflow-hidden p-0"
                 showCloseButton={false}
+                aria-describedby={undefined}
             >
                 <DialogTitle className="sr-only">Command palette</DialogTitle>
                 <Command

@@ -16,6 +16,7 @@ import { TranscriptionModelPicker } from "@/components/settings/transcription-mo
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -242,6 +243,9 @@ export function EditProviderDialog({
             <DialogContent className="max-w-md">
                 <DialogHeader>
                     <DialogTitle>Edit AI Provider</DialogTitle>
+                    <DialogDescription>
+                        Update the configuration for this AI provider.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">

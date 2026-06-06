@@ -4,7 +4,12 @@ import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     formatWebhookDate,
     type WebhookDelivery,
@@ -78,6 +83,9 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
         >
             <DialogContent className="max-w-3xl">
                 <DialogTitle>Webhook Deliveries</DialogTitle>
+                <DialogDescription>
+                    Recent delivery attempts for this webhook.
+                </DialogDescription>
                 <div className="max-h-[420px] space-y-2 overflow-y-auto">
                     {deliveries.length === 0 ? (
                         <p className="py-8 text-center text-sm text-muted-foreground">
