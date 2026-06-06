@@ -20,11 +20,10 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
     const userId = session.user.id;
 
     const body = await request.json().catch(() => ({}));
-    const newText = typeof body.text === "string" ? body.text : null;
-
-    if (newText === null) {
+    if (typeof body.text !== "string") {
         throw new AppError(ErrorCode.INVALID_INPUT, "text is required", 400);
     }
+    const newText = body.text;
 
     // Verify recording ownership.
     const [recording] = await db
@@ -49,7 +48,7 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
 
     const result = await db
         .update(transcriptions)
-        .set({ text: encryptText(newText) })
+        .set({ text: encryptText(newText) as unknown as string })
         .where(
             and(
                 eq(transcriptions.recordingId, id),

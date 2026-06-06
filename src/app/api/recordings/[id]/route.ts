@@ -99,16 +99,14 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
     const userId = session.user.id;
 
     const body = await request.json().catch(() => ({}));
-    const newFilename =
-        typeof body.filename === "string" ? body.filename.trim() : null;
-
-    if (!newFilename) {
+    if (typeof body.filename !== "string" || !body.filename.trim()) {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
             "filename is required",
             400,
         );
     }
+    const newFilename = body.filename.trim();
     if (newFilename.length > 500) {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
@@ -139,7 +137,10 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
 
     await db
         .update(recordings)
-        .set({ filename: encryptText(newFilename), updatedAt: new Date() })
+        .set({
+            filename: encryptText(newFilename) as unknown as string,
+            updatedAt: new Date(),
+        })
         .where(and(eq(recordings.id, id), eq(recordings.userId, userId)));
 
     return NextResponse.json({ success: true, filename: newFilename });

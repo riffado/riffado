@@ -70,8 +70,8 @@ export function RecordingRow({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const startEdit = useCallback(
-        (e: React.MouseEvent) => {
-            e.stopPropagation();
+        (e?: React.MouseEvent | Event) => {
+            e?.stopPropagation();
             setEditValue(recording.filename);
             setEditing(true);
             setTimeout(() => {
