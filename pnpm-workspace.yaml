@@ -34,3 +34,10 @@ overrides:
   # CVE: PostCSS XSS via unescaped </style> in CSS output (>=8.5.10 patched)
   # Pulled in by next → postcss
   postcss: ">=8.5.10"
+  # better-auth@1.6.x ships @better-auth/kysely-adapter whose compiled dist
+  # imports DEFAULT_MIGRATION_TABLE from the kysely *root* barrel. In kysely
+  # 0.29.x that constant moved to the `kysely/migration` subpath — the root
+  # barrel no longer exports it. The adapter peerDeps allow both ranges
+  # (^0.28.17 || ^0.29.0) but the compiled artifact only works with 0.28.x.
+  # Pin to the last good minor until better-auth releases a fixed adapter.
+  kysely: ">=0.28.17 <0.29.0"

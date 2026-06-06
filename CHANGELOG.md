@@ -50,6 +50,9 @@
 - `pnpm-workspace.yaml` `allowBuilds.core-js` was a string placeholder (`"set this to true or false"`) instead of a boolean; fixed to `true`, eliminating the `ERR_PNPM_IGNORED_BUILDS` error on fresh installs.
 - Removed dead `pnpm` block from `package.json` (ignored by pnpm v11 with a warning); all settings now live in `pnpm-workspace.yaml`.
 
+### Fixed (continued)
+- Docker image build was broken: `better-auth@1.6.14` bundles `@better-auth/kysely-adapter` which statically imports `DEFAULT_MIGRATION_TABLE` from the kysely root barrel. In kysely `0.29.x` that constant moved to the `kysely/migration` subpath; the adapter's compiled dist still imports it from root (a bug in better-auth's release). Added a `pnpm-workspace.yaml` override to pin `kysely` to `>=0.28.17 <0.29.0` where the constant is still in the root barrel — consistent with the adapter's own devDependency range.
+
 ### Infrastructure
 - Added `workflow_dispatch` trigger to `.github/workflows/docker.yml` with a `push_latest` input so a production image can be pushed to GHCR without requiring a git tag.
 - Added `deploy/docker-compose.yml` — the production compose used by the one-line installer. Uses `image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-latest}` instead of the dev `build: context: .` block.
