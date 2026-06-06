@@ -10,7 +10,9 @@
 #   2. Creates an install directory (default $HOME/mesynx).
 #   3. Downloads docker-compose.yml + env.example from the GitHub release.
 #   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY).
-#   5. Pulls images and starts the stack.
+#   5. Pulls the CPU core images and starts the stack. GPU (diarization +
+#      CUDA transcription) is opt-in via docker-compose.gpu.yml — see the
+#      hint printed on success.
 #   6. Waits for /api/health to return 200.
 #
 # This script is part of the Mesynx AI deploy surface (see AGENTS.md).
@@ -130,6 +132,10 @@ if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
     curl -fsSL -o .env "$BASE_URL/env.example$CACHE_BUSTER" \
         || curl -fsSL -o .env "$BASE_URL/.env.example$CACHE_BUSTER" \
         || die "Failed to download env.example from $BASE_URL"
+    # Optional GPU override (for later opt-in). Best-effort: a missing file
+    # must not fail a CPU-only install.
+    curl -fsSL -o docker-compose.gpu.yml "$BASE_URL/deploy/docker-compose.gpu.yml$CACHE_BUSTER" \
+        || warn "Could not fetch docker-compose.gpu.yml; GPU opt-in unavailable in this install."
 else
     BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
     info "Downloading release $VERSION artifacts..."
@@ -137,6 +143,10 @@ else
         || die "Failed to download docker-compose.yml from $BASE_URL"
     curl -fsSL -o .env "$BASE_URL/env.example" \
         || die "Failed to download env.example from $BASE_URL"
+    # Optional GPU override (for later opt-in). Best-effort: older releases
+    # may not ship it.
+    curl -fsSL -o docker-compose.gpu.yml "$BASE_URL/docker-compose.gpu.yml" \
+        || warn "Could not fetch docker-compose.gpu.yml; GPU opt-in unavailable in this install."
 fi
 ok "Downloaded docker-compose.yml and .env"
 
@@ -180,23 +190,16 @@ ok "Generated secrets and wrote .env"
 
 # ---- start the stack -------------------------------------------------------
 
-# Pull core services first so a flaky optional GPU service (whisperx) can't
-# interrupt the download of the main app image and leave the install half-done.
-# whisperx is a large (~20 GB) CUDA image that requires a GPU and a HF token;
-# pulling it is best-effort — the core stack runs without it.
-info "Pulling core images (this may take a few minutes on first run)..."
-docker compose pull db app whisper \
-    || die "Failed to pull core images. Check your network and try again."
-
-info "Pulling whisperx image (GPU/diarization — optional, may be slow)..."
-if ! docker compose pull whisperx 2>/dev/null; then
-    warn "whisperx image pull failed (TLS timeout or no network route to ghcr.io/etalab-ia)."
-    warn "The core stack will start without it. Retry later:"
-    warn "  cd $INSTALL_DIR && docker compose pull whisperx && docker compose up -d whisperx"
-fi
+# The core stack is CPU-only. The GPU diarization service (whisperx) and the
+# CUDA whisper image are opt-in via docker-compose.gpu.yml (see the success
+# hint below), so a flaky/large GPU image pull can't break the install.
+# whisperx sits behind the `gpu` compose profile, so a plain pull/up skips it.
+info "Pulling images (this may take a few minutes on first run)..."
+docker compose pull \
+    || die "Failed to pull images. Check your network and try again."
 
 info "Starting Mesynx AI..."
-docker compose up -d db app whisper
+docker compose up -d
 
 # ---- health check ----------------------------------------------------------
 
@@ -209,7 +212,12 @@ while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
         printf '   Open %s%s/register%s to create your account.\n\n' "$BOLD" "$APP_URL" "$RESET"
         printf '   Install dir: %s\n' "$INSTALL_DIR"
         printf '   Logs:        cd %s && docker compose logs -f\n' "$INSTALL_DIR"
-        printf '   Upgrade:     cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
+        printf '   Upgrade:     cd %s && docker compose pull && docker compose up -d\n' "$INSTALL_DIR"
+        if [ -f docker-compose.gpu.yml ]; then
+            printf '   Enable GPU:  cd %s && docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d\n' "$INSTALL_DIR"
+            printf '                (needs the NVIDIA Container Toolkit; adds diarization + CUDA transcription)\n'
+        fi
+        printf '\n'
         exit 0
     fi
     i=$((i + 1))

@@ -120,6 +120,9 @@ jobs:
         run: |
           cp .env.example env.example
           cp deploy/docker-compose.yml /tmp/docker-compose.yml
+          # GPU opt-in override, downloaded by install.sh for users who later
+          # enable diarization / CUDA transcription.
+          cp deploy/docker-compose.gpu.yml /tmp/docker-compose.gpu.yml
           # Publish the installer as a release asset so users can run
           #   bash <(curl -sSL .../releases/latest/download/install.sh)
           # Substitute the {{VERSION}} placeholder with this tag so the
@@ -141,6 +144,7 @@ jobs:
           # without cloning the repo.
           files: |
             /tmp/docker-compose.yml
+            /tmp/docker-compose.gpu.yml
             /tmp/install.sh
             env.example
         env:

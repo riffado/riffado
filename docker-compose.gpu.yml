@@ -1,0 +1,23 @@
+# GPU overrides for Mesynx AI (local/dev compose).
+#
+# The base stack is CPU-only. Opt into GPU after the core stack is up:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+#
+# This upgrades `whisper` to the CUDA image with GPU access and starts the
+# `whisperx` diarization service (gated behind the `gpu` profile in the base
+# file). Requires the NVIDIA Container Toolkit installed and configured on the
+# host (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/).
+#
+# To go back to CPU-only, bring the stack up again without these flags:
+#   docker compose up -d
+services:
+  whisper:
+    image: ${WHISPER_IMAGE:-fedirz/faster-whisper-server:latest-cuda}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]

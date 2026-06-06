@@ -14,9 +14,12 @@
 # Upgrade:
 #   docker compose pull && docker compose up -d
 #
-# GPU note: `whisper` and `whisperx` are GPU services. If you are running
-# CPU-only, comment out the `deploy: resources: reservations:` block for
-# `whisper` and remove the `whisperx` service entirely (it has no CPU image).
+# GPU note: this stack is CPU-only by default — `whisper` uses the CPU image
+# and `whisperx` (GPU-only diarization) is gated behind the `gpu` profile, so
+# it is not pulled or started unless you ask for it. To opt into GPU after the
+# core stack is up (requires the NVIDIA Container Toolkit on the host):
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d
+# That upgrades `whisper` to the CUDA image with GPU access and starts whisperx.
 
 services:
   db:
@@ -91,9 +94,10 @@ services:
       - mesynx-network
 
   whisper:
-    # GPU: Use the cuda image below (default). CPU: swap to the -cpu image.
-    image: fedirz/faster-whisper-server:latest-cuda
-    # image: fedirz/faster-whisper-server:latest-cpu
+    # CPU by default so the core stack runs on any host. For GPU acceleration,
+    # opt in via docker-compose.gpu.yml (see the GPU note at the top of this
+    # file) — it overrides this to the CUDA image and adds a GPU reservation.
+    image: ${WHISPER_IMAGE:-fedirz/faster-whisper-server:latest-cpu}
     container_name: mesynx-whisper
     restart: unless-stopped
     ports:
@@ -105,14 +109,6 @@ services:
       # Raise the upload cap — 10 MB (default) is too small for recordings
       # longer than ~15 min at standard bitrate.
       WHISPER__MAX_AUDIO_FILE_SIZE_MB: "500"
-    # GPU: Enable the deploy block below. CPU: comment it out entirely.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ "0", "1" ]
-              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]
       interval: 30s
@@ -126,10 +122,13 @@ services:
       - mesynx-network
 
   whisperx:
-    # WhisperX: forced-alignment + speaker diarization. GPU only.
+    # WhisperX: forced-alignment + speaker diarization. GPU only — no CPU image.
+    # Gated behind the `gpu` profile: not pulled or started unless you run with
+    # `--profile gpu` (see the GPU note at the top of this file).
     # To enable diarization, set HF_TOKEN and accept the pyannote licence:
     # https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
+    profiles: ["gpu"]
     container_name: mesynx-whisperx
     restart: unless-stopped
     ports:
@@ -144,7 +143,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ "0", "1" ]
+              count: all
               capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]

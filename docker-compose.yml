@@ -77,9 +77,10 @@ services:
       - mesynx-network
 
   whisper:
-    # GPU: Use cuda image. CPU: Comment out cuda image and uncomment cpu image below.
-    image: fedirz/faster-whisper-server:latest-cuda
-    # image: fedirz/faster-whisper-server:latest-cpu
+    # CPU by default so the core stack runs on any host. For GPU acceleration,
+    # opt in via docker-compose.gpu.yml — it overrides this to the CUDA image
+    # and adds a GPU reservation. See that file's header for the exact command.
+    image: ${WHISPER_IMAGE:-fedirz/faster-whisper-server:latest-cpu}
     container_name: mesynx-whisper
     restart: unless-stopped
     ports:
@@ -92,14 +93,6 @@ services:
       # Allow larger chunked uploads (default 10 MB is too small for
       # recordings over ~15 minutes at standard bitrate).
       WHISPER__MAX_AUDIO_FILE_SIZE_MB: "500"
-    # GPU: Enable deploy reservations. CPU: Comment out the entire deploy block below.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ "0", "1" ]
-              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]
       interval: 30s
@@ -116,9 +109,11 @@ services:
   whisperx:
     # WhisperX: forced-alignment + speaker diarization over an OpenAI-compatible API.
     # GPU only — there is no CPU image for this service.
-    # Diarization requires a Hugging Face token (HF_TOKEN) and a licence
-    # acceptance on https://hf.co/pyannote/speaker-diarization-community-1
+    # Gated behind the `gpu` profile: not pulled or started unless you run with
+    # `--profile gpu`. Diarization requires a Hugging Face token (HF_TOKEN) and a
+    # licence acceptance on https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
+    profiles: ["gpu"]
     container_name: mesynx-whisperx
     restart: unless-stopped
     ports:
@@ -140,7 +135,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: [ "0", "1" ]
+              count: all
               capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/v1/models" ]
