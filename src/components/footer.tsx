@@ -56,19 +56,15 @@ export function Footer() {
                         >
                             Docs
                         </Link>
-                        <ReportBugButton
-                            isHosted={env.IS_HOSTED}
-                            className="hover:text-muted-foreground transition-colors"
-                        />
                         <Link
-                            href="https://github.com/mesynx-ai/mesynx-ai"
+                            href="https://github.com/r0073d-l053r/mesynx"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-muted-foreground transition-colors"
                             aria-label="View source code on GitHub"
                         >
                             <Github className="size-3.5" />
-                        </Link>
+                        </Link>>
                     </div>
                 </div>
             </div>

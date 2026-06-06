@@ -56,14 +56,26 @@ const COLUMNS: FooterColumn[] = [
             },
         ],
     },
-    {
-        title: "Community",
-        links: [
-            { label: "Documentation", href: "/docs" },
             {
-                label: "Discussions",
-                href: "https://github.com/mesynx-ai/mesynx-ai/discussions",
-                external: true,
+                title: "Community",
+                links: [
+                    { label: "Documentation", href: "https://mesynx.r0073dl053r.com/" },
+                    {
+                        label: "Discussions",
+                        href: "https://github.com/r0073d-l053r/mesynx/discussions",
+                        external: true,
+                    },
+                    {
+                        label: "Code of Conduct",
+                        href: "https://github.com/r0073d-l053r/mesynx/blob/main/CODE_OF_CONDUCT.md",
+                        external: true,
+                    },
+                    {
+                        label: "Discord",
+                        href: "https://discord.gg/mgBKaEGUvc",
+                        external: true,
+                    },
+                ],
             },
             {
                 label: "Code of Conduct",
@@ -135,16 +147,16 @@ export function LandingFooter() {
                             already own. Your recordings, your transcripts,
                             yours to keep.
                         </p>
-                        <div className="flex items-center gap-3 mt-1">
-                            <Link
-                                href="https://github.com/mesynx-ai/mesynx-ai"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-muted-foreground hover:text-foreground transition-colors"
-                                aria-label="Mesynx AI on GitHub"
-                            >
-                                <Github className="size-5" />
-                            </Link>
+            <div className="flex items-center gap-3 mt-1">
+                <Link
+                    href="https://github.com/r0073d-l053r/mesynx"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Mesynx AI on GitHub"
+                >
+                    <Github className="size-5" />
+                </Link>
                             <Link
                                 href="https://x.com/mesynx-aihq"
                                 target="_blank"
