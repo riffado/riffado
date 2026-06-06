@@ -115,9 +115,18 @@ jobs:
       # the pre-built GHCR image instead. Stage it from deploy/docker-compose.yml
       # so softprops uploads it under the expected `docker-compose.yml` asset name.
       - name: Prepare install artifacts
+        env:
+          TAG: ${{ steps.tag.outputs.current }}
         run: |
           cp .env.example env.example
           cp deploy/docker-compose.yml /tmp/docker-compose.yml
+          # Publish the installer as a release asset so users can run
+          #   bash <(curl -sSL .../releases/latest/download/install.sh)
+          # Substitute the {{VERSION}} placeholder with this tag so the
+          # released installer pulls version-pinned release assets
+          # (docker-compose.yml + env.example) instead of falling back to
+          # raw main.
+          sed "s/{{VERSION}}/${TAG}/g" scripts/install.sh > /tmp/install.sh
 
       - name: Create draft release
         uses: softprops/action-gh-release@v2
@@ -132,6 +141,7 @@ jobs:
           # without cloning the repo.
           files: |
             /tmp/docker-compose.yml
+            /tmp/install.sh
             env.example
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -118,8 +118,12 @@ if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
     BASE_URL="https://raw.githubusercontent.com/$REPO/main"
     info "Downloading configuration files from $BASE_URL..."
     CACHE_BUSTER="?v=$(date +%s)"
-    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml$CACHE_BUSTER" \
-        || die "Failed to download docker-compose.yml from $BASE_URL"
+    # The root docker-compose.yml is the DEV compose (build: context: .) and
+    # would try to build from source that isn't present in the install dir.
+    # Self-host installs need the PRODUCTION compose under deploy/, which pulls
+    # the pre-built GHCR image instead.
+    curl -fsSL -o docker-compose.yml "$BASE_URL/deploy/docker-compose.yml$CACHE_BUSTER" \
+        || die "Failed to download docker-compose.yml from $BASE_URL/deploy"
     curl -fsSL -o .env "$BASE_URL/env.example$CACHE_BUSTER" \
         || curl -fsSL -o .env "$BASE_URL/.env.example$CACHE_BUSTER" \
         || die "Failed to download env.example from $BASE_URL"
