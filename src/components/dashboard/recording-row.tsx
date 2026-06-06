@@ -1,6 +1,15 @@
 "use client";
 
-import { Archive, Check, Loader2, MoreHorizontal, Pencil, Play, Trash2, X } from "lucide-react";
+import {
+    Archive,
+    Check,
+    Loader2,
+    MoreHorizontal,
+    Pencil,
+    Play,
+    Trash2,
+    X,
+} from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";

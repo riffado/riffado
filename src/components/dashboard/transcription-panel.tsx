@@ -126,7 +126,13 @@ export function TranscriptionPanel({
         } finally {
             setIsSavingTranscript(false);
         }
-    }, [transcriptEditValue, transcription?.text, recording.id, cancelEditTranscript, onGenerated]);
+    }, [
+        transcriptEditValue,
+        transcription?.text,
+        recording.id,
+        cancelEditTranscript,
+        onGenerated,
+    ]);
 
     // ── Inline summary editing ───────────────────────────────────
     const [editingSummary, setEditingSummary] = useState(false);
@@ -151,14 +157,11 @@ export function TranscriptionPanel({
         }
         setIsSavingSummary(true);
         try {
-            const res = await fetch(
-                `/api/recordings/${recording.id}/summary`,
-                {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ summary: trimmed }),
-                },
-            );
+            const res = await fetch(`/api/recordings/${recording.id}/summary`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ summary: trimmed }),
+            });
             if (!res.ok) throw new Error("Failed");
             toast.success("Summary saved");
             setEditingSummary(false);
@@ -169,7 +172,13 @@ export function TranscriptionPanel({
         } finally {
             setIsSavingSummary(false);
         }
-    }, [summaryEditValue, summaryData?.summary, recording.id, cancelEditSummary, refetchSummary]);
+    }, [
+        summaryEditValue,
+        summaryData?.summary,
+        recording.id,
+        cancelEditSummary,
+        refetchSummary,
+    ]);
 
     // ── Generate pipeline state ──────────────────────────────────
     const [showOptions, setShowOptions] = useState(false);
@@ -549,21 +558,22 @@ export function TranscriptionPanel({
                                         </button>
                                     </div>
                                 )}
-                                {!editingTranscript && transcription.language && (
-                                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-                                        <Languages className="size-3" />
-                                        <span className="font-mono">
-                                            {transcription.language}
-                                        </span>
-                                        <span className="opacity-40 mx-1">
-                                            ·
-                                        </span>
-                                        <span>
-                                            {transcription.text.length.toLocaleString()}{" "}
-                                            chars
-                                        </span>
-                                    </div>
-                                )}
+                                {!editingTranscript &&
+                                    transcription.language && (
+                                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
+                                            <Languages className="size-3" />
+                                            <span className="font-mono">
+                                                {transcription.language}
+                                            </span>
+                                            <span className="opacity-40 mx-1">
+                                                ·
+                                            </span>
+                                            <span>
+                                                {transcription.text.length.toLocaleString()}{" "}
+                                                chars
+                                            </span>
+                                        </div>
+                                    )}
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center gap-4 py-10">

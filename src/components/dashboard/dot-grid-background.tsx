@@ -17,21 +17,21 @@ interface DotGridBackgroundProps {
 }
 
 // ── Grid ────────────────────────────────────────────────────────────
-const SPACING = 10;           // px between dot centres — dense, logo-like grid
-const DOT_R = 1.5;            // dot radius in logical px
+const SPACING = 10; // px between dot centres — dense, logo-like grid
+const DOT_R = 1.5; // dot radius in logical px
 
 // ── Hover ───────────────────────────────────────────────────────────
-const BASE_OPACITY = 0.06;    // resting dim state (barely visible texture)
-const HOVER_RADIUS = 8;       // px — only the dot(s) the cursor tip touches
-const HOVER_PEAK = 0.85;      // max opacity when cursor is exactly on a dot
-const FADE_IN_RATE = 0.25;    // lerp factor — fast fade-in  (~4 frames ≈ 65 ms)
-const FADE_OUT_RATE = 0.02;   // lerp factor — slow fade-out (~50 frames ≈ 830 ms)
+const BASE_OPACITY = 0.06; // resting dim state (barely visible texture)
+const HOVER_RADIUS = 8; // px — only the dot(s) the cursor tip touches
+const HOVER_PEAK = 0.85; // max opacity when cursor is exactly on a dot
+const FADE_IN_RATE = 0.25; // lerp factor — fast fade-in  (~4 frames ≈ 65 ms)
+const FADE_OUT_RATE = 0.02; // lerp factor — slow fade-out (~50 frames ≈ 830 ms)
 
 // ── Ripple ──────────────────────────────────────────────────────────
-const RIPPLE_SPEED = 200;         // px / s
-const RIPPLE_HALF_WIDTH = 18;     // half-width of the lit ring in px
-const RIPPLE_PEAK = 0.92;         // peak opacity at ring centre
-const RIPPLE_DURATION = 1800;     // ms — full lifetime of one ripple event
+const RIPPLE_SPEED = 200; // px / s
+const RIPPLE_HALF_WIDTH = 18; // half-width of the lit ring in px
+const RIPPLE_PEAK = 0.92; // peak opacity at ring centre
+const RIPPLE_DURATION = 1800; // ms — full lifetime of one ripple event
 
 // Primary cyan — matches logo dots
 const DOT_COLOR = "#00c8e8";
@@ -120,7 +120,7 @@ export function DotGridBackground({
                     return {
                         cx: (r.x - rect.left) * dpr,
                         cy: (r.y - rect.top) * dpr,
-                        ringR: (RIPPLE_SPEED * elapsed) / 1000 * dpr,
+                        ringR: ((RIPPLE_SPEED * elapsed) / 1000) * dpr,
                         halfW: RIPPLE_HALF_WIDTH * dpr,
                         life: Math.max(0, 1 - elapsed / RIPPLE_DURATION),
                     };
@@ -170,13 +170,11 @@ export function DotGridBackground({
                             const iy = dotY | 0;
                             // Unique phase per dot (0 … 2π)
                             const phase =
-                                ((ix * 127 + iy * 311) & 0xff) /
-                                255 *
+                                (((ix * 127 + iy * 311) & 0xff) / 255) *
                                 Math.PI *
                                 2;
                             // Flicker frequency 3–10 Hz, varies per dot
-                            const flickerHz =
-                                3 + ((ix * 13 + iy * 17) & 7);
+                            const flickerHz = 3 + ((ix * 13 + iy * 17) & 7);
                             const flicker =
                                 0.2 +
                                 0.8 *
@@ -221,7 +219,6 @@ export function DotGridBackground({
     return (
         <canvas
             ref={canvasRef}
-            aria-hidden="true"
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ zIndex: 0 }}
         />

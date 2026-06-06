@@ -2,10 +2,10 @@ import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
+    aiEnhancements,
     archiveCategoryAssignments,
     recordings,
     transcriptions,
-    aiEnhancements,
 } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";

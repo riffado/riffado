@@ -295,7 +295,9 @@ export function Workstation({
 
     const handleTitleChange = useCallback(
         (recording: Recording, newTitle: string) => {
-            setTitleOverrides((prev) => new Map(prev).set(recording.id, newTitle));
+            setTitleOverrides((prev) =>
+                new Map(prev).set(recording.id, newTitle),
+            );
             setCurrentRecording((prev) =>
                 prev?.id === recording.id
                     ? { ...prev, filename: newTitle }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Eye, EyeOff, Lock, LockOpen, Loader2 } from "lucide-react";
+import { Archive, Eye, EyeOff, Loader2, Lock, LockOpen } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -187,9 +187,7 @@ export function ArchiveVaultSection() {
                                 </p>
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setShowPins((v) => !v)
-                                    }
+                                    onClick={() => setShowPins((v) => !v)}
                                     className="text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                     {showPins ? (
@@ -228,7 +226,9 @@ export function ArchiveVaultSection() {
                                             </span>
                                         </Label>
                                         <Input
-                                            type={showPins ? "text" : "password"}
+                                            type={
+                                                showPins ? "text" : "password"
+                                            }
                                             value={newPin}
                                             onChange={(e) =>
                                                 setNewPin(e.target.value)
@@ -243,7 +243,9 @@ export function ArchiveVaultSection() {
                                             Confirm new PIN
                                         </Label>
                                         <Input
-                                            type={showPins ? "text" : "password"}
+                                            type={
+                                                showPins ? "text" : "password"
+                                            }
                                             value={confirmPin}
                                             onChange={(e) =>
                                                 setConfirmPin(e.target.value)

@@ -101,9 +101,7 @@ export function ProvidersSection({
                     `Found local services (${found.join(", ")}), but they were already configured.`,
                 );
             } else {
-                toast.info(
-                    "No local AI services were found.",
-                );
+                toast.info("No local AI services were found.");
             }
         } catch {
             toast.error("An error occurred while scanning for local services.");

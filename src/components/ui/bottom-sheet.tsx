@@ -14,11 +14,7 @@ export const BottomSheet = DialogPrimitive.Root;
 export const BottomSheetTrigger = DialogPrimitive.Trigger;
 export const BottomSheetClose = DialogPrimitive.Close;
 
-function BottomSheetPortal({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
+function BottomSheetPortal({ children }: { children: React.ReactNode }) {
     return <DialogPrimitive.Portal>{children}</DialogPrimitive.Portal>;
 }
 
@@ -102,7 +98,8 @@ function BottomSheetAction({
             type="button"
             className={cn(
                 "flex w-full items-center gap-3 px-5 py-3.5 text-sm font-medium transition-colors hover:bg-accent active:bg-accent/80",
-                variant === "destructive" && "text-destructive hover:bg-destructive/10",
+                variant === "destructive" &&
+                    "text-destructive hover:bg-destructive/10",
                 className,
             )}
             {...props}
@@ -116,8 +113,4 @@ function BottomSheetSeparator() {
     return <div className="mx-5 my-1 h-px bg-border/50" />;
 }
 
-export {
-    BottomSheetContent,
-    BottomSheetAction,
-    BottomSheetSeparator,
-};
+export { BottomSheetContent, BottomSheetAction, BottomSheetSeparator };

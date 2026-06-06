@@ -40,8 +40,7 @@ export const POST = apiHandler(async (request: Request) => {
         );
     }
 
-    const color =
-        typeof body.color === "string" ? body.color.trim() : "gray";
+    const color = typeof body.color === "string" ? body.color.trim() : "gray";
     const icon =
         typeof body.icon === "string" ? body.icon.trim() || null : null;
 

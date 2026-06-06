@@ -117,8 +117,9 @@ async function exportAsDocx(
     transcription: string | null | undefined,
     summary: SummaryData | null | undefined,
 ): Promise<void> {
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel } =
-        await import("docx");
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
+        "docx"
+    );
 
     // Build child paragraphs incrementally so we can conditionally include sections
     const children: InstanceType<typeof Paragraph>[] = [
@@ -134,9 +135,7 @@ async function exportAsDocx(
             }),
             new Paragraph({ text: "" }),
             new Paragraph({
-                children: [
-                    new TextRun(transcription || "(no transcription)"),
-                ],
+                children: [new TextRun(transcription || "(no transcription)")],
             }),
             new Paragraph({ text: "" }),
         );
@@ -306,7 +305,13 @@ export function ExportMenu({
 
             if (format === "docx") {
                 toast.promise(
-                    exportAsDocx(titleText, slug, scope, transcriptionText, summaryData),
+                    exportAsDocx(
+                        titleText,
+                        slug,
+                        scope,
+                        transcriptionText,
+                        summaryData,
+                    ),
                     {
                         loading: "Generating .docx…",
                         success: `Exported ${scope} as .docx`,
@@ -318,7 +323,13 @@ export function ExportMenu({
 
             if (format === "pdf") {
                 toast.promise(
-                    exportAsPdf(titleText, slug, scope, transcriptionText, summaryData),
+                    exportAsPdf(
+                        titleText,
+                        slug,
+                        scope,
+                        transcriptionText,
+                        summaryData,
+                    ),
                     {
                         loading: "Generating .pdf…",
                         success: `Exported ${scope} as .pdf`,

@@ -99,13 +99,22 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
     const userId = session.user.id;
 
     const body = await request.json().catch(() => ({}));
-    const newFilename = typeof body.filename === "string" ? body.filename.trim() : null;
+    const newFilename =
+        typeof body.filename === "string" ? body.filename.trim() : null;
 
     if (!newFilename) {
-        throw new AppError(ErrorCode.INVALID_INPUT, "filename is required", 400);
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "filename is required",
+            400,
+        );
     }
     if (newFilename.length > 500) {
-        throw new AppError(ErrorCode.INVALID_INPUT, "filename too long (max 500 chars)", 400);
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "filename too long (max 500 chars)",
+            400,
+        );
     }
 
     const [recording] = await db
@@ -121,7 +130,11 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
         .limit(1);
 
     if (!recording) {
-        throw new AppError(ErrorCode.RECORDING_NOT_FOUND, "Recording not found", 404);
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
     }
 
     await db

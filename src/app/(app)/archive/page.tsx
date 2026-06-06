@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { redirect } from "next/navigation";
 import { ArchiveVaultClient } from "@/components/archive/archive-vault-client";
 import { db } from "@/db";
 import { userSettings } from "@/db/schema";

@@ -51,7 +51,11 @@ export const POST = apiHandler(async (request: Request) => {
     try {
         storedPin = decrypt(row.vaultPin);
     } catch {
-        throw new AppError(ErrorCode.INVALID_INPUT, "PIN could not be verified", 400);
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "PIN could not be verified",
+            400,
+        );
     }
 
     return NextResponse.json({ valid: storedPin === pin });
@@ -69,7 +73,11 @@ export const PATCH = apiHandler(async (request: Request) => {
     const body = await request.json().catch(() => ({}));
 
     const newPin: string | null =
-        body.pin === null ? null : typeof body.pin === "string" ? body.pin.trim() : null;
+        body.pin === null
+            ? null
+            : typeof body.pin === "string"
+              ? body.pin.trim()
+              : null;
     const currentPin =
         typeof body.currentPin === "string" ? body.currentPin.trim() : null;
 
@@ -101,10 +109,18 @@ export const PATCH = apiHandler(async (request: Request) => {
         try {
             storedPin = decrypt(row.vaultPin);
         } catch {
-            throw new AppError(ErrorCode.INVALID_INPUT, "PIN could not be verified", 400);
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                "PIN could not be verified",
+                400,
+            );
         }
         if (storedPin !== currentPin) {
-            throw new AppError(ErrorCode.FORBIDDEN, "Incorrect current PIN", 403);
+            throw new AppError(
+                ErrorCode.FORBIDDEN,
+                "Incorrect current PIN",
+                403,
+            );
         }
     }
 

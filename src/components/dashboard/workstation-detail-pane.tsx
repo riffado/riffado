@@ -111,9 +111,7 @@ export function WorkstationDetailPane({
         ripplesRef.current = [...ripplesRef.current.slice(-4), ripple];
         // Clean up after the ripple has fully faded
         window.setTimeout(() => {
-            ripplesRef.current = ripplesRef.current.filter(
-                (r) => r.id !== id,
-            );
+            ripplesRef.current = ripplesRef.current.filter((r) => r.id !== id);
         }, 2000);
     }, []);
 
@@ -231,8 +229,7 @@ export function WorkstationDetailPane({
                                             if (
                                                 currentIndex >= 0 &&
                                                 currentIndex <
-                                                    visibleRecordings.length -
-                                                        1
+                                                    visibleRecordings.length - 1
                                             ) {
                                                 onSelectRecording(
                                                     visibleRecordings[

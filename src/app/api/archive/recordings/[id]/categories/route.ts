@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { archiveCategoryAssignments, archiveCategories } from "@/db/schema";
+import { archiveCategories, archiveCategoryAssignments } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
