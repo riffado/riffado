@@ -115,19 +115,21 @@ ok "Using $INSTALL_DIR"
 # ---- download release artifacts --------------------------------------------
 
 if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
-    # Should not happen — the script is rendered server-side with a version
-    # substituted in. Defend anyway.
-    BASE_URL="https://github.com/$REPO/releases/latest/download"
-    info "Downloading latest release artifacts..."
+    BASE_URL="https://raw.githubusercontent.com/$REPO/main"
+    info "Downloading configuration files from $BASE_URL..."
+    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
+        || die "Failed to download docker-compose.yml from $BASE_URL"
+    curl -fsSL -o .env "$BASE_URL/env.example" \
+        || curl -fsSL -o .env "$BASE_URL/.env.example" \
+        || die "Failed to download env.example from $BASE_URL"
 else
     BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
     info "Downloading release $VERSION artifacts..."
+    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
+        || die "Failed to download docker-compose.yml from $BASE_URL"
+    curl -fsSL -o .env "$BASE_URL/env.example" \
+        || die "Failed to download env.example from $BASE_URL"
 fi
-
-curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
-    || die "Failed to download docker-compose.yml from $BASE_URL"
-curl -fsSL -o .env "$BASE_URL/env.example" \
-    || die "Failed to download env.example from $BASE_URL"
 ok "Downloaded docker-compose.yml and .env"
 
 # ---- generate secrets ------------------------------------------------------
