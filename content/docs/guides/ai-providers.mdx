@@ -48,6 +48,50 @@ the Docker bridge IP on Linux, to reach an AI server running on the
 host. If you run Ollama in the same Docker network as Mesynx AI, use the
 service hostname (`http://ollama:11434/v1`).
 
+## Auto-discovery (Scan for Local Services)
+
+On a self-hosted instance, **Settings → AI providers → Scan for Local
+Services** network-scans for OpenAI-compatible LLM and transcription
+servers (Ollama, LM Studio, Open WebUI, faster-whisper, WhisperX,
+vLLM / llama.cpp / SGLang) and auto-configures the ones it can. Open
+WebUI is detected but listed for **manual** setup, because it needs your
+own API key.
+
+The scan runs **inside the Mesynx Docker container**, so it cannot see
+`localhost` on your host — `localhost` there is the container. It reaches
+host services through `host.docker.internal` instead. For a service to be
+discovered:
+
+1. **It must listen on `0.0.0.0`, not `127.0.0.1`.** A service bound only
+   to loopback is invisible from the container even via
+   `host.docker.internal`. The most common offender is Ollama, which
+   defaults to `127.0.0.1`:
+   - **Windows / Mac (native app):** set the environment variable
+     `OLLAMA_HOST=0.0.0.0` and restart Ollama.
+   - **Linux (systemd):** `systemctl edit ollama` and add
+     `Environment="OLLAMA_HOST=0.0.0.0"`, then `systemctl restart ollama`.
+   - Verify from the host: `curl http://localhost:11434/v1/models` should
+     list models.
+2. **It must use a port the scanner checks:** `11434` (Ollama), `1234`
+   (LM Studio), `3000` and `8080` (Open WebUI), `8397` / `8398` / `9000`
+   (whisper variants), and `8000–8020` (vLLM / llama.cpp / SGLang). If you
+   remapped a service to another port, add it manually instead (see
+   *Adding a provider* above) or set `OLLAMA_URL` / `LM_STUDIO_URL` in the
+   app's environment so the scan picks up the custom port.
+3. **On Linux**, ensure the `app` service has
+   `extra_hosts: ["host.docker.internal:host-gateway"]` (it ships in the
+   bundled `docker-compose.yml`). Docker Desktop on Windows/Mac injects
+   this automatically.
+
+If a service runs in its **own Docker container**, put it on the same
+Docker network as Mesynx (or connect the networks) and add it manually by
+its service hostname, e.g. `http://open-webui:8080`. Cross-network
+containers are only reachable via `host.docker.internal:<published-port>`.
+
+When a scan finds nothing, the toast explains these requirements — it
+almost always means a service is bound to loopback or on a non-standard
+port.
+
 ## Choosing models
 
 The preset list ships with a curated set of known transcription model

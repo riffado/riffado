@@ -48,6 +48,14 @@ services:
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8790}:3000"
+    # Lets the app reach AI services running on the host (Ollama, Open WebUI,
+    # whisper) via http://host.docker.internal:<port>, which powers
+    # Settings → AI Providers → "Scan for Local Services". Auto-injected by
+    # Docker Desktop on Windows/Mac; required explicitly on Linux. Note: the
+    # host service must listen on 0.0.0.0, not just 127.0.0.1 — e.g. start
+    # Ollama with OLLAMA_HOST=0.0.0.0.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/mesynx

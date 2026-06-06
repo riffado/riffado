@@ -101,7 +101,11 @@ export function ProvidersSection({
                     `Found local services (${found.join(", ")}), but they were already configured.`,
                 );
             } else {
-                toast.info("No local AI services were found.");
+                toast.info("No local AI services were found.", {
+                    description:
+                        "Mesynx runs in Docker, so it reaches host services via host.docker.internal. Make sure each service listens on 0.0.0.0 (for Ollama, set OLLAMA_HOST=0.0.0.0 and restart it) and uses a standard port. See Settings → docs: AI providers → Auto-discovery.",
+                    duration: 12000,
+                });
             }
         } catch {
             toast.error("An error occurred while scanning for local services.");
