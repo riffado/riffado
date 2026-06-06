@@ -19,7 +19,7 @@
 set -eu
 
 VERSION="{{VERSION}}"
-REPO="mesynx-ai/mesynx-ai"
+REPO="r0073d-l053r/mesynx"
 DEFAULT_DIR="$HOME/mesynx-ai"
 DEFAULT_APP_URL="http://localhost:8790"
 HEALTH_TIMEOUT=60
