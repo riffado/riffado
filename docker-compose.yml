@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: mesynx-ai-db
+    container_name: mesynx-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -30,7 +30,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: ghcr.io/r0073d-l053r/mesynx:${MESYNX_AI_VERSION:-dev}
-    container_name: mesynx-ai-app
+    container_name: mesynx
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8790}:3000"
@@ -80,7 +80,7 @@ services:
     # GPU: Use cuda image. CPU: Comment out cuda image and uncomment cpu image below.
     image: fedirz/faster-whisper-server:latest-cuda
     # image: fedirz/faster-whisper-server:latest-cpu
-    container_name: mesynx-ai-whisper
+    container_name: mesynx-whisper
     restart: unless-stopped
     ports:
       - "8397:8000"
@@ -119,7 +119,7 @@ services:
     # Diarization requires a Hugging Face token (HF_TOKEN) and a licence
     # acceptance on https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
-    container_name: mesynx-ai-whisperx
+    container_name: mesynx-whisperx
     restart: unless-stopped
     ports:
       - "8398:8000"

@@ -30,8 +30,11 @@ export const GET = apiHandler(async (request: Request) => {
     if (!env.IS_HOSTED && providers.length === 0) {
         const WHISPER_DOCKER_TARGETS = [
             "http://whisper:8000/v1",
+            "http://mesynx-whisper:8000/v1",
+            // Legacy container name (pre-rename installs not yet recreated).
             "http://mesynx-ai-whisper:8000/v1",
             "http://whisperx:8000/v1",
+            "http://mesynx-whisperx:8000/v1",
             "http://mesynx-ai-whisperx:8000/v1",
         ];
 

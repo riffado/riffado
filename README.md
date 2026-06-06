@@ -60,7 +60,7 @@ Mesynx AI closes that gap by bundling a GPU [faster-whisper](https://github.com/
 # docker-compose.yml (already included)
 whisper:
   image: fedirz/faster-whisper-server:latest-cuda
-  container_name: mesynx-ai-whisper
+  container_name: mesynx-whisper
   restart: unless-stopped
   ports:
     - "8397:8000"

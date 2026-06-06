@@ -3,7 +3,7 @@ services:
     # GPU: Use cuda image. CPU: Comment out cuda image and uncomment cpu image below.
     image: fedirz/faster-whisper-server:latest-cuda
     # image: fedirz/faster-whisper-server:latest-cpu
-    container_name: mesynx-ai-whisper
+    container_name: mesynx-whisper
     restart: unless-stopped
     ports:
       # Host 8397 -> container 8000. Point Mesynx AI's provider Base URL at
@@ -42,7 +42,7 @@ services:
     # Diarization requires a Hugging Face token (HF_TOKEN) and a licence
     # acceptance on https://hf.co/pyannote/speaker-diarization-community-1
     image: ghcr.io/etalab-ia/whisperx-openai-api:latest
-    container_name: mesynx-ai-whisperx
+    container_name: mesynx-whisperx
     restart: unless-stopped
     ports:
       # Host 8398 -> container 8000. Point Mesynx AI's provider Base URL at

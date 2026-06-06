@@ -63,8 +63,11 @@ export const DEFAULT_SCAN_HOSTS: readonly string[] = [
     "127.0.0.1",
     "host.docker.internal",
     "whisper",
+    "mesynx-whisper",
+    // Legacy container names (pre-rename installs not yet recreated).
     "mesynx-ai-whisper",
     "whisperx",
+    "mesynx-whisperx",
     "mesynx-ai-whisperx",
     "ollama",
     "open-webui",

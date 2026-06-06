@@ -133,7 +133,7 @@ export function Deploy() {
                                     <span className="text-green-600 dark:text-green-500">
                                         ✓
                                     </span>{" "}
-                                    Pulled mesynx-ai-web, mesynx-ai-db
+                                    Pulled mesynx, mesynx-db
                                 </div>
                                 <div>
                                     <span className="text-green-600 dark:text-green-500">
