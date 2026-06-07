@@ -118,7 +118,7 @@ export function SearchableModelDropdown({
                 onClick={() => setOpen(!open)}
                 className={cn(TRIGGER_BASE_CLASS, triggerClassName)}
             >
-                <span className="truncate text-left flex-1">
+                <span className="truncate text-left flex-1 min-w-0">
                     {selectedLabel}
                 </span>
                 <ChevronDown className="size-4 opacity-50 shrink-0 ml-2" />

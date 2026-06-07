@@ -205,7 +205,7 @@ export function TranscriptionModelPicker({
                     onValueChange={handleSelectChange}
                     disabled={disabled}
                 >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full min-w-0">
                         <SelectValue placeholder="Pick a transcription model" />
                     </SelectTrigger>
                     <SelectContent>

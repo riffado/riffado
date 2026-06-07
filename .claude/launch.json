@@ -1,0 +1,24 @@
+{
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "Next.js Dev",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["dev"],
+            "port": 3000,
+            "autoPort": true
+        },
+        {
+            "name": "Drizzle Studio",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["db:studio"],
+            "port": 4983
+        },
+        {
+            "name": "Vitest Watch",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["test:watch"],
+            "port": 51204
+        }
+    ]
+}
