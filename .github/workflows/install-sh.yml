@@ -40,37 +40,42 @@ jobs:
           # bash. Treat warnings as errors.
           shellcheck -s sh -S warning scripts/install.sh
 
-  install-pinned:
-    # End-to-end install against a published image. This is the regression
-    # check: does today's installer still bring up an older known-good
-    # release? Bump PINNED_VERSION whenever a new stable release lands so
-    # the test stays meaningful.
-    name: Install (pinned)
+  install-smoke:
+    # End-to-end smoke test of the installer via the raw-main path -- the
+    # supported self-host path on this repo. (No GitHub release assets are
+    # published, so the version-pinned path is intentionally not exercised
+    # here; reinstate a pinned test once releases ship docker-compose.yml +
+    # env.example.) Leaving the {{VERSION}} placeholder makes install.sh fetch
+    # config from raw.githubusercontent main and bring up the CPU core stack;
+    # whisperx sits behind the `gpu` profile and is skipped.
+    #
+    # On pull_request this installs main's published artifacts (raw main does
+    # not reflect the PR), so it validates installer mechanics rather than the
+    # PR's compose edits; ShellCheck above is the per-PR gate on the script.
+    name: Install (smoke)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      PINNED_VERSION: v0.5.4
+      # Pull a stable published image rather than the .env.example default
+      # (dev) so the smoke test is deterministic.
+      MESYNX_AI_VERSION: latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Render install.sh with pinned version
+      - name: Run installer non-interactively (raw-main path)
         run: |
+          # No tty + no /dev/tty makes the installer take all defaults
+          # (install dir $HOME/mesynx, APP_URL http://localhost:8790).
+          # install.sh runs its own /api/health gate and exits non-zero on
+          # failure, so a clean exit here IS the health verification.
           mkdir -p /tmp/installer
-          sed "s|{{VERSION}}|${PINNED_VERSION}|g" scripts/install.sh > /tmp/installer/install.sh
+          cp scripts/install.sh /tmp/installer/install.sh
           chmod +x /tmp/installer/install.sh
-
-      - name: Run installer non-interactively
-        run: |
-          # No tty + no /dev/tty makes the installer take all defaults.
-          # Override $HOME so the install dir is predictable.
           HOME=/tmp/run sh /tmp/installer/install.sh < /dev/null
 
-      - name: Verify health
-        run: |
-          curl -fsS http://localhost:3000/api/health
-          docker compose -f /tmp/run/mesynx-ai/docker-compose.yml ps
+      - name: Show running services
+        run: docker compose -f /tmp/run/mesynx/docker-compose.yml ps
 
       - name: Dump logs on failure
         if: failure()
-        run: |
-          docker compose -f /tmp/run/mesynx-ai/docker-compose.yml logs --no-color || true
+        run: docker compose -f /tmp/run/mesynx/docker-compose.yml logs --no-color || true
