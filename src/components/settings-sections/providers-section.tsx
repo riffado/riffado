@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
 import { AddProviderDialog } from "@/components/settings/add-provider-dialog";
 import { EditProviderDialog } from "@/components/settings/edit-provider-dialog";
+import { GpuAccelerationCard } from "@/components/settings/gpu-acceleration-card";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { PromptManager } from "@/components/settings-sections/prompt-manager";
 import { Button } from "@/components/ui/button";
@@ -246,6 +247,10 @@ export function ProvidersSection({
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                     />
+                )}
+
+                {aiSubSection === "providers" && !isLoading && !isHosted && (
+                    <GpuAccelerationCard isHosted={isHosted} />
                 )}
 
                 {aiSubSection === "prompts" && <PromptManager />}

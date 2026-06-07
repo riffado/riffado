@@ -1,0 +1,23 @@
+# In-UI GPU provisioning override for Mesynx AI (production install).
+#
+# Opt in ONLY if you want to manage GPU services from the web UI
+# (Settings -> AI Providers -> "GPU acceleration"). This lets the app pull and
+# start the whisperx / CUDA-whisper containers for you, with a live download
+# progress bar, instead of you running docker compose on the host shell.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.provisioning.yml up -d
+#
+# ============================== SECURITY ====================================
+# This mounts the host Docker socket into the app container. That grants the
+# app control of the Docker daemon, which is effectively ROOT ON THE HOST.
+# Only enable this on a trusted, single-tenant, self-hosted instance that you
+# control. Never combine with IS_HOSTED=true (the provisioning routes refuse to
+# run on the hosted tier regardless). If you are unsure, do NOT use this file —
+# enable GPU the manual way instead (docker-compose.gpu.yml).
+# ============================================================================
+services:
+  app:
+    environment:
+      GPU_PROVISIONING_ENABLED: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

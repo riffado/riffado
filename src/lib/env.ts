@@ -173,6 +173,25 @@ export const envSchema = z.object({
     OLLAMA_BASE_URL: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
     LM_STUDIO_URL: z.string().optional(),
+
+    /**
+     * Opt-in: let the app pull/start GPU containers (whisperx / CUDA whisper)
+     * via the host Docker socket, powering in-UI GPU provisioning in
+     * Settings -> AI Providers. SELF-HOST ONLY and OFF by default.
+     *
+     * SECURITY: this requires mounting /var/run/docker.sock into the app
+     * container (see docker-compose.provisioning.yml), which grants the app
+     * host-root-equivalent access. Only enable on a trusted single-tenant
+     * instance. The provisioning routes refuse to run unless this is true,
+     * IS_HOSTED is false, and the socket is reachable.
+     */
+    GPU_PROVISIONING_ENABLED: optionalStrictBoolean,
+
+    /** Docker daemon socket path for GPU provisioning. Default /var/run/docker.sock. */
+    DOCKER_SOCKET_PATH: z
+        .string()
+        .optional()
+        .transform((val) => (val?.trim() ? val.trim() : undefined)),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -226,6 +245,8 @@ function validateEnv(): Env {
             OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL,
             OLLAMA_URL: process.env.OLLAMA_URL,
             LM_STUDIO_URL: process.env.LM_STUDIO_URL,
+            GPU_PROVISIONING_ENABLED: process.env.GPU_PROVISIONING_ENABLED,
+            DOCKER_SOCKET_PATH: process.env.DOCKER_SOCKET_PATH,
         });
 
         const isProductionBuildPhase =

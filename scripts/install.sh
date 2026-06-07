@@ -136,6 +136,10 @@ if ! printf '%s' "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
     # must not fail a CPU-only install.
     curl -fsSL -o docker-compose.gpu.yml "$BASE_URL/deploy/docker-compose.gpu.yml$CACHE_BUSTER" \
         || warn "Could not fetch docker-compose.gpu.yml; GPU opt-in unavailable in this install."
+    # Optional provisioning override (mounts the Docker socket for in-UI GPU
+    # management). Best-effort; off unless the operator opts in.
+    curl -fsSL -o docker-compose.provisioning.yml "$BASE_URL/deploy/docker-compose.provisioning.yml$CACHE_BUSTER" \
+        || warn "Could not fetch docker-compose.provisioning.yml; in-UI GPU management unavailable."
 else
     BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
     info "Downloading release $VERSION artifacts..."
@@ -147,6 +151,8 @@ else
     # may not ship it.
     curl -fsSL -o docker-compose.gpu.yml "$BASE_URL/docker-compose.gpu.yml" \
         || warn "Could not fetch docker-compose.gpu.yml; GPU opt-in unavailable in this install."
+    curl -fsSL -o docker-compose.provisioning.yml "$BASE_URL/docker-compose.provisioning.yml" \
+        || warn "Could not fetch docker-compose.provisioning.yml; in-UI GPU management unavailable."
 fi
 ok "Downloaded docker-compose.yml and .env"
 
@@ -216,6 +222,10 @@ while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
         if [ -f docker-compose.gpu.yml ]; then
             printf '   Enable GPU:  cd %s && docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile gpu up -d\n' "$INSTALL_DIR"
             printf '                (needs the NVIDIA Container Toolkit; adds diarization + CUDA transcription)\n'
+        fi
+        if [ -f docker-compose.provisioning.yml ]; then
+            printf '   Manage GPU in the web UI (mounts the Docker socket — host-level access):\n'
+            printf '                cd %s && docker compose -f docker-compose.yml -f docker-compose.provisioning.yml up -d\n' "$INSTALL_DIR"
         fi
         printf '\n'
         exit 0

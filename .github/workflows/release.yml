@@ -123,6 +123,9 @@ jobs:
           # GPU opt-in override, downloaded by install.sh for users who later
           # enable diarization / CUDA transcription.
           cp deploy/docker-compose.gpu.yml /tmp/docker-compose.gpu.yml
+          # Provisioning override (mounts the Docker socket) for in-UI GPU
+          # management. Opt-in; carries a security trade-off (see its header).
+          cp deploy/docker-compose.provisioning.yml /tmp/docker-compose.provisioning.yml
           # Publish the installer as a release asset so users can run
           #   bash <(curl -sSL .../releases/latest/download/install.sh)
           # Substitute the {{VERSION}} placeholder with this tag so the
@@ -145,6 +148,7 @@ jobs:
           files: |
             /tmp/docker-compose.yml
             /tmp/docker-compose.gpu.yml
+            /tmp/docker-compose.provisioning.yml
             /tmp/install.sh
             env.example
         env:
