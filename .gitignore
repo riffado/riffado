@@ -60,5 +60,8 @@ bun.lock
 # screenshot capture artifacts (temporary playwright scripts)
 /.screenshot-tmp/
 
+# Claude Code local git worktrees (per-branch checkouts; never commit)
+/.claude/worktrees/
+
 # logs
 *.log

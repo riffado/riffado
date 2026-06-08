@@ -45,6 +45,7 @@ Everything Riffado does, Mesynx AI does too — these are the changes layered on
 | --- | --- | --- |
 | **Transcription backend** | Bring-your-own OpenAI-compatible API | **+ Bundled self-hosted GPU Whisper** service (NVIDIA), turnkey in `docker-compose.yml` |
 | **Local AI servers** | Chat / text only (Ollama, Open WebUI) — `405` on `/v1/audio/transcriptions` | Real `/v1/audio/transcriptions` via faster-whisper — **your local box can finally transcribe** |
+| **GPU setup** | Manual `docker compose` on the host shell | **+ One-click in-UI provisioning** — download & start GPU Whisper + WhisperX diarization from Settings, with a live progress bar *(New in Mesynx AI.)* |
 | **Memory Map** | None | **Interactive mind-map** — hover-to-trace a branch, click a node to expand, full-screen modal |
 | **Provider setup** | Provider + key + model | **+ Nickname** per server · **+ searchable model picker** (auto-discovered on *Test Connection*) |
 | **Provider reliability** | Saved configs occasionally failed to load / lost the key on open | Section self-loads with a spinner; **configs and keys load reliably** |
@@ -84,6 +85,8 @@ flowchart LR
 ```
 
 Running it on a separate GPU box is supported too — see [`whisper-server/`](whisper-server/) for a standalone compose file plus **model selection and anti-hallucination (VAD) guidance** for long recordings.
+
+**Prefer one-click?** On a self-hosted instance you can download and start the GPU containers — CUDA Whisper **and** WhisperX speaker diarization — straight from **Settings → AI Providers → GPU acceleration**, with a live download progress bar and ETA. No host shell required. It's an opt-in, self-host-only feature that drives the Docker daemon, so it's gated behind an env flag plus an explicit socket-mount override — see the [GPU provisioning docs](https://mesynx.r0073dl053r.com/docs/self-hosting/gpu-provisioning) for the security model.
 
 ### 🧠 Interactive Memory Map
 
