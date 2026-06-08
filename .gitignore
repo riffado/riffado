@@ -57,5 +57,8 @@ plans/
 bun.lock
 /src/.source
 
+# screenshot capture artifacts (temporary playwright scripts)
+/.screenshot-tmp/
+
 # logs
 *.log

@@ -9,6 +9,16 @@
 
 ### Added
 
+- **In-UI GPU provisioning for Whisper/WhisperX.** Self-hosters can now enable GPU-accelerated transcription and WhisperX speaker diarization directly from Settings → AI Providers without touching the command line. A new `GpuAccelerationCard` streams Docker pull progress (per-layer percent, bytes transferred, ETA) via NDJSON. The feature is gated behind `GPU_PROVISIONING_ENABLED=true` and the `docker-compose.provisioning.yml` socket-mount override — both must be present, ensuring it is never active on the hosted tier or without explicit operator opt-in. A `GET /api/settings/ai/gpu/status` endpoint surfaces current container state and GPU availability; `POST /api/settings/ai/gpu/provision` streams the provisioning sequence. Unit tests cover the pure NDJSON parser, progress aggregator, and container-spec builders without requiring a live Docker socket.
+
+### Fixed
+
+- **Model name overflow in AI provider dialog.** Long model IDs (e.g. `whisper-large-v3-turbo`) no longer push the selector out of its container. Added `min-w-0` to the `SearchableModelDropdown` trigger label (required for `truncate` to shrink a flex child) and `w-full min-w-0` to the transcription model `SelectTrigger`.
+
+### Changed
+
+- **README screenshots refreshed.** All three hero screenshots (`dashboard-dark.png`, `memory-map.png`, `providers-list.png`) replaced with current, PII-free captures from the `/dev/demo-dashboard` fixture route, reflecting the latest UI including the redesigned Memory Map modal and the new provider-nickname display.
+
 - **WhisperX alignment and speaker diarization.** Integrated WhisperX into the docker compose stacks (with GPU and PyAnnote model caching support), extended local discovery to auto-fingerprint WhisperX endpoints, and updated the settings to support automatic diarization when a `-diarize` model is selected.
 - **Recording player, transcription panel, and archive vault.** Implemented a comprehensive workstation dashboard, recording player, transcription panel, and dynamic category management and archival vault for recording history.
 - **Mobile PWA standalone support.** Added dynamic web app manifest, service worker registration client hook, iOS-specific mobile standalone headers, and high-resolution logo icons to support installing Mesynx AI as a native full-screen app on iOS and Android.
