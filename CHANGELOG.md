@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Dropped the unused `storage_config` table. Storage has been configured at the instance level via env vars (`DEFAULT_STORAGE_TYPE`, `S3_*`, `LOCAL_STORAGE_PATH`) since v0.4.x; this table held orphan per-user S3 config rows that nothing has read or written since the move. Migration `0024_sour_serpent_society.sql` issues a `DROP TABLE ... CASCADE`. Self-hosters: if for any reason you still want the historical rows, dump them before running `pnpm db:migrate` ([#83](https://github.com/riffado/riffado/issues/83)).
+
 ## [0.5.6] - 2026-05-30
 
 ## [0.5.5] - 2026-05-30
