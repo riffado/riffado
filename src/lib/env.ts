@@ -16,7 +16,7 @@ const optionalStrictBoolean = z
     });
 
 export const envSchema = z.object({
-    /** True for the OpenPlaud-operated hosted instance; default false (self-host). */
+    /** True for the Riffado-operated hosted instance; default false (self-host). */
     IS_HOSTED: z
         .string()
         .optional()

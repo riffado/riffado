@@ -12,7 +12,7 @@ We release patches for security vulnerabilities for the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@openplaud.com** (or create a private GitHub security advisory)
+Instead, please report them via email to: **security@riffado.com** (or create a private GitHub security advisory)
 
 You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
 
@@ -30,7 +30,7 @@ This information will help us triage your report more quickly.
 
 ## Security Best Practices
 
-When deploying OpenPlaud:
+When deploying Riffado:
 
 ### 1. Environment Variables
 - **Never commit `.env` files** to version control
@@ -128,6 +128,6 @@ We appreciate the security research community and will acknowledge researchers w
 
 ## Contact
 
-For security concerns: security@openplaud.com
+For security concerns: security@riffado.com
 For general issues: GitHub Issues
 For discussions: GitHub Discussions

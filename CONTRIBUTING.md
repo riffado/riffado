@@ -1,4 +1,4 @@
-# Contributing to OpenPlaud
+# Contributing to Riffado
 
 Thanks for your interest. This guide is short on purpose — read it all.
 
@@ -10,7 +10,7 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 
 ## Before you submit
 
-- **Search first.** Check [open issues](https://github.com/openplaud/openplaud/issues) and PRs — don't duplicate work in flight.
+- **Search first.** Check [open issues](https://github.com/riffado/riffado/issues) and PRs — don't duplicate work in flight.
 - **Open an issue for anything non-trivial.** Discuss the approach before you write 500 lines.
 - **Read [AGENTS.md](AGENTS.md).** It documents the product principles (self-host is first-class, export parity, no vendor lock-in) and code conventions. PRs that violate them will likely be rejected.
 - **Read [BRANCHING.md](BRANCHING.md).** `main` is a rolling integration branch; your PR targets it.
@@ -18,8 +18,8 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 ## Development setup
 
 ```bash
-git clone https://github.com/openplaud/openplaud.git
-cd openplaud
+git clone https://github.com/riffado/riffado.git
+cd riffado
 pnpm install
 
 cp .env.example .env
@@ -27,7 +27,7 @@ cp .env.example .env
 echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)"
 echo "ENCRYPTION_KEY=$(openssl rand -hex 32)"
 
-createdb openplaud
+createdb riffado
 pnpm db:migrate
 pnpm dev
 ```
@@ -76,7 +76,7 @@ bun test src/tests/plaud.integration.test.ts
 
 ## License
 
-OpenPlaud is [AGPL-3.0](LICENSE). By contributing, you agree your contributions are licensed under the same terms. If you run a modified version as a network service, you must release your modifications.
+Riffado is [AGPL-3.0](LICENSE). By contributing, you agree your contributions are licensed under the same terms. If you run a modified version as a network service, you must release your modifications.
 
 ## Code of Conduct
 

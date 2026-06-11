@@ -1,5 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { acquirePlaudConnectLock } from "@/db/queries/plaud-locks";
 import { plaudConnections, plaudDevices } from "@/db/schema";
 import { encrypt } from "@/lib/encryption";
 import type { PlaudDeviceListResponse } from "@/types/plaud";
@@ -51,10 +52,7 @@ export async function persistPlaudConnection({
     const encryptedAccessToken = encrypt(accessToken);
 
     await db.transaction(async (tx) => {
-        // Advisory lock serialises concurrent connect attempts per user.
-        await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`plaud_connect:${userId}`}, 0))`,
-        );
+        await acquirePlaudConnectLock(tx, userId);
 
         const [existingConnection] = await tx
             .select()

@@ -22,7 +22,7 @@ export default defineConfig({
     // (sitemap <lastmod>) and the docs page footer.
     plugins: [lastModified()],
     mdxOptions: {
-        // Warm dual-theme shiki palette that lives close to the OpenPlaud
+        // Warm dual-theme shiki palette that lives close to the Riffado
         // OKLCH tokens defined in `src/app/globals.css`. `vitesse-light`
         // sits well on the cream background; `vesper` matches the dark
         // mocha surface without the high-contrast neon of e.g. `dracula`.

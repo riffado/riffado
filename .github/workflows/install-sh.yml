@@ -2,7 +2,7 @@ name: Install Script
 
 # Integration test for the one-line installer. Runs on PRs that touch the
 # installer surface so a regression in `scripts/install.sh` or its routes
-# fails CI before it reaches openplaud.com.
+# fails CI before it reaches riffado.com.
 
 on:
   push:
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      PINNED_VERSION: v0.3.0
+      PINNED_VERSION: v0.5.4
     steps:
       - uses: actions/checkout@v4
 
@@ -68,9 +68,9 @@ jobs:
       - name: Verify health
         run: |
           curl -fsS http://localhost:3000/api/health
-          docker compose -f /tmp/run/openplaud/docker-compose.yml ps
+          docker compose -f /tmp/run/riffado/docker-compose.yml ps
 
       - name: Dump logs on failure
         if: failure()
         run: |
-          docker compose -f /tmp/run/openplaud/docker-compose.yml logs --no-color || true
+          docker compose -f /tmp/run/riffado/docker-compose.yml logs --no-color || true

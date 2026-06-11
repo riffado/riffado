@@ -12,7 +12,7 @@
  *   - Otherwise: plain freeform text input (LM Studio / Ollama / Custom).
  *
  * Both list modes include a final "Custom (type model name)…" option as
- * an escape hatch so users on a stale OpenPlaud release can still type a
+ * an escape hatch so users on a stale Riffado release can still type a
  * model id we haven't seeded yet.
  */
 

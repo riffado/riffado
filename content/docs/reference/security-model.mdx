@@ -10,7 +10,7 @@ column-level details.
 
 ## Authentication
 
-Two ways to authenticate to OpenPlaud's HTTP surface:
+Two ways to authenticate to Riffado's HTTP surface:
 
 1. **Browser session** (Better Auth). Email + password, with the
    session cookie signed by `BETTER_AUTH_SECRET`. Used by every page
@@ -81,7 +81,7 @@ Two important consequences:
 
 Outbound webhook deliveries are signed:
 
-- Header: `X-OpenPlaud-Signature: t=<unix>,v1=<hex hmac>`
+- Header: `X-Riffado-Signature: t=<unix>,v1=<hex hmac>`
 - Algorithm: HMAC-SHA256 of `${timestamp}.${rawBody}` with the
   endpoint's per-secret.
 - Replay window: ±5 minutes.
@@ -93,7 +93,7 @@ a reference Node implementation.
 ## Webhook target hardening
 
 By default, webhook URLs may use `http://` or `https://` and may point
-at anything the OpenPlaud container can reach (Docker-bridge service
+at anything the Riffado container can reach (Docker-bridge service
 names, RFC1918 IPs, public hosts). Credentials embedded in the URL are
 rejected.
 
@@ -130,7 +130,7 @@ Suspended users (`users.suspendedAt` is non-null) are rejected
 The check sits next to the auth lookup, not behind a per-route
 middleware, so it can't be forgotten on a new route.
 
-## Trust boundaries OpenPlaud does *not* own
+## Trust boundaries Riffado does *not* own
 
 Some risks live outside the app entirely and we name them rather than
 pretending we cover them:
@@ -139,7 +139,7 @@ pretending we cover them:
   to whichever provider you configured. The privacy of that data
   depends on the provider's policy and infrastructure. If you don't
   trust them, run a local provider (Ollama / LM Studio) on the same
-  machine as your OpenPlaud instance.
+  machine as your Riffado instance.
 - **A compromised application server.** The server holds
   `ENCRYPTION_KEY` and decrypts data on demand. At-rest encryption
   protects DB breaches, not RCE.
@@ -149,12 +149,12 @@ pretending we cover them:
 
 ## Compliance claims
 
-OpenPlaud does not claim HIPAA, SOC2, or attorney-client privilege.
+Riffado does not claim HIPAA, SOC2, or attorney-client privilege.
 Those claims belong to your AI provider (which may itself be
 HIPAA-eligible) and your own self-host setup, which you fully
 control.
 
 ## Reporting a vulnerability
 
-See [SECURITY.md](https://github.com/openplaud/openplaud/blob/main/SECURITY.md)
+See [SECURITY.md](https://github.com/riffado/riffado/blob/main/SECURITY.md)
 in the repository for disclosure instructions.

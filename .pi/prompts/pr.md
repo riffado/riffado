@@ -10,7 +10,7 @@ For each PR URL, do the following in order:
 2. Identify any linked issues referenced in the PR body, comments, commit messages, or cross links. Read each issue in full, including all comments.
 3. Analyze the PR diff. Read all relevant code files in full from the current `main` branch (Read tool only — never `cat`/`sed`) and compare against the diff. Include related code paths that are not in the diff but are required to validate behavior.
 4. **Do not** check for a `CHANGELOG.md` entry — per AGENTS.md, the changelog is maintainer-curated at release time and contributors do not edit it. Instead, note in the review whether this change is release-worthy and which subsection it should land in (`Added` / `Changed` / `Fixed` / `Breaking Changes` / `Removed` / `Security`) so the maintainer can pick it up at release.
-5. Cross-check against OpenPlaud invariants from AGENTS.md:
+5. Cross-check against Riffado invariants from AGENTS.md:
    - **Deploy surface**: schema additivity, env var deprecation, `docker-compose.yml` structure
    - **User-scoped queries**: every user-scoped query must include `eq(table.userId, session.user.id)`
    - **Encryption at rest**: tokens, AI keys, SMTP, S3 creds go through `src/lib/encryption.ts`

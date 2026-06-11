@@ -15,7 +15,7 @@ import {
 } from "vitest";
 
 const mockEnv = vi.hoisted(() => ({
-    APP_URL: "https://openplaud.example",
+    APP_URL: "https://riffado.example",
     IS_HOSTED: false,
     WEBHOOKS_REQUIRE_PUBLIC_TARGETS: undefined as boolean | undefined,
 }));
@@ -410,7 +410,7 @@ function normalizedSqlText(value: unknown): string {
 describe("webhooks", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockEnv.APP_URL = "https://openplaud.example";
+        mockEnv.APP_URL = "https://riffado.example";
         mockEnv.IS_HOSTED = false;
         mockEnv.WEBHOOKS_REQUIRE_PUBLIC_TARGETS = undefined;
         lastMockRequest = null;
@@ -645,10 +645,10 @@ describe("webhooks", () => {
             };
         };
         expect(requestBody.data?.api_url).toBe(
-            "https://openplaud.example/api/v1/recordings/rec-1",
+            "https://riffado.example/api/v1/recordings/rec-1",
         );
         expect(requestBody.data?.links?.transcript).toBe(
-            "https://openplaud.example/api/v1/recordings/rec-1/transcript",
+            "https://riffado.example/api/v1/recordings/rec-1/transcript",
         );
         expect(requestBody.data?.transcript).toMatchObject({
             preview: "x".repeat(500),
@@ -849,10 +849,10 @@ describe("webhooks", () => {
             deleted_at: deletedAt.toISOString(),
             transcript: null,
             summary: null,
-            api_url: "https://openplaud.example/api/v1/recordings/rec-1",
+            api_url: "https://riffado.example/api/v1/recordings/rec-1",
         });
         expect(requestBody.data?.links?.self).toBe(
-            "https://openplaud.example/api/v1/recordings/rec-1",
+            "https://riffado.example/api/v1/recordings/rec-1",
         );
         expect(updateChain.set).toHaveBeenCalledWith(
             expect.objectContaining({

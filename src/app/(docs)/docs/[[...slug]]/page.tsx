@@ -14,8 +14,8 @@ interface PageProps {
     params: Promise<{ slug?: string[] }>;
 }
 
-const GITHUB_OWNER = "openplaud";
-const GITHUB_REPO = "openplaud";
+const GITHUB_OWNER = "riffado";
+const GITHUB_REPO = "riffado";
 
 export default async function Page({ params }: PageProps) {
     const { slug } = await params;

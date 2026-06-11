@@ -56,8 +56,8 @@ export async function getSyncSettings(): Promise<{
         console.error("Failed to fetch sync settings:", error);
     }
 
-    const storedInterval = localStorage.getItem("openplaud_sync_interval");
-    const storedEnabled = localStorage.getItem("openplaud_auto_sync_enabled");
+    const storedInterval = localStorage.getItem("riffado_sync_interval");
+    const storedEnabled = localStorage.getItem("riffado_auto_sync_enabled");
 
     return {
         syncInterval: storedInterval

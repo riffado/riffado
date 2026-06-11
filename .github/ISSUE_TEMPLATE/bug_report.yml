@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug or issue with OpenPlaud
+description: Report a bug or issue with Riffado
 title: "[Bug]: "
 labels: ["bug", "triage"]
 body:
@@ -52,18 +52,18 @@ body:
     id: deployment
     attributes:
       label: Deployment Type
-      description: How are you running OpenPlaud?
+      description: How are you running Riffado?
       options:
         - Self-hosted
-        - Hosted (openplaud.com)
+        - Hosted (riffado.com)
     validations:
       required: true
 
   - type: input
     id: version
     attributes:
-      label: OpenPlaud Version
-      description: What version of OpenPlaud are you running? (check package.json or About page)
+      label: Riffado Version
+      description: What version of Riffado are you running? (check package.json or About page)
       placeholder: "0.1.0"
     validations:
       required: true
@@ -72,7 +72,7 @@ body:
     id: os
     attributes:
       label: Operating System
-      description: What OS are you running OpenPlaud on?
+      description: What OS are you running Riffado on?
       options:
         - macOS
         - Linux

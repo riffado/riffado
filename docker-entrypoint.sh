@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "🚀 Starting OpenPlaud..."
+echo "🚀 Starting Riffado..."
 
 echo "⏳ Running database migrations..."
 bun migrate-idempotent.js

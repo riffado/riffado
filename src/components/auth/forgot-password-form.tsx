@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Logo } from "@/components/icons/logo";
 import { MetalButton } from "@/components/metal-button";
-import { Panel } from "@/components/panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { forgetPassword } from "@/lib/auth-client";
@@ -13,12 +11,16 @@ import { forgetPassword } from "@/lib/auth-client";
 interface ForgotPasswordFormProps {
     /**
      * Whether SMTP is configured on this instance. When false the form is
-     * disabled and we surface a hint pointing at the SMTP env vars rather
-     * than letting the user submit a request that can't be delivered.
+     * replaced with an operator-help block that names the env vars to set,
+     * rather than letting the user submit a request that can't be delivered.
      */
     smtpConfigured: boolean;
 }
 
+/**
+ * Renders only the form body (input + submit / submitted state / SMTP help).
+ * Page chrome (logo, headings, panel, background) is owned by the route.
+ */
 export function ForgotPasswordForm({
     smtpConfigured,
 }: ForgotPasswordFormProps) {
@@ -54,19 +56,7 @@ export function ForgotPasswordForm({
     };
 
     return (
-        <Panel className="w-full max-w-md space-y-6">
-            <div className="flex items-center gap-3">
-                <Logo className="size-10 shrink-0" />
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Reset password
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        We'll email you a link to set a new password.
-                    </p>
-                </div>
-            </div>
-
+        <div className="space-y-6">
             {!smtpConfigured ? (
                 <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
                     <p className="font-medium">
@@ -106,6 +96,7 @@ export function ForgotPasswordForm({
                             onChange={(e) => setEmail(e.target.value)}
                             required
                             disabled={isLoading}
+                            autoComplete="email"
                         />
                     </div>
 
@@ -128,6 +119,6 @@ export function ForgotPasswordForm({
                     Back to sign in
                 </Link>
             </div>
-        </Panel>
+        </div>
     );
 }

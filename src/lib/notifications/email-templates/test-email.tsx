@@ -20,7 +20,7 @@ interface TestEmailProps {
 
 export function TestEmail({ dashboardUrl, settingsUrl }: TestEmailProps) {
     const previewText =
-        "Test email from OpenPlaud - Email notifications are working";
+        "Test email from Riffado - Email notifications are working";
 
     return (
         <Html>
@@ -39,8 +39,8 @@ export function TestEmail({ dashboardUrl, settingsUrl }: TestEmailProps) {
                     <Section style={emailStyles.header}>
                         <div style={{ textAlign: "center" }}>
                             <Img
-                                src="https://openplaud.com/logo.png"
-                                alt="OpenPlaud"
+                                src="https://riffado.com/logo.png"
+                                alt="Riffado"
                                 width="32"
                                 height="32"
                                 style={emailStyles.logo}

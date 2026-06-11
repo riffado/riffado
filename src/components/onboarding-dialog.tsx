@@ -112,7 +112,7 @@ export function OnboardingDialog({
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
                 <DialogHeader>
                     <DialogTitle className="text-2xl" hidden>
-                        Welcome to OpenPlaud
+                        Welcome to Riffado
                     </DialogTitle>
                 </DialogHeader>
 

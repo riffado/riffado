@@ -17,7 +17,7 @@ interface PasswordResetEmailProps {
 }
 
 export function PasswordResetEmail({ resetUrl }: PasswordResetEmailProps) {
-    const previewText = "Reset your OpenPlaud password";
+    const previewText = "Reset your Riffado password";
 
     return (
         <Html>
@@ -36,8 +36,8 @@ export function PasswordResetEmail({ resetUrl }: PasswordResetEmailProps) {
                     <Section style={emailStyles.header}>
                         <div style={{ textAlign: "center" }}>
                             <Img
-                                src="https://openplaud.com/logo.png"
-                                alt="OpenPlaud"
+                                src="https://riffado.com/logo.png"
+                                alt="Riffado"
                                 width="32"
                                 height="32"
                                 style={emailStyles.logo}
@@ -53,8 +53,8 @@ export function PasswordResetEmail({ resetUrl }: PasswordResetEmailProps) {
 
                         <Text style={emailStyles.text}>
                             We received a request to reset the password for your
-                            OpenPlaud account. Click the button below to choose
-                            a new password. This link expires in 1 hour.
+                            Riffado account. Click the button below to choose a
+                            new password. This link expires in 1 hour.
                         </Text>
 
                         <Section style={emailStyles.buttonSection}>

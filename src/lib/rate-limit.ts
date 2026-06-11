@@ -1,7 +1,5 @@
 import { createHmac } from "node:crypto";
-import { sql } from "drizzle-orm";
-import { db } from "@/db";
-import { apiRateLimitBuckets } from "@/db/schema";
+import { upsertRateLimitBucket } from "@/db/queries/rate-limit";
 import { env } from "@/lib/env";
 
 export type RateLimitResult = {
@@ -25,6 +23,14 @@ function rateLimitSecret(): string {
     return secret;
 }
 
+/**
+ * HMAC the raw bucket key (user id, IP, token id, etc.) before it touches
+ * the DB. The hosted DB is a multi-tenant blast surface: an exfil should
+ * not let an attacker enumerate which users/IPs were rate-limited or
+ * correlate buckets back to identities. HMAC keyed off
+ * `API_TOKEN_HASH_SECRET` (falling back to `BETTER_AUTH_SECRET`) makes
+ * this collision-resistant and unforgeable without the server secret.
+ */
 function bucketKey(rawKey: string): string {
     return createHmac("sha256", rateLimitSecret()).update(rawKey).digest("hex");
 }
@@ -58,27 +64,37 @@ export async function consumeRateLimitBucket(
     { limit, windowMs, now = new Date() }: RateLimitConfig,
 ): Promise<RateLimitResult> {
     const resetAt = new Date(now.getTime() + windowMs);
-    const [bucket] = await db
-        .insert(apiRateLimitBuckets)
-        .values({
+
+    // Fail-open: if the bucket store is unreachable (DB down, query error,
+    // driver crash) we MUST NOT take down every rate-limited route with
+    // it. The whole point of the rate-limiter is to be a safety net; a
+    // broken safety net should not collapse the building. Log loudly so
+    // Sentry surfaces the outage, then allow the request through with
+    // synthetic headers that look like a full bucket.
+    //
+    // Trade-off: under a sustained bucket-store outage an attacker could
+    // burst past nominal limits. That's the correct trade vs. taking the
+    // API down -- the upstream (Cloudflare, ALB) still rate-limits at
+    // the edge, and the v1 surface has per-token auth as a second gate.
+    let bucket: Awaited<ReturnType<typeof upsertRateLimitBucket>>;
+    try {
+        bucket = await upsertRateLimitBucket({
             key: bucketKey(rawKey),
-            count: 1,
+            now,
             resetAt,
-            createdAt: now,
-            updatedAt: now,
-        })
-        .onConflictDoUpdate({
-            target: apiRateLimitBuckets.key,
-            set: {
-                count: sql<number>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then 1 else ${apiRateLimitBuckets.count} + 1 end`,
-                resetAt: sql<Date>`case when ${apiRateLimitBuckets.resetAt} <= ${now} then ${resetAt} else ${apiRateLimitBuckets.resetAt} end`,
-                updatedAt: now,
-            },
-        })
-        .returning({
-            count: apiRateLimitBuckets.count,
-            resetAt: apiRateLimitBuckets.resetAt,
         });
+    } catch (error) {
+        console.warn(
+            "[rate-limit] bucket store unavailable; failing open",
+            error instanceof Error ? error.message : error,
+        );
+        return {
+            allowed: true,
+            limit,
+            remaining: limit,
+            resetAt,
+        };
+    }
 
     const count = bucket?.count ?? limit + 1;
     const bucketResetAt = bucket?.resetAt ?? resetAt;

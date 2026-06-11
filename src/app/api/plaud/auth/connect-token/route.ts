@@ -24,7 +24,7 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
  * request, minus the "Bearer " prefix). We decode `exp` for a UX hint, run
  * the same workspace + /device/list validation as the OTP path, and store.
  *
- * Source: https://github.com/openplaud/openplaud/blob/main/src/app/api/plaud/auth/connect-token/route.ts
+ * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/connect-token/route.ts
  */
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);

@@ -3,7 +3,7 @@ title: Upgrading
 description: Pull a new image, restart the stack, and pick the right tag for your risk tolerance.
 ---
 
-OpenPlaud ships as a single Docker image on GitHub Container Registry.
+Riffado ships as a single Docker image on GitHub Container Registry.
 Upgrades are an image pull and a restart; migrations run automatically
 on container start.
 
@@ -23,7 +23,7 @@ behaviour you want.
 
 ## Picking a tag
 
-`OPENPLAUD_VERSION` in your `.env` controls which image tag Compose
+`RIFFADO_VERSION` in your `.env` controls which image tag Compose
 pulls.
 
 | Tag             | What you get                              | Use when                                |
@@ -35,7 +35,7 @@ pulls.
 `main` is a **rolling integration branch** and may be broken at any
 commit. Stable deploys come from tagged releases. Do **not** deploy by
 cloning the repo and building from `main`; use the tagged images
-above. See [BRANCHING.md](https://github.com/openplaud/openplaud/blob/main/BRANCHING.md)
+above. See [BRANCHING.md](https://github.com/riffado/riffado/blob/main/BRANCHING.md)
 for the branching model.
 
 ## Update badge
@@ -50,19 +50,19 @@ shouldn't phone home at all, set `DISABLE_UPDATE_CHECK=true` in your
 
 ## Rolling back
 
-To roll back, set `OPENPLAUD_VERSION` to the previous tag and re-run
+To roll back, set `RIFFADO_VERSION` to the previous tag and re-run
 the upgrade command:
 
 ```bash
 # In .env
-OPENPLAUD_VERSION=0.4.1
+RIFFADO_VERSION=0.4.1
 ```
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-This works because OpenPlaud's database migrations are
+This works because Riffado's database migrations are
 **additive by default** — dropping columns is treated as a deliberate
 breaking change with a CHANGELOG migration note. If you're rolling
 back across a release that explicitly dropped state (rare; called out

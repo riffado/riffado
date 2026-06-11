@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Release script for OpenPlaud.
+ * Release script for Riffado.
  *
  * Two phases, because `main` is protected and direct pushes are
  * rejected by required status checks.
@@ -163,7 +163,7 @@ function assertCleanOnMainInSync(): void {
 }
 
 function phase1(target: string): void {
-	console.log("\n=== OpenPlaud Release — Phase 1 (open PR) ===\n");
+	console.log("\n=== Riffado Release — Phase 1 (open PR) ===\n");
 	assertGhAvailable();
 	assertCleanOnMainInSync();
 
@@ -239,7 +239,7 @@ function phase1(target: string): void {
 	// Use mkdtempSync for a fresh, unpredictable directory so a pre-planted
 	// symlink in the system temp dir can't redirect the write
 	// (js/insecure-temporary-file).
-	const tmpDir = mkdtempSync(join(tmpdir(), "openplaud-release-"));
+	const tmpDir = mkdtempSync(join(tmpdir(), "riffado-release-"));
 	const bodyPath = join(tmpDir, `pr-body-v${version}.md`);
 	writeFileSync(bodyPath, prBody);
 	run(
@@ -261,7 +261,7 @@ function phase1(target: string): void {
 }
 
 function phase2Finalize(): void {
-	console.log("\n=== OpenPlaud Release — Phase 2 (finalize) ===\n");
+	console.log("\n=== Riffado Release — Phase 2 (finalize) ===\n");
 
 	console.log("Fetching origin...");
 	run("git fetch origin main --tags", { silent: true });
@@ -284,8 +284,22 @@ function phase2Finalize(): void {
 	// is `chore(release): vX.Y.Z`. GitHub's default squash subject is the
 	// PR title, which we set to the same string, so this --grep works for
 	// both merge-commit and squash-merge PRs.
+	//
+	// Two non-obvious things going on here:
+	//   1. The grep pattern is SINGLE-QUOTED inside the JS template so the
+	//      backslashes (`\(` / `\)`) survive `/bin/sh -c`. Without quoting,
+	//      sh strips them and git sees `^chore(release): vX.Y.Z$` under
+	//      `--extended-regexp`, where `(release)` becomes a capture group
+	//      around the literal text "release" and the pattern stops matching
+	//      the actual commit subject `chore(release): vX.Y.Z`. Result was
+	//      zero matches and `Error: no commit on origin/main matches`.
+	//   2. `--no-merges` excludes GitHub's auto-generated merge commit,
+	//      whose body includes the PR title verbatim. Without it the grep
+	//      finds BOTH the release commit and its merge commit and the
+	//      script bails with `multiple commits match`. Squash-merge PRs
+	//      produce a non-merge commit, so this stays compatible.
 	const matches = run(
-		`git log origin/main --grep=^chore\\(release\\):\\ v${version}$ --extended-regexp --format=%H`,
+		`git log origin/main --no-merges --grep='^chore\\(release\\): v${version}$' --extended-regexp --format=%H`,
 		{ silent: true },
 	)
 		.trim()

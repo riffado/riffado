@@ -4,13 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Logo } from "@/components/icons/logo";
 import { MetalButton } from "@/components/metal-button";
-import { Panel } from "@/components/panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/lib/auth-client";
 
+/**
+ * Renders only the form (fields + submit + sign-in footer).
+ * Page chrome (logo, headings, panel, background) is owned by the route.
+ */
 export function RegisterForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
@@ -61,19 +63,7 @@ export function RegisterForm() {
     };
 
     return (
-        <Panel className="w-full max-w-md space-y-6">
-            <div className="flex items-center gap-3">
-                <Logo className="size-10 shrink-0" />
-                <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Create Account
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Get started with OpenPlaud
-                    </p>
-                </div>
-            </div>
-
+        <div className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="name">Name</Label>
@@ -85,6 +75,7 @@ export function RegisterForm() {
                         onChange={(e) => setName(e.target.value)}
                         required
                         disabled={isLoading}
+                        autoComplete="name"
                     />
                 </div>
 
@@ -98,6 +89,7 @@ export function RegisterForm() {
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         disabled={isLoading}
+                        autoComplete="email"
                     />
                 </div>
 
@@ -112,6 +104,7 @@ export function RegisterForm() {
                         required
                         disabled={isLoading}
                         minLength={8}
+                        autoComplete="new-password"
                     />
                 </div>
 
@@ -125,6 +118,7 @@ export function RegisterForm() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                         disabled={isLoading}
+                        autoComplete="new-password"
                     />
                 </div>
 
@@ -149,6 +143,6 @@ export function RegisterForm() {
                     Sign in
                 </Link>
             </div>
-        </Panel>
+        </div>
     );
 }

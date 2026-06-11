@@ -1,13 +1,13 @@
 # Development Guide
 
-This guide covers setting up a local development environment for OpenPlaud.
+This guide covers setting up a local development environment for Riffado.
 
 ## Quick Start
 
 ```bash
 # Clone repository
-git clone https://github.com/openplaud/openplaud.git
-cd openplaud
+git clone https://github.com/riffado/riffado.git
+cd riffado
 
 # Install dependencies
 pnpm install
@@ -17,7 +17,7 @@ cp .env.example .env.local
 # Edit .env.local with your values
 
 # Create database
-createdb openplaud
+createdb riffado
 
 # Run migrations
 pnpm db:migrate
@@ -261,7 +261,7 @@ pnpm dev
 See `.env.example` for all variables. Required for development:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/openplaud
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/riffado
 BETTER_AUTH_SECRET=your-secret-here
 ENCRYPTION_KEY=your-64-char-hex-key-here
 APP_URL=http://localhost:3000

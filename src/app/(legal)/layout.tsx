@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Logo } from "@/components/icons/logo";
+import { LogoWordmark } from "@/components/icons/logo";
 import { LandingFooter } from "@/components/landing-footer";
 import { env } from "@/lib/env";
 
@@ -32,12 +32,10 @@ export default function LegalLayout({
                 <div className="container mx-auto px-4 max-w-3xl flex h-16 items-center">
                     <Link
                         href="/"
-                        className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                        className="flex items-center hover:opacity-80 transition-opacity"
+                        aria-label="Riffado"
                     >
-                        <Logo className="size-7" />
-                        <span className="text-lg font-bold tracking-tight font-mono">
-                            OpenPlaud
-                        </span>
+                        <LogoWordmark className="h-7 w-auto" />
                     </Link>
                 </div>
             </header>

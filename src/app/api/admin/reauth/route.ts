@@ -19,7 +19,7 @@ import { env } from "@/lib/env";
 /**
  * Admin password reprompt. Verifies the current user's password (via
  * better-auth's signIn endpoint) and, on success, sets a signed
- * `openplaud_admin_elev` cookie that gates the rest of /admin/*.
+ * `riffado_admin_elev` cookie that gates the rest of /admin/*.
  *
  * Failure modes all return 404 to avoid leaking the existence of the route
  * to non-admins.

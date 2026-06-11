@@ -1,4 +1,4 @@
-import { fleetOverview } from "@/lib/admin/queries";
+import { fleetOverview } from "@/db/queries/admin";
 import { InstallHitsTile } from "./_components/install-hits-tile";
 import {
     formatBytes,

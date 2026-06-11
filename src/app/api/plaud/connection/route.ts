@@ -37,7 +37,7 @@ export const GET = apiHandler(async (request: Request) => {
  *
  * Disconnects the current Plaud account for this user by deleting the
  * stored connection and its associated device rows. Synced recordings are
- * preserved — they remain in the user's OpenPlaud library.
+ * preserved — they remain in the user's Riffado library.
  */
 export const DELETE = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);

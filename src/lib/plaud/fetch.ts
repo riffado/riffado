@@ -1,4 +1,3 @@
-import { ProxyAgent } from "undici";
 import {
     getPlaudProxyUrl,
     invalidatePlaudProxy,
@@ -9,29 +8,14 @@ import {
 const MAX_PROXY_ROTATIONS = 1;
 const PLAUD_WEB_ORIGIN = "https://web.plaud.ai";
 
-const agentCache = new Map<string, ProxyAgent>();
-
-function getOrCreateAgent(proxy: SelectedProxy): ProxyAgent {
-    let agent = agentCache.get(proxy.id);
-    if (!agent) {
-        agent = new ProxyAgent({ uri: proxy.url });
-        agentCache.set(proxy.id, agent);
-    }
-    return agent;
-}
-
-function evictAgent(proxyId: string): void {
-    const agent = agentCache.get(proxyId);
-    if (!agent) return;
-    agentCache.delete(proxyId);
-    agent.close().catch(() => undefined);
-}
-
 /**
  * `fetch`-shaped wrapper. When `WEBSHARE_API_KEY` is configured and the URL
  * targets a Plaud host, routes the request through an HTTP proxy from the
  * configured pool with one rotation on 403/407. Otherwise behaves as a
  * pass-through to the global `fetch`.
+ *
+ * Uses the runtime's native `proxy` option so the same TLS stack handles
+ * both proxied and direct requests.
  */
 export async function plaudFetch(
     url: string,
@@ -50,14 +34,13 @@ export async function plaudFetch(
 
     let attempt = 0;
     while (true) {
-        const dispatcher = getOrCreateAgent(currentProxy);
         let response: Response;
         try {
             response = await fetch(url, {
                 ...init,
                 headers,
-                // @ts-expect-error -- undici extension to RequestInit
-                dispatcher,
+                // @ts-expect-error -- Bun extension to RequestInit
+                proxy: currentProxy.url,
             });
         } catch (err) {
             if (attempt < MAX_PROXY_ROTATIONS) {
@@ -67,7 +50,6 @@ export async function plaudFetch(
                     currentProxy.label,
                     err instanceof Error ? err.message : String(err),
                 );
-                evictAgent(currentProxy.id);
                 invalidatePlaudProxy(currentProxy);
                 const next = await getPlaudProxyUrl();
                 if (!next) return fetch(url, init);
@@ -88,7 +70,6 @@ export async function plaudFetch(
                 currentProxy.label,
                 response.statusText,
             );
-            evictAgent(currentProxy.id);
             invalidatePlaudProxy(currentProxy);
 
             const next = await getPlaudProxyUrl();
@@ -156,10 +137,7 @@ function logProxyEvent(
     );
 }
 
-/** Test-only: close and clear cached proxy agents. */
+/** Test-only: no-op kept for backward compat with existing test imports. */
 export function _resetPlaudFetchForTest(): void {
-    for (const agent of agentCache.values()) {
-        agent.close().catch(() => undefined);
-    }
-    agentCache.clear();
+    // Nothing to reset — proxy is now stateless (no agent cache).
 }

@@ -36,7 +36,7 @@ export function Footer() {
                     <div className="flex items-center gap-2">
                         <Logo className="size-4" />
                         <span>
-                            © {currentYear} OpenPlaud · Licensed under{" "}
+                            © {currentYear} Riffado · Licensed under{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -63,10 +63,23 @@ export function Footer() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"
-                            aria-label={`Release notes for OpenPlaud ${APP_VERSION_TAG}`}
+                            aria-label={`Release notes for Riffado ${APP_VERSION_TAG}`}
                         >
                             {APP_VERSION_TAG}
                         </Link>
+                        {/* Hosted-only "What's new" link to the public,
+                            plain-language changelog. Self-host already
+                            has the version tag above which points at
+                            the GitHub release notes, so adding it
+                            there would just duplicate the entry point. */}
+                        {env.IS_HOSTED ? (
+                            <Link
+                                href="/changelog"
+                                className="hover:text-foreground transition-colors"
+                            >
+                                What&apos;s new
+                            </Link>
+                        ) : null}
                         <Link
                             href="/docs"
                             className="hover:text-foreground transition-colors"
@@ -86,7 +99,7 @@ export function Footer() {
                             className="hover:text-foreground transition-colors"
                         />
                         <Link
-                            href="https://github.com/openplaud/openplaud"
+                            href="https://github.com/riffado/riffado"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"
