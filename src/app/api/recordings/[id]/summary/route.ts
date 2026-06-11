@@ -9,6 +9,7 @@ import {
     transcriptions,
     userSettings,
 } from "@/db/schema";
+import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
 import {
     getAiOutputLanguageDirective,
     getDefaultSummaryPromptConfig,
@@ -200,21 +201,23 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         ? `${baseSystem} ${languageDirective}`
         : baseSystem;
 
-    const response = await openai.chat.completions.create({
-        model,
-        messages: [
-            {
-                role: "system",
-                content: systemContent,
-            },
-            {
-                role: "user",
-                content: prompt,
-            },
-        ],
-        temperature: 0.5,
-        max_tokens: 2000,
-    });
+    const response = await openai.chat.completions.create(
+        buildChatCompletionParams({
+            model,
+            messages: [
+                {
+                    role: "system",
+                    content: systemContent,
+                },
+                {
+                    role: "user",
+                    content: prompt,
+                },
+            ],
+            temperature: 0.5,
+            maxTokens: 2000,
+        }),
+    );
 
     const rawContent = response.choices[0]?.message?.content?.trim() || "";
 
