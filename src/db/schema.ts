@@ -1,10 +1,12 @@
 import {
     boolean,
+    date,
     index,
     integer,
     jsonb,
     pgEnum,
     pgTable,
+    primaryKey,
     real,
     text,
     timestamp,
@@ -210,7 +212,7 @@ export const recordings = pgTable(
             .notNull()
             .references(() => users.id, { onDelete: "cascade" }),
         deviceSn: varchar("device_sn", { length: 255 }).notNull(),
-        // Unique ID from Plaud API, scoped per OpenPlaud user.
+        // Unique ID from Plaud API, scoped per Riffado user.
         plaudFileId: varchar("plaud_file_id", { length: 255 }).notNull(),
         filename: text("filename").notNull(),
         duration: integer("duration").notNull(), // milliseconds
@@ -238,7 +240,7 @@ export const recordings = pgTable(
         // audio reconstruction is possible from these values.
         waveformPeaks: jsonb("waveform_peaks"),
         // Soft-delete tombstone. Set when the user deletes a recording from
-        // OpenPlaud's UI. Sync skips tombstoned rows so re-syncing from Plaud
+        // Riffado's UI. Sync skips tombstoned rows so re-syncing from Plaud
         // does not resurrect deleted recordings. The audio file is hard-deleted
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.
@@ -571,5 +573,31 @@ export const apiRateLimitBuckets = pgTable(
         resetAtIdx: index("api_rate_limit_buckets_reset_at_idx").on(
             table.resetAt,
         ),
+    }),
+);
+
+/**
+ * Aggregate hit counter for the install.sh routes. Counts every fetch of
+ * `/install.sh` and `/{version}/install.sh` on the hosted instance.
+ *
+ * Privacy: no IP, no User-Agent, no identifier of any kind. Just (day,
+ * version) -> count. This is first-party traffic on our own webserver,
+ * not user-device storage. Self-host instances do NOT write to this
+ * table -- writes are gated on env.IS_HOSTED.
+ *
+ * Not an instance count. One operator re-running `install.sh` five times
+ * is five hits. CI pipelines count every run. Read as a directional
+ * trend, not absolute deployments.
+ */
+export const installScriptHits = pgTable(
+    "install_script_hits",
+    {
+        day: date("day").notNull(),
+        /** "latest" for the unversioned route, "vX.Y.Z" for versioned, "invalid" for anything that fails the version regex. */
+        version: text("version").notNull(),
+        count: integer("count").notNull().default(0),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.day, table.version] }),
     }),
 );

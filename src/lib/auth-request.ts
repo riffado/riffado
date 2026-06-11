@@ -59,16 +59,7 @@ function toBase62Checksum(num: number): string {
     return out.slice(0, CHECKSUM_LENGTH);
 }
 
-/**
- * Generate a new API key.
- *
- * Format: `op_{payload}{checksum}` where payload is random base62 and
- * checksum is the CRC32 of `op_{payload}` encoded as 4 base62 chars
- * (zero-padded). New keys are 37 chars by default (3 + 30 + 4).
- *
- * Keys issued under the previous `op_` + nanoid(24) scheme remain valid;
- * authentication uses the stored HMAC hash, not the format.
- */
+/** Generate `op_{base62}{crc32-base62}`. Stored HMAC; legacy nanoid keys still authenticate. */
 export function createApiKey(
     payloadLen: number = DEFAULT_PAYLOAD_LENGTH,
 ): string {
@@ -82,14 +73,7 @@ export function createApiKey(
     return `${base}${checksum}`;
 }
 
-/**
- * Validate the format of a freshly issued API key by re-deriving its
- * CRC32 checksum. Strict: legacy `op_` + nanoid keys (which may contain
- * `-`/`_` and carry no checksum) will fail this check. NOT used in the
- * auth path — `authenticateRequest` looks up by HMAC hash, which keeps
- * legacy keys working. This helper is for tooling, tests, and any
- * future UI that wants to give immediate feedback on a pasted key.
- */
+/** CRC32-format check; rejects legacy nanoid keys. Not used in the auth path. */
 export function validateApiKeyFormat(key: string): boolean {
     if (!key.startsWith(API_KEY_PREFIX)) return false;
 
@@ -106,11 +90,7 @@ export function validateApiKeyFormat(key: string): boolean {
     return providedChecksum === expectedChecksum;
 }
 
-/**
- * Mask a full API key for display: keep the first 12 and last 4 chars,
- * replace the middle with bullets. Not currently wired into any UI;
- * the settings page renders the stored `keyPrefix` column directly.
- */
+/** Mask a full key: first 12 + last 4 + bullets. */
 export function maskApiKey(key: string): string {
     if (key.length < DISPLAY_PREFIX_LENGTH + CHECKSUM_LENGTH) return key;
     const head = key.slice(0, DISPLAY_PREFIX_LENGTH);

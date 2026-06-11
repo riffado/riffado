@@ -1,6 +1,6 @@
 # Error codes
 
-OpenPlaud's API returns a single error envelope on every failure, with one
+Riffado's API returns a single error envelope on every failure, with one
 documented exception (HTTP `416` audio range responses, see below):
 
 ```json
@@ -157,7 +157,7 @@ rephrased between releases without notice; `code` will not.
 `mapErrorToAppError` deliberately does **not** classify bare `SyntaxError`s
 from `JSON.parse` / `Response.json()` / `Request.json()`. The two callers
 are indistinguishable at the error level: a malformed *upstream* body
-(Cloudflare HTML challenge) and a malformed *client* request body throw
+(e.g. an HTML challenge page) and a malformed *client* request body throw
 the identical exception, so any blanket mapping mis-classifies one of
 them (either a `502` for a 400 case, or vice versa).
 

@@ -117,7 +117,7 @@ export async function sendNewRecordingBarkNotification(
             subtitle,
             body,
             url: dashboardUrl,
-            group: "openplaud-recordings",
+            group: "riffado-recordings",
             sound: "minuet",
             badge: count,
         },

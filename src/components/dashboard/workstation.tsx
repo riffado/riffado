@@ -64,7 +64,7 @@ interface WorkstationProps {
     userEmail?: string | null;
     initialSettings: InitialSettings;
     /**
-     * True when running in OpenPlaud's hosted mode (`IS_HOSTED=true`).
+     * True when running in Riffado's hosted mode (`IS_HOSTED=true`).
      * Forwarded into SettingsDialog so hosted-only UI gating reflects
      * the deployment mode. Server-supplied; never derive client-side.
      * Required (no default) so a future caller can't silently regress

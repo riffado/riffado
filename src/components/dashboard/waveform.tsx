@@ -6,46 +6,28 @@ import { cn } from "@/lib/utils";
 
 interface WaveformProps {
     peaks: number[];
-    /** Current playback position in [0, 1]. */
+    /** Playback position in [0, 1]. */
     progress: number;
-    /** Total audio length in seconds, for aria-valuetext + hover tooltip. */
     durationSeconds: number;
-    /** Disable click/drag seek (e.g. while audio is not loaded yet). */
     disabled?: boolean;
-    /**
-     * Called with a new progress value in [0, 1] on click or drag.
-     * Mirrors the existing Slider API the player previously used so the
-     * caller doesn't need a second seek branch.
-     */
     onSeek: (next: number) => void;
     className?: string;
-    /** Pixel height of the rendered canvas. */
     height?: number;
 }
 
-// Visual tuning constants. Pulled out of the render loop so the
-// component reads as "geometry + state", not "magic numbers".
-const TARGET_BAR_WIDTH_PX = 3; // ideal opaque bar width
-const TARGET_BAR_GAP_PX = 2; // ideal gap between bars
-const MIN_VISIBLE_BARS = 32; // never collapse below this
-const MAX_VISIBLE_BARS = 220; // never exceed this (perf + aesthetics)
-const CENTER_DEAD_ZONE_PX = 1; // gap between top and bottom mirror halves
-const MIN_BAR_HEIGHT_FRAC = 0.04; // silence still reads as a faint line
+const TARGET_BAR_WIDTH_PX = 3;
+const TARGET_BAR_GAP_PX = 2;
+const MIN_VISIBLE_BARS = 32;
+const MAX_VISIBLE_BARS = 220;
+const CENTER_DEAD_ZONE_PX = 1;
+const MIN_BAR_HEIGHT_FRAC = 0.04;
 const PLAYHEAD_WIDTH_PX = 2;
 const PLAYHEAD_GLOW_PX = 6;
-const UNPLAYED_ALPHA = 0.35; // soften the unplayed half visually
+const UNPLAYED_ALPHA = 0.35;
 const HOVER_LINE_ALPHA = 0.55;
 
-// Thin alias so the JSX still reads as "format the second-position";
-// shared helper lives in @/lib/format-duration and now supports hours.
 const formatSeconds = formatDuration;
 
-/**
- * Aggregate the stored high-resolution peaks (~500) into N visible
- * buckets by taking the max amplitude per bucket. This is the right
- * operation visually: we want the loudest moment of each ~50ms slice
- * to be the bar's height, not the average (which mushes out spikes).
- */
 function aggregatePeaks(peaks: number[], visibleBars: number): number[] {
     if (visibleBars >= peaks.length) return peaks.slice();
     const out = new Array<number>(visibleBars);
@@ -62,23 +44,13 @@ function aggregatePeaks(peaks: number[], visibleBars: number): number[] {
     return out;
 }
 
-/**
- * Compute the number of visible bars from container width. Honors the
- * target bar+gap rhythm and clamps to a sane range so very wide screens
- * don't melt under thousands of rect() calls and very narrow ones still
- * have enough resolution to recognize speech vs. silence.
- */
 function computeVisibleBars(cssWidth: number): number {
     const slot = TARGET_BAR_WIDTH_PX + TARGET_BAR_GAP_PX;
     const raw = Math.floor(cssWidth / slot);
     return Math.max(MIN_VISIBLE_BARS, Math.min(MAX_VISIBLE_BARS, raw));
 }
 
-/**
- * Browser-compat helper: roundRect was added to Canvas2D recently. Fall
- * back to a plain fillRect on engines that lack it. The visual delta is
- * 1-2 px of corner rounding — gracefully imperceptible when missing.
- */
+// Fallback to plain fillRect on engines lacking roundRect.
 function fillBar(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -137,8 +109,6 @@ export function Waveform({
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-        // Read theme tokens at paint time so dark mode + theme switcher
-        // get the right colors without any JS theme awareness.
         const styles = getComputedStyle(wrap);
         const primary =
             styles.getPropertyValue("--primary").trim() ||
@@ -166,7 +136,6 @@ export function Waveform({
             const p = bars[i] ?? 0;
             const halfH = Math.max(minHalfHeight, p * halfMax);
 
-            // A bar belongs to "played" if its center is left of the playhead.
             const barCenter = x + barWidth / 2;
             const played = barCenter <= playedX;
 
@@ -178,19 +147,14 @@ export function Waveform({
                 ctx.globalAlpha = UNPLAYED_ALPHA;
             }
 
-            // Top half (mirrored upwards from centerline + dead zone)
             const topY = centerY - CENTER_DEAD_ZONE_PX / 2 - halfH;
             fillBar(ctx, x, topY, barWidth, halfH, radius);
-            // Bottom half
             const botY = centerY + CENTER_DEAD_ZONE_PX / 2;
             fillBar(ctx, x, botY, barWidth, halfH, radius);
         }
 
         ctx.globalAlpha = 1;
 
-        // Hover preview: faint vertical line at pointer position. Drawn
-        // before the playhead so the (stronger) playhead overlaps cleanly
-        // when hover ≈ progress.
         if (
             hoverRatio !== null &&
             !disabled &&
@@ -204,12 +168,8 @@ export function Waveform({
             ctx.restore();
         }
 
-        // Playhead: subtle outer glow + crisp inner line. Drawn in
-        // primary color regardless of played/unplayed so it's always
-        // findable. Skip when at the extreme edges to avoid clipping.
         if (progress > 0 && progress < 1) {
             ctx.save();
-            // Glow halo
             ctx.globalAlpha = 0.25;
             ctx.fillStyle = primary;
             ctx.fillRect(
@@ -218,7 +178,6 @@ export function Waveform({
                 PLAYHEAD_GLOW_PX,
                 cssHeight,
             );
-            // Crisp center
             ctx.globalAlpha = 1;
             ctx.fillRect(
                 Math.floor(playedX) - PLAYHEAD_WIDTH_PX / 2,
@@ -230,12 +189,10 @@ export function Waveform({
         }
     }, [peaks, progress, height, hoverRatio, disabled]);
 
-    // Initial + prop-driven repaint.
     useEffect(() => {
         draw();
     }, [draw]);
 
-    // Resize-driven repaint.
     useEffect(() => {
         const wrap = wrapRef.current;
         if (!wrap || typeof ResizeObserver === "undefined") return;
@@ -256,12 +213,7 @@ export function Waveform({
         (e: React.PointerEvent<HTMLDivElement>) => {
             if (disabled) return;
             isDraggingRef.current = true;
-            // Capture on `currentTarget` (the wrapper div that owns the
-            // pointer handlers), not `e.target` — the user might press
-            // on the inner <canvas>, which would still capture but only
-            // until the canvas is removed from the tree, and would also
-            // stop working the day we add e.g. an absolute-positioned
-            // tooltip child that swallows the pointer event.
+            // Capture on currentTarget (wrapper), not e.target (canvas).
             e.currentTarget.setPointerCapture(e.pointerId);
             const r = ratioFromClientX(e.clientX);
             setHoverRatio(r);
@@ -273,8 +225,6 @@ export function Waveform({
     const onPointerMove = useCallback(
         (e: React.PointerEvent<HTMLDivElement>) => {
             if (disabled) return;
-            // Touch pointers don't get hover-style preview — they're
-            // already committed to a drag the moment they land.
             if (e.pointerType !== "touch") {
                 setHoverRatio(ratioFromClientX(e.clientX));
             }
@@ -293,21 +243,12 @@ export function Waveform({
         setHoverRatio(null);
     }, []);
 
-    // Keyboard support: role="slider" promises it, we deliver. The
-    // player owns global ←/→ (±5 s) when focus is *outside* an
-    // interactive element; here on the focused waveform the smaller
-    // 1%/5% step matches typical slider expectations.
+    // role="slider" keyboard; stopPropagation so the player's window-level
+    // ←/→ listener doesn't double-seek.
     const onKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLDivElement>) => {
             if (disabled) return;
             const step = e.shiftKey ? 0.05 : 0.01;
-            // Track whether we handled the key so we know whether to
-            // stop propagation. Without this guard, an ArrowLeft on a
-            // focused waveform would (a) move the waveform by 1% here,
-            // then (b) bubble to RecordingPlayer's window-level
-            // listener which would also seek -5 s — a visible double
-            // jump. We only swallow the events we actually consumed so
-            // unrelated keys (Tab, Esc, etc.) keep working normally.
             let handled = false;
             switch (e.key) {
                 case "ArrowLeft":
@@ -335,9 +276,6 @@ export function Waveform({
         [disabled, progress, onSeek],
     );
 
-    // Hover timestamp tooltip. Pure DOM (not canvas) so it inherits
-    // typography + DPR scaling for free, and so screen readers can pick
-    // up the live region if they want to.
     const tooltipRatio = hoverRatio;
     const tooltipVisible =
         tooltipRatio !== null &&

@@ -25,15 +25,11 @@ import { cn } from "@/lib/utils";
 interface UserMenuProps {
     isAdmin: boolean;
     initialTheme: "light" | "dark" | "system";
-    /** Logged-in user's email. Used for the identity block at the top. */
     userEmail: string | null;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
 }
 
-// Small inline kbd chip. Mirrors the styling used in
-// `shortcuts-dialog.tsx` so the menu's shortcut hints and the
-// cheatsheet read as the same vocabulary.
 function Kbd({ children }: { children: React.ReactNode }) {
     return (
         <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-muted px-1 font-mono text-[10px] text-muted-foreground">
@@ -42,9 +38,6 @@ function Kbd({ children }: { children: React.ReactNode }) {
     );
 }
 
-// Initial-circle "avatar" derived from the email's first character.
-// We deliberately avoid fetching/uploading actual avatars — keeps the
-// hosted/self-host surface identical and there's no avatar UX yet.
 function emailInitial(email: string | null): string {
     if (!email) return "?";
     const trimmed = email.trim();
@@ -81,7 +74,6 @@ export function UserMenu({
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72 p-0">
-                {/* Identity block */}
                 <div className="flex items-center gap-3 border-b p-3">
                     <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
@@ -99,7 +91,6 @@ export function UserMenu({
                     </div>
                 </div>
 
-                {/* Actions */}
                 <div className="p-1">
                     <DropdownMenuItem onSelect={onOpenSettings}>
                         <Settings />
@@ -119,8 +110,6 @@ export function UserMenu({
                     )}
                 </div>
 
-                {/* Theme — inline 3-button toggle instead of a submenu.
-                    Fewer clicks, the current selection is always visible. */}
                 <div className="border-t px-3 py-2">
                     <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
                         Theme
@@ -133,12 +122,7 @@ export function UserMenu({
                         {themeOptions.map((opt) => {
                             const isActive = theme === opt.value;
                             return (
-                                // Segmented-control pattern (iOS-style), not a
-                                // list of native radio inputs. role=radio +
-                                // aria-checked describe the selection
-                                // semantics correctly while letting us style
-                                // the visible state freely.
-                                // biome-ignore lint/a11y/useSemanticElements: segmented control, see comment above
+                                // biome-ignore lint/a11y/useSemanticElements: segmented control
                                 <button
                                     key={opt.value}
                                     type="button"

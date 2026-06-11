@@ -16,40 +16,24 @@ const optionalStrictBoolean = z
     });
 
 export const envSchema = z.object({
-    // Deployment mode. `true` means this instance is the OpenPlaud-operated
-    // hosted product (marketing landing visible at `/`). Default `false`:
-    // self-host instances skip the marketing surface and bounce logged-out
-    // visitors at `/` straight to `/login`.
+    /** True for the Riffado-operated hosted instance; default false (self-host). */
     IS_HOSTED: z
         .string()
         .optional()
         .transform((val) => val === "true"),
 
-    // Disable email/password sign-up. When `true`, the better-auth
-    // sign-up endpoint is disabled server-side (security boundary), the
-    // /register page renders a disabled-state panel, and the /login page
-    // hides its register link. Operator-controlled, defaults to `false`
-    // (registration open). Self-host only -- the OpenPlaud-operated hosted
-    // instance leaves this unset.
+    /** Disable email/password sign-up. */
     DISABLE_REGISTRATION: z
         .string()
         .optional()
         .transform((val) => val === "true"),
 
-    // Disable the self-host update-available check (GitHub releases API).
-    // When `true`, the footer never reaches out to api.github.com to look
-    // for a newer release tag. Useful for instances with strict egress
-    // controls or operators who don't want any phone-home behavior.
-    // Defaults to `false` (check enabled). Inert when IS_HOSTED=true --
-    // the hosted instance hides the badge unconditionally because the
-    // operator (us) controls deploys.
+    /** Disable the self-host update-available check. */
     DISABLE_UPDATE_CHECK: z
         .string()
         .optional()
         .transform((val) => val === "true"),
 
-    // Server-required values are optional at schema level so that `next build`
-    // (phase-production-build) doesn't depend on server-only secrets.
     DATABASE_URL: z.string().optional(),
 
     BETTER_AUTH_SECRET: z.string().optional(),
@@ -62,17 +46,12 @@ export const envSchema = z.object({
         }),
     APP_URL: z.string().url("APP_URL must be a valid URL").optional(),
 
-    // Webhook target hardening. Unset means default to IS_HOSTED; explicit
-    // false keeps self-host integrations like Docker service hostnames working.
+    /** Require public HTTPS webhook targets. Defaults to IS_HOSTED. */
     WEBHOOKS_REQUIRE_PUBLIC_TARGETS: optionalStrictBoolean,
 
-    // Only enable when a trusted reverse proxy strips or overwrites incoming
-    // client-supplied forwarding headers before requests reach Next.js.
+    /** Trust X-Forwarded-For for IP rate limiting; only enable behind a trusted proxy. */
     RATE_LIMIT_TRUST_PROXY_HEADERS: optionalStrictBoolean,
 
-    // Encryption
-    // Optional at env-schema level so that builds don't fail if it's missing;
-    // encryption code is responsible for enforcing a strong key at runtime.
     ENCRYPTION_KEY: z.string().optional(),
 
     DEFAULT_STORAGE_TYPE: z.enum(["local", "s3"]).optional().default("local"),
@@ -83,35 +62,24 @@ export const envSchema = z.object({
     S3_ACCESS_KEY_ID: z.string().optional(),
     S3_SECRET_ACCESS_KEY: z.string().optional(),
 
-    // Webshare residential-proxy API key. When set, Plaud-bound outbound
-    // requests (api*.plaud.ai, resource.plaud.ai) are routed through a
-    // random valid proxy from the Webshare list, with automatic rotation
-    // on Cloudflare 403/407 responses. Unset (default) keeps every call
-    // on the direct egress path — the right default for self-hosters on
-    // residential or homelab IPs that Cloudflare doesn't flag. Hosted
-    // deployments on flagged datacenter ASNs (Contabo, OVH, …) need this.
-    // See src/lib/plaud/proxy.ts for the rationale.
+    /**
+     * Optional Webshare API key. When set, Plaud-bound outbound requests are
+     * routed through a proxy from the configured Webshare account. Unset
+     * (default) keeps every call on the direct egress path.
+     */
     WEBSHARE_API_KEY: z
         .string()
         .optional()
         .transform((val) => (val === "" ? undefined : val)),
 
-    // Scope of the Webshare proxy. "all" (default) routes every Plaud
-    // outbound (API + signed-URL audio CDN) through the proxy. "api-only"
-    // skips proxying resource.plaud.ai signed-URL downloads, sending
-    // those direct from the server's egress IP. Audio bytes dominate
-    // proxy bandwidth, so flipping this to api-only on hosted can save
-    // most of the Webshare quota -- BUT only do so after verifying with
-    // scripts/plaud-egress-probe.sh that resource.plaud.ai actually
-    // serves direct from your egress IPs. Inert when WEBSHARE_API_KEY
-    // is unset (no proxy is used at all).
+    /**
+     * Which Plaud hosts route through the proxy. `all` (default) includes
+     * `resource.plaud.ai` audio downloads; `api-only` skips them.
+     * Inert when WEBSHARE_API_KEY is unset.
+     */
     PLAUD_PROXY_SCOPE: z.enum(["all", "api-only"]).optional().default("all"),
 
-    // Per-user rate limit on POST /api/plaud/sync, in requests per minute.
-    // Defaults to 10. Backstops the client-side manual-sync floor and
-    // cross-tab dedup: even if a script hammers the endpoint, the bucket
-    // throttles it before any Plaud or Webshare call is issued. Set lower
-    // for tighter quotas, higher for power users. Range 1..600.
+    /** Per-user rate limit on POST /api/plaud/sync. Default 10, range 1..600. */
     PLAUD_SYNC_RATE_LIMIT_PER_MINUTE: z
         .string()
         .regex(
@@ -133,10 +101,7 @@ export const envSchema = z.object({
         .transform((val) => val === "true"),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
-    // Rybbit analytics (hosted mode only). Both must be set together for
-    // the tracking script and proxy rewrites to activate. Self-host leaves
-    // them unset; the analytics component returns null and no rewrites are
-    // registered, so no requests go to Rybbit at all.
+    /** Rybbit analytics (hosted only). Inert unless both site id and host are set. */
     RYBBIT_SITE_ID: z.string().optional(),
     RYBBIT_HOST: z.string().url("RYBBIT_HOST must be a valid URL").optional(),
 
@@ -156,13 +121,11 @@ export const envSchema = z.object({
             },
         ),
 
-    // Admin dashboard (hosted-only). All three are inert when IS_HOSTED is
-    // unset/false -- the admin gate trips before any of these are read.
-    //
-    // ADMIN_EMAILS: comma-separated allowlist of operator email addresses.
-    // Lower-cased and trimmed at parse time. Empty => no admins (default).
-    // Source of truth for admin identity; intentionally out of the DB so a
-    // DB compromise alone does not grant admin.
+    /**
+     * Hosted-only admin dashboard config. Inert when IS_HOSTED is unset.
+     * `ADMIN_EMAILS`: comma-separated allowlist of operator emails (source of
+     * truth for admin identity, kept out of the DB).
+     */
     ADMIN_EMAILS: z
         .string()
         .optional()
@@ -173,9 +136,7 @@ export const envSchema = z.object({
             }),
         ),
 
-    // ADMIN_IP_ALLOWLIST: optional comma-separated CIDR list. When set, admin
-    // routes 404 for requests whose client IP isn't in the list. Empty/unset
-    // disables the check (relying on the auth + reauth chain instead).
+    /** Optional CIDR allowlist for /admin/*. Empty/unset disables the check. */
     ADMIN_IP_ALLOWLIST: z
         .string()
         .optional()
@@ -186,13 +147,7 @@ export const envSchema = z.object({
             }),
         ),
 
-    // ADMIN_REAUTH_TTL_MINUTES: how long an admin's elevated cookie is valid
-    // after password reprompt before the dashboard forces another reauth.
-    // Default 30. Mutations require the cookie to be issued within the last
-    // ADMIN_MUTATION_TTL_MINUTES (default 10) -- a tighter window than reads.
-    // TTLs validated as strict positive integers. The leading regex
-    // rejects malformed values (`parseInt("30abc")` would silently coerce
-    // to 30); the .pipe(z.number()...) clamps to a sane range.
+    /** Admin reauth cookie TTL (minutes). Default 30, max 1440. */
     ADMIN_REAUTH_TTL_MINUTES: z
         .string()
         .regex(/^\d+$/, "ADMIN_REAUTH_TTL_MINUTES must be a positive integer")
@@ -205,6 +160,7 @@ export const envSchema = z.object({
                 .positive()
                 .max(24 * 60),
         ),
+    /** Tighter TTL required for admin mutations (minutes). Default 10, max 60. */
     ADMIN_MUTATION_TTL_MINUTES: z
         .string()
         .regex(/^\d+$/, "ADMIN_MUTATION_TTL_MINUTES must be a positive integer")
@@ -262,14 +218,10 @@ function validateEnv(): Env {
             ADMIN_MUTATION_TTL_MINUTES: process.env.ADMIN_MUTATION_TTL_MINUTES,
         });
 
-        // In runtime (dev/prod servers), we require a strong encryption key.
-        // During `next build` (phase-production-build) we skip this so that
-        // server-only config doesn't break the frontend build.
         const isProductionBuildPhase =
             process.env.NEXT_PHASE === "phase-production-build";
 
         if (!isProductionBuildPhase) {
-            // Core server-side envs must be present when the server actually runs.
             if (!parsed.DATABASE_URL) {
                 throw new Error(
                     "DATABASE_URL must be set in non-build runtime (dev/prod server)",
@@ -302,7 +254,6 @@ function validateEnv(): Env {
                 );
             }
 
-            // Encryption key: required and strong at runtime, ignored during build.
             const key = parsed.ENCRYPTION_KEY;
             if (!key) {
                 throw new Error(

@@ -1,70 +1,82 @@
-import { Cpu, Database, Download, RefreshCw } from "lucide-react";
+import { Cpu, LayoutDashboard, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { Panel } from "@/components/panel";
+
+/**
+ * "How it works" section. Three compact beats matching the three
+ * Hero promises -- Searchable, summarized, and yours.
+ *
+ * Each beat is a single short paragraph. Claims must map to real
+ * behavior in the codebase. Export formats are JSON / TXT / SRT /
+ * VTT plus full-archive -- do not add "Markdown".
+ */
+
+type Beat = {
+    step: string;
+    icon: ReactNode;
+    title: string;
+    body: string;
+};
+
+const BEATS: Beat[] = [
+    {
+        step: "01",
+        icon: <RefreshCw className="size-5" />,
+        title: "Sign in once, sync forever.",
+        body: "Log in with the same email you use for your recorder — Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
+    },
+    {
+        step: "02",
+        icon: <Cpu className="size-5" />,
+        title: "Pick the AI. Get the transcript.",
+        body: "Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries — you pay them directly at their published rate. No account anywhere? Transcription runs free, right in your browser. Every recording comes back with a summary, key points, and action items.",
+    },
+    {
+        step: "03",
+        icon: <LayoutDashboard className="size-5" />,
+        title: "Search, listen, send it anywhere.",
+        body: "Player and transcript side-by-side. Search across every word you've ever recorded. Send a single recording to Notion, Obsidian, or your video editor — or download everything as one archive. Open source, end to end.",
+    },
+];
 
 export function Features() {
     return (
-        <section className="py-24">
+        <section id="features" className="py-20 md:py-24">
             <div className="container mx-auto px-4">
-                <div className="max-w-3xl mb-16">
-                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4">
-                        What OpenPlaud does.
-                    </h2>
-                    <p className="text-muted-foreground text-lg leading-relaxed">
-                        Four things, in order. Your Plaud Note keeps recording
-                        exactly as it does today; we replace everything that
-                        happens after.
-                    </p>
-                </div>
+                <div className="mx-auto max-w-5xl">
+                    <div className="max-w-3xl mb-12">
+                        <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mb-4">
+                            How it works
+                        </p>
+                        <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4 text-balance">
+                            A workstation around the recorder you already have.
+                        </h2>
+                        <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
+                            Your recorder keeps recording. Riffado picks up
+                            after the audio leaves the device — and lets you
+                            pick the AI, the storage, and where it all lives.
+                        </p>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
-                    <FeatureCard
-                        step="01"
-                        icon={<RefreshCw className="size-5" />}
-                        title="Pulls recordings from your Plaud Note"
-                        description="Log in with your existing Plaud account. OpenPlaud syncs your recordings in the background — no manual exports, no copy-pasting bearer tokens. Works with Plaud Note, Note Pro, and NotePin."
-                    />
-                    <FeatureCard
-                        step="02"
-                        icon={<Cpu className="size-5" />}
-                        title="Transcribes with the AI you choose"
-                        description="Plug in OpenAI, Anthropic, Groq, Deepgram, or run Llama locally through Ollama. You pay the provider directly — pennies per hour instead of a subscription. Switch providers any time without re-transcribing."
-                    />
-                    <FeatureCard
-                        step="03"
-                        icon={<Database className="size-5" />}
-                        title="Stores audio where you choose"
-                        description="Local filesystem, your own S3-compatible bucket (AWS, Cloudflare R2, Backblaze, MinIO, Wasabi), or OpenPlaud-hosted storage if you don't want to think about it. Your recordings, on infrastructure you control."
-                    />
-                    <FeatureCard
-                        step="04"
-                        icon={<Download className="size-5" />}
-                        title="Exports to anything, anywhere"
-                        description="One click to Markdown, JSON, SRT, or VTT — ready for Notion, Obsidian, a video editor, or your own pipeline. Full backups are a single endpoint away. No lock-in, by design."
-                    />
+                    <ol className="grid grid-cols-1 lg:grid-cols-3 lg:divide-x divide-y lg:divide-y-0 divide-border/60 border-y border-border/60">
+                        {BEATS.map((b) => (
+                            <BeatItem key={b.step} {...b} />
+                        ))}
+                    </ol>
+
+                    <p className="mt-8 text-sm text-muted-foreground text-pretty">
+                        Free in your browser. Or plug in OpenAI or Groq and pay
+                        them directly.
+                    </p>
                 </div>
             </div>
         </section>
     );
 }
 
-function FeatureCard({
-    step,
-    icon,
-    title,
-    description,
-}: {
-    step: string;
-    icon: ReactNode;
-    title: string;
-    description: string;
-}) {
+function BeatItem({ step, icon, title, body }: Beat) {
     return (
-        <Panel
-            variant="default"
-            className="space-y-4 h-full hover:border-primary/40 transition-colors"
-        >
-            <div className="flex items-center gap-3">
+        <li className="py-8 lg:py-10 lg:px-7 lg:first:pl-0 lg:last:pr-0">
+            <div className="flex items-center gap-3 mb-5">
                 <div className="size-10 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center">
                     {icon}
                 </div>
@@ -72,10 +84,12 @@ function FeatureCard({
                     {step}
                 </span>
             </div>
-            <h3 className="text-xl font-semibold leading-tight">{title}</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-                {description}
+            <h3 className="text-lg font-semibold leading-snug tracking-tight mb-2 text-balance">
+                {title}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
+                {body}
             </p>
-        </Panel>
+        </li>
     );
 }

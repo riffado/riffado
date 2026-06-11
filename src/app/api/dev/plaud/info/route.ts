@@ -56,8 +56,6 @@ export const GET = apiHandler(async (request: Request) => {
         trashedRecordingCount =
             trash.data_file_total ?? trash.data_file_list?.length ?? 0;
     } catch (err) {
-        // Dev introspection — surface the underlying message in the body
-        // (this endpoint is gated behind NODE_ENV !== "production" above).
         errorMessage = err instanceof Error ? err.message : String(err);
     }
 
@@ -68,9 +66,6 @@ export const GET = apiHandler(async (request: Request) => {
         reachable,
         latencyMs,
         error: errorMessage,
-        // Whether outbound Plaud calls go through the Webshare residential
-        // proxy. Surfaced here so we can quickly tell, on a flagged-egress
-        // VPS, whether the proxy path is wired up.
         usingPlaudProxy: isPlaudProxyConfigured(),
         connection: {
             id: connection.id,
@@ -78,11 +73,6 @@ export const GET = apiHandler(async (request: Request) => {
             server: serverKeyFromApiBase(connection.apiBase),
             plaudEmail: connection.plaudEmail,
             workspaceId: client.workspaceId ?? connection.workspaceId,
-            // "cache"      = used the stored workspaceId as-is
-            // "resolved"   = client discovered or replaced it (cache empty
-            //                or stale-cache rescue picked a different id)
-            // "unresolved" = nothing stored and nothing resolved (the UT
-            //                fallback path)
             workspaceIdSource:
                 client.workspaceId &&
                 client.workspaceId !== connection.workspaceId

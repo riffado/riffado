@@ -128,9 +128,6 @@ importers:
       vitest:
         specifier: ^4.0.12
         version: 4.0.12(@types/debug@4.1.13)(@types/node@20.19.25)(jiti@2.6.1)(lightningcss@1.30.2)
-      wreq-js:
-        specifier: ^2.3.0
-        version: 2.3.0
       zod:
         specifier: ^4.1.12
         version: 4.1.12
@@ -4829,11 +4826,6 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
-
-  wreq-js@2.3.0:
-    resolution: {integrity: sha512-jROBpTUhVH40qG+cAvBhdduKPGDSx55jK1dIDmVuu29sux9i8KY0u0wb5tHkMzXKDy9hrfHP+bpvaSq25rGwEA==}
-    cpu: [x64, arm64]
-    os: [darwin, linux, win32]
 
   ws@8.17.1:
     resolution: {integrity: sha512-6XQFvXTkbfUOZOKKILFG1PDK2NDQs4azKQl26T0YS5CxqWLgXajbPZ+h4gZekJyRqFU8pvnbAbbs/3TgRPy+GQ==}
@@ -10230,8 +10222,6 @@ snapshots:
       strip-ansi: 7.1.2
 
   wrappy@1.0.2: {}
-
-  wreq-js@2.3.0: {}
 
   ws@8.17.1: {}
 

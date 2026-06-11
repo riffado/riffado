@@ -1,4 +1,4 @@
-# OpenPlaud — Agent Guidelines
+# Riffado — Agent Guidelines
 
 ## First task
 
@@ -6,7 +6,7 @@ If the user did not give you a concrete task, read this file + `README.md` + `BR
 
 ## The One Rule
 
-Understand what you're changing. OpenPlaud is live and in use — people depend on it to access their recordings, transcripts, and storage. If you can't explain what your change does and how it interacts with the rest of the system, don't ship it.
+Understand what you're changing. Riffado is live and in use — people depend on it to access their recordings, transcripts, and storage. If you can't explain what your change does and how it interacts with the rest of the system, don't ship it.
 
 Using AI to write code is fine. Submitting AI-generated code you don't understand is not.
 
@@ -28,6 +28,11 @@ Marketing surfaces (landing page copy, README feature sections) are exempt — t
 - Always ask before removing functionality or code that appears to be intentional
 - Refactor freely and do not preserve backward compatibility on internal code unless the user explicitly asks. Internal code APIs are not a contract; only the **deploy surface** is (see below) — that one is sacred.
 
+### Comments
+
+JSDoc on exported APIs only. No narrative or strategy comments in source.
+Design rationale goes in the commit message.
+
 ## Commands
 
 - After code changes (not docs): `pnpm format-and-lint:fix && pnpm type-check`. Fix all errors and warnings before committing.
@@ -37,6 +42,7 @@ Marketing surfaces (landing page copy, README feature sections) are exempt — t
 - Regression tests for a specific bug go at `src/tests/regressions/<issue-number>-<short-slug>.test.ts` (create the directory the first time).
 - **NEVER run without user instruction:** `pnpm dev`, `pnpm build`, `pnpm db:migrate`, `pnpm db:generate`, `docker compose up`, any release command.
 - Dev diagnostics endpoint: `/api/dev/plaud/info` (dev-only, hidden in production) — probes the stored Plaud connection and reports device + recording counts. Useful for "is the connection actually working" without digging into the DB.
+- Dev screenshot route: `/dev/demo-dashboard` (dev-only, hidden in production) — renders the real dashboard `<Workstation>` against hand-curated fixtures in `src/lib/demo/fixtures.ts`. Used to capture marketing screenshots without polluting a real account. Summaries for `demo-` ids are served by a dev-only branch in `/api/recordings/[id]/summary` GET; audio playback is intentionally broken (404) since screenshots don't need it.
 
 ## **CRITICAL** Tool Usage Rules **CRITICAL**
 
@@ -171,8 +177,8 @@ Entries go under `## [Unreleased]`. Subsections:
 
 ### Attribution format
 
-- Internal changes: `Fixed sync stall on 429 ([#123](https://github.com/openplaud/openplaud/issues/123))`
-- External contributions: `Added Groq provider ([#456](https://github.com/openplaud/openplaud/pull/456) by [@username](https://github.com/username))`
+- Internal changes: `Fixed sync stall on 429 ([#123](https://github.com/riffado/riffado/issues/123))`
+- External contributions: `Added Groq provider ([#456](https://github.com/riffado/riffado/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 
@@ -180,7 +186,7 @@ Agents do not cut releases — that's a maintainer action. The procedure (tag, p
 
 ## Don't break existing deployments
 
-OpenPlaud ships in **two production modes from the same codebase**:
+Riffado ships in **two production modes from the same codebase**:
 
 1. **Self-host** (`IS_HOSTED` unset/false) — AGPL, `docker compose up`, single-tenant in practice, owned by the user.
 2. **Hosted** (`IS_HOSTED=true`) — multi-tenant SaaS we operate. Live, paying users, profit-bearing.
@@ -190,7 +196,7 @@ Both surfaces are user contracts. The **deploy surface** — DB schema, env vars
 - **Schema changes are additive by default.** Dropping columns or tables requires a user-impact assessment and a migration plan. See the **Database Migrations** block below.
 - **Env var renames need deprecation.** Keep the old name working for at least one release cycle, log a deprecation warning, document both in `CHANGELOG.md`.
 - **`docker-compose.yml` is a user contract.** Breaking structural changes need a CHANGELOG migration note.
-- **The one-line installer is part of the deploy surface.** `scripts/install.sh`, the `openplaud.com/install.sh` route, and the version-pinned `openplaud.com/vX.Y.Z/install.sh` route are a single contract — the script is served from the repo file via `src/app/install.sh/route.ts` and `src/app/[version]/install.sh/route.ts`. Breaking changes (renaming, removing prompts, changing the URL shape) need a deprecation cycle and a CHANGELOG note. Self-hosters paste these URLs into their own runbooks; don't break them silently.
+- **The one-line installer is part of the deploy surface.** `scripts/install.sh`, the `riffado.com/install.sh` route, and the version-pinned `riffado.com/vX.Y.Z/install.sh` route are a single contract — the script is served from the repo file via `src/app/install.sh/route.ts` and `src/app/[version]/install.sh/route.ts`. Breaking changes (renaming, removing prompts, changing the URL shape) need a deprecation cycle and a CHANGELOG note. Self-hosters paste these URLs into their own runbooks; don't break them silently.
 - **Test sync against a real Plaud account** before shipping anything touching `src/lib/sync/` or `src/lib/plaud/`. Sync regressions destroy user trust fastest.
 - **Breaking changes ship with loud logging + Sentry context + CHANGELOG notes.** Never silently.
 - **Never gate features behind `IS_HOSTED` in a way that breaks self-host.** Hosted-only branches must degrade cleanly to the self-host path, not crash or silently disable functionality self-hosters expect.
@@ -199,11 +205,23 @@ Ask: *"If this goes wrong, how many users notice, and how fast can they recover?
 
 ## Product context
 
-OpenPlaud is AGPL-3.0, targets anyone who owns a Plaud device (Note, Note Pro, NotePin) and doesn't want Plaud's AI subscription.
+Riffado is AGPL-3.0, an open-source companion app for AI voice recorders. Currently supports the Plaud Note family (Note, Note Pro, NotePin); more device support is planned.
+
+### Positioning rules (marketing-facing)
+
+Riffado is **not** positioned as a Plaud competitor or a "subscription killer." Even though Plaud is the only device family supported today, marketing copy stays vendor-agnostic and forward-looking:
+
+- Frame Riffado as a **multi-device transcription layer**, not a Plaud alternative.
+- Use the category noun **"voice recorders"** (not "Plaud devices") wherever possible.
+- Plaud references are factual / interoperability only ("currently supports the Plaud Note family"). No "replace", "subscription", "cheaper than", "$X/mo", or "skip the subscription" framing.
+- When pricing context is needed, present it survey-style across 3+ vendors (Plaud Pro, Otter Business, Rev AI Pro — not just Plaud) with each vendor's published number. No qualitative claims.
+- Do not republish disparaging third-party quotes about Plaud (the previous `reddit-quotes.tsx` was removed for commercial-disparagement risk — do not reinstate without legal review).
+- A future Riffado-branded device is on the roadmap but **must not be announced** in any user-facing copy until product confirms.
+- **Write marketing copy for the non-technical user.** The hosted product exists for people who don't want to think about infrastructure — that's the audience for landing, FAQ, pricing, emails, and any in-app marketing surface. Name real vendors and outcomes ("OpenAI, Anthropic, Groq", "your recordings, your transcripts"), not categories or implementation details ("OpenAI-compatible providers", "S3-compatible object storage", "JWT bearer tokens"). Technical / self-host readers parse plain-user language fine; the reverse isn't true. Implementation-detail language belongs in `README.md`, `CHANGELOG.md`, docs, and code comments — not marketing surfaces. Per-vendor escape hatches ("+ any OpenAI-compatible endpoint") stay as tail clauses for the technical reader, never as the lead.
 
 ### Audience slices
 
-- **Slice 1 — Cost-conscious Plaud users** (default path; hero, The Math, Reddit quotes target these). Driver: "Plaud charges $X/mo, we charge $0." Don't care where code runs.
+- **Slice 1 — Voice recorder owners who want choice** (default path; hero, features, pricing, the-math target these). Driver: own your transcripts, choose your AI, choose your storage, leave anytime. Don't care where the code runs.
 - **Slice 2 — Privacy / compliance professionals** (`for-professionals.tsx`): lawyers, journalists, consultants, researchers. Driver: sovereignty. Default to self-host + local AI (Whisper / Ollama). Care about auditability (AGPL) and infrastructure control.
 
 ### Delivery tiers
@@ -217,9 +235,9 @@ OpenPlaud is AGPL-3.0, targets anyone who owns a Plaud device (Note, Note Pro, N
 
 - **Self-host is first-class.** If it won't run in `docker compose up`, it doesn't ship. Slice 2 literally cannot use it otherwise.
 - **Local-AI path must keep working.** Transformers.js (browser) and Ollama/LM Studio (local server) are the privacy-critical path. Don't regress them for "better" cloud-provider features.
-- **No vendor lock-in inside OpenPlaud either.** Storage pluggable (local / S3-compatible). AI providers pluggable (any OpenAI-compatible). Don't hardcode to one; don't add a "default cloud" fallback that silently leaks data.
+- **No vendor lock-in inside Riffado either.** Storage pluggable (local / S3-compatible). AI providers pluggable (any OpenAI-compatible). Don't hardcode to one; don't add a "default cloud" fallback that silently leaks data.
 - **Export parity is non-negotiable.** Full backup (one-archive export → restore elsewhere) is the proof users can leave. Every recording, transcript, summary must round-trip. Do not ship features that can't be backed up.
-- **Never claim compliance we don't own.** HIPAA, SOC2, attorney-client privilege — the claim belongs to the user's AI provider + their self-host setup, not to OpenPlaud. Marketing and product copy both stay honest here.
+- **Never claim compliance we don't own.** HIPAA, SOC2, attorney-client privilege — the claim belongs to the user's AI provider + their self-host setup, not to Riffado. Marketing and product copy both stay honest here.
 
 ### Hosted mode invariants (`IS_HOSTED=true`)
 
@@ -235,14 +253,14 @@ When designing or reviewing any feature, assume hosted is real and check both mo
 
 ### Marketing-vs-product gap
 
-OpenPlaud has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
+Riffado has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
 
 - Plaud refresh-token handling was removed in `bed9cd3` — Plaud issues only long-lived access tokens (~300 day JWT). Do not re-add refresh-token plumbing.
 
 ### Target UX comparisons
 
 - **Yes:** Plaud's own web app (the thing we're replacing), Linear, Vercel dashboards.
-- **No:** generic self-host transcription stacks (Whisper + a script). OpenPlaud must feel like a product, not a pile of utilities.
+- **No:** generic self-host transcription stacks (Whisper + a script). Riffado must feel like a product, not a pile of utilities.
 
 ## Product principles
 
@@ -257,7 +275,8 @@ In priority order when in doubt:
 
 - Prefer **server components**; use `"use client"` only for interactivity.
 - Route handlers live under `src/app/api/` — one `route.ts` per endpoint.
-- Database access via Drizzle. Queries may live inline in route handlers for now (no enforced `queries/` layer yet).
+- Database access via Drizzle. Fluent Drizzle queries (`db.select().from(...).where(...)`) may live inline in route handlers and feature `lib/` files. **Raw-SQL queries — anything calling `db.execute(sql\`...\`)` or holding a full `SELECT`/`INSERT`/`UPDATE`/`DELETE` inside a `sql\`\`` template — MUST live in `src/db/queries/`** and be imported by feature code. Inline `sql\`\`` *expression fragments* embedded inside Drizzle's fluent builder (`set: { col: sql\`col + 1\` }`, `where(sql\`json @> ...\`)`, `orderBy(sql\`...\`)`) stay where they're used — they're operator helpers, not queries.
+- When you write or touch any `sql\`\`` template: every interpolated value must be a `${...}` placeholder (param-bound, never string-concatenated); every `Date` value must be `.toISOString()` and cast (`${iso}::timestamp` for `timestamp` columns, `::timestamptz` only when the column is `timestamptz`); user-supplied `ILIKE` patterns must escape `%` and `_` with `escape '\\'`; sort columns and identifiers come from a fixed allowlist, never from user input.
 - Environment variables are validated via Zod in `src/lib/env.ts`. Add new vars there and access via the validated `env` object. **Never `process.env.X` directly in feature code.**
 - Toasts via `sonner`; no `alert()` or custom toast systems.
 - Client components that fetch from our own API use existing `/api/...` routes — no duplicate client-side Plaud API calls.
@@ -321,7 +340,7 @@ Don't branch on storage type anywhere outside `factory.ts`.
 
 ### Adding an AI provider
 
-OpenPlaud doesn't have a per-provider abstraction — it uses the OpenAI SDK with a custom `baseURL`. "Adding a provider" is usually configuration, not code:
+Riffado doesn't have a per-provider abstraction — it uses the OpenAI SDK with a custom `baseURL`. "Adding a provider" is usually configuration, not code:
 
 1. If the provider is OpenAI-compatible (OpenAI, Groq, Together, OpenRouter, LM Studio, Ollama, Azure, …): no code change. Users add it via the settings UI — `baseURL` + API key + model names. Document it in `README.md` under the AI Provider Setup section.
 2. If the provider has non-standard auth (e.g., AWS Bedrock with SigV4): write an adapter that fronts the provider behind an OpenAI-compatible surface. Do not branch on provider name in feature code. Keep the abstraction clean.

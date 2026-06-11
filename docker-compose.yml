@@ -3,7 +3,7 @@ version: '3.8'
 services:
   db:
     image: postgres:16-alpine
-    container_name: openplaud-db
+    container_name: riffado-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -13,7 +13,7 @@ services:
       # can rotate by setting POSTGRES_PASSWORD in .env, recreating the
       # `db` volume, and restoring from a backup.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: openplaud
+      POSTGRES_DB: riffado
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
@@ -29,15 +29,15 @@ services:
     #   - `latest`  → newest stable release (recommended)
     #   - `0.1.0`   → pin to a specific version
     #   - `dev`     → rolling build from `main` (unstable, opt-in)
-    # Override via OPENPLAUD_VERSION in .env. For local builds, see docker-compose.dev.yml.
-    image: ghcr.io/openplaud/openplaud:${OPENPLAUD_VERSION:-latest}
-    container_name: openplaud-app
+    # Override via RIFFADO_VERSION in .env. For local builds, see docker-compose.dev.yml.
+    image: ghcr.io/riffado/riffado:${RIFFADO_VERSION:-latest}
+    container_name: riffado-app
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       # Database
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/openplaud
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/riffado
 
       # Auth
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
@@ -49,6 +49,7 @@ services:
 
       # Storage (optional defaults)
       DEFAULT_STORAGE_TYPE: ${DEFAULT_STORAGE_TYPE:-local}
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-/app/audio}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_BUCKET: ${S3_BUCKET:-}
       S3_REGION: ${S3_REGION:-}

@@ -5,10 +5,6 @@ import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/**
- * Step 1: welcome / overview. Pure presentation -- explains what the
- * onboarding flow is about to ask the user to do.
- */
 export function OnboardingStepWelcome() {
     return (
         <div className="space-y-6">
@@ -20,8 +16,8 @@ export function OnboardingStepWelcome() {
                     Your AI-Powered Recording Hub
                 </h3>
                 <p className="text-muted-foreground">
-                    OpenPlaud helps you manage, transcribe, and enhance your
-                    Plaud recordings with AI. Let's set up your account.
+                    Riffado helps you manage, transcribe, and enhance your Plaud
+                    recordings with AI. Let's set up your account.
                 </p>
             </div>
 
@@ -75,11 +71,6 @@ export function OnboardingStepWelcome() {
     );
 }
 
-/**
- * Step 2: Plaud account connection. When already connected, shows a
- * confirmation card with a Reconnect button; otherwise embeds the
- * shared PlaudConnectTabs (email OTP / paste-token / connector flows).
- */
 export function OnboardingStepPlaud({
     hasPlaudConnection,
     onReconnect,
@@ -139,12 +130,6 @@ export function OnboardingStepPlaud({
     );
 }
 
-/**
- * Step 3: AI provider configuration. When already configured, just
- * confirms. Otherwise punts to the Settings -> Providers section
- * (the actual provider configuration lives there; embedding the full
- * provider UI in the onboarding dialog would duplicate too much).
- */
 export function OnboardingStepAiProvider({
     hasAiProvider,
     onGoToSettings,
@@ -202,10 +187,6 @@ export function OnboardingStepAiProvider({
     );
 }
 
-/**
- * Step 4: completion. Recaps what happens next so the user knows what
- * to expect when they hit Get Started.
- */
 export function OnboardingStepComplete() {
     return (
         <div className="space-y-6">
@@ -215,7 +196,7 @@ export function OnboardingStepComplete() {
                 </div>
                 <h3 className="text-xl font-semibold">You're All Set!</h3>
                 <p className="text-muted-foreground">
-                    Start recording and let OpenPlaud handle the rest
+                    Start recording and let Riffado handle the rest
                 </p>
             </div>
 

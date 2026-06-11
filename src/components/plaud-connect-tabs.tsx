@@ -1,22 +1,5 @@
 "use client";
 
-/**
- * Two-mode Plaud connect form, shared between the onboarding dialog and the
- * standalone /onboarding page.
- *
- * Mode "email" — the existing OTP flow (email → 6-digit code).
- *
- * Mode "token" — paste an access token grabbed from a logged-in
- * web.plaud.ai session. This exists for users whose Plaud account was
- * created via Google or Apple sign-in (issue #65): the OTP flow signs them
- * into a *different*, empty shadow account on Plaud's side, so the only
- * reliable connection method is reusing the token from a real web session.
- *
- * Both modes terminate in the same place — a connection row in
- * plaud_connections — so the parent only needs to know "did the user
- * connect?" via the `onConnected` callback.
- */
-
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,11 +13,9 @@ import {
 } from "@/lib/plaud/servers";
 
 const CONNECTOR_CHROME_URL =
-    "https://github.com/openplaud/connector#installation";
+    "https://github.com/riffado/connector#installation";
 
-// Public API contract for the OpenPlaud Connector browser extension.
-// Kept in sync with /Users/.../connector/src/page-bridge.ts — if this
-// shape changes, bump `version` on both sides.
+// API contract for the Riffado Connector extension; bump `version` on both sides.
 interface ConnectorBridge {
     version: number;
     connect(): Promise<{
@@ -47,7 +28,7 @@ interface ConnectorBridge {
 
 declare global {
     interface Window {
-        __openplaudConnector?: ConnectorBridge;
+        __riffadoConnector?: ConnectorBridge;
     }
 }
 
@@ -55,7 +36,7 @@ type Mode = "connector" | "email" | "token";
 type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
-const ISSUE_URL = "https://github.com/openplaud/openplaud/issues/65";
+const ISSUE_URL = "https://github.com/riffado/riffado/issues/65";
 
 function regionLabel(base: string): string {
     if (base.includes("euc1")) return "EU (Frankfurt)";
@@ -65,9 +46,7 @@ function regionLabel(base: string): string {
 }
 
 interface PlaudConnectTabsProps {
-    /** Called after a successful connect (either mode). */
     onConnected: () => void;
-    /** Compact mode pulls in margins/typography for the dialog surface. */
     variant?: "dialog" | "page";
 }
 
@@ -75,16 +54,12 @@ export function PlaudConnectTabs({
     onConnected,
     variant = "dialog",
 }: PlaudConnectTabsProps) {
-    // Detect the OpenPlaud Connector extension. The page-bridge defines
-    // window.__openplaudConnector at document_start, but if the extension
-    // gets installed *while* the page is open we never see it; we re-poll
-    // a few times for resilience and then give up.
     const [hasConnector, setHasConnector] = useState<boolean>(false);
     useEffect(() => {
         let cancelled = false;
         const check = () => {
             if (cancelled) return;
-            const v = window.__openplaudConnector?.version;
+            const v = window.__riffadoConnector?.version;
             if (typeof v === "number" && v >= 1) setHasConnector(true);
         };
         check();
@@ -152,8 +127,6 @@ export function PlaudConnectTabs({
     );
 }
 
-// ── Connector (browser extension) pane ─────────────────────────────────
-
 interface ConnectorPaneProps {
     onConnected: () => void;
     hasConnector: boolean;
@@ -170,7 +143,7 @@ function ConnectorPane({
     const [isLoading, setIsLoading] = useState(false);
 
     const handleConnect = useCallback(async () => {
-        const bridge = window.__openplaudConnector;
+        const bridge = window.__riffadoConnector;
         if (!bridge) {
             toast.error("Connector extension not detected");
             return;
@@ -197,10 +170,6 @@ function ConnectorPane({
             toast.success("Plaud account connected");
             onConnected();
         } catch (err) {
-            // Reachable only for client-side throws (extension bridge
-            // failure, network blow-up before `fetch` returns). Server
-            // errors went through `toastApiError` above and already
-            // toasted with the `Report` action when applicable.
             toast.error(
                 err instanceof Error ? err.message : "Failed to connect",
             );
@@ -214,7 +183,7 @@ function ConnectorPane({
             <div className="space-y-3">
                 <p className="text-sm text-muted-foreground leading-relaxed">
                     Easiest path: install the{" "}
-                    <span className="font-medium">OpenPlaud Connector</span>{" "}
+                    <span className="font-medium">Riffado Connector</span>{" "}
                     browser extension. Sign in to Plaud the way you normally do
                     (Google, Apple, or email) and the connector hands the
                     session back here, no copy-pasting.
@@ -225,11 +194,11 @@ function ConnectorPane({
                         target="_blank"
                         rel="noopener noreferrer"
                     >
-                        Install OpenPlaud Connector
+                        Install Riffado Connector
                     </a>
                 </Button>
                 <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                    Already installed? Reload this page so OpenPlaud can detect
+                    Already installed? Reload this page so Riffado can detect
                     it. Or use the{" "}
                     <button
                         type="button"
@@ -347,8 +316,6 @@ function EmailCodePane({
             setStep("code");
             toast.success("Verification code sent — check your email");
         } catch (err) {
-            // Network blow-up before `fetch` returns. Server errors were
-            // handled by `toastApiError` above.
             toast.error(
                 err instanceof Error ? err.message : "Failed to send code",
             );

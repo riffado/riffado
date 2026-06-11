@@ -1,11 +1,4 @@
-/**
- * Minimal CIDR allowlist matcher for the admin gate.
- *
- * Supports IPv4 (a.b.c.d/n), IPv6 (::1/128), and bare-IP entries (treated as
- * /32 or /128). Anything malformed in the env var is logged and ignored --
- * the gate fails closed, so a typo in ADMIN_IP_ALLOWLIST means nobody passes,
- * not "everybody passes."
- */
+// Fail-closed CIDR allowlist matcher (IPv4 + IPv6, bare-IP = /32 or /128).
 
 function ipv4ToInt(ip: string): number | null {
     const parts = ip.split(".");
@@ -16,7 +9,6 @@ function ipv4ToInt(ip: string): number | null {
         if (!Number.isInteger(n) || n < 0 || n > 255) return null;
         acc = (acc << 8) + n;
     }
-    // Force unsigned 32-bit
     return acc >>> 0;
 }
 
@@ -26,8 +18,7 @@ const BIG_16 = BigInt(16);
 const BIG_V4_MASK = BigInt("0xffffffff");
 
 function ipv6ToBigInt(ip: string): bigint | null {
-    // Expand `::` and validate. Accepts IPv4-mapped form (::ffff:1.2.3.4)
-    // by converting the trailing IPv4 chunk to two hex groups.
+    // Accepts IPv4-mapped form (::ffff:1.2.3.4).
     let s = ip;
     const v4Match = s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/);
     if (v4Match) {
@@ -37,9 +28,6 @@ function ipv6ToBigInt(ip: string): bigint | null {
         const lo = v4 & 0xffff;
         s = `${v4Match[1]}${hi.toString(16)}:${lo.toString(16)}`;
     }
-    // RFC 4291: a valid IPv6 address contains AT MOST ONE `::`. Reject
-    // anything with two or more (e.g. `1::2::3`) so spurious empty groups
-    // can't slip through after the split/filter below.
     const doubleColon = s.indexOf("::");
     if (doubleColon !== s.lastIndexOf("::")) return null;
     let groups: string[];
@@ -75,12 +63,6 @@ interface ParsedCidr {
 }
 
 function parseCidr(entry: string): ParsedCidr | null {
-    // Reject malformed entries up front:
-    //   - more than one `/`         (e.g. "10.0.0.0/24/extra")
-    //   - empty bits portion        (e.g. "10.0.0.0/")
-    //   - non-digit bits portion    (e.g. "10.0.0.0/abc")
-    // A bare "10.0.0.0/" previously parsed as bits=0 (Number("") === 0),
-    // which silently allowed all IPs in that family.
     const slashCount = (entry.match(/\//g) ?? []).length;
     if (slashCount > 1) return null;
     let ipPart: string;
@@ -99,7 +81,6 @@ function parseCidr(entry: string): ParsedCidr | null {
         if (ipInt === null) return null;
         const bits = bitsPart === undefined ? 32 : Number(bitsPart);
         if (!Number.isInteger(bits) || bits < 0 || bits > 32) return null;
-        // Mask the base so 10.0.0.5/24 == 10.0.0.0/24
         const mask =
             bits === 0
                 ? BIG_ZERO
@@ -117,11 +98,7 @@ function parseCidr(entry: string): ParsedCidr | null {
     return { family: 6, base: ipBig & mask, bits };
 }
 
-/**
- * Returns true if the given client IP matches any CIDR in the allowlist.
- * An empty allowlist returns true (= check disabled). A non-empty allowlist
- * with no parseable entries returns false (fail closed on misconfiguration).
- */
+/** Empty allowlist = disabled (true). Non-empty + no parseable entries = fail closed. */
 export function ipMatchesAllowlist(
     clientIp: string | null | undefined,
     allowlist: readonly string[],
@@ -129,7 +106,6 @@ export function ipMatchesAllowlist(
     if (allowlist.length === 0) return true;
     if (!clientIp) return false;
 
-    // Strip v6-bracket form and IPv4-mapped prefix variants
     let ip = clientIp.trim().replace(/^\[|\]$/g, "");
     if (ip.startsWith("::ffff:") && ip.includes(".")) {
         ip = ip.slice(7);
@@ -140,7 +116,6 @@ export function ipMatchesAllowlist(
         return parsed ? [parsed] : [];
     });
     if (parsedEntries.length === 0) {
-        // Misconfigured allowlist -- fail closed.
         return false;
     }
 
@@ -174,24 +149,9 @@ export function ipMatchesAllowlist(
 }
 
 /**
- * Best-effort client-IP extraction. Order of preference:
- *   1. x-forwarded-for (first entry, since edge proxies append on the right)
- *   2. x-real-ip
- *
- * If neither header is set we return null and the allowlist check fails closed
- * when an allowlist is configured.
- *
- * Trust model: this function trusts the headers. If the OpenPlaud server is
- * exposed to the public internet without a proxy, an attacker can SET
- * x-forwarded-for in their request and bypass the IP gate. Mitigation lives
- * at the deploy layer:
- *   - Run behind a proxy (Caddy/nginx/Cloudflare) that REPLACES (not appends)
- *     incoming x-forwarded-for with the actual client IP, or
- *   - Don't enable ADMIN_IP_ALLOWLIST and rely on the email + reauth chain.
- *
- * `warnIfIpAllowlistTrustsXff` (called from auth-server module load) prints
- * a single startup line when ADMIN_IP_ALLOWLIST is configured, reminding the
- * operator to verify their proxy strips inbound XFF.
+ * Client IP from XFF (first entry) or X-Real-IP. Trusts the headers —
+ * the operator's proxy MUST replace (not append) inbound XFF. See
+ * `warnIfIpAllowlistTrustsXff` startup warning.
  */
 export function clientIpFromHeaders(headers: Headers): string | null {
     const xff = headers.get("x-forwarded-for");

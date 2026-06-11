@@ -9,30 +9,9 @@ import { auth } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { ReauthForm } from "./reauth-form";
 
-// Force dynamic rendering. Without this, Next.js may statically prerender
-// this page during `next build` -- and because the IS_HOSTED / ADMIN_EMAILS
-// checks run before any dynamic API (headers/cookies/searchParams), build
-// environments that lack those vars would bake a permanent 404 into the
-// output. Admin config is always runtime, never build-time.
+// force-dynamic: admin config is read at runtime, not build time.
 export const dynamic = "force-dynamic";
 
-/**
- * Password reprompt for the admin dashboard. Reachable only after a regular
- * session is in place; non-admins, self-host, and IP-blocked clients all 404.
- *
- * The actual password verification + cookie issuance happens in
- * /api/admin/reauth -- this page just renders the form.
- */
-/**
- * Validate `?next=` and collapse to `/admin` on anything suspicious.
- * Defends against:
- *   - repeated params: Next.js exposes them as `string | string[]` --
- *     a non-string trip-wires here.
- *   - protocol-relative / absolute URLs: must start with `/`.
- *   - traversal segments (`/admin/../..`): URL.pathname normalizes them
- *     so we re-validate the normalized form.
- *   - paths outside the admin tree.
- */
 function sanitizeNext(raw: unknown): string {
     if (typeof raw !== "string") return "/admin";
     if (!raw.startsWith("/") || raw.startsWith("//")) return "/admin";
@@ -67,8 +46,6 @@ export default async function AdminReauthPage({
     if (!isAdminEmail(session.user.email)) notFound();
 
     const sp = await searchParams;
-    // Repeated params surface as string[]; pick the first entry, then run
-    // through sanitizeNext for the actual safety check.
     const rawNext = Array.isArray(sp.next) ? sp.next[0] : sp.next;
     const next = sanitizeNext(rawNext);
 

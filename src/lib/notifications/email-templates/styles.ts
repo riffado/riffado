@@ -1,7 +1,3 @@
-// Email template styles - Clean, minimal, mobile-first design
-// Matches OpenPlaud's technical aesthetic with proper contrast and typography
-// Colors from globals.css light theme with WCAG AA contrast compliance
-
 import { brandColors } from "./brand-colors";
 
 export const emailStyles = {

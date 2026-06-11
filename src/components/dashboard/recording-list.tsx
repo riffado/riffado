@@ -1,16 +1,6 @@
 "use client";
 
-import {
-    ArrowDownAZ,
-    Loader2,
-    Mic,
-    MoreHorizontal,
-    Play,
-    Rows3,
-    Search,
-    Trash2,
-    X,
-} from "lucide-react";
+import { Mic } from "lucide-react";
 import type * as React from "react";
 import {
     useCallback,
@@ -20,34 +10,26 @@ import {
     useRef,
     useState,
 } from "react";
-import { useConfirm } from "@/components/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuRadioGroup,
-    DropdownMenuRadioItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { dateGroupLabel, formatDateTime } from "@/lib/format-date";
-import { formatDurationMs } from "@/lib/format-duration";
-import { cn } from "@/lib/utils";
+    type PendingUpload,
+    PendingUploadRow,
+} from "@/components/dashboard/pending-upload-row";
+import {
+    type ListDensity,
+    RecordingListToolbar,
+    type SortOrder,
+} from "@/components/dashboard/recording-list-toolbar";
+import { RecordingRow } from "@/components/dashboard/recording-row";
+import { Card, CardContent } from "@/components/ui/card";
+import { dateGroupLabel } from "@/lib/format-date";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
-export type SortOrder = "newest" | "oldest" | "name";
-export type ListDensity = "comfortable" | "compact";
-
-export interface PendingUpload {
-    id: string; // local nanoid-ish, "pending:..."
-    filename: string;
-    filesize: number;
-}
+export type { PendingUpload } from "@/components/dashboard/pending-upload-row";
+export type {
+    ListDensity,
+    SortOrder,
+} from "@/components/dashboard/recording-list-toolbar";
 
 interface TranscriptionData {
     text?: string;
@@ -74,7 +56,6 @@ export interface RecordingListHandle {
     prev: () => void;
 }
 
-// Persist a single user-settings field. Best-effort; UI already changed.
 function persistSetting(field: string, value: unknown) {
     fetch("/api/settings/user", {
         method: "PUT",
@@ -83,32 +64,14 @@ function persistSetting(field: string, value: unknown) {
     }).catch(() => {});
 }
 
-// Use the shared duration formatter so list rows automatically pick up
-// the H:MM:SS layout for hour-plus recordings.
-const formatDuration = formatDurationMs;
-
-function formatSize(bytes: number) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// Pull a single-line plaintext snippet out of a transcript for the
-// list row preview. Transcripts come in two shapes:
-//   - Plaintext (legacy / Whisper passthrough): leave as-is.
-//   - JSON-ish with embedded timestamps / speaker labels: strip the
-//     structural noise so the first line of "real" content surfaces.
-// We intentionally keep this dumb — the snippet is a hint, not a
-// document. Anything richer belongs in the workstation transcript pane.
 function transcriptSnippet(
     text: string | undefined,
     maxChars = 140,
 ): string | null {
     if (!text) return null;
     const stripped = text
-        // Drop bracketed metadata like [00:00:00] or [Speaker 1]
         .replace(/\[[^\]]+\]/g, " ")
-        // Drop bare timecodes (00:00, 00:00:00)
         .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, " ")
-        // Collapse whitespace and newlines
         .replace(/\s+/g, " ")
         .trim();
     if (!stripped) return null;
@@ -135,7 +98,6 @@ export function RecordingList({
     const [density, setDensity] = useState<ListDensity>(initialDensity);
     const [query, setQuery] = useState("");
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
-    const confirm = useConfirm();
     const searchRef = useRef<HTMLInputElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -150,7 +112,14 @@ export function RecordingList({
         persistSetting("listDensity", next);
     }, []);
 
-    // Filter (filename + transcript text), then sort.
+    const registerRowRef = useCallback(
+        (id: string, el: HTMLButtonElement | null) => {
+            if (el) rowRefs.current.set(id, el);
+            else rowRefs.current.delete(id);
+        },
+        [],
+    );
+
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
         const base = q
@@ -186,8 +155,6 @@ export function RecordingList({
 
     const visible = filtered.slice(0, visibleCount);
 
-    // Group adjacent rows by date bucket. Only meaningful when sorting
-    // by time; for "name" we render a single ungrouped block.
     const grouped = useMemo(() => {
         if (sortOrder === "name") {
             return [{ label: null as string | null, items: visible }];
@@ -218,7 +185,6 @@ export function RecordingList({
         );
     }, [filtered.length, initialChunkSize]);
 
-    // Infinite-scroll sentinel
     useEffect(() => {
         const el = sentinelRef.current;
         if (!el) return;
@@ -238,7 +204,6 @@ export function RecordingList({
         return () => observer.disconnect();
     }, [filtered.length, initialChunkSize]);
 
-    // Imperative API for parent-driven keyboard nav.
     useImperativeHandle(
         ref,
         () => ({
@@ -283,424 +248,67 @@ export function RecordingList({
     return (
         <Card hasNoPadding>
             <CardContent className="p-0">
-                {/* Header: search + sort + density */}
-                <div className="flex flex-col gap-2 border-b p-3">
-                    <div className="relative">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            ref={searchRef}
-                            value={query}
-                            onChange={(e) => setQuery(e.target.value)}
-                            onKeyDown={(e) => {
-                                // Enter opens the top filtered result.
-                                // Without this, finding-then-opening takes
-                                // a separate mouse click — the most common
-                                // search outcome should be one keystroke.
-                                if (e.key === "Enter" && filtered.length > 0) {
-                                    e.preventDefault();
-                                    onSelect(filtered[0]);
-                                }
-                            }}
-                            placeholder="Search recordings, transcripts..."
-                            className="h-9 pl-8 pr-8"
-                            aria-label="Search recordings"
-                        />
-                        {query && (
-                            <button
-                                type="button"
-                                onClick={() => setQuery("")}
-                                aria-label="Clear search"
-                                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>
-                            {filtered.length}
-                            {query ? " matching" : ""} of {recordings.length}{" "}
-                            recording
-                            {recordings.length !== 1 ? "s" : ""}
-                        </span>
-                        <div className="flex items-center gap-1">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs"
-                                        aria-label="Sort"
-                                    >
-                                        <ArrowDownAZ className="size-3.5" />
-                                        <span>
-                                            {sortOrder === "newest"
-                                                ? "Newest"
-                                                : sortOrder === "oldest"
-                                                  ? "Oldest"
-                                                  : "Name"}
-                                        </span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>
-                                        Sort by
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuRadioGroup
-                                        value={sortOrder}
-                                        onValueChange={(v) =>
-                                            setSortOrderPersisted(
-                                                v as SortOrder,
-                                            )
-                                        }
-                                    >
-                                        <DropdownMenuRadioItem value="newest">
-                                            Newest first
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="oldest">
-                                            Oldest first
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="name">
-                                            Name
-                                        </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs"
-                                        aria-label="Density"
-                                    >
-                                        <Rows3 className="size-3.5" />
-                                        <span>
-                                            {density === "compact"
-                                                ? "Compact"
-                                                : "Comfortable"}
-                                        </span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>
-                                        Density
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuRadioGroup
-                                        value={density}
-                                        onValueChange={(v) =>
-                                            setDensityPersisted(
-                                                v as ListDensity,
-                                            )
-                                        }
-                                    >
-                                        <DropdownMenuRadioItem value="comfortable">
-                                            Comfortable
-                                        </DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="compact">
-                                            Compact
-                                        </DropdownMenuRadioItem>
-                                    </DropdownMenuRadioGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    </div>
-                </div>
+                <RecordingListToolbar
+                    query={query}
+                    onQueryChange={setQuery}
+                    onEnterSelectFirst={() => {
+                        if (filtered.length > 0) onSelect(filtered[0]);
+                    }}
+                    searchRef={searchRef}
+                    filteredCount={filtered.length}
+                    totalCount={recordings.length}
+                    sortOrder={sortOrder}
+                    onSortOrderChange={setSortOrderPersisted}
+                    density={density}
+                    onDensityChange={setDensityPersisted}
+                />
 
-                {/* Pending uploads (optimistic placeholders, always on top) */}
                 {pendingUploads.length > 0 && (
                     <div className="divide-y bg-muted/30">
                         {pendingUploads.map((p) => (
-                            <div
+                            <PendingUploadRow
                                 key={p.id}
-                                className={cn(
-                                    "flex items-center gap-3",
-                                    rowPadding,
-                                )}
-                            >
-                                <Loader2 className="size-4 animate-spin text-primary" />
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium text-muted-foreground">
-                                        {p.filename}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        Uploading… {formatSize(p.filesize)}
-                                    </p>
-                                </div>
-                            </div>
+                                upload={p}
+                                rowPadding={rowPadding}
+                            />
                         ))}
                     </div>
                 )}
 
-                {/* Grouped list */}
                 <div>
                     {grouped.map((group, gi) => (
                         <div
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
                         >
                             {group.label && (
-                                // Quiet group header. Sits flush against the
-                                // following row — no top border, no internal
-                                // padding besides the text's own line-height,
-                                // so the only visible vertical space is the
-                                // previous row's bottom padding. Sticky + bg
-                                // keep it readable when the user scrolls past
-                                // a group boundary.
                                 <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                     {group.label}
                                 </div>
                             )}
                             <div className="divide-y">
-                                {group.items.map((recording) => {
-                                    const isSelected =
-                                        currentRecording?.id === recording.id;
-                                    const inFlight = inFlightActions.get(
-                                        recording.id,
-                                    );
-                                    const transcript = transcriptions.get(
-                                        recording.id,
-                                    );
-                                    const snippet = transcriptSnippet(
-                                        transcript?.text,
-                                    );
-                                    return (
-                                        <div
-                                            key={recording.id}
-                                            className={cn(
-                                                "group/row relative",
-                                                // Selected row: 2px primary
-                                                // left rail + slightly
-                                                // stronger bg. The rail is
-                                                // an inset box-shadow so it
-                                                // doesn't shift content.
-                                                isSelected
-                                                    ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
-                                                    : null,
-                                            )}
-                                        >
-                                            <button
-                                                ref={(el) => {
-                                                    if (el)
-                                                        rowRefs.current.set(
-                                                            recording.id,
-                                                            el,
-                                                        );
-                                                    else
-                                                        rowRefs.current.delete(
-                                                            recording.id,
-                                                        );
-                                                }}
-                                                type="button"
-                                                onClick={() =>
-                                                    onSelect(recording)
-                                                }
-                                                className={cn(
-                                                    "w-full text-left transition-colors hover:bg-accent/60",
-                                                    rowPadding,
-                                                )}
-                                            >
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="truncate text-sm font-medium">
-                                                            {recording.filename}
-                                                        </h3>
-                                                        {/*
-                                                          Status — only
-                                                          non-OK states
-                                                          render. A row
-                                                          with a transcript
-                                                          + summary is
-                                                          silent on purpose.
-                                                        */}
-                                                        {inFlight && (
-                                                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
-                                                                <Loader2
-                                                                    className="size-3 animate-spin"
-                                                                    aria-hidden="true"
-                                                                />
-                                                                {inFlight ===
-                                                                "transcribing"
-                                                                    ? "Transcribing"
-                                                                    : "Summarizing"}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {/*
-                                                      Subtitle: transcript
-                                                      snippet when present
-                                                      (the actual content
-                                                      of the recording),
-                                                      otherwise duration +
-                                                      timestamp. Single
-                                                      line, truncated.
-                                                    */}
-                                                    {snippet ? (
-                                                        <p
-                                                            className={cn(
-                                                                "truncate text-xs text-muted-foreground",
-                                                                isCompact
-                                                                    ? "mt-0.5"
-                                                                    : "mt-1",
-                                                            )}
-                                                        >
-                                                            {snippet}
-                                                        </p>
-                                                    ) : (
-                                                        <p
-                                                            className={cn(
-                                                                "text-xs text-muted-foreground",
-                                                                isCompact
-                                                                    ? "mt-0.5"
-                                                                    : "mt-1",
-                                                            )}
-                                                        >
-                                                            {formatDuration(
-                                                                recording.duration,
-                                                            )}
-                                                            {" \u00b7 "}
-                                                            {formatDateTime(
-                                                                recording.startTime,
-                                                                dateTimeFormat,
-                                                            )}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </button>
-                                            {/*
-                                              Visibility: hidden by default,
-                                              revealed on row hover OR when
-                                              focus is inside the trigger OR
-                                              while the menu is open. The
-                                              `has-[[data-state=open]]` check
-                                              keeps the kebab visible after
-                                              click — Radix portals the menu,
-                                              so focus leaves this subtree
-                                              and `focus-within` alone would
-                                              drop the trigger to opacity-0.
-                                            */}
-                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger
-                                                        asChild
-                                                    >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon-sm"
-                                                            aria-label="Row actions"
-                                                            onClick={(e) =>
-                                                                e.stopPropagation()
-                                                            }
-                                                        >
-                                                            <MoreHorizontal className="size-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            onSelect={() =>
-                                                                onSelect(
-                                                                    recording,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Play />
-                                                            Open
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem
-                                                            variant="destructive"
-                                                            onSelect={(e) => {
-                                                                // Keep the
-                                                                // dropdown
-                                                                // mounted
-                                                                // while the
-                                                                // confirm
-                                                                // dialog
-                                                                // opens —
-                                                                // Radix's
-                                                                // standard
-                                                                // dialog-from-menu
-                                                                // pattern
-                                                                // (without
-                                                                // this, the
-                                                                // menu's
-                                                                // close
-                                                                // animation
-                                                                // races the
-                                                                // dialog's
-                                                                // open and
-                                                                // focus
-                                                                // bounces
-                                                                // back to
-                                                                // the
-                                                                // trigger).
-                                                                // The
-                                                                // confirm's
-                                                                // overlay
-                                                                // dismisses
-                                                                // the menu
-                                                                // visually.
-                                                                e.preventDefault();
-                                                                void confirm({
-                                                                    title: "Delete this recording?",
-                                                                    description:
-                                                                        (
-                                                                            <>
-                                                                                <span className="font-medium text-foreground">
-                                                                                    {
-                                                                                        recording.filename
-                                                                                    }
-                                                                                </span>
-                                                                                <br />
-                                                                                The
-                                                                                audio
-                                                                                file
-                                                                                and
-                                                                                any
-                                                                                transcript
-                                                                                or
-                                                                                summary
-                                                                                will
-                                                                                be
-                                                                                removed.
-                                                                                If
-                                                                                the
-                                                                                file
-                                                                                is
-                                                                                still
-                                                                                on
-                                                                                your
-                                                                                Plaud
-                                                                                device,
-                                                                                the
-                                                                                next
-                                                                                sync
-                                                                                will
-                                                                                re-download
-                                                                                it.
-                                                                            </>
-                                                                        ),
-                                                                    confirmLabel:
-                                                                        "Delete",
-                                                                    pendingLabel:
-                                                                        "Deleting…",
-                                                                    destructive: true,
-                                                                    onConfirm:
-                                                                        () =>
-                                                                            onDelete(
-                                                                                recording,
-                                                                            ),
-                                                                });
-                                                            }}
-                                                        >
-                                                            <Trash2 />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                {group.items.map((recording) => (
+                                    <RecordingRow
+                                        key={recording.id}
+                                        recording={recording}
+                                        isSelected={
+                                            currentRecording?.id ===
+                                            recording.id
+                                        }
+                                        inFlight={inFlightActions.get(
+                                            recording.id,
+                                        )}
+                                        snippet={transcriptSnippet(
+                                            transcriptions.get(recording.id)
+                                                ?.text,
+                                        )}
+                                        isCompact={isCompact}
+                                        rowPadding={rowPadding}
+                                        dateTimeFormat={dateTimeFormat}
+                                        onSelect={onSelect}
+                                        onDelete={onDelete}
+                                        registerRef={registerRowRef}
+                                    />
+                                ))}
                             </div>
                         </div>
                     ))}
@@ -716,7 +324,6 @@ export function RecordingList({
                         </div>
                     )}
 
-                    {/* Infinite-scroll sentinel */}
                     <div ref={sentinelRef} className="h-4" aria-hidden="true" />
                 </div>
             </CardContent>

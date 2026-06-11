@@ -1,17 +1,17 @@
 {
-    "name": "openplaud",
-    "version": "0.5.3",
+    "name": "riffado",
+    "version": "0.5.6",
     "description": "Self-hosted AI transcription interface for Plaud Note devices",
-    "author": "OpenPlaud Contributors",
+    "author": "Riffado Contributors",
     "license": "AGPL-3.0",
     "repository": {
         "type": "git",
-        "url": "https://github.com/openplaud/openplaud.git"
+        "url": "https://github.com/riffado/riffado.git"
     },
     "bugs": {
-        "url": "https://github.com/openplaud/openplaud/issues"
+        "url": "https://github.com/riffado/riffado/issues"
     },
-    "homepage": "https://github.com/openplaud/openplaud#readme",
+    "homepage": "https://github.com/riffado/riffado#readme",
     "keywords": [
         "plaud",
         "plaud-note",
@@ -80,7 +80,6 @@
         "tailwind-merge": "^3.4.0",
         "undici": "^7.16.0",
         "vitest": "^4.0.12",
-        "wreq-js": "^2.3.0",
         "zod": "^4.1.12"
     },
     "devDependencies": {

@@ -219,8 +219,8 @@ export function EditProviderDialog({
                                     {legacyLocalProvider} isn&apos;t usable on
                                     the hosted app — we can&apos;t reach your
                                     machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host
-                                    OpenPlaud (
+                                    with a public endpoint, or self-host Riffado
+                                    (
                                     <code className="font-mono">
                                         docker compose up
                                     </code>
@@ -270,7 +270,7 @@ export function EditProviderDialog({
                                 We can&apos;t reach{" "}
                                 <code className="font-mono">localhost</code> or
                                 other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host OpenPlaud (
+                                use LM Studio or Ollama, self-host Riffado (
                                 <code className="font-mono">
                                     docker compose up
                                 </code>

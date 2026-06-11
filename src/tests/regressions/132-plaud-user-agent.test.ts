@@ -1,30 +1,4 @@
-/**
- * Regression test for issue #132:
- *   "Cloudflare 403s Node fetch with no User-Agent; sync silently returns
- *   no recordings on datacenter IPs"
- *
- * Plaud's API sits behind Cloudflare's WAF, which 403s requests from Node's
- * default fetch (undici sends no User-Agent header). On datacenter IPs this
- * is essentially guaranteed; on residential IPs it's environment-dependent.
- *
- * The fix sets a browser-like User-Agent on every fetch in `src/lib/plaud/`.
- * The presigned-S3 download in `client.ts:downloadRecording` is intentionally
- * left alone because it hits AWS directly, not Cloudflare.
- *
- * These tests assert the User-Agent header is sent on each of the six
- * affected call sites. They do NOT validate the exact UA string; that would
- * couple the test to a value the maintainers may rotate when Cloudflare
- * heuristics change. The contract is: "we send a non-empty browser-shaped
- * UA, not node/undici/empty".
- *
- * Six call sites covered:
- *   1. PlaudClient.request               (client.ts)
- *   2. listPlaudWorkspaces               (workspace.ts)
- *   3. mintPlaudWorkspaceToken           (workspace.ts)
- *   4. plaudSendCode                     (auth.ts)
- *   5. plaudVerifyOtp                    (auth.ts)
- *   6. fetchPlaudUserMeEmail             (auth.ts)
- */
+// Regression for issue #132: every Plaud-bound fetch sends User-Agent.
 
 import {
     afterAll,
@@ -37,8 +11,6 @@ import {
     vi,
 } from "vitest";
 
-// Mock env so importing Plaud modules (which transitively load env via
-// `proxy.ts`) doesn't trip the DATABASE_URL/ENCRYPTION_KEY runtime checks.
 const mockEnv = vi.hoisted(() => ({
     WEBSHARE_API_KEY: undefined as string | undefined,
 }));
@@ -90,12 +62,6 @@ function mockJson(body: unknown, init?: { ok?: boolean; status?: number }) {
     };
 }
 
-/**
- * Pull the User-Agent header off a mockFetch call. Headers can be supplied
- * as a Record<string, string> (every call site in src/lib/plaud/ uses this
- * shape today). Returns undefined if absent so test assertions can be
- * exact rather than loose.
- */
 function userAgentFromCall(call: unknown[]): string | undefined {
     const init = call[1] as RequestInit | undefined;
     const headers = (init?.headers ?? {}) as Record<string, string>;
@@ -103,18 +69,11 @@ function userAgentFromCall(call: unknown[]): string | undefined {
 }
 
 describe("issue #132: PLAUD_USER_AGENT constant", () => {
-    it("is a non-empty browser-shaped UA (not node/undici/empty)", () => {
+    it("is a non-empty browser-shaped UA", () => {
         expect(PLAUD_USER_AGENT).toBeTruthy();
         expect(PLAUD_USER_AGENT.length).toBeGreaterThan(20);
-        // Cloudflare WAF flags these as obvious automation. Negative
-        // assertions guard against an accidental rollback to the default
-        // undici UA or a copy-paste of "node-fetch" / similar.
         expect(PLAUD_USER_AGENT.toLowerCase()).not.toContain("undici");
         expect(PLAUD_USER_AGENT.toLowerCase()).not.toContain("node-fetch");
-        // Browser-shaped: starts with "Mozilla/5.0". This is the same
-        // convention every real browser uses and what Plaud's own web
-        // client sends; matching it keeps us indistinguishable from
-        // normal user traffic on a WAF level.
         expect(PLAUD_USER_AGENT).toMatch(/^Mozilla\/5\.0/);
     });
 });
@@ -198,12 +157,9 @@ describe("issue #132: every Plaud API fetch sends User-Agent", () => {
     });
 
     it("client.ts: PlaudClient.request sends UA on recording endpoints", async () => {
-        // Two-step flow. With no cached workspaceId, the client first calls
-        // /team-app/workspaces/list (covered above); we 500 that call to
-        // force the UT-fallback path so the second fetch is the recordings
-        // call itself — which is what this test asserts against.
-        // (Mint is never attempted on this path because the list step
-        // throws before resolveWorkspaceToken reaches mintPlaudWorkspaceToken.)
+        // With no cached workspaceId we 500 the workspace-list call so
+        // the client falls back to the UT and the second fetch is the
+        // recordings call itself.
         mockFetch
             .mockResolvedValueOnce(
                 mockJson({ status: 500 }, { ok: false, status: 500 }),
@@ -220,9 +176,6 @@ describe("issue #132: every Plaud API fetch sends User-Agent", () => {
         const client = new PlaudClient(UT, API_BASE);
         await client.getRecordings(0, 10);
 
-        // We assert UA on the second call (the one PlaudClient.request
-        // makes). The first call goes through workspace.ts which is
-        // covered above; here we want the client.ts contract.
         expect(mockFetch.mock.calls.length).toBeGreaterThanOrEqual(2);
         const recordingCall = mockFetch.mock.calls[1];
         expect(String(recordingCall[0])).toContain("/file/simple/web");

@@ -1,12 +1,5 @@
 "use client";
 
-/**
- * Shared building blocks for the command palette. Lives next to
- * `command-palette.tsx` so all the groups (Recordings/Actions/Theme)
- * and the footer can share the same Row/Kbd primitives without
- * either component re-exporting things from the other.
- */
-
 import { Command } from "cmdk";
 import {
     FileText,
@@ -33,14 +26,7 @@ interface TranscriptionData {
     language?: string;
 }
 
-/**
- * Strip transcript noise (timecodes, speaker labels, redundant
- * whitespace) into a single-line snippet usable as both a row
- * subtitle and a fuzzy-search target. Kept in sync with the helper
- * of the same name in `recording-list.tsx`; we duplicate rather
- * than import-cross because the list's helper is module-local
- * there and we don't want to widen its surface for one caller.
- */
+// Mirror of the helper in `recording-list.tsx`; kept local on both sides.
 export function transcriptSnippet(
     text: string | undefined,
     maxChars = 140,
@@ -56,11 +42,6 @@ export function transcriptSnippet(
     return `${stripped.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
-/**
- * Generic two-line row used by every cmdk item in the palette so
- * icon weight, alignment, and accessory placement stay consistent
- * across groups (recordings, actions, theme).
- */
 export function Row({
     icon,
     title,
@@ -94,12 +75,6 @@ export function Kbd({ children }: { children: ReactNode }) {
     return <kbd className="cmd-kbd">{children}</kbd>;
 }
 
-/**
- * Recordings group. Renders the recent list with state-aware leading
- * icons, transcript-snippet subtitles, and an inline Transcribe quick
- * action on rows without a transcript. The Transcribe button calls
- * onTranscribe (not onSelect) so it doesn't change the active row.
- */
 export function RecordingsGroup({
     recordings,
     transcriptions,
@@ -131,11 +106,6 @@ export function RecordingsGroup({
                 const inFlight = inFlightActions.get(r.id);
                 const isCurrent = currentRecording?.id === r.id;
 
-                // Leading icon doubles as a state indicator so the user
-                // can scan and immediately tell which recordings are
-                // audio-only, transcribed, or fully processed. In-flight
-                // wins because it's the most actionable state ("don't
-                // trigger this again").
                 let stateIcon: ReactNode;
                 let stateLabel: string;
                 if (inFlight) {
@@ -161,8 +131,6 @@ export function RecordingsGroup({
                     stateLabel = "Transcribed & summarized";
                 }
 
-                // Null/undefined check -- a 0 ms duration is real (treat
-                // as "0:00") and should still render.
                 const durationText =
                     r.duration != null ? formatDurationMs(r.duration) : null;
                 const timeText = formatDateTime(r.startTime, dateTimeFormat);
@@ -172,8 +140,6 @@ export function RecordingsGroup({
                       ? `${durationText} · ${timeText}`
                       : timeText;
 
-                // Search value bakes in transcript text so cmdk's fuzzy
-                // matcher finds recordings by content, not just filename.
                 const searchValue = [r.filename, r.id, snippet ?? ""].join(" ");
 
                 let accessory: ReactNode = null;
@@ -192,16 +158,7 @@ export function RecordingsGroup({
                         </span>
                     );
                 } else if (!r.hasTranscript) {
-                    // Inline quick action: kicks off transcription
-                    // without changing the current selection.
-                    // stopPropagation on both pointerdown and click is
-                    // intentional -- cmdk treats a pointerdown anywhere
-                    // inside an item as selection intent, which would
-                    // fire the row's "open recording" handler too.
-                    // We don't close the palette after click so the user
-                    // can queue several transcribes in succession; the
-                    // row's accessory flips to "Transcribing" the moment
-                    // markAction lands.
+                    // stopPropagation: cmdk treats inner pointerdown as selection.
                     accessory = (
                         <button
                             type="button"
@@ -228,7 +185,6 @@ export function RecordingsGroup({
                         </span>
                     );
                 }
-                // No fallback accessory -- "healthy rows are silent."
 
                 return (
                     <Command.Item
@@ -259,11 +215,6 @@ export function RecordingsGroup({
     );
 }
 
-/**
- * Static actions group (sync / upload / settings / shortcuts).
- * runAction wraps each handler so the palette closes before the
- * action runs.
- */
 export function ActionsGroup({
     onSync,
     onUpload,
@@ -311,10 +262,6 @@ export function ActionsGroup({
     );
 }
 
-/**
- * Theme picker group. Active theme is shown via an "Active" accessory
- * pill, matching the rest of the palette's selected-state convention.
- */
 export function ThemeGroup({
     currentTheme,
     onSetTheme,
@@ -363,11 +310,6 @@ export function ThemeGroup({
     );
 }
 
-/**
- * Footer keyboard hints. Only renders the transcribe hint when at
- * least one row in the palette would respond to it -- otherwise it's
- * noise.
- */
 export function PaletteFooter({
     showTranscribeHint,
 }: {

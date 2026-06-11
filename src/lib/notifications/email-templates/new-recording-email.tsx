@@ -48,8 +48,8 @@ export function NewRecordingEmail({
                     <Section style={emailStyles.header}>
                         <div style={{ textAlign: "center" }}>
                             <Img
-                                src="https://openplaud.com/logo.png"
-                                alt="OpenPlaud"
+                                src="https://riffado.com/logo.png"
+                                alt="Riffado"
                                 width="32"
                                 height="32"
                                 style={emailStyles.logo}

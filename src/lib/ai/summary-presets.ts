@@ -1,7 +1,3 @@
-/**
- * Summary generation prompt presets
- */
-
 export type SummaryPreset =
     | "general"
     | "meeting-notes"
@@ -23,7 +19,8 @@ export interface CustomSummaryPrompt {
 }
 
 export interface SummaryPromptConfiguration {
-    selectedPrompt: string; // preset ID or custom prompt ID
+    /** Preset id or custom prompt id. */
+    selectedPrompt: string;
     customPrompts: CustomSummaryPrompt[];
 }
 
@@ -102,16 +99,10 @@ Transcription:
     },
 };
 
-/**
- * Get the prompt for a given summary preset
- */
 export function getSummaryPromptForPreset(preset: SummaryPreset): string {
     return SUMMARY_PRESETS[preset].prompt;
 }
 
-/**
- * Get default summary prompt config
- */
 export function getDefaultSummaryPromptConfig(): SummaryPromptConfiguration {
     return {
         selectedPrompt: "general",
@@ -119,9 +110,6 @@ export function getDefaultSummaryPromptConfig(): SummaryPromptConfiguration {
     };
 }
 
-/**
- * Get all available summary prompts (presets + custom)
- */
 export function getAllSummaryPrompts(
     config: SummaryPromptConfiguration,
 ): Array<{
@@ -150,11 +138,6 @@ export function getAllSummaryPrompts(
     return [...presets, ...customs];
 }
 
-/**
- * Supported AI output languages for summaries and AI-generated titles.
- * `auto` means "match the transcript language" — this preserves the
- * historical (pre-#57) behavior where the model decides.
- */
 export interface AiOutputLanguageOption {
     code: string;
     label: string;
@@ -194,23 +177,13 @@ export const AI_OUTPUT_LANGUAGES: readonly AiOutputLanguageOption[] = [
 
 const LANGUAGE_CODES = new Set(AI_OUTPUT_LANGUAGES.map((l) => l.code));
 
-/**
- * Validate a language code against the allowed set.
- * Returns the code if valid, otherwise null.
- */
+/** Validate against `AI_OUTPUT_LANGUAGES`; returns the code or null. */
 export function normalizeAiOutputLanguage(value: unknown): string | null {
     if (typeof value !== "string") return null;
     return LANGUAGE_CODES.has(value) ? value : null;
 }
 
-/**
- * Build a directive string instructing the model to write output in a
- * specific language. Returns null for `auto`, missing, or unknown codes
- * — callers should skip injection in those cases (preserves prior behavior).
- *
- * Note: callers parsing JSON responses must keep their JSON keys in English;
- * this directive only governs the *values*.
- */
+/** Directive sentence for the model; null for `auto`/missing/unknown. */
 export function getAiOutputLanguageDirective(
     code: string | null | undefined,
 ): string | null {
@@ -220,9 +193,6 @@ export function getAiOutputLanguageDirective(
     return `IMPORTANT: Write all natural-language output in ${match.label}, regardless of the transcription's language. Keep any JSON keys in English exactly as specified.`;
 }
 
-/**
- * Get summary prompt by ID (preset or custom)
- */
 export function getSummaryPromptById(
     id: string,
     config: SummaryPromptConfiguration,

@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature or improvement for OpenPlaud
+description: Suggest a new feature or improvement for Riffado
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
@@ -85,7 +85,7 @@ body:
       options:
         - label: I have searched existing issues and feature requests to avoid duplicates
           required: true
-        - label: This feature aligns with OpenPlaud's goals (self-hosted, privacy-focused)
+        - label: This feature aligns with Riffado's goals (self-hosted, privacy-focused)
           required: true
         - label: I am willing to contribute to implementing this feature
           required: false

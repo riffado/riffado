@@ -1,7 +1,3 @@
-/**
- * Title generation prompt presets for different use cases
- */
-
 import type {
     CustomPrompt,
     PromptConfiguration,
@@ -239,16 +235,10 @@ Generate the title now:`,
     },
 };
 
-/**
- * Get the prompt for a given preset
- */
 export function getPromptForPreset(preset: PromptPreset): string {
     return PROMPT_PRESETS[preset].prompt;
 }
 
-/**
- * Get default prompt config (default preset)
- */
 export function getDefaultPromptConfig(): PromptConfiguration {
     return {
         selectedPrompt: "default",
@@ -256,9 +246,6 @@ export function getDefaultPromptConfig(): PromptConfiguration {
     };
 }
 
-/**
- * Get all available prompts (presets + custom)
- */
 export function getAllPrompts(config: PromptConfiguration): Array<{
     id: string;
     name: string;
@@ -285,9 +272,6 @@ export function getAllPrompts(config: PromptConfiguration): Array<{
     return [...presets, ...customs];
 }
 
-/**
- * Get prompt by ID (preset or custom)
- */
 export function getPromptById(
     id: string,
     config: PromptConfiguration,
