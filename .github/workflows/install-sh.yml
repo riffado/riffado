@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      PINNED_VERSION: v0.3.0
+      PINNED_VERSION: v0.5.4
     steps:
       - uses: actions/checkout@v4
 
