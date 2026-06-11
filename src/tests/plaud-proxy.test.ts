@@ -15,21 +15,6 @@ const mockEnv = vi.hoisted(() => ({
 
 vi.mock("@/lib/env", () => ({ env: mockEnv }));
 
-const mockProxyAgent = vi.hoisted(() => ({
-    ctor: vi.fn() as Mock,
-}));
-
-vi.mock("undici", () => ({
-    ProxyAgent: class {
-        constructor(opts: unknown) {
-            mockProxyAgent.ctor(opts);
-        }
-        close(): Promise<void> {
-            return Promise.resolve();
-        }
-    },
-}));
-
 import { _resetPlaudFetchForTest, plaudFetch } from "@/lib/plaud/fetch";
 import {
     _resetPlaudProxyCacheForTest,
@@ -84,7 +69,6 @@ const otherProxy = {
 beforeEach(() => {
     mockFetch = vi.fn();
     global.fetch = mockFetch as typeof global.fetch;
-    mockProxyAgent.ctor.mockReset();
     mockEnv.WEBSHARE_API_KEY = undefined;
     mockEnv.PLAUD_PROXY_SCOPE = "all";
     _resetPlaudProxyCacheForTest();
@@ -122,20 +106,28 @@ describe("shouldProxyPlaud", () => {
 });
 
 describe("plaudFetch without a proxy configured", () => {
-    it("calls global fetch directly with no dispatcher", async () => {
+    it("calls global fetch directly without a proxy", async () => {
         mockFetch.mockResolvedValueOnce(okResponse());
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(200);
         expect(mockFetch).toHaveBeenCalledTimes(1);
-        expect(mockProxyAgent.ctor).not.toHaveBeenCalled();
         expect(isPlaudProxyConfigured()).toBe(false);
+
+        const opts = mockFetch.mock.calls[0][1] as
+            | { proxy?: unknown }
+            | undefined;
+        expect(opts?.proxy).toBeUndefined();
     });
 
     it("does not proxy non-Plaud URLs", async () => {
         mockFetch.mockResolvedValueOnce(okResponse());
         await plaudFetch("https://example.com/x");
-        expect(mockProxyAgent.ctor).not.toHaveBeenCalled();
+
+        const opts = mockFetch.mock.calls[0][1] as
+            | { proxy?: unknown }
+            | undefined;
+        expect(opts?.proxy).toBeUndefined();
     });
 });
 
@@ -144,7 +136,7 @@ describe("plaudFetch with a proxy configured", () => {
         mockEnv.WEBSHARE_API_KEY = "test-key";
     });
 
-    it("fetches the Webshare list and attaches a ProxyAgent dispatcher to the Plaud call", async () => {
+    it("fetches the Webshare list and passes the proxy URL to the Plaud call", async () => {
         mockFetch
             .mockResolvedValueOnce(webshareList([sampleProxy]))
             .mockResolvedValueOnce(okResponse());
@@ -158,12 +150,11 @@ describe("plaudFetch with a proxy configured", () => {
 
         const [plaudUrl, opts] = mockFetch.mock.calls[1];
         expect(String(plaudUrl)).toBe(PLAUD_API_URL);
-        expect((opts as { dispatcher?: unknown }).dispatcher).toBeDefined();
 
-        expect(mockProxyAgent.ctor).toHaveBeenCalledTimes(1);
-        expect(mockProxyAgent.ctor).toHaveBeenCalledWith({
-            uri: `http://${sampleProxy.username}:${sampleProxy.password}@${sampleProxy.proxy_address}:${sampleProxy.port}`,
-        });
+        const proxyUrl = (opts as { proxy?: string }).proxy;
+        expect(proxyUrl).toBe(
+            `http://${sampleProxy.username}:${sampleProxy.password}@${sampleProxy.proxy_address}:${sampleProxy.port}`,
+        );
 
         const sentHeaders = (opts as { headers: Headers }).headers;
         expect(sentHeaders.get("user-agent")).toMatch(/Chrome/);
@@ -179,7 +170,13 @@ describe("plaudFetch with a proxy configured", () => {
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(403);
         expect(mockFetch).toHaveBeenCalledTimes(3);
-        expect(mockProxyAgent.ctor).toHaveBeenCalledTimes(2);
+
+        // Verify two different proxies were used
+        const proxy1 = (mockFetch.mock.calls[1][1] as { proxy?: string }).proxy;
+        const proxy2 = (mockFetch.mock.calls[2][1] as { proxy?: string }).proxy;
+        expect(proxy1).toBeDefined();
+        expect(proxy2).toBeDefined();
+        expect(proxy1).not.toBe(proxy2);
     });
 
     it("returns a readable body when rotation is exhausted (no second proxy)", async () => {
@@ -201,7 +198,12 @@ describe("plaudFetch with a proxy configured", () => {
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(200);
-        expect(mockProxyAgent.ctor).toHaveBeenCalledTimes(2);
+
+        const proxy1 = (mockFetch.mock.calls[1][1] as { proxy?: string }).proxy;
+        const proxy2 = (mockFetch.mock.calls[2][1] as { proxy?: string }).proxy;
+        expect(proxy1).toBeDefined();
+        expect(proxy2).toBeDefined();
+        expect(proxy1).not.toBe(proxy2);
     });
 
     it("falls through to direct fetch when the proxy list is empty", async () => {
@@ -211,13 +213,21 @@ describe("plaudFetch with a proxy configured", () => {
 
         const res = await plaudFetch(PLAUD_API_URL);
         expect(res.status).toBe(200);
-        expect(mockProxyAgent.ctor).not.toHaveBeenCalled();
+
+        const opts = mockFetch.mock.calls[1][1] as
+            | { proxy?: unknown }
+            | undefined;
+        expect(opts?.proxy).toBeUndefined();
     });
 
     it("does not proxy non-Plaud URLs even when configured", async () => {
         mockFetch.mockResolvedValueOnce(okResponse());
         await plaudFetch("https://s3.amazonaws.com/some-bucket/file");
         expect(mockFetch).toHaveBeenCalledTimes(1);
-        expect(mockProxyAgent.ctor).not.toHaveBeenCalled();
+
+        const opts = mockFetch.mock.calls[0][1] as
+            | { proxy?: unknown }
+            | undefined;
+        expect(opts?.proxy).toBeUndefined();
     });
 });

@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
@@ -79,7 +79,9 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
     }
 
     // Conditional write: predicates on UPDATE so a concurrent DELETE
-    // doesn't race; matches zero rows on tombstoned recordings.
+    // doesn't race; matches zero rows on tombstoned recordings. The
+    // `waveformPeaks is null` clause makes the write idempotent under
+    // racing POSTs -- first writer wins, the rest no-op.
     const result = await db
         .update(recordings)
         .set({ waveformPeaks: normalized, updatedAt: new Date() })
@@ -88,7 +90,7 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
                 eq(recordings.id, id),
                 eq(recordings.userId, session.user.id),
                 isNull(recordings.deletedAt),
-                sql`${recordings.waveformPeaks} is null`,
+                isNull(recordings.waveformPeaks),
             ),
         );
 

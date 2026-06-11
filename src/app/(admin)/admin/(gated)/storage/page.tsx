@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { storageHistogram, topStorageUsers } from "@/lib/admin/queries";
+import { storageHistogram, topStorageUsers } from "@/db/queries/admin";
 import { formatBytes, formatNumber } from "../_components/metrics";
 
 export const dynamic = "force-dynamic";

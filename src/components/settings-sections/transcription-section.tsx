@@ -15,6 +15,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 
+// ISO-639-1 codes from Whisper's supported-languages list. Sticking to
+// languages with non-trivial user populations to keep the dropdown
+// scannable. Auto-detect already covers everything Whisper handles —
+// these entries just let users force a language for noisy recordings
+// or when auto-detect mis-routes (Slavic / Romance neighbours).
 const languageOptions = [
     { label: "Auto-detect", value: null },
     { label: "English", value: "en" },
@@ -23,10 +28,28 @@ const languageOptions = [
     { label: "German", value: "de" },
     { label: "Italian", value: "it" },
     { label: "Portuguese", value: "pt" },
+    { label: "Dutch", value: "nl" },
+    { label: "Swedish", value: "sv" },
+    { label: "Danish", value: "da" },
+    { label: "Norwegian", value: "no" },
+    { label: "Finnish", value: "fi" },
+    { label: "Polish", value: "pl" },
+    { label: "Czech", value: "cs" },
+    { label: "Ukrainian", value: "uk" },
+    { label: "Russian", value: "ru" },
+    { label: "Romanian", value: "ro" },
+    { label: "Hungarian", value: "hu" },
+    { label: "Greek", value: "el" },
+    { label: "Turkish", value: "tr" },
+    { label: "Arabic", value: "ar" },
+    { label: "Hebrew", value: "he" },
+    { label: "Hindi", value: "hi" },
+    { label: "Indonesian", value: "id" },
+    { label: "Vietnamese", value: "vi" },
+    { label: "Thai", value: "th" },
     { label: "Chinese", value: "zh" },
     { label: "Japanese", value: "ja" },
     { label: "Korean", value: "ko" },
-    { label: "Russian", value: "ru" },
 ];
 
 const qualityOptions = [

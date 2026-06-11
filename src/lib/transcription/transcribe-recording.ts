@@ -16,6 +16,7 @@ import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
+import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 import {
     buildTranscriptionParams,
     getResponseFormat,
@@ -205,13 +206,38 @@ export async function transcribeRecording(
             detectedLanguage = result.detectedLanguage;
         } else {
             const responseFormat = getResponseFormat(model);
+
+            // OpenAI's /v1/audio/transcriptions endpoint has a hard 25 MiB
+            // per-request limit (https://platform.openai.com/docs/guides/speech-to-text).
+            // For meeting-length recordings that limit is the common case,
+            // not the edge case — fall back to a mono Opus re-encode so the
+            // 3 h+ uploads users actually have don't get rejected with a 413.
+            const compressed = await maybeCompressForWhisper(
+                audioBuffer,
+                contentType,
+            );
+            const fileToSend = compressed.compressed
+                ? buildAudioFile(
+                      compressed.buffer,
+                      recording.storagePath,
+                      decryptedFilename,
+                  ).file
+                : audioFile;
+
+            // Whisper-1 transcribes at roughly 0.1-0.3x realtime on
+            // OpenAI's infrastructure, so a 3 h compressed recording can
+            // legitimately keep the request open for 20-40 minutes. The
+            // SDK default (10 min) times out long before that. Override
+            // per-request so unrelated OpenAI calls (e.g. title generation)
+            // keep the shorter default.
             const transcription = await openai.audio.transcriptions.create(
                 buildTranscriptionParams({
-                    file: audioFile,
+                    file: fileToSend,
                     model,
                     responseFormat,
                     language: defaultLanguage,
                 }),
+                { timeout: whisperRequestTimeoutMs() },
             );
             const parsed = parseTranscriptionResponse(
                 transcription,
@@ -407,4 +433,15 @@ export async function transcribeRecording(
             errorCode: "TRANSCRIPTION_FAILED",
         };
     }
+}
+
+const DEFAULT_WHISPER_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
+
+function whisperRequestTimeoutMs(): number {
+    const raw = process.env.WHISPER_REQUEST_TIMEOUT_MS;
+    if (!raw) return DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
 }

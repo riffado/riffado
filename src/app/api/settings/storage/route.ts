@@ -17,27 +17,28 @@ export const GET = apiHandler(async (request: Request) => {
         isNull(recordings.deletedAt),
     );
 
-    const [totals] = await db
-        .select({
-            usedBytes: sql<number>`coalesce(sum(${recordings.filesize}), 0)::bigint`,
-            recordingCount: sql<number>`count(*)::int`,
-            totalDurationMs: sql<number>`coalesce(sum(${recordings.duration}), 0)::bigint`,
-        })
-        .from(recordings)
-        .where(activeRecording);
-
-    const largestRows = await db
-        .select({
-            id: recordings.id,
-            filename: recordings.filename,
-            filesize: recordings.filesize,
-            duration: recordings.duration,
-            startTime: recordings.startTime,
-        })
-        .from(recordings)
-        .where(activeRecording)
-        .orderBy(desc(recordings.filesize))
-        .limit(5);
+    const [[totals], largestRows] = await Promise.all([
+        db
+            .select({
+                usedBytes: sql<number>`coalesce(sum(${recordings.filesize}), 0)::bigint`,
+                recordingCount: sql<number>`count(*)::int`,
+                totalDurationMs: sql<number>`coalesce(sum(${recordings.duration}), 0)::bigint`,
+            })
+            .from(recordings)
+            .where(activeRecording),
+        db
+            .select({
+                id: recordings.id,
+                filename: recordings.filename,
+                filesize: recordings.filesize,
+                duration: recordings.duration,
+                startTime: recordings.startTime,
+            })
+            .from(recordings)
+            .where(activeRecording)
+            .orderBy(desc(recordings.filesize))
+            .limit(5),
+    ]);
     const largest = largestRows.map((r) => ({
         ...r,
         filename: decryptText(r.filename),

@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
     topServerTranscriptionUsers,
     transcriptionByProvider,
-} from "@/lib/admin/queries";
+} from "@/db/queries/admin";
 import { formatNumber } from "../_components/metrics";
 
 export const dynamic = "force-dynamic";
