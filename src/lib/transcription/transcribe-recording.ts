@@ -17,12 +17,12 @@ import { createUserStorageProvider } from "@/lib/storage/factory";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
-import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import {
     buildTranscriptionParams,
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
+import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -242,16 +242,15 @@ export async function transcribeRecording(
                 // SDK default (10 min) times out long before that. Override
                 // per-request so unrelated OpenAI calls (e.g. title generation)
                 // keep the shorter default.
-                const transcription =
-                    await openai.audio.transcriptions.create(
-                        buildTranscriptionParams({
-                            file: fileToSend,
-                            model,
-                            responseFormat,
-                            language: defaultLanguage,
-                        }),
-                        { timeout: whisperRequestTimeoutMs() },
-                    );
+                const transcription = await openai.audio.transcriptions.create(
+                    buildTranscriptionParams({
+                        file: fileToSend,
+                        model,
+                        responseFormat,
+                        language: defaultLanguage,
+                    }),
+                    { timeout: whisperRequestTimeoutMs() },
+                );
                 const parsed = parseTranscriptionResponse(
                     transcription,
                     responseFormat,
