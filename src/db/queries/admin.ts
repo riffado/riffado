@@ -203,6 +203,7 @@ export async function fleetOverview() {
             .where(
                 and(
                     eq(transcriptions.transcriptionType, "server"),
+                    eq(transcriptions.source, "riffado"),
                     gte(transcriptions.createdAt, d30),
                 ),
             )
@@ -213,6 +214,7 @@ export async function fleetOverview() {
             .where(
                 and(
                     eq(transcriptions.transcriptionType, "server"),
+                    eq(transcriptions.source, "riffado"),
                     gte(transcriptions.createdAt, d7),
                 ),
             )
@@ -223,6 +225,7 @@ export async function fleetOverview() {
             .where(
                 and(
                     eq(transcriptions.transcriptionType, "server"),
+                    eq(transcriptions.source, "riffado"),
                     gte(transcriptions.createdAt, d14),
                     lt(transcriptions.createdAt, d7),
                 ),
@@ -238,6 +241,7 @@ export async function fleetOverview() {
             .where(
                 and(
                     eq(transcriptions.transcriptionType, "server"),
+                    eq(transcriptions.source, "riffado"),
                     gte(transcriptions.createdAt, d7),
                 ),
             )
@@ -252,6 +256,7 @@ export async function fleetOverview() {
             .where(
                 and(
                     eq(transcriptions.transcriptionType, "server"),
+                    eq(transcriptions.source, "riffado"),
                     gte(transcriptions.createdAt, d14),
                     lt(transcriptions.createdAt, d7),
                 ),

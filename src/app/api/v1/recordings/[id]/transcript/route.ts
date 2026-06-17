@@ -8,7 +8,11 @@ import {
     enforceV1AuthenticatedRateLimit,
     enforceV1IpRateLimit,
 } from "@/lib/v1/rate-limit";
-import { serializeTranscript } from "@/lib/v1/serialize";
+import {
+    getPreferredTranscriptSource,
+    resolvePrimaryTranscript,
+    serializeTranscript,
+} from "@/lib/v1/serialize";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -46,7 +50,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    const [transcription] = await db
+    const transcriptRows = await db
         .select()
         .from(transcriptions)
         .where(
@@ -54,14 +58,18 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                 eq(transcriptions.recordingId, recording.id),
                 eq(transcriptions.userId, authn.user.id),
             ),
-        )
-        .limit(1);
+        );
 
-    if (!transcription) {
+    const primary = resolvePrimaryTranscript(
+        transcriptRows,
+        await getPreferredTranscriptSource(authn.user.id),
+    );
+
+    if (!primary) {
         throw new AppError(ErrorCode.NOT_FOUND, "Transcript not found", 404, {
             id,
         });
     }
 
-    return NextResponse.json(serializeTranscript(transcription));
+    return NextResponse.json(serializeTranscript(primary));
 });

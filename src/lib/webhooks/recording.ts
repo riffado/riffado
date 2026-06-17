@@ -17,7 +17,10 @@ type WebhookTranscript = Omit<V1Transcript, "text"> & {
     length: number;
 };
 
-type WebhookRecordingDetail = Omit<V1RecordingDetail, "transcript"> & {
+type WebhookRecordingDetail = Omit<
+    V1RecordingDetail,
+    "transcript" | "transcripts"
+> & {
     api_url: string;
     links: V1RecordingDetail["links"];
     transcript: WebhookTranscript | null;
@@ -35,6 +38,7 @@ function serializeWebhookTranscript(
     const text = transcript.text;
 
     return {
+        source: transcript.source,
         preview: text.slice(0, TRANSCRIPT_PREVIEW_CHARS),
         truncated: text.length > TRANSCRIPT_PREVIEW_CHARS,
         length: text.length,
@@ -55,12 +59,17 @@ function serializeWebhookRecording(
         audio: absoluteApiUrl(recording.links.audio),
     };
 
+    // `transcript` is replaced with a truncated preview below, and the full
+    // `transcripts[]` array is dropped entirely — webhooks never carry full
+    // transcript text. Both are destructured out of the spread base.
+    const { transcript, transcripts, ...base } = recording;
     const payload: WebhookRecordingDetail = {
-        ...recording,
+        ...base,
         api_url: links.self,
         links,
-        transcript: serializeWebhookTranscript(recording.transcript),
+        transcript: serializeWebhookTranscript(transcript),
     };
+    void transcripts;
 
     if (deletedAt) {
         payload.deleted_at = deletedAt.toISOString();
@@ -101,7 +110,7 @@ async function getDeletedWebhookRecordingDetailForUser(
     if (!row?.recording.deletedAt) return null;
 
     return serializeWebhookRecording(
-        serializeRecordingDetail(row.recording, row.device, null, null),
+        serializeRecordingDetail(row.recording, row.device, [], null),
         row.recording.deletedAt,
     );
 }
