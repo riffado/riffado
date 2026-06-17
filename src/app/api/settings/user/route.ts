@@ -17,6 +17,8 @@ const ENUM_FIELDS = {
     recordingListSortOrder: ["newest", "oldest", "name"],
     transcriptionQuality: ["fast", "balanced", "accurate"],
     defaultExportFormat: ["json", "csv", "zip"],
+    transcriptMode: ["plaud_only", "keep_both"],
+    preferredTranscriptSource: ["plaud", "riffado"],
 } as const satisfies Record<string, readonly string[]>;
 
 const ENUM_FIELD_SETS: Record<string, ReadonlySet<string>> = Object.fromEntries(
@@ -56,6 +58,9 @@ const DEFAULT_SETTINGS = {
     autoGenerateTitle: true,
     syncTitleToPlaud: false,
     aiOutputLanguage: null,
+    importPlaudContent: false,
+    transcriptMode: "plaud_only" as const,
+    preferredTranscriptSource: "plaud" as const,
 } as const;
 
 const SETTINGS_FIELDS = [
@@ -91,6 +96,9 @@ const SETTINGS_FIELDS = [
     "autoGenerateTitle",
     "syncTitleToPlaud",
     "aiOutputLanguage",
+    "importPlaudContent",
+    "transcriptMode",
+    "preferredTranscriptSource",
 ] as const;
 
 function extractSettings(settings: typeof userSettings.$inferSelect) {
