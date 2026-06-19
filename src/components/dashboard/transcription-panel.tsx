@@ -49,6 +49,7 @@ export function TranscriptionPanel({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
+        customPrompts,
         handleSummarize,
         handleDeleteSummary,
     } = useTranscriptionSummary({
@@ -168,6 +169,14 @@ export function TranscriptionPanel({
                                                     </SelectItem>
                                                 ),
                                             )}
+                                            {customPrompts.map((prompt) => (
+                                                <SelectItem
+                                                    key={prompt.id}
+                                                    value={prompt.id}
+                                                >
+                                                    {prompt.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 )}

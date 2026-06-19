@@ -49,6 +49,7 @@ export function TranscriptionSection({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
+        customPrompts,
         handleSummarize,
         handleDeleteSummary,
         refetchSummary,
@@ -201,6 +202,14 @@ export function TranscriptionSection({
                                                     </SelectItem>
                                                 ),
                                             )}
+                                            {customPrompts.map((prompt) => (
+                                                <SelectItem
+                                                    key={prompt.id}
+                                                    value={prompt.id}
+                                                >
+                                                    {prompt.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 )}

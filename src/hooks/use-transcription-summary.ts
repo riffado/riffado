@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import type {
+    CustomSummaryPrompt,
+    SummaryPromptConfiguration,
+} from "@/lib/ai/summary-presets";
 
 export interface SummaryData {
     summary: string | null;
@@ -41,6 +45,43 @@ export function useTranscriptionSummary({
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPreset] = useState("general");
+    const [customPrompts, setCustomPrompts] = useState<CustomSummaryPrompt[]>(
+        [],
+    );
+
+    // Once the user picks a preset, the mount fetch below must not clobber
+    // their choice when it resolves (slow network → the user already
+    // selected before the saved default arrived).
+    const userPickedPresetRef = useRef(false);
+    const selectSummaryPreset = useCallback((preset: string) => {
+        userPickedPresetRef.current = true;
+        setSummaryPreset(preset);
+    }, []);
+
+    // Pull the saved default preset + customs from /api/settings/user
+    // once on mount so the per-recording dropdown reflects the user's
+    // configured default (instead of hard-coding "general") and can
+    // list custom prompts alongside the presets.
+    useEffect(() => {
+        const controller = new AbortController();
+        fetch("/api/settings/user", { signal: controller.signal })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!data) return;
+                const config =
+                    data.summaryPrompt as SummaryPromptConfiguration | null;
+                // Don't override a selection the user already made while
+                // this request was in flight.
+                if (config?.selectedPrompt && !userPickedPresetRef.current) {
+                    setSummaryPreset(config.selectedPrompt);
+                }
+                if (Array.isArray(config?.customPrompts)) {
+                    setCustomPrompts(config.customPrompts);
+                }
+            })
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
 
     // Re-fetch trigger separate from the URL/id key so callers can
     // bump it imperatively (e.g. right after a re-transcribe finishes,
@@ -149,7 +190,8 @@ export function useTranscriptionSummary({
         summaryExpanded,
         setSummaryExpanded,
         summaryPreset,
-        setSummaryPreset,
+        setSummaryPreset: selectSummaryPreset,
+        customPrompts,
         handleSummarize,
         handleDeleteSummary,
         refetchSummary,
