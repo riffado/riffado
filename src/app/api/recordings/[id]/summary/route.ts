@@ -16,6 +16,11 @@ import {
     getSummaryPromptById,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
+import {
+    buildSummarySystemMessage,
+    buildSummaryUserPrompt,
+} from "@/lib/ai/summary-prompt";
+import { parseSummaryResponse } from "@/lib/ai/summary-response";
 import { requireApiSession } from "@/lib/auth-server";
 import { DEMO_SUMMARIES, isDemoRecordingId } from "@/lib/demo/fixtures";
 import { decrypt } from "@/lib/encryption";
@@ -90,7 +95,12 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
             ) ?? getDefaultSummaryPromptConfig();
         promptConfig = {
             selectedPrompt: config.selectedPrompt || "general",
-            customPrompts: config.customPrompts || [],
+            // Guard against a malformed stored shape (e.g. a non-array
+            // written by a non-UI client): getSummaryPromptById calls
+            // `.find()` on this, which would otherwise throw a 500.
+            customPrompts: Array.isArray(config.customPrompts)
+                ? config.customPrompts
+                : [],
         };
     }
 
@@ -182,24 +192,24 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
 
     // Apply AI output language directive (if configured) via the system
     // message rather than the user prompt. This separates concerns: the
-    // user prompt carries the JSON-shape contract (English keys), the
-    // system message carries the output-language preference. Smaller
+    // system message carries the JSON-shape contract and the output-
+    // language preference; the user prompt carries only intent. Smaller
     // models tend to honor this split more reliably than a combined
     // prompt where language and JSON-shape rules compete.
     const languageDirective = getAiOutputLanguageDirective(
         userSettingsRow?.aiOutputLanguage ?? null,
     );
 
-    const prompt = promptTemplate.replace(
-        "{transcription}",
+    // The system message owns the output-shape contract (see
+    // `buildSummarySystemMessage`), so a custom prompt (issue #199) only
+    // needs to express intent — it doesn't have to restate the JSON
+    // schema, and the transcript is guaranteed to be included even if the
+    // prompt omits the `{transcription}` placeholder.
+    const prompt = buildSummaryUserPrompt(
+        promptTemplate,
         truncatedTranscription,
     );
-
-    const baseSystem =
-        "You are a helpful assistant that summarizes audio transcriptions. Always respond with valid JSON only, no markdown formatting or code fences.";
-    const systemContent = languageDirective
-        ? `${baseSystem} ${languageDirective}`
-        : baseSystem;
+    const systemContent = buildSummarySystemMessage(languageDirective);
 
     const response = await openai.chat.completions.create(
         buildChatCompletionParams({
@@ -221,27 +231,13 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
 
     const rawContent = response.choices[0]?.message?.content?.trim() || "";
 
-    // Parse the JSON response
-    let summary = "";
-    let keyPoints: string[] = [];
-    let actionItems: string[] = [];
-
-    try {
-        // Strip markdown code fences if present
-        const cleanContent = rawContent
-            .replace(/^```(?:json)?\s*/i, "")
-            .replace(/\s*```$/i, "")
-            .trim();
-        const parsed = JSON.parse(cleanContent);
-        summary = parsed.summary || "";
-        keyPoints = Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [];
-        actionItems = Array.isArray(parsed.actionItems)
-            ? parsed.actionItems
-            : [];
-    } catch {
-        // Fallback: treat entire response as summary text
-        summary = rawContent;
-    }
+    // Parse the model output into the stored shape. Hardened for custom
+    // prompts (issue #199): a user-authored prompt may emit prose or a
+    // JSON shape whose `summary` isn't a string. `parseSummaryResponse`
+    // guarantees `summary` is always a string so it never reaches
+    // `encryptText` (which throws on non-string input) as an object.
+    const { summary, keyPoints, actionItems } =
+        parseSummaryResponse(rawContent);
 
     // Atomic tombstone re-check + upsert.
     //
