@@ -111,11 +111,24 @@ export async function enforceAuthRateLimit(
     const rule = RULES[path];
     if (!rule) return null;
 
-    const ipResult = await consumeRateLimitBucket(
-        `auth:ip:${path}:${getClientIp(request)}`,
-        { limit: rule.ipLimit, windowMs: WINDOW_MS },
-    );
-    if (!ipResult.allowed) return tooManyRequests(ipResult);
+    // Only enforce the per-IP cap when we can actually distinguish clients.
+    // `getClientIp` returns "unknown" when proxy-header trust is off
+    // (`RATE_LIMIT_TRUST_PROXY_HEADERS` unset, the self-host default) or the
+    // header is absent. Bucketing every client under one `unknown` key would
+    // turn a low auth limit into a trivial cross-user lockout: one actor
+    // burns the shared bucket and locks everyone out. Failing open on the IP
+    // dimension here is the safer default -- the per-email cap below is
+    // IP-independent and still guards the SMTP-burn vector, and operators who
+    // want per-IP auth throttling set `RATE_LIMIT_TRUST_PROXY_HEADERS=true`
+    // (already required under `IS_HOSTED`).
+    const clientIp = getClientIp(request);
+    if (clientIp !== "unknown") {
+        const ipResult = await consumeRateLimitBucket(
+            `auth:ip:${path}:${clientIp}`,
+            { limit: rule.ipLimit, windowMs: WINDOW_MS },
+        );
+        if (!ipResult.allowed) return tooManyRequests(ipResult);
+    }
 
     if (rule.emailLimit !== undefined) {
         const email = await readEmail(request);
