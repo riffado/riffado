@@ -1,11 +1,22 @@
-import { env } from "./lib/env";
-
 type WebhookWorkerModule = {
     startWebhookWorker: () => void;
 };
 
+type EnvModule = {
+    env: {
+        IS_HOSTED: boolean;
+        RATE_LIMIT_TRUST_PROXY_HEADERS?: boolean;
+    };
+};
+
 export async function register() {
     if (process.env.NEXT_RUNTIME !== "nodejs") return;
+
+    // Deferred require (matches the worker import below): a top-level
+    // `import { env }` would run full env validation at module load in every
+    // runtime -- including edge, where this hook must no-op -- before the
+    // guard above. Loading it here keeps validation inside the nodejs branch.
+    const { env } = require("./lib/env") as EnvModule;
 
     // Per-IP auth rate limiting needs a trustworthy client IP. When proxy
     // headers aren't trusted, `getClientIp` returns "unknown" and the per-IP
