@@ -145,71 +145,68 @@ function WebhookRow({
     onShowDeliveries: (webhook: WebhookEndpoint) => void;
 }) {
     return (
-        <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="truncate font-medium">
-                            {webhook.description || webhook.url}
-                        </h3>
-                        <span
-                            className={`rounded border px-2 py-0.5 text-xs ${
-                                webhook.enabled
-                                    ? "text-primary"
-                                    : "text-muted-foreground"
-                            }`}
-                        >
-                            {webhook.enabled ? "Enabled" : "Disabled"}
+        <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+            <div className="min-w-0 space-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <h3 className="min-w-0 truncate font-medium">
+                        {webhook.description || webhook.url}
+                    </h3>
+                    <span
+                        className={`rounded border px-2 py-0.5 text-xs ${
+                            webhook.enabled
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                        }`}
+                    >
+                        {webhook.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    {webhook.lastDeliveryStatus && (
+                        <span className="rounded border px-2 py-0.5 text-xs">
+                            {webhook.lastDeliveryStatus}
                         </span>
-                        {webhook.lastDeliveryStatus && (
-                            <span className="rounded border px-2 py-0.5 text-xs">
-                                {webhook.lastDeliveryStatus}
-                            </span>
-                        )}
-                    </div>
-                    <p className="truncate font-mono text-xs text-muted-foreground">
-                        {webhook.url}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                        {webhook.events.map((event) => (
-                            <span
-                                key={event}
-                                className="rounded bg-muted px-2 py-0.5 text-xs"
-                            >
-                                {event}
-                            </span>
-                        ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Last delivery:{" "}
-                        {formatWebhookDate(webhook.lastDeliveryAt)}
-                    </p>
+                    )}
                 </div>
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onShowDeliveries(webhook)}
-                    >
-                        Deliveries
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => onEdit(webhook)}
-                        aria-label="Edit webhook"
-                    >
-                        <Pencil className="size-4" />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => onDelete(webhook.id)}
-                        aria-label="Delete webhook"
-                    >
-                        <Trash2 className="size-4 text-destructive" />
-                    </Button>
+                <p className="break-all font-mono text-xs text-muted-foreground">
+                    {webhook.url}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                    {webhook.events.map((event) => (
+                        <span
+                            key={event}
+                            className="rounded bg-muted px-2 py-0.5 text-xs"
+                        >
+                            {event}
+                        </span>
+                    ))}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                    Last delivery: {formatWebhookDate(webhook.lastDeliveryAt)}
+                </p>
+            </div>
+            <div className="flex gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onShowDeliveries(webhook)}
+                >
+                    Deliveries
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => onEdit(webhook)}
+                    aria-label="Edit webhook"
+                >
+                    <Pencil className="size-4" />
+                </Button>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => onDelete(webhook.id)}
+                    aria-label="Delete webhook"
+                >
+                    <Trash2 className="size-4 text-destructive" />
+                </Button>
             </div>
         </div>
     );

@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, type ReactNode, use, useRef, useState } from "react";
+import {
+    createContext,
+    type ReactNode,
+    use,
+    useCallback,
+    useRef,
+    useState,
+} from "react";
 import { toast } from "sonner";
 import {
     AlertDialog,
@@ -87,7 +94,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     // without having to read state (which is one render behind).
     const activeRef = useRef<ActiveConfirm | null>(null);
 
-    const confirm: ConfirmFn = (opts) => {
+    const confirm = useCallback<ConfirmFn>((opts) => {
         if (activeRef.current) {
             return Promise.reject(
                 new Error(
@@ -100,7 +107,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
             activeRef.current = entry;
             setActive(entry);
         });
-    };
+    }, []);
 
     const closeWithResult = (result: boolean) => {
         const entry = activeRef.current;
