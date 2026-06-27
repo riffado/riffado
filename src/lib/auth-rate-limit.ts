@@ -80,9 +80,15 @@ function tooManyRequests(result: RateLimitResult): Response {
         Math.ceil((result.resetAt.getTime() - Date.now()) / 1000),
     );
 
+    const text = `Too many attempts. Please wait ${retryAfter}s and try again.`;
     return Response.json(
         {
-            message: `Too many attempts. Please wait ${retryAfter}s and try again.`,
+            // `error` is the app's standard envelope field (AppErrorJSON); a
+            // direct API client expecting `{ error, code }` reads it. `message`
+            // is kept so better-auth's better-fetch surfaces it as
+            // `result.error.message` in the auth forms.
+            error: text,
+            message: text,
             code: ErrorCode.RATE_LIMITED,
         },
         {

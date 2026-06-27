@@ -93,6 +93,12 @@ describe("enforceAuthRateLimit", () => {
         const retryAfter = result?.headers.get("Retry-After");
         expect(retryAfter).toBeTruthy();
         expect(Number(retryAfter)).toBeGreaterThan(0);
+        // Body follows the app envelope (`error` + `code`) and keeps `message`
+        // for better-auth's better-fetch -> result.error.message in the forms.
+        const body = (await result?.json()) as Record<string, unknown>;
+        expect(body.code).toBe("RATE_LIMITED");
+        expect(typeof body.error).toBe("string");
+        expect(body.message).toBe(body.error);
     });
 
     it("skips the per-IP bucket when the client IP is unknown (no cross-user lockout)", async () => {
