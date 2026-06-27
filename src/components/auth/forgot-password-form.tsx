@@ -37,10 +37,21 @@ export function ForgotPasswordForm({
             // We intentionally don't surface the better-auth response: we
             // always show the same success message so this endpoint can't
             // be used to enumerate which emails have accounts.
-            await forgetPassword({
+            const result = await forgetPassword({
                 email,
                 redirectTo: "/reset-password",
             });
+            // Rate-limit rejections (429) are a request-volume signal, not an
+            // account-existence signal, so surfacing them doesn't leak
+            // enumeration. Show the limiter's message instead of a false
+            // "check your email" when no email was actually sent.
+            if (result?.error?.status === 429) {
+                toast.error(
+                    result.error.message ||
+                        "Too many requests. Please wait a moment and try again.",
+                );
+                return;
+            }
             setSubmitted(true);
         } catch (error) {
             // Network-level failures still get surfaced -- those aren't an
