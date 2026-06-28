@@ -1,0 +1,59 @@
+{
+    "name": "riffado",
+    "version": "0.1.0",
+    "description": "Command-line interface for Riffado — access your recordings, transcripts, and summaries from the terminal.",
+    "type": "module",
+    "license": "AGPL-3.0",
+    "author": "Riffado Contributors",
+    "homepage": "https://github.com/riffado/riffado/tree/main/cli#readme",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/riffado/riffado.git",
+        "directory": "cli"
+    },
+    "bugs": {
+        "url": "https://github.com/riffado/riffado/issues"
+    },
+    "keywords": [
+        "riffado",
+        "plaud",
+        "cli",
+        "transcription",
+        "voice-recorder",
+        "self-hosted"
+    ],
+    "bin": {
+        "riffado": "./dist/index.js"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+    ],
+    "engines": {
+        "node": ">=20"
+    },
+    "publishConfig": {
+        "access": "public",
+        "provenance": true
+    },
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "type-check": "tsc --noEmit",
+        "prepublishOnly": "pnpm build"
+    },
+    "dependencies": {
+        "citty": "^0.1.6",
+        "picocolors": "^1.1.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "tsup": "^8.3.5",
+        "typescript": "^5",
+        "vitest": "^4.0.12"
+    }
+}

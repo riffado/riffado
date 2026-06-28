@@ -5,6 +5,11 @@
 ### Added
 
 - Google Gemini as a native transcription provider. Gemini's OpenAI-compatibility layer does not implement `POST /v1/audio/transcriptions`, so configuring a Gemini API key under the existing Whisper/chat styles couldn't work. New `gemini` transcription style routes audio through `@google/generative-ai`'s `generateContent` with `inlineData`. 20 MB inline-data limit applies; larger files error out cleanly (File API upload support is planned follow-up). Preset is selectable in Settings → AI Providers ([#176](https://github.com/riffado/riffado/pull/176) by [@amateo8282](https://github.com/amateo8282)).
+- Official command-line interface, published to npm as `riffado`. Wraps `/api/v1/recordings` with `login` / `logout` / `whoami` / `recordings list|get|download` commands. Authenticates via API keys (paste, `--api-key` flag, or `RIFFADO_API_KEY` env); honors `--server` / `RIFFADO_SERVER` so self-hosters can point at their own instance. Source in [`cli/`](cli/README.md), changelog in [`cli/CHANGELOG.md`](cli/CHANGELOG.md), versioned independently with `cli-vX.Y.Z` tags ([#120](https://github.com/riffado/riffado/issues/120)).
+
+### Changed
+
+- Repository is now a minimal pnpm workspace with `cli/` as a sibling package. The root web-app package is renamed `riffado-app` (private) so the npm name `riffado` belongs to the CLI. The web Docker image is unaffected: the deps stage runs `bun install --frozen-lockfile --filter './' --ignore-scripts`, scoping installation to the root workspace and excluding CLI dependencies from the image ([#120](https://github.com/riffado/riffado/issues/120)).
 
 ### Fixed
 
@@ -85,7 +90,6 @@
 - Webhook worker no longer skews due-delivery comparisons under Bun: `nowParam` is cast to `::timestamp` to match the `next_attempt_at` column type ([#121](https://github.com/riffado/riffado/pull/121)).
 - DELETE recording locks the parent row with `SELECT ... FOR UPDATE` at the start of the transaction, so a concurrent transcribe or summary write can't leave orphan child rows pointing at a tombstoned recording. Sync re-checks the tombstone under `FOR UPDATE` before its update + emit, preventing delete-during-download races from resurrecting a recording ([#118](https://github.com/riffado/riffado/pull/118)).
 - Plaud helpers (`plaudSendCode`, `plaudVerifyOtp`, `listPlaudWorkspaces`, `mintPlaudWorkspaceToken`) parse upstream JSON defensively via a new `safeParseJson`. Cloudflare WAF HTML challenge pages (and other non-JSON upstream bodies) previously escaped as raw `SyntaxError` and flattened to a generic `INTERNAL_ERROR (500)`; they now surface as typed `PLAUD_INVALID_TOKEN` / `PLAUD_RATE_LIMITED` / `PLAUD_UPSTREAM_ERROR` / `PLAUD_API_ERROR` with the upstream HTTP status and a 200-char body snippet in `details` ([#143](https://github.com/riffado/riffado/pull/143), [#142](https://github.com/riffado/riffado/issues/142), [#137](https://github.com/riffado/riffado/issues/137)).
-
 ## [0.4.2] - 2026-05-09
 
 ### Fixed

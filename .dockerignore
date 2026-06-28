@@ -54,3 +54,6 @@ next-env.d.ts
 
 # README
 README.md
+
+# CLI package (separate npm publish; not part of the web image)
+/cli

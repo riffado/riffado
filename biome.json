@@ -9,9 +9,13 @@
         "ignoreUnknown": true,
         "includes": [
             "src/**/*.{js,jsx,ts,tsx,json,css}",
+            "cli/src/**/*.{js,ts,json}",
+            "cli/tests/**/*.{js,ts}",
+            "cli/*.{js,ts,json}",
             "*.{js,jsx,ts,tsx,json}",
             "!src/db/migrations",
-            "!src/.source"
+            "!src/.source",
+            "!cli/dist"
         ]
     },
     "formatter": {

@@ -3,14 +3,21 @@ FROM oven/bun:1 AS base
 WORKDIR /app
 
 # Install dependencies
+# Bun migrates `pnpm-lock.yaml` + `pnpm-workspace.yaml` to its own format
+# on first install. The CLI workspace's `package.json` is COPYed so the
+# migration can resolve every importer the lockfile references, but
+# `--filter './'` then scopes the actual install to the root package
+# only. The CLI's source and dependencies never enter the image.
+#
 # `--ignore-scripts` skips the `fumadocs-mdx` postinstall (declared in
 # package.json by PR #131). That hook needs `source.config.ts` and
 # `content/docs/`, which aren't present in this hermetic deps stage --
 # only `package.json` + the lockfile are. We regenerate fumadocs sources
 # explicitly in the builder stage below, where the full tree is available.
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN bun install --frozen-lockfile --ignore-scripts
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY cli/package.json ./cli/package.json
+RUN bun install --frozen-lockfile --filter './' --ignore-scripts
 
 # Build Next.js
 FROM base AS builder

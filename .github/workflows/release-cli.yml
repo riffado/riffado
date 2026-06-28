@@ -1,0 +1,79 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and pack only — skip npm publish'
+        required: false
+        default: 'true'
+
+jobs:
+  release:
+    name: Build, test, publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write  # required for npm provenance
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify tag matches cli/package.json
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/cli-v}"
+          PKG_VERSION=$(node -p "require('./cli/package.json').version")
+          if [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "Tag cli-v$TAG does not match cli/package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+          echo "Releasing CLI v$PKG_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check CLI
+        run: pnpm --filter riffado type-check
+
+      - name: Test CLI
+        run: pnpm --filter riffado test
+
+      - name: Build CLI
+        run: pnpm --filter riffado build
+
+      - name: Smoke-test built binary
+        run: |
+          node cli/dist/index.js --version
+          node cli/dist/index.js --help
+
+      - name: Publish to npm
+        if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
+        working-directory: cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Dry-run pack (workflow_dispatch with dry_run=true)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+        working-directory: cli
+        run: npm pack --dry-run

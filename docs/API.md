@@ -590,7 +590,19 @@ then 6 hours. After six failed attempts, the delivery is marked `dead`.
 
 ## SDK / Client Libraries
 
-Currently, no official SDK is available. The API is RESTful and can be consumed by any HTTP client.
+The official `riffado` CLI consumes the `/api/v1/*` endpoints and is the
+shortest path to scripting against Riffado. Install it from npm:
+
+```sh
+npm install -g riffado
+riffado login                       # paste an API key from Settings -> API Keys
+riffado recordings list --json | jq
+```
+
+Use `--server https://my-riffado.example.com` to point at a self-hosted
+instance. Source and full command reference live in [`cli/`](../cli/README.md).
+
+The API is also RESTful and can be consumed by any HTTP client directly.
 
 Example with JavaScript:
 

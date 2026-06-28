@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+cli/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -56,3 +57,6 @@ plans/
 # bun (we use pnpm; bun is only a runtime for scripts/tests)
 bun.lock
 /src/.source
+
+# cli build output
+/cli/dist

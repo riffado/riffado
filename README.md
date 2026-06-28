@@ -65,6 +65,18 @@ Full install guide, version pinning, image tags, and Windows/WSL notes: [riffado
 
 > `main` is a rolling integration branch. Deploy from tagged image releases, not by building `main`. See [BRANCHING.md](BRANCHING.md).
 
+## Command-line interface
+
+For scripting against your recordings, transcripts, and summaries:
+
+```bash
+npm install -g riffado
+riffado login                          # paste an API key from Settings → API Keys
+riffado recordings list
+```
+
+Runs against the hosted instance by default, or any self-hosted server via `--server https://my-riffado.example.com`. Full reference in [`cli/README.md`](cli/README.md).
+
 ## Connecting Plaud
 
 Riffado signs into Plaud using your email — the same OTP flow as the official app. The verification code is forwarded directly to Plaud and never stored. Your access token is encrypted with AES-256-GCM before hitting the database. Region (Global, EU, APAC) is auto-detected.

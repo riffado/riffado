@@ -312,6 +312,7 @@ If drizzle-kit generates SQL that re-adds columns that already exist, meta snaps
 - **Transcription runs in two places:** (1) in-browser via Transformers.js for zero-cost, or (2) server-side via any OpenAI-compatible provider. Per-recording choice, changeable from the workstation.
 - **Storage is pluggable** behind `StorageProvider` (`src/lib/storage/types.ts`). Factory pattern in `factory.ts`. Don't branch on storage type in feature code.
 - **AI is pluggable** via OpenAI-compatible HTTP (`src/lib/ai/`). Users configure `baseURL` + API key per provider; any OpenAI-compatible endpoint works. Don't hardcode OpenAI-specific behavior.
+- **CLI lives in `cli/`** as a sibling pnpm workspace package, published to npm as `riffado` (root web-app package is `riffado-app`, private). It only consumes `/api/v1/*` and authenticates via API keys (`op_…`) — never cookies, never Plaud bearer tokens. The web Docker image excludes the CLI workspace via `bun install --filter './'`. CLI version is independent of the web app version; release tags are `cli-vX.Y.Z` (see `scripts/release-cli.ts`). Server response shapes consumed by the CLI are hand-mirrored in `cli/src/lib/types.ts` — if `src/lib/v1/serialize.ts` changes shape, update both ends in the same PR.
 
 ## Plaud API Gotchas
 
