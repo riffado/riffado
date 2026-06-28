@@ -183,7 +183,13 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         userSettingsRow?.aiOutputLanguage ?? null,
     );
 
-    const prompt = promptTemplate.replace("{transcription}", transcriptText);
+    // Use a replacement function so `$` sequences in the transcript (e.g.
+    // `$1`, `$&`, `$$`) are inserted verbatim instead of being interpreted
+    // as `String.prototype.replace` special patterns.
+    const prompt = promptTemplate.replace(
+        "{transcription}",
+        () => transcriptText,
+    );
 
     const baseSystem =
         "You are a helpful assistant that summarizes audio transcriptions. Always respond with valid JSON only, no markdown formatting or code fences.";

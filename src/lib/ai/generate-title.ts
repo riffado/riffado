@@ -122,9 +122,12 @@ export async function generateTitleFromTranscription(
             userSettingsRow?.aiOutputLanguage ?? null,
         );
 
+        // Replacement function so `$` sequences in the transcript are
+        // inserted verbatim, not treated as `String.prototype.replace`
+        // special patterns.
         const prompt = promptTemplate.replace(
             "{transcription}",
-            truncatedTranscription,
+            () => truncatedTranscription,
         );
 
         const baseSystem =

@@ -20,6 +20,13 @@
 
 import { APIError } from "openai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    aiEnhancements,
+    apiCredentials,
+    recordings,
+    transcriptions,
+    userSettings,
+} from "@/db/schema";
 import { ErrorCode, mapErrorToAppError } from "@/lib/errors";
 
 // Capture the chat-completion request without a real provider call.
@@ -56,16 +63,25 @@ vi.mock("@/lib/auth-server", () => ({
     requireApiSession: vi.fn(async () => ({ user: { id: "user-1" } })),
 }));
 
-// Queue of rows consumed (in order) by each `.limit(1)` select.
-const selectResults: unknown[][] = [];
+// Per-table result queues keyed by the Drizzle table object the route
+// passes to `.from(...)`. Keying by table (rather than one global
+// positional array) keeps the fixture order-independent across tables:
+// adding/removing/reordering a select on one table can't silently shift
+// the rows returned for another. Tables queried more than once
+// (apiCredentials, recordings) still consume their own queue in order.
+const selectResults = new Map<unknown, unknown[][]>();
 
 function selectChain() {
+    let table: unknown;
     const c = {
-        from: () => c,
+        from: (t: unknown) => {
+            table = t;
+            return c;
+        },
         where: () => c,
         for: () => c,
         orderBy: () => c,
-        limit: () => Promise.resolve(selectResults.shift() ?? []),
+        limit: () => Promise.resolve(selectResults.get(table)?.shift() ?? []),
     };
     return c;
 }
@@ -86,19 +102,35 @@ vi.mock("@/db", () => ({
 describe("POST /api/recordings/[id]/summary — no transcript truncation (#213)", () => {
     beforeEach(() => {
         createMock.mockReset();
-        selectResults.length = 0;
+        selectResults.clear();
     });
 
     it("forwards the entire transcript to the model, including text past the old 8000-char limit", async () => {
         // > 8000 chars, with unique markers at the very start and very end.
         // The old code clipped at 8000, so END_MARKER would have been lost.
-        const transcript = `START_MARKER ${"x".repeat(20000)} END_MARKER`;
+        // The `$&$1$$` sequence guards the `String.prototype.replace`
+        // special-pattern bug: a string replacement would mangle it; a
+        // replacement function inserts it verbatim.
+        const dollarMarker = "DOLLAR_$&$1$$_MARKER";
+        const transcript = `START_MARKER ${"x".repeat(20000)} ${dollarMarker} END_MARKER`;
         expect(transcript.length).toBeGreaterThan(8000);
 
-        selectResults.push(
-            [{ id: "rec-1", userId: "user-1", deletedAt: null }], // recording
-            [{ recordingId: "rec-1", userId: "user-1", text: transcript }], // transcription
-            [{ summaryPrompt: null, aiOutputLanguage: null }], // userSettings
+        // recordings is selected twice: the initial lookup and the
+        // still-active re-check inside the upsert transaction.
+        selectResults.set(recordings, [
+            [{ id: "rec-1", userId: "user-1", deletedAt: null }],
+            [{ deletedAt: null }],
+        ]);
+        selectResults.set(transcriptions, [
+            [{ recordingId: "rec-1", userId: "user-1", text: transcript }],
+        ]);
+        selectResults.set(userSettings, [
+            [{ summaryPrompt: null, aiOutputLanguage: null }],
+        ]);
+        // apiCredentials is selected twice: default-enhancement then
+        // default-transcription. The enhancement row wins, so the second
+        // (transcription) query result is unused.
+        selectResults.set(apiCredentials, [
             [
                 {
                     apiKey: "enc-key",
@@ -108,11 +140,11 @@ describe("POST /api/recordings/[id]/summary — no transcript truncation (#213)"
                     isDefaultEnhancement: true,
                     userId: "user-1",
                 },
-            ], // enhancement credentials
-            [], // transcription credentials (unused)
-            [{ deletedAt: null }], // still-active re-check inside the tx
-            [], // no existing enhancement -> insert path
-        );
+            ],
+            [],
+        ]);
+        // No existing enhancement row -> insert path.
+        selectResults.set(aiEnhancements, [[]]);
 
         createMock.mockResolvedValue({
             choices: [
@@ -160,6 +192,8 @@ describe("POST /api/recordings/[id]/summary — no transcript truncation (#213)"
         // And it's not silently shortened to the old ~8000-char ceiling.
         expect(prompt.length).toBeGreaterThan(20000);
         expect(prompt).not.toContain(`${"x".repeat(20)}...`);
+        // `$` sequences survive verbatim (not interpreted by replace()).
+        expect(prompt).toContain(dollarMarker);
     });
 });
 
@@ -199,5 +233,50 @@ describe("mapErrorToAppError — OpenAI provider errors (#213)", () => {
         const app = mapErrorToAppError(apiError(400, "invalid_request_error"));
         expect(app.statusCode).toBe(400);
         expect(app.code).toBe(ErrorCode.AI_PROVIDER_API_ERROR);
+    });
+
+    it("does not echo the raw provider message on a generic 4xx", () => {
+        const app = mapErrorToAppError(
+            new APIError(
+                400,
+                {
+                    code: "invalid_request_error",
+                    message: "key sk-secret-1234 is invalid",
+                },
+                undefined,
+                undefined,
+            ),
+        );
+        expect(app.message).toBe("The AI provider rejected the request.");
+        expect(app.message).not.toContain("sk-secret");
+    });
+
+    it("maps a connection/transport failure (no HTTP status) to 502", () => {
+        // APIConnectionError / timeouts surface as an APIError with an
+        // undefined status -- the provider was never reached.
+        const app = mapErrorToAppError(
+            new APIError(undefined, undefined, "Connection error.", undefined),
+        );
+        expect(app.statusCode).toBe(502);
+        expect(app.code).toBe(ErrorCode.UPSTREAM_BAD_RESPONSE);
+    });
+
+    it("detects a provider context-window error reported only in the message", () => {
+        // A non-OpenAI provider returns 400 without the OpenAI-specific
+        // code, describing the overflow only in the message.
+        const app = mapErrorToAppError(
+            new APIError(
+                400,
+                {
+                    code: "invalid_request_error",
+                    message:
+                        "This model's maximum context length is 8192 tokens.",
+                },
+                undefined,
+                undefined,
+            ),
+        );
+        expect(app.statusCode).toBe(400);
+        expect(app.code).toBe(ErrorCode.AI_CONTEXT_LENGTH_EXCEEDED);
     });
 });
