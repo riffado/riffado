@@ -6,6 +6,10 @@
 
 - Google Gemini as a native transcription provider. Gemini's OpenAI-compatibility layer does not implement `POST /v1/audio/transcriptions`, so configuring a Gemini API key under the existing Whisper/chat styles couldn't work. New `gemini` transcription style routes audio through `@google/generative-ai`'s `generateContent` with `inlineData`. 20 MB inline-data limit applies; larger files error out cleanly (File API upload support is planned follow-up). Preset is selectable in Settings → AI Providers ([#176](https://github.com/riffado/riffado/pull/176) by [@amateo8282](https://github.com/amateo8282)).
 
+### Fixed
+
+- Long-meeting summaries no longer drop the end of the transcript. The summary endpoint hard-truncated transcripts to the first 8000 characters (~2000 tokens) before sending them to the model, silently discarding everything after — so end-of-call decisions and action items never reached the summary. The full transcript is now sent. If a transcript exceeds the configured model's context window, the provider error is surfaced as a clear 400 ("transcript too long, pick a larger-context model") instead of a generic 500 ([#213](https://github.com/riffado/riffado/issues/213)).
+
 ### Removed
 
 - Dropped the unused `storage_config` table. Storage has been configured at the instance level via env vars (`DEFAULT_STORAGE_TYPE`, `S3_*`, `LOCAL_STORAGE_PATH`) since v0.4.x; this table held orphan per-user S3 config rows that nothing has read or written since the move. Migration `0024_sour_serpent_society.sql` issues a `DROP TABLE ... CASCADE`. Self-hosters: if for any reason you still want the historical rows, dump them before running `pnpm db:migrate` ([#83](https://github.com/riffado/riffado/issues/83)).

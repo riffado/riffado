@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { APIError as OpenAIAPIError } from "openai";
 
 export enum ErrorCode {
     UNAUTHORIZED = "UNAUTHORIZED",
@@ -40,6 +41,7 @@ export enum ErrorCode {
     AI_PROVIDER_NOT_CONFIGURED = "AI_PROVIDER_NOT_CONFIGURED",
     AI_PROVIDER_API_ERROR = "AI_PROVIDER_API_ERROR",
     AI_RATE_LIMITED = "AI_RATE_LIMITED",
+    AI_CONTEXT_LENGTH_EXCEEDED = "AI_CONTEXT_LENGTH_EXCEEDED",
 
     RECORDING_NOT_FOUND = "RECORDING_NOT_FOUND",
     RECORDING_STREAM_INVALID_RANGE = "RECORDING_STREAM_INVALID_RANGE",
@@ -137,6 +139,38 @@ function attachErrorId(app: AppError): string {
 export function mapErrorToAppError(error: unknown): AppError {
     if (error instanceof AppError) {
         return error;
+    }
+
+    // Errors from any OpenAI-compatible provider (summary, title, etc.).
+    // Surface a useful message instead of a generic 500 -- the common case
+    // is an over-long transcript exceeding the model's context window.
+    if (error instanceof OpenAIAPIError) {
+        if (error.code === "context_length_exceeded") {
+            return new AppError(
+                ErrorCode.AI_CONTEXT_LENGTH_EXCEEDED,
+                "Transcript is too long for the selected model's context window. Choose a model with a larger context or a different provider.",
+                400,
+            );
+        }
+        if (error.status === 429) {
+            return new AppError(
+                ErrorCode.AI_RATE_LIMITED,
+                "Too many requests to the AI provider. Please try again later.",
+                429,
+            );
+        }
+        if (typeof error.status === "number" && error.status >= 500) {
+            return new AppError(
+                ErrorCode.UPSTREAM_BAD_RESPONSE,
+                "The AI provider is temporarily unavailable. Please try again later.",
+                502,
+            );
+        }
+        return new AppError(
+            ErrorCode.AI_PROVIDER_API_ERROR,
+            error.message || "The AI provider rejected the request.",
+            400,
+        );
     }
 
     if (error instanceof Error) {
