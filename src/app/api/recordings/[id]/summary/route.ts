@@ -19,13 +19,9 @@ import {
 import { requireApiSession } from "@/lib/auth-server";
 import { DEMO_SUMMARIES, isDemoRecordingId } from "@/lib/demo/fixtures";
 import { decrypt } from "@/lib/encryption";
-import {
-    decryptJsonField,
-    decryptText,
-    encryptJsonField,
-    encryptText,
-} from "@/lib/encryption/fields";
+import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { upsertEnhancement } from "@/lib/transcription/persist";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -56,6 +52,9 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
+    // NOTE: when both a Plaud-imported and the user's own transcript coexist,
+    // this currently summarizes whichever the DB returns first. Selecting the
+    // user's *active* transcript is handled in the Phase 5 UI work (#204).
     const [transcription] = await db
         .select()
         .from(transcriptions)
@@ -239,104 +238,21 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         summary = rawContent;
     }
 
-    // Atomic tombstone re-check + upsert.
-    //
-    // The user may have deleted the recording while the (long-running)
-    // provider call was in flight. To prevent a delete that lands
-    // *between* our re-check and our upsert from being silently undone,
-    // we run both inside a single transaction that takes a row-level
-    // write lock (`FOR UPDATE`) on the recording. The DELETE handler's
-    // transaction acquires the same lock via its `UPDATE recordings`
-    // tombstone write, so the two transactions serialize: either we
-    // see `deletedAt` set and abort, or our upsert commits before
-    // DELETE runs and DELETE then cleans up our row inside its own tx.
-    // See PR #72.
-    const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
-    try {
-        await db.transaction(async (tx) => {
-            const [stillActive] = await tx
-                .select({ deletedAt: recordings.deletedAt })
-                .from(recordings)
-                .where(
-                    and(
-                        eq(recordings.id, id),
-                        eq(recordings.userId, session.user.id),
-                    ),
-                )
-                .for("update")
-                .limit(1);
+    // Persist the riffado-generated summary via the shared, tombstone-aware
+    // upsert. Summaries stay single per recording; `source` records the origin.
+    const { committed } = await upsertEnhancement({
+        userId: session.user.id,
+        recordingId: id,
+        summary,
+        keyPoints,
+        actionItems,
+        source: "riffado",
+        provider: credentials.provider,
+        model,
+    });
 
-            if (!stillActive || stillActive.deletedAt) {
-                throw RECORDING_TOMBSTONED;
-            }
-
-            const [existing] = await tx
-                .select()
-                .from(aiEnhancements)
-                .where(
-                    and(
-                        eq(aiEnhancements.recordingId, id),
-                        eq(aiEnhancements.userId, session.user.id),
-                    ),
-                )
-                .limit(1);
-
-            // Encrypt content fields at rest. `summary` is a text column;
-            // `keyPoints` / `actionItems` are jsonb columns and are stored
-            // as `{ c: <ciphertext> }` envelopes (option (a) from the
-            // rollout plan — keeps the schema unchanged).
-            const encryptedSummary = encryptText(summary);
-            const encryptedKeyPoints = encryptJsonField(keyPoints);
-            const encryptedActionItems = encryptJsonField(actionItems);
-
-            if (existing) {
-                await tx
-                    .update(aiEnhancements)
-                    .set({
-                        summary: encryptedSummary,
-                        keyPoints: encryptedKeyPoints,
-                        actionItems: encryptedActionItems,
-                        provider: credentials.provider,
-                        model,
-                    })
-                    .where(
-                        and(
-                            eq(aiEnhancements.id, existing.id),
-                            eq(aiEnhancements.userId, session.user.id),
-                        ),
-                    );
-            } else {
-                await tx.insert(aiEnhancements).values({
-                    recordingId: id,
-                    userId: session.user.id,
-                    summary: encryptedSummary,
-                    keyPoints: encryptedKeyPoints,
-                    actionItems: encryptedActionItems,
-                    provider: credentials.provider,
-                    model,
-                });
-            }
-
-            await tx
-                .update(recordings)
-                .set({ updatedAt: new Date() })
-                .where(
-                    and(
-                        eq(recordings.id, id),
-                        eq(recordings.userId, session.user.id),
-                        isNull(recordings.deletedAt),
-                    ),
-                );
-        });
-    } catch (txError) {
-        if (txError === RECORDING_TOMBSTONED) {
-            throw new AppError(
-                ErrorCode.NOT_FOUND,
-                "Recording was deleted",
-                410,
-            );
-        }
-        throw txError;
+    if (!committed) {
+        throw new AppError(ErrorCode.NOT_FOUND, "Recording was deleted", 410);
     }
 
     return NextResponse.json({

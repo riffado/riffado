@@ -23,6 +23,7 @@ import {
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
+import { upsertTranscription } from "@/lib/transcription/persist";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -100,6 +101,12 @@ export async function transcribeRecording(
                 and(
                     eq(transcriptions.recordingId, recordingId),
                     eq(transcriptions.userId, userId),
+                    // Only the user's own ('riffado') transcript gates the
+                    // idempotent short-circuit and forced re-run. A
+                    // Plaud-imported transcript ('plaud') must NOT suppress the
+                    // user's own run, and the user's run must NOT overwrite the
+                    // Plaud row — the two coexist. See #204.
+                    eq(transcriptions.source, "riffado"),
                 ),
             )
             .limit(1);
@@ -260,90 +267,26 @@ export async function transcribeRecording(
             }
         }
 
-        const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
-        try {
-            await db.transaction(async (tx) => {
-                const [stillActive] = await tx
-                    .select({ deletedAt: recordings.deletedAt })
-                    .from(recordings)
-                    .where(
-                        and(
-                            eq(recordings.id, recordingId),
-                            eq(recordings.userId, userId),
-                        ),
-                    )
-                    .for("update")
-                    .limit(1);
+        // Persist the user's own ('riffado') transcript via the shared,
+        // tombstone-aware, source-scoped upsert. The persisted model is the
+        // *actual* model used (may differ from the provider default when the
+        // manual route supplied an override).
+        const { committed } = await upsertTranscription({
+            userId,
+            recordingId,
+            text: transcriptionText,
+            detectedLanguage,
+            source: "riffado",
+            provider: credentials.provider,
+            model,
+        });
 
-                if (!stillActive || stillActive.deletedAt) {
-                    throw RECORDING_TOMBSTONED;
-                }
-
-                const [currentTranscription] = await tx
-                    .select()
-                    .from(transcriptions)
-                    .where(
-                        and(
-                            eq(transcriptions.recordingId, recordingId),
-                            eq(transcriptions.userId, userId),
-                        ),
-                    )
-                    .limit(1);
-
-                const encryptedTranscriptionText =
-                    encryptText(transcriptionText);
-
-                // Persist the *actual* model used (which may differ from
-                // the provider default when the manual route supplied an
-                // override). Mirrors what the OpenAI request really ran.
-                if (currentTranscription) {
-                    await tx
-                        .update(transcriptions)
-                        .set({
-                            text: encryptedTranscriptionText,
-                            detectedLanguage,
-                            transcriptionType: "server",
-                            provider: credentials.provider,
-                            model,
-                        })
-                        .where(
-                            and(
-                                eq(transcriptions.id, currentTranscription.id),
-                                eq(transcriptions.userId, userId),
-                            ),
-                        );
-                } else {
-                    await tx.insert(transcriptions).values({
-                        recordingId,
-                        userId,
-                        text: encryptedTranscriptionText,
-                        detectedLanguage,
-                        transcriptionType: "server",
-                        provider: credentials.provider,
-                        model,
-                    });
-                }
-
-                await tx
-                    .update(recordings)
-                    .set({ updatedAt: new Date() })
-                    .where(
-                        and(
-                            eq(recordings.id, recordingId),
-                            eq(recordings.userId, userId),
-                            isNull(recordings.deletedAt),
-                        ),
-                    );
-            });
-        } catch (txError) {
-            if (txError === RECORDING_TOMBSTONED) {
-                return {
-                    success: false,
-                    error: "Recording was deleted before transcription finished",
-                    errorCode: "RECORDING_DELETED",
-                };
-            }
-            throw txError;
+        if (!committed) {
+            return {
+                success: false,
+                error: "Recording was deleted before transcription finished",
+                errorCode: "RECORDING_DELETED",
+            };
         }
 
         if (autoGenerateTitle && transcriptionText.trim()) {

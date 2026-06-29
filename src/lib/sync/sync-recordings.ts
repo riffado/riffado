@@ -1,12 +1,30 @@
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
+import {
+    aiEnhancements,
+    plaudConnections,
+    recordings,
+    transcriptions,
+    userSettings,
+    users,
+} from "@/db/schema";
 import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
+import { AppError, ErrorCode } from "@/lib/errors";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
+import {
+    isReady,
+    parseSummary,
+    parseTranscript,
+    selectContentItems,
+} from "@/lib/plaud/content";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import {
+    upsertEnhancement,
+    upsertTranscription,
+} from "@/lib/transcription/persist";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 import { emitEvent } from "@/lib/webhooks/emit";
 import type { PlaudRecording } from "@/types/plaud";
@@ -33,10 +51,23 @@ const inFlightSyncs = new Map<string, Promise<SyncResult>>();
 interface SyncContext {
     userId: string;
     autoTranscribe: boolean;
+    /** Master opt-in: import Plaud's native transcript/summary on sync (#204). */
+    importPlaudContent: boolean;
+    /** 'plaud_only' (default) | 'keep_both' — see runSyncRecordingsForUser. */
+    transcriptMode: string;
     emailNotifications: boolean;
     barkNotifications: boolean;
     notificationEmail: string | null;
     barkPushUrl: string | null;
+}
+
+/** A freshly-synced recording that Plaud may hold transcript/summary content
+ * for. Collected during the sync loop and drained by the import pass. */
+interface ImportCandidate {
+    recordingId: string;
+    plaudFileId: string;
+    isTrans: boolean;
+    isSummary: boolean;
 }
 
 async function uniqueStorageKey(
@@ -67,6 +98,27 @@ async function uniqueStorageKey(
     return `${userId}/${plaudFileId}.${ext}`;
 }
 
+/**
+ * Build an import candidate for a freshly-synced recording, or `undefined`
+ * when there's nothing to import — the recording is trashed, or Plaud reports
+ * neither a transcript (`is_trans`) nor a summary (`is_summary`).
+ */
+function buildImportCandidate(
+    recordingId: string,
+    plaudRecording: PlaudRecording,
+): ImportCandidate | undefined {
+    if (plaudRecording.is_trash) return undefined;
+    if (!plaudRecording.is_trans && !plaudRecording.is_summary) {
+        return undefined;
+    }
+    return {
+        recordingId,
+        plaudFileId: plaudRecording.id,
+        isTrans: plaudRecording.is_trans,
+        isSummary: plaudRecording.is_summary,
+    };
+}
+
 async function processRecording(
     plaudRecording: PlaudRecording,
     context: SyncContext,
@@ -77,6 +129,7 @@ async function processRecording(
     recordingId?: string;
     filename?: string;
     error?: string;
+    importCandidate?: ImportCandidate;
 }> {
     try {
         const [existingRecording] = await db
@@ -194,6 +247,10 @@ async function processRecording(
                 status: "updated",
                 recordingId: existingRecording.id,
                 filename: plaudRecording.filename,
+                importCandidate: buildImportCandidate(
+                    existingRecording.id,
+                    plaudRecording,
+                ),
             };
         }
 
@@ -208,6 +265,10 @@ async function processRecording(
             status: "new",
             recordingId: newRecording.id,
             filename: plaudRecording.filename,
+            importCandidate: buildImportCandidate(
+                newRecording.id,
+                plaudRecording,
+            ),
         };
     } catch (error) {
         return {
@@ -228,6 +289,7 @@ async function processBatch(
     errors: string[];
     newRecordingIds: string[];
     newRecordingNames: string[];
+    importCandidates: ImportCandidate[];
 }> {
     const results = await Promise.allSettled(
         batch.map((rec) =>
@@ -240,10 +302,12 @@ async function processBatch(
     const errors: string[] = [];
     const newRecordingIds: string[] = [];
     const newRecordingNames: string[] = [];
+    const importCandidates: ImportCandidate[] = [];
 
     for (const result of results) {
         if (result.status === "fulfilled") {
-            const { status, recordingId, filename, error } = result.value;
+            const { status, recordingId, filename, error, importCandidate } =
+                result.value;
             if (status === "new" && recordingId) {
                 newCount++;
                 newRecordingIds.push(recordingId);
@@ -253,6 +317,7 @@ async function processBatch(
             } else if (status === "error" && error) {
                 errors.push(error);
             }
+            if (importCandidate) importCandidates.push(importCandidate);
         } else {
             errors.push(`Batch processing error: ${result.reason}`);
         }
@@ -264,6 +329,7 @@ async function processBatch(
         errors,
         newRecordingIds,
         newRecordingNames,
+        importCandidates,
     };
 }
 
@@ -329,6 +395,8 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
+            importPlaudContent: settings?.importPlaudContent ?? false,
+            transcriptMode: settings?.transcriptMode ?? "plaud_only",
             emailNotifications: settings?.emailNotifications ?? false,
             barkNotifications: settings?.barkNotifications ?? false,
             notificationEmail:
@@ -343,6 +411,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         );
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
+        const importCandidates: ImportCandidate[] = [];
 
         let page = 0;
         let hasMore = true;
@@ -387,6 +456,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     ...batchResult.newRecordingIds,
                 );
                 allNewRecordingNames.push(...batchResult.newRecordingNames);
+                importCandidates.push(...batchResult.importCandidates);
             }
 
             if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
@@ -462,15 +532,34 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             }
         }
 
-        if (
-            context.autoTranscribe &&
-            result.pendingTranscriptionIds.length > 0
-        ) {
-            queueTranscriptions(userId, result.pendingTranscriptionIds).catch(
-                (error) => {
-                    console.error("Background transcription failed:", error);
-                },
+        // Import Plaud-native transcript/summary content (#204) before
+        // deciding what to auto-transcribe. Runs after all recording rows are
+        // committed; never throws out of sync.
+        let plaudTranscriptImported = new Set<string>();
+        if (context.importPlaudContent && importCandidates.length > 0) {
+            plaudTranscriptImported = await importPlaudContent(
+                importCandidates,
+                context,
+                plaudClient,
+                result,
             );
+        }
+
+        // Auto-transcribe with the user's own provider. 'plaud_only' skips
+        // recordings that received a Plaud transcript (saves AI credits);
+        // 'keep_both' runs anyway so both coexist. Recordings whose Plaud
+        // transcript wasn't ready/failed fall back here naturally.
+        const idsToTranscribe =
+            context.transcriptMode === "keep_both"
+                ? result.pendingTranscriptionIds
+                : result.pendingTranscriptionIds.filter(
+                      (id) => !plaudTranscriptImported.has(id),
+                  );
+
+        if (context.autoTranscribe && idsToTranscribe.length > 0) {
+            queueTranscriptions(userId, idsToTranscribe).catch((error) => {
+                console.error("Background transcription failed:", error);
+            });
         }
 
         return result;
@@ -496,4 +585,138 @@ async function queueTranscriptions(
             );
         }
     }
+}
+
+/**
+ * Import Plaud-native transcript/summary content for recordings Plaud has
+ * already processed. Runs AFTER recording rows are committed and BEFORE
+ * auto-transcribe, sequentially — gentle on the short-lived workspace token
+ * (#203). Non-destructive: only fills gaps, never overwrites an existing
+ * transcript/summary. Never throws out of sync; a dead token (401) stops the
+ * pass, any other failure skips that one item.
+ *
+ * Returns the set of recordingIds that now hold a Plaud transcript so the
+ * caller can decide (per `transcriptMode`) whether to also run the user's own
+ * provider.
+ */
+async function importPlaudContent(
+    candidates: ImportCandidate[],
+    context: SyncContext,
+    plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
+    result: SyncResult,
+): Promise<Set<string>> {
+    const transcriptImported = new Set<string>();
+    let tokenDead = false;
+
+    for (const candidate of candidates) {
+        if (tokenDead) break;
+        try {
+            const detail = await plaudClient.getFileDetail(
+                candidate.plaudFileId,
+            );
+            const { transcript, summary } = selectContentItems(detail);
+
+            // --- Transcript (coexists with the user's own; gap-fill only) ---
+            const transcriptLink = transcript?.data_link;
+            if (candidate.isTrans && isReady(transcript) && transcriptLink) {
+                const [existing] = await db
+                    .select({ id: transcriptions.id })
+                    .from(transcriptions)
+                    .where(
+                        and(
+                            eq(
+                                transcriptions.recordingId,
+                                candidate.recordingId,
+                            ),
+                            eq(transcriptions.userId, context.userId),
+                            eq(transcriptions.source, "plaud"),
+                        ),
+                    )
+                    .limit(1);
+
+                if (existing) {
+                    // Already imported on a prior sync. Treat as present so
+                    // 'plaud_only' still suppresses re-transcription.
+                    transcriptImported.add(candidate.recordingId);
+                } else {
+                    const parsed = parseTranscript(
+                        await plaudClient.fetchContentLink(transcriptLink),
+                    );
+                    if (parsed.text.trim()) {
+                        const { committed } = await upsertTranscription({
+                            userId: context.userId,
+                            recordingId: candidate.recordingId,
+                            text: parsed.text,
+                            detectedLanguage: parsed.language,
+                            source: "plaud",
+                            provider: "plaud",
+                            model: "plaud-native",
+                        });
+                        if (committed) {
+                            transcriptImported.add(candidate.recordingId);
+                            await emitEvent(
+                                "transcription.completed",
+                                context.userId,
+                                candidate.recordingId,
+                            );
+                        }
+                    }
+                }
+            }
+
+            // --- Summary (single per recording; gap-fill only) ---
+            const summaryLink = summary?.data_link;
+            if (candidate.isSummary && isReady(summary) && summaryLink) {
+                const [existing] = await db
+                    .select({ id: aiEnhancements.id })
+                    .from(aiEnhancements)
+                    .where(
+                        and(
+                            eq(
+                                aiEnhancements.recordingId,
+                                candidate.recordingId,
+                            ),
+                            eq(aiEnhancements.userId, context.userId),
+                        ),
+                    )
+                    .limit(1);
+
+                if (!existing) {
+                    const parsed = parseSummary(
+                        await plaudClient.fetchContentLink(summaryLink),
+                    );
+                    if (parsed.summary.trim()) {
+                        await upsertEnhancement({
+                            userId: context.userId,
+                            recordingId: candidate.recordingId,
+                            summary: parsed.summary,
+                            keyPoints: parsed.keyPoints,
+                            actionItems: parsed.actionItems,
+                            source: "plaud",
+                            provider: "plaud",
+                            model: "plaud-native",
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            if (
+                error instanceof AppError &&
+                error.code === ErrorCode.PLAUD_INVALID_TOKEN
+            ) {
+                // Workspace token died mid-pass (#203). Stop; audio already
+                // synced and auto-transcribe remains the fallback.
+                tokenDead = true;
+                result.errors.push(
+                    "Plaud content import stopped: access token expired",
+                );
+            } else {
+                result.errors.push(
+                    `Plaud content import failed for ${candidate.plaudFileId}: ${error}`,
+                );
+            }
+        }
+    }
+
+    return transcriptImported;
 }

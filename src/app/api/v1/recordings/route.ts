@@ -1,5 +1,5 @@
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, gte, isNull, lt, not, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import {
@@ -117,19 +117,34 @@ export const GET = apiHandler(async (request: Request) => {
         );
     }
 
+    // Transcripts are 1:N per recording (Plaud + the user's own coexist), so a
+    // join would duplicate recordings. Use a correlated EXISTS for both the
+    // has_transcription filter and the boolean flag.
+    const transcriptExists = exists(
+        db
+            .select()
+            .from(transcriptions)
+            .where(
+                and(
+                    eq(transcriptions.recordingId, recordings.id),
+                    eq(transcriptions.userId, authn.user.id),
+                ),
+            ),
+    );
+
     if (hasTranscription === true) {
-        conditions.push(isNotNull(transcriptions.id));
+        conditions.push(transcriptExists);
     }
     if (hasTranscription === false) {
-        conditions.push(isNull(transcriptions.id));
+        conditions.push(not(transcriptExists));
     }
 
     const rows = await db
         .select({
             recording: recordings,
             device: plaudDevices,
-            transcription: transcriptions,
             enhancement: aiEnhancements,
+            hasTranscript: transcriptExists,
         })
         .from(recordings)
         .leftJoin(
@@ -137,13 +152,6 @@ export const GET = apiHandler(async (request: Request) => {
             and(
                 eq(plaudDevices.userId, authn.user.id),
                 eq(plaudDevices.serialNumber, recordings.deviceSn),
-            ),
-        )
-        .leftJoin(
-            transcriptions,
-            and(
-                eq(transcriptions.recordingId, recordings.id),
-                eq(transcriptions.userId, authn.user.id),
             ),
         )
         .leftJoin(
@@ -163,12 +171,10 @@ export const GET = apiHandler(async (request: Request) => {
 
     return NextResponse.json({
         data: pageRows.map((row) =>
-            serializeRecording(
-                row.recording,
-                row.device,
-                row.transcription,
-                row.enhancement,
-            ),
+            serializeRecording(row.recording, row.device, {
+                hasTranscription: Boolean(row.hasTranscript),
+                hasSummary: Boolean(row.enhancement),
+            }),
         ),
         next_cursor:
             hasMore && last

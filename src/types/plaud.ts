@@ -93,3 +93,37 @@ export interface PlaudWorkspaceTokenResponse {
         role: string;
     };
 }
+
+// --- Plaud-native content (transcript / summary / notes) — feature #204 ---
+// Shape of GET /file/detail/{fileId}. Reverse-engineered and UNVERIFIED
+// against official Plaud docs (see Phase 0); kept permissive (all fields
+// optional) so parsers defensively pick what they need.
+export interface PlaudContentItem {
+    data_type?: string; // 'transaction' | 'summary' | 'note' | 'outline' | 'mindmap' | ...
+    data_tab_name?: string;
+    task_status?: number; // 1 = ready
+    data_link?: string; // presigned URL; body may be gzip-compressed JSON
+}
+
+export interface PlaudFileDetail {
+    id?: string;
+    filename?: string;
+    duration?: number;
+    start_time?: number;
+    scene?: number;
+    content_list?: PlaudContentItem[];
+}
+
+export interface PlaudFileDetailResponse {
+    status: number;
+    msg?: string;
+    data?: PlaudFileDetail;
+}
+
+// A single diarized transcript segment from a 'transaction' content link.
+export interface PlaudTranscriptSegment {
+    start_time?: number;
+    end_time?: number;
+    speaker?: string | number;
+    content?: string;
+}

@@ -5,6 +5,7 @@ import {
     plaudDevices,
     recordings,
     transcriptions,
+    userSettings,
 } from "@/db/schema";
 import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 
@@ -19,6 +20,7 @@ export type RecordingCursor = {
 };
 
 export type V1Transcript = {
+    source: string;
     language: string | null;
     text: string;
     provider: string;
@@ -58,7 +60,12 @@ export type V1Recording = {
 };
 
 export type V1RecordingDetail = V1Recording & {
+    /** The primary transcript (per the user's preferred source). Kept singular
+     * for backward compatibility with clients that expect one transcript. */
     transcript: V1Transcript | null;
+    /** Every transcript for the recording, one per source (e.g. the user's own
+     * plus a Plaud-imported one). May hold 0, 1, or more entries. */
+    transcripts: V1Transcript[];
     summary: V1Summary | null;
 };
 
@@ -113,6 +120,7 @@ export function serializeTranscript(
     if (!transcription) return null;
 
     return {
+        source: transcription.source,
         language: transcription.detectedLanguage,
         text: decryptText(transcription.text),
         provider: transcription.provider,
@@ -141,8 +149,7 @@ export function serializeSummary(
 export function serializeRecording(
     recording: RecordingRow,
     device: DeviceRow | null,
-    transcription: TranscriptionRow | null,
-    enhancement: AiEnhancementRow | null,
+    flags: { hasTranscription: boolean; hasSummary: boolean },
 ): V1Recording {
     const self = `/api/v1/recordings/${recording.id}`;
 
@@ -161,8 +168,8 @@ export function serializeRecording(
                   model: device.model,
               }
             : null,
-        has_transcription: Boolean(transcription),
-        has_summary: Boolean(enhancement),
+        has_transcription: flags.hasTranscription,
+        has_summary: flags.hasSummary,
         links: {
             self,
             transcript: `${self}/transcript`,
@@ -171,28 +178,67 @@ export function serializeRecording(
     };
 }
 
+/**
+ * Choose the primary transcript for singular contexts (the `transcript` field,
+ * summary input, the v1 transcript endpoint). Prefers the user's configured
+ * source, then their own 'riffado' transcript, then whatever exists.
+ */
+export function resolvePrimaryTranscript(
+    transcripts: TranscriptionRow[],
+    preferredSource: string,
+): TranscriptionRow | null {
+    if (transcripts.length === 0) return null;
+    return (
+        transcripts.find((t) => t.source === preferredSource) ??
+        transcripts.find((t) => t.source === "riffado") ??
+        transcripts[0]
+    );
+}
+
 export function serializeRecordingDetail(
     recording: RecordingRow,
     device: DeviceRow | null,
-    transcription: TranscriptionRow | null,
+    transcripts: TranscriptionRow[],
     enhancement: AiEnhancementRow | null,
+    preferredSource = "plaud",
 ): V1RecordingDetail {
+    const primary = resolvePrimaryTranscript(transcripts, preferredSource);
     return {
-        ...serializeRecording(recording, device, transcription, enhancement),
-        transcript: serializeTranscript(transcription),
+        ...serializeRecording(recording, device, {
+            hasTranscription: transcripts.length > 0,
+            hasSummary: Boolean(enhancement),
+        }),
+        transcript: serializeTranscript(primary),
+        transcripts: transcripts
+            .map(serializeTranscript)
+            .filter((t): t is V1Transcript => t !== null),
         summary: serializeSummary(enhancement),
     };
+}
+
+/** The user's preferred primary transcript source (default 'plaud'). */
+export async function getPreferredTranscriptSource(
+    userId: string,
+): Promise<string> {
+    const [settings] = await db
+        .select({ preferred: userSettings.preferredTranscriptSource })
+        .from(userSettings)
+        .where(eq(userSettings.userId, userId))
+        .limit(1);
+    return settings?.preferred ?? "plaud";
 }
 
 export async function getV1RecordingDetailForUser(
     userId: string,
     recordingId: string,
 ): Promise<V1RecordingDetail | null> {
+    // device + enhancement are 1:1 with a recording, so left-joining them is
+    // safe. Transcripts are 1:N (a Plaud-imported transcript and the user's
+    // own coexist), so they're fetched separately to avoid row fan-out.
     const [row] = await db
         .select({
             recording: recordings,
             device: plaudDevices,
-            transcription: transcriptions,
             enhancement: aiEnhancements,
         })
         .from(recordings)
@@ -201,13 +247,6 @@ export async function getV1RecordingDetailForUser(
             and(
                 eq(plaudDevices.userId, userId),
                 eq(plaudDevices.serialNumber, recordings.deviceSn),
-            ),
-        )
-        .leftJoin(
-            transcriptions,
-            and(
-                eq(transcriptions.recordingId, recordings.id),
-                eq(transcriptions.userId, userId),
             ),
         )
         .leftJoin(
@@ -228,10 +267,21 @@ export async function getV1RecordingDetailForUser(
 
     if (!row) return null;
 
+    const transcriptRows = await db
+        .select()
+        .from(transcriptions)
+        .where(
+            and(
+                eq(transcriptions.recordingId, recordingId),
+                eq(transcriptions.userId, userId),
+            ),
+        );
+
     return serializeRecordingDetail(
         row.recording,
         row.device,
-        row.transcription,
+        transcriptRows,
         row.enhancement,
+        await getPreferredTranscriptSource(userId),
     );
 }

@@ -67,6 +67,7 @@ const transcription = {
     transcriptionType: "server",
     provider: "openai",
     model: "whisper-1",
+    source: "riffado",
     createdAt: now,
 };
 
@@ -79,6 +80,7 @@ const enhancement = {
     keyPoints: ["Planning"],
     provider: "openai",
     model: "gpt-4o-mini",
+    source: "riffado",
     createdAt: now,
 };
 
@@ -94,7 +96,10 @@ describe("v1 recordings", () => {
 
     it("serializes stable list payloads", () => {
         expect(
-            serializeRecording(recording, device, transcription, enhancement),
+            serializeRecording(recording, device, {
+                hasTranscription: true,
+                hasSummary: true,
+            }),
         ).toEqual({
             id: "rec-1",
             title: "Planning Call",
@@ -122,11 +127,13 @@ describe("v1 recordings", () => {
         const detail = serializeRecordingDetail(
             recording,
             device,
-            transcription,
+            [transcription],
             enhancement,
         );
 
         expect(detail.transcript?.text).toBe("Hello world");
+        expect(detail.transcript?.source).toBe("riffado");
+        expect(detail.transcripts).toHaveLength(1);
         expect(detail.summary?.text).toBe("A short summary");
         expect(detail.summary?.action_items).toEqual(["Follow up"]);
         expect(detail.summary?.key_points).toEqual(["Planning"]);
@@ -136,7 +143,7 @@ describe("v1 recordings", () => {
         const detail = serializeRecordingDetail(
             { ...recording, filename: "Legacy Recording" },
             null,
-            { ...transcription, text: "Legacy transcript" },
+            [{ ...transcription, text: "Legacy transcript" }],
             null,
         );
 

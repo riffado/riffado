@@ -1,7 +1,9 @@
+import { gunzipSync } from "node:zlib";
 import { AppError, ErrorCode } from "@/lib/errors";
 import type {
     PlaudApiError,
     PlaudDeviceListResponse,
+    PlaudFileDetailResponse,
     PlaudRecordingsResponse,
     PlaudTempUrlResponse,
 } from "@/types/plaud";
@@ -250,6 +252,51 @@ export class PlaudClient {
                 "Failed to download recording from Plaud. Please try again later.",
                 502,
             );
+        }
+    }
+
+    /**
+     * Fetch a recording's content manifest (`/file/detail/{id}`) — lists the
+     * transcript / summary / note items Plaud has processed and the presigned
+     * links to their bodies. Goes through `request`, so it inherits
+     * workspace-token auth, retry/backoff, and 401 → PLAUD_INVALID_TOKEN.
+     * NOTE: the response shape is unverified (see #204 / Phase 0).
+     */
+    async getFileDetail(fileId: string): Promise<PlaudFileDetailResponse> {
+        return this.request<PlaudFileDetailResponse>(`/file/detail/${fileId}`);
+    }
+
+    /**
+     * Fetch a presigned content link (transcript / summary JSON) from S3.
+     * Unlike Plaud API calls this carries no auth header and is gzip-aware:
+     * undici inflates transparently when `Content-Encoding: gzip` is present,
+     * otherwise we detect the gzip magic bytes and inflate manually. Returns
+     * parsed JSON, or the raw string when the body isn't JSON (parsers
+     * tolerate both). A 403 here means an expired presign (skip this item) —
+     * distinct from a dead Plaud token (401 from `getFileDetail`).
+     */
+    async fetchContentLink(url: string): Promise<unknown> {
+        const response = await plaudFetch(url);
+        if (!response.ok) {
+            throw new AppError(
+                ErrorCode.PLAUD_UPSTREAM_ERROR,
+                "Failed to fetch Plaud content link.",
+                502,
+                { plaudStatus: response.status },
+            );
+        }
+
+        const arrayBuffer = await response.arrayBuffer();
+        let buf = Buffer.from(arrayBuffer);
+        if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+            buf = gunzipSync(buf);
+        }
+
+        const text = buf.toString("utf-8");
+        try {
+            return JSON.parse(text);
+        } catch {
+            return text;
         }
     }
 

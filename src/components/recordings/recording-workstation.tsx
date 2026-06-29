@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
-import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
+import {
+    TranscriptionPanel,
+    type TranscriptOption,
+} from "@/components/dashboard/transcription-panel";
 import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +31,8 @@ interface Transcription {
 interface RecordingWorkstationProps {
     recording: Recording;
     transcription?: Transcription;
+    /** All transcripts (one per source) for the in-panel source switcher. */
+    transcripts?: TranscriptOption[];
     /**
      * User playback preferences forwarded into the embedded
      * RecordingPlayer. Server-resolved (with the same defaults as the
@@ -44,6 +49,7 @@ interface RecordingWorkstationProps {
 export function RecordingWorkstation({
     recording,
     transcription,
+    transcripts,
     initialPlaybackSpeed,
     initialVolume,
     initialAutoPlayNext,
@@ -144,6 +150,7 @@ export function RecordingWorkstation({
                     <TranscriptionPanel
                         recording={recording}
                         transcription={transcription}
+                        transcripts={transcripts}
                         isTranscribing={isTranscribing}
                         onTranscribe={handleTranscribe}
                     />

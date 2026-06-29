@@ -80,6 +80,10 @@ export function TranscriptionSection() {
         useState("balanced");
     const [autoGenerateTitle, setAutoGenerateTitle] = useState(true);
     const [syncTitleToPlaud, setSyncTitleToPlaud] = useState(false);
+    const [importPlaudContent, setImportPlaudContent] = useState(false);
+    const [transcriptMode, setTranscriptMode] = useState("plaud_only");
+    const [preferredTranscriptSource, setPreferredTranscriptSource] =
+        useState("plaud");
     const pendingChangesRef = useRef<Map<string, unknown>>(new Map());
 
     useEffect(() => {
@@ -97,6 +101,11 @@ export function TranscriptionSection() {
                     );
                     setAutoGenerateTitle(data.autoGenerateTitle ?? true);
                     setSyncTitleToPlaud(data.syncTitleToPlaud ?? false);
+                    setImportPlaudContent(data.importPlaudContent ?? false);
+                    setTranscriptMode(data.transcriptMode ?? "plaud_only");
+                    setPreferredTranscriptSource(
+                        data.preferredTranscriptSource ?? "plaud",
+                    );
                 }
             } catch (error) {
                 console.error("Failed to fetch settings:", error);
@@ -127,6 +136,43 @@ export function TranscriptionSection() {
         } catch {
             setAutoTranscribe(previous);
             pendingChangesRef.current.delete("autoTranscribe");
+            toast.error("Failed to save settings. Changes reverted.");
+        }
+    };
+
+    const handleImportSettingChange = async (updates: {
+        importPlaudContent?: boolean;
+        transcriptMode?: string;
+        preferredTranscriptSource?: string;
+    }) => {
+        const prev = {
+            importPlaudContent,
+            transcriptMode,
+            preferredTranscriptSource,
+        };
+        if (updates.importPlaudContent !== undefined) {
+            setImportPlaudContent(updates.importPlaudContent);
+        }
+        if (updates.transcriptMode !== undefined) {
+            setTranscriptMode(updates.transcriptMode);
+        }
+        if (updates.preferredTranscriptSource !== undefined) {
+            setPreferredTranscriptSource(updates.preferredTranscriptSource);
+        }
+
+        try {
+            const response = await fetch("/api/settings/user", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updates),
+            });
+            if (!response.ok) {
+                throw new Error("Failed to save settings");
+            }
+        } catch {
+            setImportPlaudContent(prev.importPlaudContent);
+            setTranscriptMode(prev.transcriptMode);
+            setPreferredTranscriptSource(prev.preferredTranscriptSource);
             toast.error("Failed to save settings. Changes reverted.");
         }
     };
@@ -265,6 +311,102 @@ export function TranscriptionSection() {
                         disabled={isSavingSettings}
                     />
                 </div>
+
+                <div className="flex items-center justify-between">
+                    <div className="space-y-0.5 flex-1">
+                        <Label
+                            htmlFor="import-plaud-content"
+                            className="text-base"
+                        >
+                            Import Plaud transcripts and summaries
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            When Plaud already transcribed a recording, import
+                            its transcript and summary on sync instead of
+                            re-doing the work with your own AI provider.
+                        </p>
+                    </div>
+                    <Switch
+                        id="import-plaud-content"
+                        checked={importPlaudContent}
+                        onCheckedChange={(checked) =>
+                            handleImportSettingChange({
+                                importPlaudContent: checked,
+                            })
+                        }
+                        disabled={isSavingSettings}
+                    />
+                </div>
+
+                {importPlaudContent && (
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="transcript-mode">
+                                When Plaud has a transcript
+                            </Label>
+                            <Select
+                                value={transcriptMode}
+                                onValueChange={(value) =>
+                                    handleImportSettingChange({
+                                        transcriptMode: value,
+                                    })
+                                }
+                                disabled={isSavingSettings}
+                            >
+                                <SelectTrigger
+                                    id="transcript-mode"
+                                    className="w-full"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="plaud_only">
+                                        Use Plaud only (saves AI credits)
+                                    </SelectItem>
+                                    <SelectItem value="keep_both">
+                                        Keep both — also run my provider
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Keep both also transcribes with your own
+                                provider so you can compare them.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="preferred-transcript-source">
+                                Primary transcript
+                            </Label>
+                            <Select
+                                value={preferredTranscriptSource}
+                                onValueChange={(value) =>
+                                    handleImportSettingChange({
+                                        preferredTranscriptSource: value,
+                                    })
+                                }
+                                disabled={isSavingSettings}
+                            >
+                                <SelectTrigger
+                                    id="preferred-transcript-source"
+                                    className="w-full"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="plaud">Plaud</SelectItem>
+                                    <SelectItem value="riffado">
+                                        My provider
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Shown by default and used for summaries when
+                                both exist.
+                            </p>
+                        </div>
+                    </>
+                )}
 
                 <div className="space-y-2">
                     <Label htmlFor="transcription-language">

@@ -242,6 +242,14 @@ describe("Issue #79 - API keys and v1 recordings", () => {
         (db.select as Mock)
             .mockReturnValueOnce(authSelectChain)
             .mockReturnValueOnce(userSelectChain)
+            // has_transcription is now computed via a correlated EXISTS
+            // subquery (transcripts are 1:N per recording), which issues its
+            // own db.select() before the main list query.
+            .mockReturnValueOnce({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({}),
+                }),
+            })
             .mockReturnValueOnce({
                 from: vi.fn().mockReturnValue(listChain),
             });

@@ -176,6 +176,13 @@
       "when": 1780126747513,
       "tag": "0024_sour_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1781597334829,
+      "tag": "0025_cold_wallow",
+      "breakpoints": true
     }
   ]
 }
