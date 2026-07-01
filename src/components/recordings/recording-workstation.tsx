@@ -17,7 +17,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { useBrowserTranscription } from "@/hooks/use-browser-transcription";
 import type { Recording } from "@/types/recording";
+import type { TranscriptionModel } from "@/types/transcription";
 
 interface Transcription {
     text?: string;
@@ -53,6 +55,8 @@ export function RecordingWorkstation({
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const { run: runBrowserTranscription, status: browserStatus } =
+        useBrowserTranscription();
 
     const handleTranscribe = useCallback(async () => {
         setIsTranscribing(true);
@@ -77,6 +81,29 @@ export function RecordingWorkstation({
             setIsTranscribing(false);
         }
     }, [recording.id, refresh]);
+
+    const handleTranscribeBrowser = useCallback(
+        async (model: TranscriptionModel) => {
+            setIsTranscribing(true);
+            try {
+                await runBrowserTranscription({
+                    recordingId: recording.id,
+                    model,
+                });
+                toast.success("Transcription complete");
+                refresh();
+            } catch (error) {
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : "Browser transcription failed",
+                );
+            } finally {
+                setIsTranscribing(false);
+            }
+        },
+        [recording.id, refresh, runBrowserTranscription],
+    );
 
     const handleDelete = useCallback(async () => {
         setIsDeleting(true);
@@ -146,6 +173,8 @@ export function RecordingWorkstation({
                         transcription={transcription}
                         isTranscribing={isTranscribing}
                         onTranscribe={handleTranscribe}
+                        onTranscribeBrowser={handleTranscribeBrowser}
+                        browserStatus={browserStatus}
                     />
 
                     {/* Metadata */}

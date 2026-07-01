@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { useBrowserTranscription } from "@/hooks/use-browser-transcription";
+import type { TranscriptionModel } from "@/types/transcription";
 
 type ActionKind = "transcribing" | "summarizing";
 
@@ -26,6 +28,11 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
     const [inFlightActions, setInFlightActions] = useState<
         Map<string, ActionKind>
     >(new Map());
+    const {
+        run: runBrowserTranscription,
+        status: browserStatus,
+        reset: resetBrowserStatus,
+    } = useBrowserTranscription();
 
     const markAction = useCallback((id: string, kind: ActionKind | null) => {
         setInFlightActions((prev) => {
@@ -73,9 +80,45 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
         [markAction, onTranscribeComplete],
     );
 
+    /**
+     * Transcribe a recording entirely in the browser via Transformers.js
+     * (Whisper in WebAssembly) -- no provider key required. The model
+     * download + inference run client-side; only the resulting text is
+     * sent to the server for storage. Shares the same `inFlightActions`
+     * marker as the server path so the UI's disabled/spinner states work
+     * uniformly.
+     */
+    const transcribeInBrowser = useCallback(
+        async (id: string, model: TranscriptionModel) => {
+            markAction(id, "transcribing");
+            try {
+                await runBrowserTranscription({ recordingId: id, model });
+                toast.success("Transcription complete");
+                onTranscribeComplete();
+            } catch (error) {
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : "Browser transcription failed",
+                );
+            } finally {
+                resetBrowserStatus();
+                markAction(id, null);
+            }
+        },
+        [
+            markAction,
+            onTranscribeComplete,
+            runBrowserTranscription,
+            resetBrowserStatus,
+        ],
+    );
+
     return {
         inFlightActions,
         markAction,
         transcribeById,
+        transcribeInBrowser,
+        browserStatus,
     };
 }

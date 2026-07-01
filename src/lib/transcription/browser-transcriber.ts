@@ -1,6 +1,14 @@
 /**
- * Browser-based transcription using Transformers.js
- * Runs Whisper models in the browser via WebAssembly
+ * Browser-based transcription using Transformers.js.
+ *
+ * Runs Whisper models entirely in the user's browser via WebAssembly --
+ * no API key, no audio leaving the machine. This class lives on the main
+ * thread and drives a Web Worker (`worker.ts`) that owns the heavy
+ * Transformers.js pipeline so inference never blocks the UI thread.
+ *
+ * Audio must be decoded to mono 16 kHz PCM (`Float32Array`) before being
+ * passed in -- see `decode-audio.ts`. The worker feeds those samples
+ * straight to the pipeline.
  */
 
 import type {
@@ -16,12 +24,22 @@ const MODEL_MAP: Record<TranscriptionModel, string> = {
     "whisper-small": "Xenova/whisper-small",
 };
 
+/** Coarse stages reported back to the UI while a transcription runs. */
+export type BrowserTranscriptionStage = "loading-model" | "transcribing";
+
+export interface BrowserTranscriptionProgress {
+    stage: BrowserTranscriptionStage;
+    /** 0-100 model-download progress; only present during `loading-model`. */
+    percent?: number;
+}
+
 export class BrowserTranscriber {
     private worker: Worker | null = null;
     private isReady = false;
 
     /**
-     * Initialize the transcription worker
+     * Initialize the transcription worker. Cheap and idempotent -- the
+     * expensive model download happens lazily on the first `transcribe`.
      */
     async initialize(): Promise<void> {
         if (this.worker) {
@@ -30,25 +48,29 @@ export class BrowserTranscriber {
 
         return new Promise((resolve, reject) => {
             try {
-                this.worker = new Worker(
+                const worker = new Worker(
                     new URL("./worker.ts", import.meta.url),
                     { type: "module" },
                 );
 
-                this.worker.addEventListener("message", (event) => {
-                    if (event.data.type === "ready") {
+                const onReady = (event: MessageEvent) => {
+                    if (event.data?.type === "ready") {
+                        worker.removeEventListener("message", onReady);
                         this.isReady = true;
                         resolve();
                     }
-                });
+                };
 
-                this.worker.addEventListener("error", (error) => {
+                worker.addEventListener("message", onReady);
+                worker.addEventListener("error", (error) => {
                     reject(
                         new Error(
                             `Worker initialization failed: ${error.message}`,
                         ),
                     );
                 });
+
+                this.worker = worker;
             } catch (error) {
                 reject(error);
             }
@@ -56,99 +78,59 @@ export class BrowserTranscriber {
     }
 
     /**
-     * Transcribe audio file using the browser-based model
+     * Transcribe decoded mono 16 kHz PCM samples with the given Whisper
+     * model. The first call for a model downloads it (cached by the
+     * browser afterwards), reported via `onProgress`.
      */
     async transcribe(
-        audioFile: File,
+        samples: Float32Array,
         model: TranscriptionModel = "whisper-base",
-        onProgress?: (status: string) => void,
+        onProgress?: (progress: BrowserTranscriptionProgress) => void,
     ): Promise<TranscriptionResult> {
-        if (!this.worker || !this.isReady) {
+        const worker = this.worker;
+        if (!worker || !this.isReady) {
             throw new Error(
                 "Transcriber not initialized. Call initialize() first.",
             );
         }
 
         return new Promise((resolve, reject) => {
-            if (!this.worker) {
-                reject(new Error("Worker not available"));
-                return;
-            }
+            const messageHandler = (event: MessageEvent) => {
+                const { type, text, detectedLanguage, error, stage, percent } =
+                    event.data ?? {};
 
-            const reader = new FileReader();
-
-            reader.onload = async () => {
-                if (!this.worker) {
-                    reject(new Error("Worker not available"));
-                    return;
+                if (type === "progress") {
+                    onProgress?.({ stage, percent });
+                } else if (type === "complete") {
+                    worker.removeEventListener("message", messageHandler);
+                    resolve({ text, detectedLanguage });
+                } else if (type === "error") {
+                    worker.removeEventListener("message", messageHandler);
+                    reject(new Error(error));
                 }
+            };
 
-                const audioData = reader.result;
-                const modelPath = MODEL_MAP[model];
+            worker.addEventListener("message", messageHandler);
 
-                const messageHandler = (event: MessageEvent) => {
-                    const { type, text, detectedLanguage, error, status } =
-                        event.data;
-
-                    if (type === "progress" && onProgress) {
-                        onProgress(status);
-                    } else if (type === "complete") {
-                        this.worker?.removeEventListener(
-                            "message",
-                            messageHandler,
-                        );
-                        resolve({ text, detectedLanguage });
-                    } else if (type === "error") {
-                        this.worker?.removeEventListener(
-                            "message",
-                            messageHandler,
-                        );
-                        reject(new Error(error));
-                    }
-                };
-
-                this.worker.addEventListener("message", messageHandler);
-
-                this.worker.postMessage({
+            // Transfer the underlying buffer to avoid copying potentially
+            // large sample arrays across the worker boundary.
+            worker.postMessage(
+                {
                     type: "transcribe",
-                    audioData,
-                    model: modelPath,
-                });
-            };
-
-            reader.onerror = () => {
-                reject(new Error("Failed to read audio file"));
-            };
-
-            reader.readAsArrayBuffer(audioFile);
+                    samples,
+                    model: MODEL_MAP[model],
+                },
+                [samples.buffer],
+            );
         });
     }
 
-    /**
-     * Clean up the worker
-     */
+    /** Tear down the worker and free its loaded model. */
     terminate(): void {
         if (this.worker) {
             this.worker.terminate();
             this.worker = null;
             this.isReady = false;
         }
-    }
-}
-
-/**
- * Convenience function to transcribe audio in the browser
- */
-export async function transcribeInBrowser(
-    audioFile: File,
-    model: TranscriptionModel = "whisper-base",
-    onProgress?: (status: string) => void,
-): Promise<TranscriptionResult> {
-    const transcriber = new BrowserTranscriber();
-    try {
-        await transcriber.initialize();
-        return await transcriber.transcribe(audioFile, model, onProgress);
-    } finally {
-        transcriber.terminate();
     }
 }

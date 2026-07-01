@@ -4,6 +4,7 @@
 
 ### Added
 
+- In-browser transcription is now wired end to end. `BrowserTranscriber` (Whisper via Transformers.js / WebAssembly) previously had no callers and no storage route, so the advertised "free browser transcription" did nothing. Recordings now expose an **In browser** option (Whisper Tiny / Base / Small) that decodes audio to mono 16 kHz client-side, runs Whisper in a Web Worker, and persists only the resulting transcript through the same encrypted-at-rest path as server transcripts (`transcription_type: browser`). No API key, no audio leaves the device. New guide at `docs/guides/browser-transcription` ([#130](https://github.com/riffado/riffado/issues/130)).
 - Google Gemini as a native transcription provider. Gemini's OpenAI-compatibility layer does not implement `POST /v1/audio/transcriptions`, so configuring a Gemini API key under the existing Whisper/chat styles couldn't work. New `gemini` transcription style routes audio through `@google/generative-ai`'s `generateContent` with `inlineData`. 20 MB inline-data limit applies; larger files error out cleanly (File API upload support is planned follow-up). Preset is selectable in Settings → AI Providers ([#176](https://github.com/riffado/riffado/pull/176) by [@amateo8282](https://github.com/amateo8282)).
 
 ### Fixed

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
+import type { TranscriptionModel } from "@/types/transcription";
 
 interface TranscriptionData {
     text?: string;
@@ -19,6 +20,8 @@ interface Props {
     isCurrentTranscribing: boolean;
     visibleRecordings: Recording[];
     onTranscribe: () => void;
+    onTranscribeBrowser: (model: TranscriptionModel) => void;
+    browserStatus: string | null;
     onSelectRecording: (r: Recording) => void;
     onBackToList: () => void;
     /** When true, the pane is hidden (mobile list view active). */
@@ -45,6 +48,8 @@ export function WorkstationDetailPane({
     isCurrentTranscribing,
     visibleRecordings,
     onTranscribe,
+    onTranscribeBrowser,
+    browserStatus,
     onSelectRecording,
     onBackToList,
     hiddenOnMobile,
@@ -102,6 +107,8 @@ export function WorkstationDetailPane({
                         transcription={currentTranscription}
                         isTranscribing={isCurrentTranscribing}
                         onTranscribe={onTranscribe}
+                        onTranscribeBrowser={onTranscribeBrowser}
+                        browserStatus={browserStatus}
                     />
                 </>
             ) : (
