@@ -3,6 +3,7 @@
     "pages": [
         "connect-plaud-account",
         "ai-providers",
+        "browser-transcription",
         "notifications",
         "automation-and-webhooks",
         "backup-and-restore"

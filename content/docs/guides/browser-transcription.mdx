@@ -1,0 +1,65 @@
+---
+title: Browser transcription
+description: Free, private transcription that runs Whisper entirely in your browser — no API key, no audio upload.
+---
+
+Riffado can transcribe a recording without any AI provider configured,
+by running [Whisper](https://github.com/openai/whisper) directly in your
+browser via [Transformers.js](https://huggingface.co/docs/transformers.js)
+(WebAssembly). The model and the audio never leave your machine, and it
+costs nothing.
+
+This is the default zero-config path: if you haven't set up a provider,
+or you just want a quick transcript without spending API credits, use
+browser transcription.
+
+## How to use it
+
+On a recording's detail view, open the **In browser** dropdown next to
+the Transcribe button and pick a model:
+
+- **Whisper Tiny** — fastest, smallest download (~75 MB). Good for clear
+  speech and quick drafts.
+- **Whisper Base** — balanced (~145 MB). The recommended default.
+- **Whisper Small** — most accurate, largest download (~485 MB). Best
+  for noisy audio or accents.
+
+The first run with a given model downloads its weights. The browser
+caches them afterwards, so subsequent transcriptions with the same model
+skip the download.
+
+## What happens under the hood
+
+1. Riffado downloads the recording's audio from your own instance.
+2. The audio is decoded to mono 16 kHz PCM in your browser (Whisper's
+   native format).
+3. Whisper runs in a Web Worker so the UI stays responsive.
+4. Only the resulting transcript text is sent back to the server, where
+   it is stored exactly like a server-side transcript — encrypted at
+   rest, with a browser/model label, and an auto-generated title if you
+   have that enabled.
+
+No audio and no model weights ever touch a third-party server. Model
+weights are fetched once from the Hugging Face CDN; the audio is never
+uploaded anywhere.
+
+## Trade-offs
+
+- **Speed** scales with your device. Whisper Small on a long recording
+  can take several minutes on a laptop. For long meetings, a server-side
+  provider (see [AI providers](/docs/guides/ai-providers)) is faster.
+- **Accuracy** is lower than large hosted Whisper models. Tiny/Base are
+  draft-quality; Small is solid for most speech.
+- **First-run download** is large. Subsequent runs reuse the cached
+  model.
+- Requires a browser with WebAssembly and the Web Audio API (all current
+  desktop browsers; mobile works but is slower).
+
+## When to use which
+
+| Situation | Recommendation |
+| --- | --- |
+| No API key, want it free | Browser (Tiny/Base) |
+| Privacy-critical, nothing leaves the device | Browser, or a local provider (Ollama / LM Studio) |
+| Long recordings, want speed | Server-side provider |
+| Highest accuracy | Server-side large Whisper, or Browser Small |

@@ -3,16 +3,13 @@ import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
     apiCredentials,
-    plaudConnections,
     recordings,
     transcriptions,
     userSettings,
 } from "@/db/schema";
-import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
-import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
@@ -23,6 +20,7 @@ import {
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
+import { maybeGenerateAndSyncTitle } from "@/lib/transcription/store-transcript";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -346,86 +344,14 @@ export async function transcribeRecording(
             throw txError;
         }
 
-        if (autoGenerateTitle && transcriptionText.trim()) {
-            try {
-                const generatedTitle = await generateTitleFromTranscription(
-                    userId,
-                    transcriptionText,
-                );
-
-                if (generatedTitle) {
-                    // Encrypt the generated title before storing it as the
-                    // recording's filename. The plaintext is still available
-                    // below for the optional sync-to-Plaud push.
-                    await db
-                        .update(recordings)
-                        .set({
-                            filename: encryptText(generatedTitle),
-                            updatedAt: new Date(),
-                        })
-                        .where(
-                            and(
-                                eq(recordings.id, recordingId),
-                                eq(recordings.userId, userId),
-                                isNull(recordings.deletedAt),
-                            ),
-                        );
-
-                    if (syncTitleToPlaud) {
-                        try {
-                            const [connection] = await db
-                                .select()
-                                .from(plaudConnections)
-                                .where(eq(plaudConnections.userId, userId))
-                                .limit(1);
-
-                            if (connection) {
-                                const plaudClient = await createPlaudClient(
-                                    connection.bearerToken,
-                                    connection.apiBase,
-                                    connection.workspaceId,
-                                );
-                                await plaudClient.updateFilename(
-                                    recording.plaudFileId,
-                                    generatedTitle,
-                                );
-                                // Backfill workspaceId if newly resolved.
-                                // Always scope user-owned UPDATEs by userId
-                                // even when filtering by id (per AGENTS.md).
-                                const resolved = plaudClient.workspaceId;
-                                if (
-                                    resolved &&
-                                    resolved !== connection.workspaceId
-                                ) {
-                                    await db
-                                        .update(plaudConnections)
-                                        .set({ workspaceId: resolved })
-                                        .where(
-                                            and(
-                                                eq(
-                                                    plaudConnections.id,
-                                                    connection.id,
-                                                ),
-                                                eq(
-                                                    plaudConnections.userId,
-                                                    userId,
-                                                ),
-                                            ),
-                                        );
-                                }
-                            }
-                        } catch (error) {
-                            console.error(
-                                "Failed to sync title to Plaud:",
-                                error,
-                            );
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error("Failed to generate title:", error);
-            }
-        }
+        await maybeGenerateAndSyncTitle({
+            userId,
+            recordingId,
+            plaudFileId: recording.plaudFileId,
+            transcriptionText,
+            autoGenerateTitle,
+            syncTitleToPlaud,
+        });
 
         await emitEvent("transcription.completed", userId, recordingId);
 

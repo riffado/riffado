@@ -28,6 +28,7 @@ import type { InitialSettings } from "@/lib/settings/initial-settings";
 import { SYNC_CONFIG } from "@/lib/sync-config";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
+import type { TranscriptionModel } from "@/types/transcription";
 
 interface TranscriptionData {
     text?: string;
@@ -210,7 +211,12 @@ export function Workstation({
         triggerUpload,
     } = useUploadQueue({ onUploadComplete: refresh });
 
-    const { inFlightActions, transcribeById } = useTranscribeQueue({
+    const {
+        inFlightActions,
+        transcribeById,
+        transcribeInBrowser,
+        browserStatus,
+    } = useTranscribeQueue({
         onTranscribeComplete: refresh,
     });
 
@@ -231,6 +237,14 @@ export function Workstation({
         if (!currentRecording) return;
         await transcribeById(currentRecording.id);
     }, [currentRecording, transcribeById]);
+
+    const handleTranscribeBrowser = useCallback(
+        async (model: TranscriptionModel) => {
+            if (!currentRecording) return;
+            await transcribeInBrowser(currentRecording.id, model);
+        },
+        [currentRecording, transcribeInBrowser],
+    );
 
     const handleDelete = useCallback(
         async (recording: Recording) => {
@@ -363,6 +377,8 @@ export function Workstation({
                                 isCurrentTranscribing={isCurrentTranscribing}
                                 visibleRecordings={visibleRecordings}
                                 onTranscribe={handleTranscribe}
+                                onTranscribeBrowser={handleTranscribeBrowser}
+                                browserStatus={browserStatus}
                                 onSelectRecording={setCurrentRecording}
                                 onBackToList={() => setMobileView("list")}
                                 hiddenOnMobile={mobileView === "list"}

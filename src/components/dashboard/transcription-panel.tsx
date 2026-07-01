@@ -3,6 +3,7 @@
 import {
     ChevronDown,
     ChevronUp,
+    Cpu,
     FileText,
     Languages,
     ListChecks,
@@ -14,6 +15,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -23,17 +32,40 @@ import {
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import { SUMMARY_PRESETS } from "@/lib/ai/summary-presets";
 import type { Recording } from "@/types/recording";
+import type { TranscriptionModel } from "@/types/transcription";
 
 interface Transcription {
     text?: string;
     language?: string;
 }
 
+const BROWSER_MODELS: {
+    model: TranscriptionModel;
+    label: string;
+    hint: string;
+}[] = [
+    { model: "whisper-tiny", label: "Whisper Tiny", hint: "fastest, ~75 MB" },
+    { model: "whisper-base", label: "Whisper Base", hint: "balanced, ~145 MB" },
+    {
+        model: "whisper-small",
+        label: "Whisper Small",
+        hint: "most accurate, ~485 MB",
+    },
+];
+
 interface TranscriptionPanelProps {
     recording: Recording;
     transcription?: Transcription;
     isTranscribing: boolean;
     onTranscribe: () => void;
+    /**
+     * Run transcription in the browser via Transformers.js with the
+     * chosen Whisper model. Optional -- when omitted, only the
+     * server-side path is offered.
+     */
+    onTranscribeBrowser?: (model: TranscriptionModel) => void;
+    /** Human-readable progress string while a browser transcribe runs. */
+    browserStatus?: string | null;
 }
 
 export function TranscriptionPanel({
@@ -41,6 +73,8 @@ export function TranscriptionPanel({
     transcription,
     isTranscribing,
     onTranscribe,
+    onTranscribeBrowser,
+    browserStatus,
 }: TranscriptionPanelProps) {
     const {
         summaryData,
@@ -67,7 +101,7 @@ export function TranscriptionPanel({
                             Transcription
                         </CardTitle>
                         <div className="flex items-center gap-2">
-                            {transcription?.text && (
+                            {transcription?.text ? (
                                 <Button
                                     onClick={onTranscribe}
                                     size="sm"
@@ -77,16 +111,56 @@ export function TranscriptionPanel({
                                     <RefreshCw className="size-4 mr-2" />
                                     Re-transcribe
                                 </Button>
+                            ) : (
+                                !isTranscribing && (
+                                    <Button
+                                        onClick={onTranscribe}
+                                        size="sm"
+                                        disabled={isTranscribing}
+                                    >
+                                        <Sparkles className="size-4 mr-2" />
+                                        Transcribe
+                                    </Button>
+                                )
                             )}
-                            {!transcription?.text && !isTranscribing && (
-                                <Button
-                                    onClick={onTranscribe}
-                                    size="sm"
-                                    disabled={isTranscribing}
-                                >
-                                    <Sparkles className="size-4 mr-2" />
-                                    Transcribe
-                                </Button>
+                            {onTranscribeBrowser && !isTranscribing && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            aria-label="Transcribe in browser"
+                                        >
+                                            <Cpu className="size-4 mr-2" />
+                                            In browser
+                                            <ChevronDown className="size-4 ml-1" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuLabel>
+                                            Transcribe in browser (free)
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        {BROWSER_MODELS.map(
+                                            ({ model, label, hint }) => (
+                                                <DropdownMenuItem
+                                                    key={model}
+                                                    onClick={() =>
+                                                        onTranscribeBrowser(
+                                                            model,
+                                                        )
+                                                    }
+                                                    className="flex flex-col items-start gap-0.5"
+                                                >
+                                                    <span>{label}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {hint}
+                                                    </span>
+                                                </DropdownMenuItem>
+                                            ),
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
                         </div>
                     </div>
@@ -96,8 +170,14 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-12">
                             <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                             <p className="text-sm text-muted-foreground">
-                                Transcribing audio…
+                                {browserStatus ?? "Transcribing audio…"}
                             </p>
+                            {browserStatus && (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Running in your browser — nothing leaves
+                                    this device.
+                                </p>
+                            )}
                         </div>
                     ) : transcription?.text ? (
                         <div className="space-y-4">
