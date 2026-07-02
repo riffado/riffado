@@ -68,7 +68,14 @@ export async function validateAudience(
         `[validate:${definition.slug}] start concurrency=${concurrency} limit=${limit || "none"}`,
     );
 
-    const inFlight = new Map<string, Promise<void>>();
+    // Keyed by a per-probe sequence number, not the raw email -- a
+    // duplicate recipient email would otherwise collide on the same map
+    // key. The second probe's `set` would silently overwrite the first's
+    // entry, and the first probe's `finally` would then delete the
+    // *second* probe's still-running entry out from under it, making the
+    // final drain loop return before that probe actually finishes.
+    const inFlight = new Map<number, Promise<void>>();
+    let inFlightSeq = 0;
     let attempted = 0;
 
     const drainOne = async (): Promise<void> => {
@@ -101,6 +108,7 @@ export async function validateAudience(
             await drainOne();
         }
 
+        const probeId = inFlightSeq++;
         const probe = (async () => {
             try {
                 const result = await checkEmail(email, {
@@ -119,10 +127,10 @@ export async function validateAudience(
                     `[validate:${definition.slug}] ${email} ERROR: ${describeError(error)}`,
                 );
             } finally {
-                inFlight.delete(email);
+                inFlight.delete(probeId);
             }
         })();
-        inFlight.set(email, probe);
+        inFlight.set(probeId, probe);
     }
 
     while (inFlight.size > 0) {
