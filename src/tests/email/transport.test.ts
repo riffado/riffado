@@ -57,10 +57,31 @@ describe("htmlToText", () => {
         expect(text).toContain("Body");
     });
 
-    it("drops everything after an unclosed script/style tag rather than looping forever", () => {
+    it("drops everything after an unclosed script/style tag (no defined end -- conservative by design)", () => {
         const html = `<p>Before</p><script>alert(1)`;
         const text = htmlToText(html);
         expect(text).toBe("Before");
+    });
+
+    it("preserves a lone unmatched '<' as literal text instead of truncating the rest of the email", () => {
+        // Not an unclosed real tag -- script/style content is already fully
+        // removed by this point, so a stray "<" with no ">" anywhere later
+        // in the string (ordinary prose: a comparison, a partial tag typed
+        // by a user, etc.) must not eat everything after it. Deliberately
+        // no later ">" anywhere in the fixture (a "<...>" pair further
+        // along would legitimately still get eaten as one bogus tag --
+        // that's the same known trade-off the old regex approach had, not
+        // what this test is about).
+        const html = `<p>Body</p>5 is less than 10, no closing bracket after this`;
+        const text = htmlToText(html);
+        expect(text).toContain(
+            "5 is less than 10, no closing bracket after this",
+        );
+
+        const withBareLt = `<p>Body</p>5 < 10, nothing closes after this point`;
+        expect(htmlToText(withBareLt)).toContain(
+            "5 < 10, nothing closes after this point",
+        );
     });
 
     it("leaves no tag markup behind when an unrelated tag is nested inside what looks like a script tag", () => {

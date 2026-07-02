@@ -110,11 +110,12 @@ function stripTagBlocks(input: string, tagName: string): string {
             break;
         }
         out += input.slice(i, openIdx);
+        // An unclosed <script>/<style> has no defined end -- an HTML
+        // parser would treat everything after it as (potentially
+        // executable) tag content until EOF, so dropping the remainder
+        // here is the conservative/correct choice, not a bug.
         const closeIdx = lower.indexOf(closePrefix, openTagEnd);
-        if (closeIdx === -1) {
-            i = input.length;
-            break;
-        }
+        if (closeIdx === -1) break;
         const closeTagEnd = lower.indexOf(">", closeIdx);
         i = closeTagEnd === -1 ? input.length : closeTagEnd + 1;
     }
@@ -139,7 +140,15 @@ function stripAllTags(input: string): string {
         out += input.slice(i, openIdx);
         const closeIdx = input.indexOf(">", openIdx);
         if (closeIdx === -1) {
-            i = input.length;
+            // A lone "<" with no matching ">" left in the input at this
+            // point is not an unclosed real tag (script/style blocks --
+            // the only tags whose content can hide something dangerous --
+            // were already fully removed by stripTagBlocks above). It's
+            // ordinary content like "5 < 10". Keep it as literal text
+            // instead of silently truncating the rest of the email body.
+            // `out` already has everything up to `openIdx` from the line
+            // above, so only the "<" onward needs appending here.
+            out += input.slice(openIdx);
             break;
         }
         i = closeIdx + 1;
