@@ -39,6 +39,7 @@ export type TranscribeErrorCode =
     | "RECORDING_NOT_FOUND"
     | "NO_TRANSCRIPTION_PROVIDER"
     | "RECORDING_DELETED"
+    | "HOSTED_LOCKED_OUT"
     | "TRANSCRIPTION_FAILED";
 
 export interface StoreBrowserTranscriptionInput {
@@ -71,7 +72,7 @@ export async function storeBrowserTranscription(
         return {
             success: false,
             error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
-            errorCode: "TRANSCRIPTION_FAILED",
+            errorCode: "HOSTED_LOCKED_OUT",
         };
     }
 
@@ -217,7 +218,7 @@ export async function transcribeRecording(
             return {
                 success: false,
                 error: "Your hosted plan has lapsed. Subscribe to resume transcription.",
-                errorCode: "TRANSCRIPTION_FAILED",
+                errorCode: "HOSTED_LOCKED_OUT",
             };
         }
 
@@ -316,6 +317,18 @@ export async function transcribeRecording(
         let persistModel: string;
 
         if (!credentials) {
+            // An explicit providerId override that didn't resolve (invalid,
+            // stale, or belongs to another user) must fail loudly rather
+            // than silently falling back to Mynah -- otherwise the caller's
+            // requested provider is ignored and hosted fallback usage gets
+            // charged against their Mynah budget unexpectedly.
+            if (opts.providerId) {
+                return {
+                    success: false,
+                    error: "No transcription API configured",
+                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
+                };
+            }
             // No user-configured provider. On hosted, fall back to Mynah
             // (metered against the user's monthly second budget). On
             // self-host there is no fallback.

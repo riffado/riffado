@@ -64,6 +64,12 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
                     result.error ?? "Recording was deleted",
                     410,
                 );
+            case "HOSTED_LOCKED_OUT":
+                throw new AppError(
+                    ErrorCode.ACCOUNT_LOCKED,
+                    result.error ?? "Your hosted plan has lapsed.",
+                    403,
+                );
             default:
                 throw new AppError(
                     ErrorCode.TRANSCRIPTION_FAILED,

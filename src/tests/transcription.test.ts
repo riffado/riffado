@@ -167,6 +167,53 @@ describe("Transcription", () => {
             expect(result.error).toBe("No transcription API configured");
         });
 
+        it("fails fast (does not fall back to Mynah) when an explicit providerId override doesn't resolve", async () => {
+            const { isMynahConfigured, transcribeViaMynah } = await import(
+                "@/lib/hosted/transcription/mynah"
+            );
+            (isMynahConfigured as Mock).mockReturnValueOnce(true);
+
+            (db.select as Mock)
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    id: mockRecordingId,
+                                    filename: "test.mp3",
+                                    storagePath: "test.mp3",
+                                },
+                            ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([]),
+                        }),
+                    }),
+                })
+                // Explicit providerId lookup finds nothing (stale/invalid/other user's id).
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([]),
+                        }),
+                    }),
+                });
+
+            const result = await transcribeRecording(
+                mockUserId,
+                mockRecordingId,
+                { providerId: "stale-provider-id" },
+            );
+
+            expect(result.success).toBe(false);
+            expect(result.errorCode).toBe("NO_TRANSCRIPTION_PROVIDER");
+            expect(transcribeViaMynah).not.toHaveBeenCalled();
+        });
+
         it("should return error when API call fails", async () => {
             const mockCreate = vi
                 .fn()
@@ -446,6 +493,21 @@ describe("Transcription", () => {
             );
             return { tx, txInsert, txInsertValues, txUpdate, txUpdateSet };
         }
+
+        it("returns HOSTED_LOCKED_OUT (not TRANSCRIPTION_FAILED) when the account is lapsed", async () => {
+            const { isHostedLockedOut } = await import("@/lib/entitlements");
+            (isHostedLockedOut as Mock).mockResolvedValueOnce(true);
+            const result = await storeBrowserTranscription({
+                userId: mockUserId,
+                recordingId: mockRecordingId,
+                text: "hello world",
+                detectedLanguage: "en",
+                model: "whisper-base",
+            });
+            expect(result.success).toBe(false);
+            expect(result.errorCode).toBe("HOSTED_LOCKED_OUT");
+            expect(emitEvent).not.toHaveBeenCalled();
+        });
 
         it("returns RECORDING_NOT_FOUND when recording does not exist or is tombstoned", async () => {
             mockOwnershipLookup([]);
