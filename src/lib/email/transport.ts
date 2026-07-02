@@ -122,21 +122,49 @@ function stripTagBlocks(input: string, tagName: string): string {
     return out;
 }
 
+/**
+ * Remove every remaining `<...>` tag from `input`, scanning manually (no
+ * regex replace) rather than a global `<[^>]*>` substitution.
+ */
+function stripAllTags(input: string): string {
+    let out = "";
+    let i = 0;
+
+    while (i < input.length) {
+        const openIdx = input.indexOf("<", i);
+        if (openIdx === -1) {
+            out += input.slice(i);
+            break;
+        }
+        out += input.slice(i, openIdx);
+        const closeIdx = input.indexOf(">", openIdx);
+        if (closeIdx === -1) {
+            i = input.length;
+            break;
+        }
+        i = closeIdx + 1;
+    }
+
+    return out;
+}
+
 /** Strip HTML tags for a synthetic plain-text alternative. */
 export function htmlToText(html: string): string {
     let result = html;
 
-    // Remove script/style blocks (manual scan, see stripTagBlocks) and then
-    // any remaining tags. Looped to a fixed point: stripping an unrelated tag
-    // from the middle of text can reform a "<script>"-looking string (e.g.
-    // "<scr<b>ipt>" becomes "<script>" once "<b>" is removed), so a single
-    // pass isn't enough to guarantee no "<script"/"<style" substring survives.
+    // Remove script/style blocks and then any remaining tags, all via manual
+    // scanning (no regex.replace on attacker-influenced content -- see
+    // stripTagBlocks/stripAllTags). Looped to a fixed point: stripping an
+    // unrelated tag from the middle of text can, in principle, reform a
+    // "<script>"-looking string (e.g. "<scr<b>ipt>" becomes "<script>" once
+    // "<b>" is removed), so a single pass isn't enough to guarantee no
+    // "<script"/"<style" substring survives.
     let previous: string;
     do {
         previous = result;
         result = stripTagBlocks(result, "style");
         result = stripTagBlocks(result, "script");
-        result = result.replace(/<[^>]*>/g, "");
+        result = stripAllTags(result);
     } while (result !== previous);
 
     // Decode entities; &amp; must be decoded last, otherwise text like
