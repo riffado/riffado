@@ -70,10 +70,16 @@ export async function transcribeViaMynah(
         );
 
         if (!res.ok) {
+            // The upstream body can contain internal Mynah diagnostics; this
+            // error's message propagates all the way to the client via
+            // transcribeRecording's catch block (result.error -> AppError
+            // message -> JSON response), so log the detail server-side only
+            // and throw a status-only message.
             const detail = await res.text().catch(() => "");
-            throw new Error(
-                `Mynah transcription failed (${res.status}): ${detail.slice(0, 500)}`,
+            console.error(
+                `[mynah] transcription request failed (${res.status}) for user ${input.userId}: ${detail.slice(0, 2000)}`,
             );
+            throw new Error(`Mynah transcription failed (${res.status})`);
         }
 
         const body = (await res.json()) as {
