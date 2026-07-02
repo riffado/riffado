@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -17,14 +18,6 @@ interface Props {
     exportUrl: string;
     /** Self-host docs / repo link. */
     selfHostUrl: string;
-}
-
-function formatDate(d: Date): string {
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
 }
 
 // DRAFT COPY — review before sending. Sent ~3 days before the free Pro
@@ -50,7 +43,7 @@ export function TransitionReminderEmail({
             </Heading>
             <Text style={emailStyles.text}>
                 Your free hosted window closes on{" "}
-                <strong>{formatDate(transitionEndsAt)}</strong>. To keep
+                <strong>{formatEmailDate(transitionEndsAt)}</strong>. To keep
                 background sync, new transcriptions, and uploads running, add a
                 card and lock founding-member pricing — {amountValue}{" "}
                 {amountCurrency}/month for life.
@@ -62,9 +55,10 @@ export function TransitionReminderEmail({
             </Section>
             <Text style={emailStyles.text}>
                 If you'd rather not subscribe, that's fine — nothing gets
-                deleted. After {formatDate(transitionEndsAt)} your account goes
-                read-only: your recordings stay playable and exportable, but
-                sync and new transcriptions pause until you subscribe. You can{" "}
+                deleted. After {formatEmailDate(transitionEndsAt)} your account
+                goes read-only: your recordings stay playable and exportable,
+                but sync and new transcriptions pause until you subscribe. You
+                can{" "}
                 <a href={selfHostUrl} style={emailStyles.link}>
                     self-host for free
                 </a>{" "}

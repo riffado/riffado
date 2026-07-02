@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -9,14 +10,6 @@ interface Props {
     deletionAt: Date;
     exportUrl: string;
     reactivateUrl: string;
-}
-
-function formatDate(d: Date): string {
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
 }
 
 export function GraceReminderEmail({
@@ -35,8 +28,8 @@ export function GraceReminderEmail({
             </Heading>
             <Text style={emailStyles.text}>
                 A reminder: your Riffado account and every recording in it will
-                be permanently deleted on {formatDate(deletionAt)}. You have{" "}
-                {daysLeft} days to export the data or reactivate.
+                be permanently deleted on {formatEmailDate(deletionAt)}. You
+                have {daysLeft} days to export the data or reactivate.
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={exportUrl}>

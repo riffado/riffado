@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -7,23 +8,18 @@ interface Props {
     gracePath: "trial" | "paid";
     /** Total grace window in days (7 for trial, 30 for paid). */
     graceDays: number;
+    /** Configured trial length in days (`BILLING_TRIAL_DAYS`, default 14). Only used when `gracePath === "trial"`. */
+    trialDays: number;
     /** When the account will be hard-deleted. */
     deletionAt: Date;
     exportUrl: string;
     reactivateUrl: string;
 }
 
-function formatDate(d: Date): string {
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-}
-
 export function GraceStartedEmail({
     gracePath,
     graceDays,
+    trialDays,
     deletionAt,
     exportUrl,
     reactivateUrl,
@@ -34,8 +30,8 @@ export function GraceStartedEmail({
             : "Your subscription ended.";
     const lead =
         gracePath === "trial"
-            ? `Your 14-day Riffado Pro trial ended without a card on file. You have ${graceDays} days to export your data; after that, your account and all recordings will be permanently deleted on ${formatDate(deletionAt)}.`
-            : `Your Riffado Pro subscription ended. You have ${graceDays} days to export your data or reactivate. After ${formatDate(deletionAt)} your account and all recordings will be permanently deleted.`;
+            ? `Your ${trialDays}-day Riffado Pro trial ended without a card on file. You have ${graceDays} days to export your data; after that, your account and all recordings will be permanently deleted on ${formatEmailDate(deletionAt)}.`
+            : `Your Riffado Pro subscription ended. You have ${graceDays} days to export your data or reactivate. After ${formatEmailDate(deletionAt)} your account and all recordings will be permanently deleted.`;
     return (
         <EmailLayout
             previewText={`You have ${graceDays} days to export your Riffado data before the account is deleted.`}

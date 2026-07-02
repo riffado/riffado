@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -12,11 +13,7 @@ interface Props {
 
 function formatDate(d: Date | null): string {
     if (!d) return "shortly";
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
+    return formatEmailDate(d, { month: "short" });
 }
 
 export function PaymentFailedEmail({

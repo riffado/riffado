@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -17,14 +18,6 @@ interface Props {
     selfHostUrl: string;
 }
 
-function formatDate(d: Date): string {
-    return d.toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-}
-
 // DRAFT COPY — review before sending. Sent to grandfathered hosted users
 // on launch day. Tone: respectful, no surprise, the 30-day window is the
 // grace. Positioning rules: name the price plainly, self-host is the free
@@ -39,7 +32,7 @@ export function TransitionStartEmail({
 }: Props) {
     return (
         <EmailLayout
-            previewText={`Riffado Hosted is now a paid product. You keep full Pro access free until ${formatDate(transitionEndsAt)}.`}
+            previewText={`Riffado Hosted is now a paid product. You keep full Pro access free until ${formatEmailDate(transitionEndsAt)}.`}
             footerLink={{ href: billingUrl, label: "Manage billing" }}
         >
             <Heading style={emailStyles.h1}>
@@ -50,7 +43,7 @@ export function TransitionStartEmail({
                 today, hosted runs as a paid plan — Hosted Pro at {amountValue}{" "}
                 {amountCurrency}/month. Nothing changes for you right now: you
                 keep full Pro access, free, until{" "}
-                <strong>{formatDate(transitionEndsAt)}</strong>.
+                <strong>{formatEmailDate(transitionEndsAt)}</strong>.
             </Text>
             <Text style={emailStyles.text}>
                 Add a card before then to keep everything running and lock{" "}
