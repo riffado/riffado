@@ -73,15 +73,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         await sendConfirmation(subscriber.id, subscriber.email);
     } catch (error) {
         if (error instanceof SmtpNotConfiguredError) {
+            // Expected on self-host instances without SMTP configured --
+            // the subscriber row still exists and will get their
+            // confirmation email once SMTP is set up. Not a failure.
             console.warn(
                 "[newsletter] SMTP not configured; confirmation email skipped",
             );
-        } else {
-            console.error(
-                "[newsletter] failed to send confirmation email",
-                error,
-            );
+            return NextResponse.json({ ok: true });
         }
+        // Any other failure (render exception, transient SMTP error) means
+        // the user will never see a confirm link. Surface it as a 5xx
+        // instead of silently returning ok:true so the client can show an
+        // error and the user knows to retry.
+        console.error("[newsletter] failed to send confirmation email", error);
+        return NextResponse.json(
+            { error: "Failed to send confirmation email. Please try again." },
+            { status: 502 },
+        );
     }
 
     return NextResponse.json({ ok: true });
