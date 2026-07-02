@@ -25,7 +25,7 @@ export const POST = apiHandler(async (request) => {
     }
     if (!isStripeConfigured()) {
         throw new AppError(
-            ErrorCode.NOT_FOUND,
+            ErrorCode.SERVICE_UNAVAILABLE,
             "Billing is not configured on this instance",
             503,
         );
