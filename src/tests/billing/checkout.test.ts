@@ -26,7 +26,10 @@ vi.mock("@/lib/hosted/billing/stripe-client", () => ({
 }));
 vi.mock("@/lib/env", () => ({ env: envMock }));
 
-import { startSubscriptionCheckout } from "@/lib/hosted/billing/checkout";
+import {
+    getOrCreateStripeCustomer,
+    startSubscriptionCheckout,
+} from "@/lib/hosted/billing/checkout";
 
 const baseInput = {
     userId: "user_1",
@@ -44,6 +47,62 @@ function subscriptionDataFromLastCall() {
     return (params as { subscription_data: Record<string, unknown> })
         .subscription_data;
 }
+
+describe("getOrCreateStripeCustomer", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("returns the existing mapping without calling Stripe when one already exists", async () => {
+        queriesMock.getBillingCustomerByUserId.mockResolvedValue({
+            stripeCustomerId: "cus_existing",
+        });
+        const id = await getOrCreateStripeCustomer({
+            userId: "user_1",
+            email: "u@example.com",
+        });
+        expect(id).toBe("cus_existing");
+        expect(stripeMock.customers.create).not.toHaveBeenCalled();
+    });
+
+    it("creates with a stable per-user idempotency key (not a fresh nonce)", async () => {
+        queriesMock.getBillingCustomerByUserId.mockResolvedValue(null);
+        stripeMock.customers.create.mockResolvedValue({ id: "cus_new" });
+
+        await getOrCreateStripeCustomer({
+            userId: "user_1",
+            email: "u@example.com",
+        });
+
+        expect(stripeMock.customers.create).toHaveBeenCalledWith(
+            expect.objectContaining({ email: "u@example.com" }),
+            { idempotencyKey: "stripe-customer:user_1" },
+        );
+        expect(queriesMock.upsertBillingCustomer).toHaveBeenCalledWith({
+            userId: "user_1",
+            stripeCustomerId: "cus_new",
+        });
+    });
+
+    it("uses the same idempotency key across repeated calls for the same user", async () => {
+        queriesMock.getBillingCustomerByUserId.mockResolvedValue(null);
+        stripeMock.customers.create.mockResolvedValue({ id: "cus_new" });
+
+        await getOrCreateStripeCustomer({
+            userId: "user_1",
+            email: "u@example.com",
+        });
+        await getOrCreateStripeCustomer({
+            userId: "user_1",
+            email: "u@example.com",
+        });
+
+        const keys = stripeMock.customers.create.mock.calls.map(
+            (call) => (call[1] as { idempotencyKey: string }).idempotencyKey,
+        );
+        expect(keys[0]).toBe(keys[1]);
+    });
+});
 
 describe("startSubscriptionCheckout tax rates", () => {
     beforeEach(() => {

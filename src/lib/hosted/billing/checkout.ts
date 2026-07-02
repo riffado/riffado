@@ -25,7 +25,21 @@ export class CheckoutPreconditionError extends Error {
     }
 }
 
-/** Idempotent Stripe customer create + local mapping insert. */
+/**
+ * Idempotent Stripe customer create + local mapping insert.
+ *
+ * The DB check-then-create above isn't atomic: two concurrent checkout
+ * submits for the same user can both pass `getBillingCustomerByUserId`
+ * as "no customer yet" before either write lands, each creating its own
+ * Stripe customer (with the last local upsert silently winning and
+ * orphaning the other Stripe customer). A stable, per-user Stripe
+ * idempotency key closes that gap at the Stripe layer: Stripe caches
+ * the response for a repeated key + request body, so the second
+ * concurrent call gets back the SAME customer.id instead of creating a
+ * duplicate. Deliberately not a fresh nonce per call (unlike the
+ * Checkout Session idempotency key below) -- it must be identical
+ * across concurrent calls for the same user to collide correctly.
+ */
 export async function getOrCreateStripeCustomer(input: {
     userId: string;
     email: string;
@@ -35,11 +49,14 @@ export async function getOrCreateStripeCustomer(input: {
     if (existing) return existing.stripeCustomerId;
 
     const stripe = getStripe();
-    const customer = await stripe.customers.create({
-        email: input.email,
-        name: input.name ?? undefined,
-        metadata: { userId: input.userId },
-    });
+    const customer = await stripe.customers.create(
+        {
+            email: input.email,
+            name: input.name ?? undefined,
+            metadata: { userId: input.userId },
+        },
+        { idempotencyKey: `stripe-customer:${input.userId}` },
+    );
 
     await upsertBillingCustomer({
         userId: input.userId,
