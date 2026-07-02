@@ -140,20 +140,46 @@ export async function mirrorStripeSubscription(
     });
     await setUserPlan({ userId, plan: planEntry.plan });
 
+    // "trialing" grants Pro entitlements (see PRO_STATUSES) but no invoice
+    // has been paid yet -- only "active"/"past_due" mean an invoice actually
+    // went through (past_due is a lapsed renewal on a previously-active sub,
+    // so everPaidAt is already true there; the write is a no-op). Gating on
+    // this keeps `everPaidAt`/founding-member/the paid welcome email tied to
+    // real payment, so classifyGracePath doesn't grant a trial user the
+    // 30-day paid grace window if they later lapse.
+    const hasPaidInvoice = n.status === "active" || n.status === "past_due";
+
     if (planEntry.plan === "hosted_pro") {
-        await markEverPaid({ userId, paidAt: new Date() });
         await clearAccountDeletion(userId);
-        if (isWithinFoundingWindow()) {
-            await stampFoundingMember(userId);
-        }
         await closeCycleForUser(userId);
-        await sendActivationWelcome(userId, {
-            amountValue: n.amountValue,
-            amountCurrency: n.amountCurrency,
-        });
+        if (hasPaidInvoice) {
+            await markEverPaid({ userId, paidAt: new Date() });
+            if (isWithinFoundingWindow()) {
+                await stampFoundingMember(userId);
+            }
+            await sendActivationWelcome(userId, {
+                amountValue: n.amountValue,
+                amountCurrency: n.amountCurrency,
+            });
+        }
+    } else if (isLiveSubscriptionStatus(n.status)) {
+        // Live Stripe status (still being billed) but an unrecognized price
+        // id -- entitlementsForSubscription already demoted to free rather
+        // than escalate, but that's a price-id misconfiguration, not a
+        // cancellation. Don't start the deletion/grace workflow for a user
+        // who's still being charged; just log so it gets reconciled.
+        console.warn(
+            `[billing-mirror] subscription ${n.id} has live status "${n.status}" but unrecognized price ${n.stripePriceId}; demoted to free without scheduling deletion`,
+        );
     } else {
         await scheduleDeletionForLapsedUser(userId);
     }
+}
+
+function isLiveSubscriptionStatus(status: string): boolean {
+    return (
+        status === "active" || status === "trialing" || status === "past_due"
+    );
 }
 
 /** Webhook/reconcile entry: fetch the subscription by id, then mirror. */
@@ -209,11 +235,10 @@ async function scheduleDeletionForLapsedUser(userId: string): Promise<void> {
         createdAt: row.createdAt,
         everPaidAt: row.everPaidAt,
     });
-    const scheduledAt = computeDeletionScheduledAt({
-        lapseAt: new Date(),
-        path,
+    const scheduledAt = await scheduleAccountDeletion({
+        userId,
+        scheduledAt: computeDeletionScheduledAt({ lapseAt: new Date(), path }),
     });
-    await scheduleAccountDeletion({ userId, scheduledAt });
 
     const base = env.APP_URL?.replace(/\/$/, "");
     if (!base || !row.email) return;
@@ -223,6 +248,7 @@ async function scheduleDeletionForLapsedUser(userId: string): Promise<void> {
             email: row.email,
             gracePath: path,
             graceDays: graceDaysForPath(path),
+            trialDays: env.BILLING_TRIAL_DAYS,
             deletionAt: scheduledAt,
             exportUrl: `${base}/settings#export`,
             reactivateUrl: `${base}/settings#billing`,

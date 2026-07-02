@@ -52,13 +52,19 @@ export async function processExpiredTrials(options?: {
                 everPaidAt: row.everPaidAt,
             });
             const lapseAt = row.planTransitionUntil ?? new Date();
-            const scheduledAt = computeDeletionScheduledAt({ lapseAt, path });
 
-            await setUserPlan({ userId: row.id, plan: "hosted_free" });
-            await scheduleAccountDeletion({
+            // Schedule deletion BEFORE demoting the plan. `claimUsersWithExpiredTrials`
+            // only selects `plan = 'hosted_pro'` rows, so once the demote below
+            // succeeds the row falls out of that claim forever -- a crash between
+            // the two writes would otherwise leave a lapsed trial user demoted to
+            // hosted_free with no deletion ever scheduled. scheduleAccountDeletion
+            // is idempotent (keeps the earlier timestamp), so redoing it on a retry
+            // after a partial failure is safe.
+            const scheduledAt = await scheduleAccountDeletion({
                 userId: row.id,
-                scheduledAt,
+                scheduledAt: computeDeletionScheduledAt({ lapseAt, path }),
             });
+            await setUserPlan({ userId: row.id, plan: "hosted_free" });
             await sendGraceStartedNotice({
                 userId: row.id,
                 path,
@@ -96,6 +102,7 @@ async function sendGraceStartedNotice(input: {
             email: row.email,
             gracePath: input.path,
             graceDays: graceDaysForPath(input.path),
+            trialDays: env.BILLING_TRIAL_DAYS,
             deletionAt: input.scheduledAt,
             exportUrl: `${base}/settings#export`,
             reactivateUrl: `${base}/settings#billing`,

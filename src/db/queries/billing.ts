@@ -227,23 +227,33 @@ export async function stampFoundingMember(userId: string): Promise<void> {
  * Set the deletion timestamp. Idempotent: if a deletion is already
  * scheduled we keep the EARLIER timestamp (so a trial-end schedule isn't
  * pushed out by a later cancel event). Pass `force: true` to override.
+ *
+ * Returns the *effective* persisted timestamp -- the value actually
+ * written, or the earlier existing value that was kept -- so callers
+ * that surface this date to the user (e.g. the grace-started email)
+ * show what's really in the DB instead of re-deriving their own value,
+ * which would drift (and defeat dedup, since the grace-started email's
+ * dedup key includes this timestamp) on repeated mirror/reconcile runs.
  */
 export async function scheduleAccountDeletion(input: {
     userId: string;
     scheduledAt: Date;
     force?: boolean;
-}): Promise<void> {
+}): Promise<Date> {
     if (input.force) {
-        await db
+        const [updated] = await db
             .update(users)
             .set({
                 accountDeletionScheduledAt: input.scheduledAt,
                 updatedAt: new Date(),
             })
-            .where(eq(users.id, input.userId));
-        return;
+            .where(eq(users.id, input.userId))
+            .returning({
+                accountDeletionScheduledAt: users.accountDeletionScheduledAt,
+            });
+        return updated?.accountDeletionScheduledAt ?? input.scheduledAt;
     }
-    await db
+    const [updated] = await db
         .update(users)
         .set({
             accountDeletionScheduledAt: input.scheduledAt,
@@ -254,7 +264,22 @@ export async function scheduleAccountDeletion(input: {
                 eq(users.id, input.userId),
                 sql`(${users.accountDeletionScheduledAt} is null or ${users.accountDeletionScheduledAt} > ${input.scheduledAt.toISOString()}::timestamp)`,
             ),
-        );
+        )
+        .returning({
+            accountDeletionScheduledAt: users.accountDeletionScheduledAt,
+        });
+    if (updated) return updated.accountDeletionScheduledAt ?? input.scheduledAt;
+
+    // Kept the earlier existing value; read it back so the caller has the
+    // real effective date rather than the later one it just tried to set.
+    const [existing] = await db
+        .select({
+            accountDeletionScheduledAt: users.accountDeletionScheduledAt,
+        })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+    return existing?.accountDeletionScheduledAt ?? input.scheduledAt;
 }
 
 /** Clear any pending deletion. Called on successful reactivation. */
