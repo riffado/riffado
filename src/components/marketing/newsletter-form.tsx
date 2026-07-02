@@ -114,10 +114,17 @@ export function NewsletterForm({
                     overflow: "hidden",
                 }}
             >
-                <label htmlFor="newsletter-company">Company</label>
+                {/*
+                 * Honeypot. Deliberately NOT named/labeled like a real
+                 * autofill-recognized field ("company", "organization", etc.)
+                 * -- browsers autofill those from saved profile data even
+                 * when visually hidden and autocomplete="off" is set,
+                 * silently misclassifying real subscribers as bots.
+                 */}
+                <label htmlFor="newsletter-hp">Leave this field empty</label>
                 <input
-                    id="newsletter-company"
-                    name="company"
+                    id="newsletter-hp"
+                    name="hp_check"
                     type="text"
                     tabIndex={-1}
                     autoComplete="off"
