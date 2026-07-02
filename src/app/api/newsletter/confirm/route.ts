@@ -5,12 +5,37 @@ import {
 } from "@/db/queries/newsletter-subscriptions";
 import { verifyUnsubscribeToken } from "@/lib/email/unsubscribe-token";
 
+/**
+ * Renders a confirm page requiring a user-initiated POST rather than
+ * confirming on GET. Automated link scanners (email security gateways,
+ * link-preview bots) follow GET links from inboxes before the user ever
+ * sees the email; a GET that mutates state would let a scanner complete
+ * double opt-in without the user's action.
+ */
 export async function GET(req: NextRequest): Promise<NextResponse> {
     const params = req.nextUrl.searchParams;
     const id = params.get("s");
     const token = params.get("t");
 
     if (!id || !token) return badRequest("missing parameters");
+    if (!verifyUnsubscribeToken("subscriber", id, token)) {
+        return badRequest("invalid confirmation link");
+    }
+
+    const subscriber = await getSubscriberById(id);
+    if (!subscriber) return badRequest("unknown subscription");
+
+    return confirmPage(id, token);
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+    const form = await req.formData().catch(() => null);
+    const id = form?.get("s");
+    const token = form?.get("t");
+
+    if (typeof id !== "string" || typeof token !== "string") {
+        return badRequest("missing parameters");
+    }
     if (!verifyUnsubscribeToken("subscriber", id, token)) {
         return badRequest("invalid confirmation link");
     }
@@ -30,6 +55,26 @@ function badRequest(message: string): NextResponse {
         }),
         {
             status: 400,
+            headers: { "content-type": "text/html; charset=utf-8" },
+        },
+    );
+}
+
+function confirmPage(id: string, token: string): NextResponse {
+    return new NextResponse(
+        renderPage({
+            title: "Confirm your subscription",
+            body: `
+                <p>Click below to confirm you'd like updates from Riffado.</p>
+                <form method="post" action="/api/newsletter/confirm">
+                    <input type="hidden" name="s" value="${escapeHtml(id)}" />
+                    <input type="hidden" name="t" value="${escapeHtml(token)}" />
+                    <button type="submit" style="font: inherit; padding: 0.6rem 1.2rem; border-radius: 0.4rem; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer;">Confirm subscription</button>
+                </form>
+            `,
+        }),
+        {
+            status: 200,
             headers: { "content-type": "text/html; charset=utf-8" },
         },
     );
