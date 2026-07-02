@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { queriesMock, mirrorMock, stripeMock, emailMock, dbMock } = vi.hoisted(
     () => ({
-        queriesMock: { claimWebhookDelivery: vi.fn() },
+        queriesMock: {
+            claimWebhookDelivery: vi.fn(),
+            getBillingCustomerByStripeId: vi.fn().mockResolvedValue(null),
+        },
         mirrorMock: {
             mirrorCheckoutSession: vi.fn(),
             mirrorSubscriptionById: vi.fn(),
@@ -114,5 +117,70 @@ describe("handleStripeWebhook", () => {
         expect(emailMock.sendPaymentFailedEmail).toHaveBeenCalledWith(
             expect.objectContaining({ userId: "u1", email: "u1@example.com" }),
         );
+    });
+
+    it("resolves userId via the billing-customer mapping when metadata.userId is missing", async () => {
+        stripeMock.getStripe.mockReturnValue({
+            subscriptions: {
+                retrieve: vi.fn().mockResolvedValue({
+                    id: "sub_pf2",
+                    metadata: {},
+                    customer: "cus_abc",
+                    items: { data: [{ current_period_end: 1_900_000_000 }] },
+                }),
+            },
+        });
+        queriesMock.getBillingCustomerByStripeId.mockResolvedValue({
+            userId: "u2",
+        });
+        dbMock.select.mockReturnValue({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    limit: vi
+                        .fn()
+                        .mockResolvedValue([{ email: "u2@example.com" }]),
+                }),
+            }),
+        });
+        emailMock.sendPaymentFailedEmail.mockResolvedValue(true);
+
+        await handleStripeWebhook(
+            event("invoice.payment_failed", {
+                id: "in_pf2",
+                next_payment_attempt: 1_800_000_000,
+                parent: { subscription_details: { subscription: "sub_pf2" } },
+            }),
+        );
+
+        expect(queriesMock.getBillingCustomerByStripeId).toHaveBeenCalledWith(
+            "cus_abc",
+        );
+        expect(emailMock.sendPaymentFailedEmail).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: "u2", email: "u2@example.com" }),
+        );
+    });
+
+    it("skips the email entirely when neither metadata nor the billing-customer mapping resolve a user", async () => {
+        stripeMock.getStripe.mockReturnValue({
+            subscriptions: {
+                retrieve: vi.fn().mockResolvedValue({
+                    id: "sub_pf3",
+                    metadata: {},
+                    customer: "cus_unknown",
+                    items: { data: [{ current_period_end: 1_900_000_000 }] },
+                }),
+            },
+        });
+        queriesMock.getBillingCustomerByStripeId.mockResolvedValue(null);
+
+        await handleStripeWebhook(
+            event("invoice.payment_failed", {
+                id: "in_pf3",
+                next_payment_attempt: 1_800_000_000,
+                parent: { subscription_details: { subscription: "sub_pf3" } },
+            }),
+        );
+
+        expect(emailMock.sendPaymentFailedEmail).not.toHaveBeenCalled();
     });
 });

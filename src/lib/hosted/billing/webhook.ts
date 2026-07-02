@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db";
-import { claimWebhookDelivery } from "@/db/queries/billing";
+import {
+    claimWebhookDelivery,
+    getBillingCustomerByStripeId,
+} from "@/db/queries/billing";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendPaymentFailedEmail } from "@/lib/notifications/email";
@@ -86,8 +89,23 @@ async function handleInvoicePaymentFailed(
 
     const stripe = getStripe();
     const sub = await stripe.subscriptions.retrieve(subId);
-    const userId =
+    const metadataUserId =
         typeof sub.metadata?.userId === "string" ? sub.metadata.userId : null;
+    // Same fallback mirrorStripeSubscription uses: not every subscription
+    // carries `metadata.userId` (e.g. one created before that metadata was
+    // added, or manually in the Stripe dashboard), but the customer is
+    // still resolvable locally via billing_customers. Without this,
+    // payment-failed dunning emails silently never send for those users.
+    const userId =
+        metadataUserId ??
+        (
+            await getBillingCustomerByStripeId(
+                typeof sub.customer === "string"
+                    ? sub.customer
+                    : sub.customer.id,
+            )
+        )?.userId ??
+        null;
     if (!userId) return;
 
     const [row] = await db
