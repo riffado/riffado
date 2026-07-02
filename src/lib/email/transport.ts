@@ -76,16 +76,33 @@ export function resolveFromAddress(
 
 /** Strip HTML tags for a synthetic plain-text alternative. */
 export function htmlToText(html: string): string {
-    return html
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<[^>]*>/g, "")
+    let result = html;
+
+    // Remove script/style blocks, including their content. Looped to catch
+    // nested/overlapping tags a single pass could miss (e.g. "<scr<script>ipt>").
+    // Closing tags allow any non-">" characters before ">" (e.g. "</script foo=\"bar\">",
+    // "</script\t\nbar>"), matching how the opening-tag pattern already tolerates attributes.
+    let previous: string;
+    do {
+        previous = result;
+        result = result
+            .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, "")
+            .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
+    } while (result !== previous);
+
+    result = result.replace(/<[^>]*>/g, "");
+
+    // Decode entities; &amp; must be decoded last, otherwise text like
+    // "&amp;lt;" would double-unescape into "<" instead of staying "&lt;".
+    result = result
         .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
         .replace(/&lt;/g, "<")
         .replace(/&gt;/g, ">")
         .replace(/&quot;/g, '"')
         .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, "&");
+
+    return result
         .replace(/[ \t]+/g, " ")
         .replace(/\n\s*\n/g, "\n\n")
         .trim();

@@ -37,6 +37,19 @@ describe("htmlToText", () => {
         expect(text).toBe("Body");
     });
 
+    it("removes script/style blocks whose closing tag has whitespace or attributes before '>'", () => {
+        const html = `<style>body{color:red}</style ><p>Body</p><script>alert(1)</script\t\nfoo="bar">`;
+        const text = htmlToText(html);
+        expect(text).toBe("Body");
+    });
+
+    it("removes overlapping/nested script tags a single pass would miss", () => {
+        const html = `<scr<script>ipt>alert(1)</scr</script>ipt><p>Body</p>`;
+        const text = htmlToText(html);
+        expect(text).not.toContain("alert(1)");
+        expect(text).toContain("Body");
+    });
+
     it("collapses whitespace runs but preserves paragraph breaks", () => {
         const html = `<p>One</p>\n\n\n\n<p>Two</p>`;
         const text = htmlToText(html);
