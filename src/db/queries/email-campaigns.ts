@@ -4,6 +4,31 @@ import { emailCampaigns } from "@/db/schema";
 
 export type CampaignKind = "transactional" | "announcement" | "marketing";
 
+const CAMPAIGN_KINDS: readonly CampaignKind[] = [
+    "transactional",
+    "announcement",
+    "marketing",
+];
+
+/**
+ * `email_campaigns.kind` is a plain `varchar(20)`, not a DB enum/check
+ * constraint -- the column doesn't itself guarantee only these three
+ * values ever land there. `kind` drives `resolveFromAddress()` (picks
+ * the transactional vs. marketing From: header), so trusting an
+ * unrecognized value via a blind cast could send from the wrong
+ * address. Fall back to "marketing" (the most conservative choice --
+ * strictest opt-out/unsubscribe handling) rather than propagate junk.
+ */
+function normalizeCampaignKind(value: string, slug: string): CampaignKind {
+    if ((CAMPAIGN_KINDS as readonly string[]).includes(value)) {
+        return value as CampaignKind;
+    }
+    console.error(
+        `[email-campaigns] campaign ${slug} has unexpected kind "${value}"; treating as "marketing"`,
+    );
+    return "marketing";
+}
+
 export interface CampaignRow {
     id: string;
     slug: string;
@@ -26,7 +51,7 @@ export async function getCampaignBySlug(
         id: row.id,
         slug: row.slug,
         subject: row.subject,
-        kind: row.kind as CampaignKind,
+        kind: normalizeCampaignKind(row.kind, row.slug),
         createdAt: row.createdAt,
     };
 }
@@ -55,7 +80,7 @@ export async function ensureCampaign(input: {
             id: inserted[0].id,
             slug: inserted[0].slug,
             subject: inserted[0].subject,
-            kind: inserted[0].kind as CampaignKind,
+            kind: normalizeCampaignKind(inserted[0].kind, inserted[0].slug),
             createdAt: inserted[0].createdAt,
         };
     }
