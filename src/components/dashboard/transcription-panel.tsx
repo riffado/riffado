@@ -96,7 +96,15 @@ export function TranscriptionPanel({
                                         recordingId={recording.id}
                                         disabled={isTranscribing}
                                         onComplete={
-                                            onTranscribeComplete ?? onTranscribe
+                                            // Falling back to `onTranscribe` here
+                                            // would kick off a redundant SERVER
+                                            // transcription right after a
+                                            // successful browser one, possibly
+                                            // overwriting it. Callers that care
+                                            // about refreshing after a browser
+                                            // transcription must pass
+                                            // `onTranscribeComplete` explicitly.
+                                            onTranscribeComplete ?? (() => {})
                                         }
                                     />
                                 </>
