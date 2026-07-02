@@ -74,23 +74,64 @@ export function resolveFromAddress(
     );
 }
 
+/**
+ * Remove every `<tagName ...>...</tagName ...>` block from `input`, scanning
+ * manually (no regex replace) so there's no reliance on proving regex-based
+ * removal converges to a fixed point. Each iteration removes exactly one
+ * block; nested/overlapping open tags inside a block (e.g. "<scr<script>ipt>")
+ * are covered because the next matching close tag is always searched for
+ * after the open tag we just found, and the whole span is deleted in one cut
+ * rather than reassembled from a regex substitution.
+ */
+function stripTagBlocks(input: string, tagName: string): string {
+    const lower = input.toLowerCase();
+    const openPrefix = `<${tagName}`;
+    const closePrefix = `</${tagName}`;
+    let out = "";
+    let i = 0;
+
+    while (i < input.length) {
+        const openIdx = lower.indexOf(openPrefix, i);
+        if (openIdx === -1) {
+            out += input.slice(i);
+            break;
+        }
+        // Require the match to be a real tag boundary ("<script>", "<script ",
+        // "<script/>"), not a longer tag/attribute name like "<scriptx>".
+        const boundary = lower[openIdx + openPrefix.length];
+        if (boundary !== undefined && /[a-z0-9-]/.test(boundary)) {
+            out += input.slice(i, openIdx + openPrefix.length);
+            i = openIdx + openPrefix.length;
+            continue;
+        }
+        const openTagEnd = lower.indexOf(">", openIdx);
+        if (openTagEnd === -1) {
+            out += input.slice(i, openIdx);
+            break;
+        }
+        out += input.slice(i, openIdx);
+        const closeIdx = lower.indexOf(closePrefix, openTagEnd);
+        if (closeIdx === -1) {
+            i = input.length;
+            break;
+        }
+        const closeTagEnd = lower.indexOf(">", closeIdx);
+        i = closeTagEnd === -1 ? input.length : closeTagEnd + 1;
+    }
+
+    return out;
+}
+
 /** Strip HTML tags for a synthetic plain-text alternative. */
 export function htmlToText(html: string): string {
     let result = html;
 
-    // Remove script/style blocks, including their content. Each pattern is
-    // re-tested and re-applied until no match remains, so nested/overlapping
-    // tags that a single replace pass could miss (e.g. "<scr<script>ipt>")
-    // are fully removed rather than just the outermost match. Closing tags
-    // allow any non-">" characters before ">" (e.g. "</script foo=\"bar\">",
-    // "</script\t\nbar>"), matching how the opening-tag pattern already
-    // tolerates attributes.
-    while (/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi.test(result)) {
-        result = result.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, "");
-    }
-    while (/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi.test(result)) {
-        result = result.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
-    }
+    // Remove script/style blocks, including their content, via manual
+    // scanning (see stripTagBlocks) rather than a regex replace, so there's
+    // no residual-match risk from nested/overlapping tags reforming after a
+    // single substitution pass.
+    result = stripTagBlocks(result, "style");
+    result = stripTagBlocks(result, "script");
 
     result = result.replace(/<[^>]*>/g, "");
 

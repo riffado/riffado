@@ -50,6 +50,19 @@ describe("htmlToText", () => {
         expect(text).toContain("Body");
     });
 
+    it("does not treat a longer tag name as a script/style boundary match", () => {
+        const html = `<scriptx>keep me</scriptx><p>Body</p>`;
+        const text = htmlToText(html);
+        expect(text).toContain("keep me");
+        expect(text).toContain("Body");
+    });
+
+    it("drops everything after an unclosed script/style tag rather than looping forever", () => {
+        const html = `<p>Before</p><script>alert(1)`;
+        const text = htmlToText(html);
+        expect(text).toBe("Before");
+    });
+
     it("collapses whitespace runs but preserves paragraph breaks", () => {
         const html = `<p>One</p>\n\n\n\n<p>Two</p>`;
         const text = htmlToText(html);
