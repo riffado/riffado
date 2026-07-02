@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { env } from "./env";
+import { closeCycleForUser } from "./hosted/billing/cycle-close";
 import {
     sendEmailChangeConfirm,
     sendPasswordResetEmail,
@@ -14,16 +15,18 @@ import { isSmtpConfigured } from "./smtp";
 const EMAIL_VERIFICATION_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Email verification is gated on SMTP being configured. Self-host
- * instances without SMTP keep the historical "no verification" path
- * (they have no delivery channel for the link anyway); SMTP-configured
- * instances and the hosted instance both require verification.
- *
- * Existing users created before this flip should be grandfathered by
- * `scripts/billing-backfill.ts` (sets `emailVerified=true` for every
- * pre-launch row) so no one gets locked out.
+ * Email verification is enforced only on the hosted instance (and only
+ * when SMTP is actually configured there -- no delivery channel for the
+ * link otherwise). Self-host instances never enforce verification, even
+ * when they configure SMTP for notification emails: `IS_HOSTED` is the
+ * rollout boundary from `scripts/billing-backfill.ts`, which grandfathers
+ * every pre-launch row to `emailVerified=true` -- that's a one-shot ops
+ * script run once against the hosted DB at launch, not something
+ * self-host operators ever run. Gating on `isSmtpConfigured()` alone
+ * would flip verification on for any self-host deployment that has SMTP
+ * configured and immediately lock out its existing unverified accounts.
  */
-const verificationActive = isSmtpConfigured();
+const verificationActive = env.IS_HOSTED && isSmtpConfigured();
 
 export const auth = betterAuth({
     database: drizzleAdapter(db, {
@@ -93,6 +96,12 @@ export const auth = betterAuth({
                             updatedAt: new Date(),
                         })
                         .where(eq(schema.users.id, user.id));
+                    // Grant the Pro Mynah budget synchronously instead of
+                    // waiting for the billing worker's next tick (up to
+                    // TICK_MS after signup) -- otherwise a user who tries
+                    // hosted transcription immediately after signing up hits
+                    // the schema default of 0 remaining seconds.
+                    await closeCycleForUser(user.id);
                 },
             },
         },
