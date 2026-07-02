@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -13,6 +13,15 @@ const BATCH_LIMIT = 200;
 const REMINDER_DAYS_OUT = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SELF_HOST_URL = "https://github.com/riffado/riffado#self-hosting";
+
+// Cursor into the cohort, ordered by `users.id`. Without this, a cohort
+// larger than BATCH_LIMIT would have the same first-200 rows re-selected
+// every tick forever (already-sent emails no-op via dedup, but the row
+// still occupies a batch slot), so users past the 200th never get their
+// once-only start/reminder/ended emails. Wraps to the start once a tick
+// returns fewer than BATCH_LIMIT rows (end of cohort reached), so every
+// tick makes progress through the full cohort over time.
+let cursorId: string | null = null;
 
 export interface TransitionEmailResult {
     /** Launch-day start notices sent this run. */
@@ -69,21 +78,42 @@ export async function processTransitionEmails(): Promise<TransitionEmailResult> 
     const billingUrl = `${base}/settings#billing`;
     const exportUrl = `${base}/settings#export`;
 
-    const cohort = await db
-        .select({
-            id: users.id,
-            email: users.email,
-            transitionUntil: users.planTransitionUntil,
-        })
-        .from(users)
-        .where(
-            and(
-                eq(users.plan, "hosted_free"),
-                isNotNull(users.planTransitionUntil),
-                isNull(users.accountDeletionScheduledAt),
-            ),
-        )
-        .limit(BATCH_LIMIT);
+    const baseFilter = and(
+        eq(users.plan, "hosted_free"),
+        isNotNull(users.planTransitionUntil),
+        isNull(users.accountDeletionScheduledAt),
+    );
+
+    const fetchPage = (afterId: string | null) =>
+        db
+            .select({
+                id: users.id,
+                email: users.email,
+                transitionUntil: users.planTransitionUntil,
+            })
+            .from(users)
+            .where(
+                afterId ? and(baseFilter, gt(users.id, afterId)) : baseFilter,
+            )
+            .orderBy(asc(users.id))
+            .limit(BATCH_LIMIT);
+
+    let cohort = await fetchPage(cursorId);
+
+    // Nothing past the cursor -- we'd reached the end on a prior tick.
+    // Wrap and fetch from the start so this tick still makes progress
+    // instead of returning an empty batch.
+    if (cohort.length === 0 && cursorId !== null) {
+        cohort = await fetchPage(null);
+    }
+
+    // Advance the cursor past this batch; a short page (< BATCH_LIMIT)
+    // means we've reached the true end of the cohort, so reset to null
+    // rather than pointing past it (the next tick then wraps naturally).
+    cursorId =
+        cohort.length > 0 && cohort.length === BATCH_LIMIT
+            ? cohort[cohort.length - 1].id
+            : null;
 
     for (const row of cohort) {
         if (!row.email || !row.transitionUntil) continue;

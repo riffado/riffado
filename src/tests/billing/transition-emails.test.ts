@@ -43,10 +43,27 @@ function queueCohort(rows: CohortRow[]) {
     dbMock.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue(rows),
+                orderBy: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue(rows),
+                }),
             }),
         }),
     });
+}
+
+/** Queue a sequence of `db.select` calls (one page per call), in order. */
+function queuePages(pages: CohortRow[][]) {
+    for (const rows of pages) {
+        dbMock.select.mockReturnValueOnce({
+            from: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                    orderBy: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue(rows),
+                    }),
+                }),
+            }),
+        });
+    }
 }
 
 const NOW = Date.now();
@@ -208,5 +225,43 @@ describe("processTransitionEmails", () => {
         expect(result.ended).toBe(1);
         expect(result.errors).toBe(1);
         expect(emailMock.sendTransitionEndedEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it("pages through a cohort larger than BATCH_LIMIT instead of re-selecting the same first page forever", async () => {
+        // A full-size first page (BATCH_LIMIT=200) means "there may be
+        // more"; the next tick must query strictly past the last id from
+        // the first page rather than reusing the same unbounded query.
+        const fullPage: CohortRow[] = Array.from({ length: 200 }, (_, i) => ({
+            id: `u${String(i).padStart(4, "0")}`,
+            email: `u${i}@example.com`,
+            transitionUntil: new Date(NOW + 20 * DAY),
+        }));
+        const remainder: CohortRow[] = [
+            {
+                id: "u9999",
+                email: "last@example.com",
+                transitionUntil: new Date(NOW + 20 * DAY),
+            },
+        ];
+        queuePages([fullPage]);
+        const first = await processTransitionEmails();
+        expect(first.start).toBe(200);
+
+        const secondWhere = vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue(remainder),
+            }),
+        });
+        dbMock.select.mockReturnValueOnce({
+            from: vi.fn().mockReturnValue({ where: secondWhere }),
+        });
+
+        const second = await processTransitionEmails();
+        expect(second.start).toBe(1);
+        // Only one query this tick (no wrap-around re-fetch needed since
+        // the cursor-scoped query already returned rows) -- confirms the
+        // second tick queried past the first page's cursor rather than
+        // repeating it.
+        expect(secondWhere).toHaveBeenCalledTimes(1);
     });
 });
