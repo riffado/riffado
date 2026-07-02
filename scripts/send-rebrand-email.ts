@@ -23,6 +23,15 @@ interface CliOptions {
     allowSelfHost: boolean;
 }
 
+/**
+ * Strict integer parse: `Number.parseInt("10abc", 10)` silently
+ * truncates to `10` instead of rejecting the malformed value.
+ * `Number(...)` rejects any trailing garbage (returns NaN).
+ */
+function parseStrictInt(value: string): number {
+    return Number(value);
+}
+
 function parseCli(): CliOptions {
     const parsed = parseArgs({
         options: {
@@ -35,10 +44,10 @@ function parseCli(): CliOptions {
     });
 
     const limit = parsed.values.limit
-        ? Number.parseInt(parsed.values.limit, 10)
+        ? parseStrictInt(parsed.values.limit)
         : undefined;
     const ratePerSecond = parsed.values.rate
-        ? Number.parseInt(parsed.values.rate, 10)
+        ? parseStrictInt(parsed.values.rate)
         : undefined;
 
     if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
@@ -113,6 +122,12 @@ async function main(): Promise<void> {
         console.log(
             "  Note: see email_deliveries.error for per-recipient failure detail.",
         );
+    }
+    // An interrupted/incomplete run or any per-recipient failures must not
+    // report success to cron/CI -- otherwise operational monitoring can't
+    // tell a clean run from one that needs a re-run or investigation.
+    if (!result.completed || result.failed > 0) {
+        process.exitCode = 1;
     }
 }
 
