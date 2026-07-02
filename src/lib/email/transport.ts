@@ -126,14 +126,18 @@ function stripTagBlocks(input: string, tagName: string): string {
 export function htmlToText(html: string): string {
     let result = html;
 
-    // Remove script/style blocks, including their content, via manual
-    // scanning (see stripTagBlocks) rather than a regex replace, so there's
-    // no residual-match risk from nested/overlapping tags reforming after a
-    // single substitution pass.
-    result = stripTagBlocks(result, "style");
-    result = stripTagBlocks(result, "script");
-
-    result = result.replace(/<[^>]*>/g, "");
+    // Remove script/style blocks (manual scan, see stripTagBlocks) and then
+    // any remaining tags. Looped to a fixed point: stripping an unrelated tag
+    // from the middle of text can reform a "<script>"-looking string (e.g.
+    // "<scr<b>ipt>" becomes "<script>" once "<b>" is removed), so a single
+    // pass isn't enough to guarantee no "<script"/"<style" substring survives.
+    let previous: string;
+    do {
+        previous = result;
+        result = stripTagBlocks(result, "style");
+        result = stripTagBlocks(result, "script");
+        result = result.replace(/<[^>]*>/g, "");
+    } while (result !== previous);
 
     // Decode entities; &amp; must be decoded last, otherwise text like
     // "&amp;lt;" would double-unescape into "<" instead of staying "&lt;".

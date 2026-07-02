@@ -63,6 +63,18 @@ describe("htmlToText", () => {
         expect(text).toBe("Before");
     });
 
+    it("leaves no tag markup behind when an unrelated tag is nested inside what looks like a script tag", () => {
+        // "<scr<b>ipt>" is not a real <script> tag; the generic tag stripper
+        // consumes from the first "<" to the next ">" regardless of what's
+        // nested inside. No "<" can survive (a lone ">" left over from an
+        // orphaned close-bracket is inert text, not a tag), so no markup of
+        // any kind can be reformed.
+        const html = `<scr<b>ipt>alert(1)</scr</b>ipt><p>Body</p>`;
+        const text = htmlToText(html);
+        expect(text).not.toContain("<");
+        expect(text).toContain("Body");
+    });
+
     it("collapses whitespace runs but preserves paragraph breaks", () => {
         const html = `<p>One</p>\n\n\n\n<p>Two</p>`;
         const text = htmlToText(html);
