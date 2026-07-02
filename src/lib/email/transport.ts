@@ -85,17 +85,11 @@ export function htmlToText(html: string): string {
     // allow any non-">" characters before ">" (e.g. "</script foo=\"bar\">",
     // "</script\t\nbar>"), matching how the opening-tag pattern already
     // tolerates attributes.
-    const styleBlock = /<style[^>]*>[\s\S]*?<\/style[^>]*>/gi;
-    while (styleBlock.test(result)) {
-        styleBlock.lastIndex = 0;
-        result = result.replace(styleBlock, "");
-        styleBlock.lastIndex = 0;
+    while (/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi.test(result)) {
+        result = result.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, "");
     }
-    const scriptBlock = /<script[^>]*>[\s\S]*?<\/script[^>]*>/gi;
-    while (scriptBlock.test(result)) {
-        scriptBlock.lastIndex = 0;
-        result = result.replace(scriptBlock, "");
-        scriptBlock.lastIndex = 0;
+    while (/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi.test(result)) {
+        result = result.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
     }
 
     result = result.replace(/<[^>]*>/g, "");
