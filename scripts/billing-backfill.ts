@@ -22,6 +22,7 @@
 import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
+import { isValidCalendarDateString } from "@/lib/date-validation";
 
 const args = new Map<string, string>();
 for (const arg of process.argv.slice(2)) {
@@ -34,18 +35,23 @@ for (const arg of process.argv.slice(2)) {
 const DRY_RUN = args.has("dry-run");
 const LAUNCH = args.get("launch");
 
-if (!LAUNCH || !/^\d{4}-\d{2}-\d{2}$/.test(LAUNCH)) {
+// `new Date("YYYY-MM-DDT...")` silently normalizes out-of-range days
+// (e.g. "2026-02-30" becomes 2026-03-02) instead of rejecting them, so a
+// typo'd --launch value would shift `planTransitionUntil` for every
+// updated user without any error. isValidCalendarDateString checks the
+// real calendar validity, not just the NaN case.
+if (
+    !LAUNCH ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(LAUNCH) ||
+    !isValidCalendarDateString(LAUNCH)
+) {
     console.error(
-        "billing-backfill: --launch=YYYY-MM-DD is required (e.g. --launch=2026-07-28)",
+        "billing-backfill: --launch=YYYY-MM-DD is required and must be a real calendar date (e.g. --launch=2026-07-28)",
     );
     process.exit(2);
 }
 
 const launchDate = new Date(`${LAUNCH}T00:00:00.000Z`);
-if (Number.isNaN(launchDate.getTime())) {
-    console.error(`billing-backfill: invalid --launch value: ${LAUNCH}`);
-    process.exit(2);
-}
 const transitionUntil = new Date(
     launchDate.getTime() + 30 * 86400 * 1000 + 86399 * 1000,
 );

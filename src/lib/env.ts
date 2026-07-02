@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCalendarDateString } from "./date-validation";
 
 const optionalStrictBoolean = z
     .string()
@@ -439,6 +440,10 @@ export const envSchema = z.object({
             /^\d{4}-\d{2}-\d{2}$/,
             "BILLING_LAUNCH_DATE must be an ISO date (YYYY-MM-DD)",
         )
+        .refine(isValidCalendarDateString, {
+            message:
+                "BILLING_LAUNCH_DATE must be a real calendar date (YYYY-MM-DD)",
+        })
         .optional(),
 });
 
