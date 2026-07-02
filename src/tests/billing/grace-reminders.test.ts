@@ -46,7 +46,9 @@ function queueQueries(input: {
     const buildChain = (rows: CandidateRow[]) => ({
         from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue(rows),
+                orderBy: vi.fn().mockReturnValue({
+                    limit: vi.fn().mockResolvedValue(rows),
+                }),
             }),
         }),
     });
@@ -102,6 +104,38 @@ describe("processGraceReminders", () => {
         );
     });
 
+    it("uses a stable daysLeft (dedup key) across ticks within the target-day window, not a value that drifts as time passes", async () => {
+        // Two ticks, same user, msLeft has ticked down slightly (5 minutes
+        // of wall-clock progress) but both are still within the T-3
+        // trial-reminder band. Before the fix, daysLeft was derived from
+        // a live round() of msLeft, so ticks landing on different whole-day
+        // boundaries produced different `grace_reminder:<deletionAt>:<daysLeft>`
+        // dedup keys and the user got re-emailed. It must stay pinned to
+        // the target day (3) for the entire window.
+        const deletionAt = new Date(NOW + 2.6 * DAY);
+        for (const msOffset of [0, 5 * 60 * 1000]) {
+            queueQueries({
+                reminders: [
+                    {
+                        id: "u_trial",
+                        email: "trial@example.com",
+                        createdAt: new Date(NOW - 4 * DAY),
+                        everPaidAt: null,
+                        deletionAt: new Date(deletionAt.getTime() - msOffset),
+                    },
+                ],
+                lastDay: [],
+            });
+            await processGraceReminders();
+        }
+
+        expect(emailMock.sendGraceReminderEmail).toHaveBeenCalledTimes(2);
+        const [firstCall, secondCall] =
+            emailMock.sendGraceReminderEmail.mock.calls;
+        expect(firstCall[0].daysLeft).toBe(3);
+        expect(secondCall[0].daysLeft).toBe(3);
+    });
+
     it("does not send a trial-path reminder when the user is still > 3 days out", async () => {
         const deletionAt = new Date(NOW + 5 * DAY);
         queueQueries({
@@ -124,7 +158,7 @@ describe("processGraceReminders", () => {
     });
 
     it("sends a reminder at T-7 for paid-path users", async () => {
-        const deletionAt = new Date(NOW + 6 * DAY);
+        const deletionAt = new Date(NOW + 6.5 * DAY);
         queueQueries({
             reminders: [
                 {
@@ -146,7 +180,7 @@ describe("processGraceReminders", () => {
     it("classifies pre-launch users as paid path (grandfather)", async () => {
         envMock.BILLING_LAUNCH_DATE = "2026-06-01";
         const preLaunch = new Date("2026-05-15T00:00:00Z");
-        const deletionAt = new Date(NOW + 5 * DAY);
+        const deletionAt = new Date(NOW + 6.5 * DAY);
         queueQueries({
             reminders: [
                 {

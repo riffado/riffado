@@ -1,4 +1,4 @@
-import { and, gt, isNotNull, lte } from "drizzle-orm";
+import { and, asc, gt, isNotNull, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -76,6 +76,9 @@ export async function processGraceReminders(): Promise<GraceReminderResult> {
                 ),
             ),
         )
+        // Nearest deletion first, so a truncated batch still prioritizes
+        // the users closest to being deleted.
+        .orderBy(asc(users.accountDeletionScheduledAt))
         .limit(REMINDER_BATCH_LIMIT);
 
     for (const row of reminderCandidates) {
@@ -84,12 +87,21 @@ export async function processGraceReminders(): Promise<GraceReminderResult> {
         const isPaidPath =
             row.everPaidAt !== null ||
             (launch !== null && row.createdAt < launch);
-        const targetWindowMs = isPaidPath
-            ? PAID_REMINDER_DAYS_OUT * DAY_MS
-            : TRIAL_REMINDER_DAYS_OUT * DAY_MS;
-        if (msLeft > targetWindowMs) continue;
-        if (msLeft <= LAST_DAY_HOURS_OUT * HOUR_MS) continue;
-        const daysLeft = Math.max(1, Math.round(msLeft / DAY_MS));
+        const targetDays = isPaidPath
+            ? PAID_REMINDER_DAYS_OUT
+            : TRIAL_REMINDER_DAYS_OUT;
+        const targetWindowMs = targetDays * DAY_MS;
+        // Only send within the ~24h band around the target day (T-7 paid /
+        // T-3 trial), not "any tick from the target day down to last-day".
+        // Without this upper bound too, a worker running every 5 minutes
+        // would re-send once per day as `daysLeft` decrements through
+        // 7,6,5,... each producing a fresh email_log dedup key -- the
+        // workflow is meant to be one generic reminder plus the separate
+        // last-day notice, not one reminder per day of the window.
+        if (msLeft > targetWindowMs || msLeft <= targetWindowMs - DAY_MS) {
+            continue;
+        }
+        const daysLeft = targetDays;
         try {
             const sent = await sendGraceReminderEmail({
                 userId: row.id,
@@ -126,6 +138,8 @@ export async function processGraceReminders(): Promise<GraceReminderResult> {
                 ),
             ),
         )
+        // Nearest deletion first, same rationale as the reminder query above.
+        .orderBy(asc(users.accountDeletionScheduledAt))
         .limit(LAST_DAY_BATCH_LIMIT);
 
     for (const row of lastDayCandidates) {
