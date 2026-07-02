@@ -40,6 +40,7 @@ vi.mock("@/db/queries/billing", () => ({
     getUserBillingState: vi.fn(),
     getSubscriptionByUserId: vi.fn(),
     getUserStorageBytes: vi.fn(),
+    scheduleAccountDeletion: vi.fn(),
 }));
 vi.mock("@/lib/entitlements", () => ({
     getEntitlements: vi.fn(),
@@ -47,11 +48,13 @@ vi.mock("@/lib/entitlements", () => ({
 
 import { POST as cancelRoute } from "@/app/(hosted)/api/billing/cancel/route";
 import { POST as checkoutRoute } from "@/app/(hosted)/api/billing/checkout/route";
+import { POST as deleteNowRoute } from "@/app/(hosted)/api/billing/delete-now/route";
 import { GET as meRoute } from "@/app/(hosted)/api/billing/me/route";
 import {
     getSubscriptionByUserId,
     getUserBillingState,
     getUserStorageBytes,
+    scheduleAccountDeletion,
 } from "@/db/queries/billing";
 import { getEntitlements } from "@/lib/entitlements";
 
@@ -186,6 +189,54 @@ describe("POST /api/billing/cancel", () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.ok).toBe(true);
+    });
+});
+
+describe("POST /api/billing/delete-now", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        envMock.IS_HOSTED = true;
+        envMock.BILLING_ENABLED = true;
+    });
+
+    it("returns 404 when billing is off", async () => {
+        envMock.BILLING_ENABLED = false;
+        const res = await deleteNowRoute(
+            new Request("https://example.com/api/billing/delete-now", {
+                method: "POST",
+            }),
+        );
+        expect(res.status).toBe(404);
+    });
+
+    it("returns 409 and does not schedule deletion when the account is not already in a grace period", async () => {
+        (getUserBillingState as ReturnType<typeof vi.fn>).mockResolvedValue({
+            plan: "hosted_pro",
+            accountDeletionScheduledAt: null,
+        });
+        const res = await deleteNowRoute(
+            new Request("https://example.com/api/billing/delete-now", {
+                method: "POST",
+            }),
+        );
+        expect(res.status).toBe(409);
+        expect(scheduleAccountDeletion).not.toHaveBeenCalled();
+    });
+
+    it("schedules immediate deletion when the account is already in a grace period", async () => {
+        (getUserBillingState as ReturnType<typeof vi.fn>).mockResolvedValue({
+            plan: "hosted_free",
+            accountDeletionScheduledAt: new Date("2026-08-01T00:00:00Z"),
+        });
+        const res = await deleteNowRoute(
+            new Request("https://example.com/api/billing/delete-now", {
+                method: "POST",
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect(scheduleAccountDeletion).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: "u1", force: true }),
+        );
     });
 });
 
