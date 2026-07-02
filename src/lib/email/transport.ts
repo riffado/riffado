@@ -78,17 +78,25 @@ export function resolveFromAddress(
 export function htmlToText(html: string): string {
     let result = html;
 
-    // Remove script/style blocks, including their content. Looped to catch
-    // nested/overlapping tags a single pass could miss (e.g. "<scr<script>ipt>").
-    // Closing tags allow any non-">" characters before ">" (e.g. "</script foo=\"bar\">",
-    // "</script\t\nbar>"), matching how the opening-tag pattern already tolerates attributes.
-    let previous: string;
-    do {
-        previous = result;
-        result = result
-            .replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, "")
-            .replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, "");
-    } while (result !== previous);
+    // Remove script/style blocks, including their content. Each pattern is
+    // re-tested and re-applied until no match remains, so nested/overlapping
+    // tags that a single replace pass could miss (e.g. "<scr<script>ipt>")
+    // are fully removed rather than just the outermost match. Closing tags
+    // allow any non-">" characters before ">" (e.g. "</script foo=\"bar\">",
+    // "</script\t\nbar>"), matching how the opening-tag pattern already
+    // tolerates attributes.
+    const styleBlock = /<style[^>]*>[\s\S]*?<\/style[^>]*>/gi;
+    while (styleBlock.test(result)) {
+        styleBlock.lastIndex = 0;
+        result = result.replace(styleBlock, "");
+        styleBlock.lastIndex = 0;
+    }
+    const scriptBlock = /<script[^>]*>[\s\S]*?<\/script[^>]*>/gi;
+    while (scriptBlock.test(result)) {
+        scriptBlock.lastIndex = 0;
+        result = result.replace(scriptBlock, "");
+        scriptBlock.lastIndex = 0;
+    }
 
     result = result.replace(/<[^>]*>/g, "");
 
