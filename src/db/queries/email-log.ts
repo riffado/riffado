@@ -1,3 +1,4 @@
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { emailLog } from "@/db/schema";
 
@@ -25,4 +26,24 @@ export async function claimEmailSend(input: {
         })
         .returning({ id: emailLog.id });
     return inserted.length > 0;
+}
+
+/**
+ * Undo a `claimEmailSend` claim. Callers use this when the send itself
+ * fails after a successful claim (transient SMTP error, render
+ * exception) so a future retry can claim and send again instead of
+ * the once-only email being permanently dropped.
+ */
+export async function releaseEmailSend(input: {
+    userId: string;
+    kind: string;
+}): Promise<void> {
+    await db
+        .delete(emailLog)
+        .where(
+            and(
+                eq(emailLog.userId, input.userId),
+                eq(emailLog.kind, input.kind),
+            ),
+        );
 }

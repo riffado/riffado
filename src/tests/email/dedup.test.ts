@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { dbMock } = vi.hoisted(() => ({
-    dbMock: { insert: vi.fn() },
+    dbMock: { insert: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock("@/db", () => ({ db: dbMock }));
@@ -9,7 +9,7 @@ vi.mock("@/db/schema", () => ({
     emailLog: { id: "id", userId: "user_id", kind: "kind" },
 }));
 
-import { claimEmailSend } from "@/db/queries/email-log";
+import { claimEmailSend, releaseEmailSend } from "@/db/queries/email-log";
 
 function chainInsertReturning(returning: unknown[]) {
     const chain = {
@@ -55,5 +55,19 @@ describe("claimEmailSend", () => {
         const b = await claimEmailSend({ userId: "u1", kind: "over_cap" });
         expect(a).toBe(true);
         expect(b).toBe(true);
+    });
+});
+
+describe("releaseEmailSend", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("deletes the claim row so a future retry can claim again", async () => {
+        const where = vi.fn().mockResolvedValue(undefined);
+        dbMock.delete.mockReturnValue({ where });
+        await releaseEmailSend({ userId: "u1", kind: "welcome_hosted_pro" });
+        expect(dbMock.delete).toHaveBeenCalled();
+        expect(where).toHaveBeenCalled();
     });
 });

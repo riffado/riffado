@@ -1,7 +1,7 @@
 import { render } from "@react-email/render";
 import nodemailer from "nodemailer";
 import React from "react";
-import { claimEmailSend } from "@/db/queries/email-log";
+import { claimEmailSend, releaseEmailSend } from "@/db/queries/email-log";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
 import { AccountDeletedEmail } from "./email-templates/account-deleted";
@@ -128,6 +128,31 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
     }
 }
 
+/**
+ * Claim a once-only `(userId, kind)` email slot, build + send it, and
+ * release the claim if the send fails (transient SMTP error) or `build`
+ * throws (e.g. a render exception). Without the release, a single
+ * transient failure permanently drops that email -- the claim row
+ * already exists, so every future retry sees `claimed: false` and
+ * skips sending forever.
+ */
+async function sendClaimedEmail(
+    claim: { userId: string; kind: string },
+    build: () => Promise<EmailOptions>,
+): Promise<boolean> {
+    const claimed = await claimEmailSend(claim);
+    if (!claimed) return false;
+    try {
+        const options = await build();
+        const sent = await sendEmail(options);
+        if (!sent) await releaseEmailSend(claim);
+        return sent;
+    } catch (error) {
+        await releaseEmailSend(claim);
+        throw error;
+    }
+}
+
 export async function sendNewRecordingEmail(
     email: string,
     count: number,
@@ -224,27 +249,26 @@ export async function sendWelcomeHostedProEmail(input: {
     amountValue: string;
     amountCurrency: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: "welcome_hosted_pro",
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(WelcomeHostedProEmail, {
-            dashboardUrl: input.dashboardUrl,
-            settingsUrl: input.settingsUrl,
-            foundingMember: input.foundingMember,
-            amountValue: input.amountValue,
-            amountCurrency: input.amountCurrency,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: "welcome_hosted_pro" },
+        async () => {
+            const html = await render(
+                React.createElement(WelcomeHostedProEmail, {
+                    dashboardUrl: input.dashboardUrl,
+                    settingsUrl: input.settingsUrl,
+                    foundingMember: input.foundingMember,
+                    amountValue: input.amountValue,
+                    amountCurrency: input.amountCurrency,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "You're on Riffado Hosted Pro",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "You're on Riffado Hosted Pro",
-        html,
-    });
 }
 
 /**
@@ -259,25 +283,24 @@ export async function sendPaymentFailedEmail(input: {
     nextRetryAt: Date | null;
     accessUntil: Date | null;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: `payment_failed:${input.paymentId}`,
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(PaymentFailedEmail, {
-            billingUrl: input.billingUrl,
-            nextRetryAt: input.nextRetryAt,
-            accessUntil: input.accessUntil,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: `payment_failed:${input.paymentId}` },
+        async () => {
+            const html = await render(
+                React.createElement(PaymentFailedEmail, {
+                    billingUrl: input.billingUrl,
+                    nextRetryAt: input.nextRetryAt,
+                    accessUntil: input.accessUntil,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "Riffado: payment failed",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "Riffado: payment failed",
-        html,
-    });
 }
 
 /**
@@ -293,26 +316,25 @@ export async function sendOverCapEmail(input: {
     currentBytes: number;
     limitBytes: number;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: "over_cap",
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(OverCapEmail, {
-            billingUrl: input.billingUrl,
-            settingsUrl: input.settingsUrl,
-            currentBytes: input.currentBytes,
-            limitBytes: input.limitBytes,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: "over_cap" },
+        async () => {
+            const html = await render(
+                React.createElement(OverCapEmail, {
+                    billingUrl: input.billingUrl,
+                    settingsUrl: input.settingsUrl,
+                    currentBytes: input.currentBytes,
+                    limitBytes: input.limitBytes,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "Riffado: storage over the Free cap",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "Riffado: storage over the Free cap",
-        html,
-    });
 }
 
 /**
@@ -384,34 +406,39 @@ export async function sendGraceStartedEmail(input: {
     email: string;
     gracePath: "trial" | "paid";
     graceDays: number;
+    /** Configured trial length in days (`BILLING_TRIAL_DAYS`). Only shown when `gracePath === "trial"`. */
+    trialDays: number;
     deletionAt: Date;
     exportUrl: string;
     reactivateUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: `grace_started:${input.deletionAt.toISOString()}`,
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(GraceStartedEmail, {
-            gracePath: input.gracePath,
-            graceDays: input.graceDays,
-            deletionAt: input.deletionAt,
-            exportUrl: input.exportUrl,
-            reactivateUrl: input.reactivateUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        {
+            userId: input.userId,
+            kind: `grace_started:${input.deletionAt.toISOString()}`,
+        },
+        async () => {
+            const html = await render(
+                React.createElement(GraceStartedEmail, {
+                    gracePath: input.gracePath,
+                    graceDays: input.graceDays,
+                    trialDays: input.trialDays,
+                    deletionAt: input.deletionAt,
+                    exportUrl: input.exportUrl,
+                    reactivateUrl: input.reactivateUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject:
+                    input.gracePath === "trial"
+                        ? `Your Riffado trial ended — ${input.graceDays} days to export`
+                        : `Your Riffado subscription ended — ${input.graceDays} days to export`,
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject:
-            input.gracePath === "trial"
-                ? `Your Riffado trial ended — ${input.graceDays} days to export`
-                : `Your Riffado subscription ended — ${input.graceDays} days to export`,
-        html,
-    });
 }
 
 /** Mid-grace reminder. Dedup includes deletionAt + the daysLeft mark. */
@@ -423,26 +450,28 @@ export async function sendGraceReminderEmail(input: {
     exportUrl: string;
     reactivateUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: `grace_reminder:${input.deletionAt.toISOString()}:${input.daysLeft}`,
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(GraceReminderEmail, {
-            daysLeft: input.daysLeft,
-            deletionAt: input.deletionAt,
-            exportUrl: input.exportUrl,
-            reactivateUrl: input.reactivateUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        {
+            userId: input.userId,
+            kind: `grace_reminder:${input.deletionAt.toISOString()}:${input.daysLeft}`,
+        },
+        async () => {
+            const html = await render(
+                React.createElement(GraceReminderEmail, {
+                    daysLeft: input.daysLeft,
+                    deletionAt: input.deletionAt,
+                    exportUrl: input.exportUrl,
+                    reactivateUrl: input.reactivateUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: `Riffado: ${input.daysLeft} days left to export`,
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: `Riffado: ${input.daysLeft} days left to export`,
-        html,
-    });
 }
 
 /** Last-day (~24h before deletion) notice. */
@@ -453,25 +482,28 @@ export async function sendGraceLastDayEmail(input: {
     exportUrl: string;
     reactivateUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: `grace_last_day:${input.deletionAt.toISOString()}`,
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(GraceLastDayEmail, {
-            deletionAt: input.deletionAt,
-            exportUrl: input.exportUrl,
-            reactivateUrl: input.reactivateUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        {
+            userId: input.userId,
+            kind: `grace_last_day:${input.deletionAt.toISOString()}`,
+        },
+        async () => {
+            const html = await render(
+                React.createElement(GraceLastDayEmail, {
+                    deletionAt: input.deletionAt,
+                    exportUrl: input.exportUrl,
+                    reactivateUrl: input.reactivateUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject:
+                    "Riffado: last chance to export — account deleted in 24h",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "Riffado: last chance to export — account deleted in 24h",
-        html,
-    });
 }
 
 /**
@@ -513,28 +545,27 @@ export async function sendTransitionStartEmail(input: {
     exportUrl: string;
     selfHostUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: "transition_start",
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(TransitionStartEmail, {
-            transitionEndsAt: input.transitionEndsAt,
-            amountValue: input.amountValue,
-            amountCurrency: input.amountCurrency,
-            billingUrl: input.billingUrl,
-            exportUrl: input.exportUrl,
-            selfHostUrl: input.selfHostUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: "transition_start" },
+        async () => {
+            const html = await render(
+                React.createElement(TransitionStartEmail, {
+                    transitionEndsAt: input.transitionEndsAt,
+                    amountValue: input.amountValue,
+                    amountCurrency: input.amountCurrency,
+                    billingUrl: input.billingUrl,
+                    exportUrl: input.exportUrl,
+                    selfHostUrl: input.selfHostUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "Riffado Hosted is now a paid product",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "Riffado Hosted is now a paid product",
-        html,
-    });
 }
 
 /**
@@ -552,29 +583,28 @@ export async function sendTransitionReminderEmail(input: {
     exportUrl: string;
     selfHostUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: "transition_reminder",
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(TransitionReminderEmail, {
-            daysLeft: input.daysLeft,
-            transitionEndsAt: input.transitionEndsAt,
-            amountValue: input.amountValue,
-            amountCurrency: input.amountCurrency,
-            billingUrl: input.billingUrl,
-            exportUrl: input.exportUrl,
-            selfHostUrl: input.selfHostUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: "transition_reminder" },
+        async () => {
+            const html = await render(
+                React.createElement(TransitionReminderEmail, {
+                    daysLeft: input.daysLeft,
+                    transitionEndsAt: input.transitionEndsAt,
+                    amountValue: input.amountValue,
+                    amountCurrency: input.amountCurrency,
+                    billingUrl: input.billingUrl,
+                    exportUrl: input.exportUrl,
+                    selfHostUrl: input.selfHostUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: `Riffado: ${input.daysLeft} day${input.daysLeft === 1 ? "" : "s"} of free Hosted Pro left`,
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: `Riffado: ${input.daysLeft} day${input.daysLeft === 1 ? "" : "s"} of free Hosted Pro left`,
-        html,
-    });
 }
 
 /**
@@ -591,27 +621,26 @@ export async function sendTransitionEndedEmail(input: {
     exportUrl: string;
     selfHostUrl: string;
 }): Promise<boolean> {
-    const claimed = await claimEmailSend({
-        userId: input.userId,
-        kind: "transition_ended",
-    });
-    if (!claimed) return false;
-
-    const html = await render(
-        React.createElement(TransitionEndedEmail, {
-            amountValue: input.amountValue,
-            amountCurrency: input.amountCurrency,
-            billingUrl: input.billingUrl,
-            exportUrl: input.exportUrl,
-            selfHostUrl: input.selfHostUrl,
-        }),
-        { pretty: false },
+    return sendClaimedEmail(
+        { userId: input.userId, kind: "transition_ended" },
+        async () => {
+            const html = await render(
+                React.createElement(TransitionEndedEmail, {
+                    amountValue: input.amountValue,
+                    amountCurrency: input.amountCurrency,
+                    billingUrl: input.billingUrl,
+                    exportUrl: input.exportUrl,
+                    selfHostUrl: input.selfHostUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "Your Riffado hosted account is now read-only",
+                html,
+            };
+        },
     );
-    return sendEmail({
-        to: input.email,
-        subject: "Your Riffado hosted account is now read-only",
-        html,
-    });
 }
 
 export async function sendTestEmail(email: string): Promise<void> {
