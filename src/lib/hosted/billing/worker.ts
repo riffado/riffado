@@ -13,63 +13,87 @@ let started = false;
 let running = false;
 let tickCount = 0;
 
-async function tick(): Promise<void> {
+/**
+ * Run one phase in isolation so a failure in its own top-level query
+ * (before that phase's internal per-item try/catch even starts) can't
+ * block the other, unrelated phases in the same tick from running.
+ */
+async function runPhase(name: string, phase: () => Promise<void>) {
+    try {
+        await phase();
+    } catch (error) {
+        console.error(`[billing-worker] phase "${name}" failed:`, error);
+    }
+}
+
+/** Exported for testing. */
+export async function tick(): Promise<void> {
     if (running) return;
     running = true;
     try {
-        const closed = await closeDueCycles();
-        if (closed > 0) {
-            console.log(`[billing-worker] closed ${closed} cycle(s)`);
-        }
+        await runPhase("cycle-close", async () => {
+            const closed = await closeDueCycles();
+            if (closed > 0) {
+                console.log(`[billing-worker] closed ${closed} cycle(s)`);
+            }
+        });
 
-        const lapse = await processExpiredTrials();
-        if (lapse.lapsed > 0 || lapse.errors > 0) {
-            console.log(
-                `[billing-worker] trial-lapse lapsed=${lapse.lapsed} errors=${lapse.errors}`,
-            );
-        }
+        await runPhase("trial-lapse", async () => {
+            const lapse = await processExpiredTrials();
+            if (lapse.lapsed > 0 || lapse.errors > 0) {
+                console.log(
+                    `[billing-worker] trial-lapse lapsed=${lapse.lapsed} errors=${lapse.errors}`,
+                );
+            }
+        });
 
-        const deletion = await processDueAccountDeletions();
-        if (deletion.deleted > 0 || deletion.errors > 0) {
-            console.log(
-                `[billing-worker] deletion deleted=${deletion.deleted} storage_partial=${deletion.storagePartial} errors=${deletion.errors}`,
-            );
-        }
+        await runPhase("deletion", async () => {
+            const deletion = await processDueAccountDeletions();
+            if (deletion.deleted > 0 || deletion.errors > 0) {
+                console.log(
+                    `[billing-worker] deletion deleted=${deletion.deleted} storage_partial=${deletion.storagePartial} errors=${deletion.errors}`,
+                );
+            }
+        });
 
-        const reminders = await processGraceReminders();
-        if (
-            reminders.reminders > 0 ||
-            reminders.lastDay > 0 ||
-            reminders.errors > 0
-        ) {
-            console.log(
-                `[billing-worker] grace-reminders reminders=${reminders.reminders} last_day=${reminders.lastDay} errors=${reminders.errors}`,
-            );
-        }
+        await runPhase("grace-reminders", async () => {
+            const reminders = await processGraceReminders();
+            if (
+                reminders.reminders > 0 ||
+                reminders.lastDay > 0 ||
+                reminders.errors > 0
+            ) {
+                console.log(
+                    `[billing-worker] grace-reminders reminders=${reminders.reminders} last_day=${reminders.lastDay} errors=${reminders.errors}`,
+                );
+            }
+        });
 
-        const transition = await processTransitionEmails();
-        if (
-            transition.start > 0 ||
-            transition.reminder > 0 ||
-            transition.ended > 0 ||
-            transition.errors > 0
-        ) {
-            console.log(
-                `[billing-worker] transition-emails start=${transition.start} reminder=${transition.reminder} ended=${transition.ended} errors=${transition.errors}`,
-            );
-        }
+        await runPhase("transition-emails", async () => {
+            const transition = await processTransitionEmails();
+            if (
+                transition.start > 0 ||
+                transition.reminder > 0 ||
+                transition.ended > 0 ||
+                transition.errors > 0
+            ) {
+                console.log(
+                    `[billing-worker] transition-emails start=${transition.start} reminder=${transition.reminder} ended=${transition.ended} errors=${transition.errors}`,
+                );
+            }
+        });
 
         tickCount += 1;
         if (tickCount % RECONCILE_EVERY_N_TICKS === 0) {
-            const result = await reconcileStaleSubscriptions();
-            if (result.inspected > 0 || result.errors > 0) {
-                console.log(
-                    `[billing-worker] reconcile inspected=${result.inspected} errors=${result.errors}`,
-                );
-            }
+            await runPhase("reconcile", async () => {
+                const result = await reconcileStaleSubscriptions();
+                if (result.inspected > 0 || result.errors > 0) {
+                    console.log(
+                        `[billing-worker] reconcile inspected=${result.inspected} errors=${result.errors}`,
+                    );
+                }
+            });
         }
-    } catch (error) {
-        console.error("[billing-worker] tick failed:", error);
     } finally {
         running = false;
     }
