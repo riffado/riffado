@@ -34,7 +34,9 @@ function stubClaimQuery(rows: { userId: string }[]) {
         from: vi.fn().mockReturnValue({
             innerJoin: vi.fn().mockReturnValue({
                 where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue(rows),
+                    orderBy: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue(rows),
+                    }),
                 }),
             }),
         }),

@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -27,6 +27,10 @@ export async function claimProUsersForSync(): Promise<string[]> {
                 ),
             ),
         )
+        // Oldest/never-synced first (NULLS FIRST is Postgres's default for
+        // ASC) so a large eligible pool cycles through everyone instead of
+        // the same MAX_USERS_PER_TICK subset winning every tick.
+        .orderBy(asc(plaudConnections.lastSync))
         .limit(MAX_USERS_PER_TICK);
 
     return rows.map((r) => r.userId);
