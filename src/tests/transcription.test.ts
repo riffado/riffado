@@ -35,6 +35,15 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/entitlements", () => ({
+    isHostedLockedOut: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@/lib/hosted/transcription/mynah", () => ({
+    isMynahConfigured: vi.fn().mockReturnValue(false),
+    transcribeViaMynah: vi.fn(),
+}));
+
 vi.mock("@/lib/ai/generate-title", () => ({
     generateTitleFromTranscription: vi
         .fn()
@@ -49,7 +58,10 @@ import { OpenAI } from "openai";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
-import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
+import {
+    storeBrowserTranscription,
+    transcribeRecording,
+} from "@/lib/transcription/transcribe-recording";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 describe("Transcription", () => {
@@ -363,6 +375,177 @@ describe("Transcription", () => {
             expect(
                 (emitEvent as Mock).mock.invocationCallOrder[0],
             ).toBeGreaterThan(titleUpdateWhere.mock.invocationCallOrder[0]);
+        });
+    });
+
+    describe("storeBrowserTranscription", () => {
+        function mockOwnershipLookup(rows: unknown[]) {
+            (db.select as Mock).mockReturnValueOnce({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue(rows),
+                    }),
+                }),
+            });
+        }
+
+        function makeTxMock(opts: {
+            stillActive: { deletedAt: Date | null } | null;
+            existingTranscription: { id: string } | null;
+        }) {
+            const txInsertValues = vi.fn().mockResolvedValue(undefined);
+            const txInsert = vi
+                .fn()
+                .mockReturnValue({ values: txInsertValues });
+            const txUpdateWhere = vi.fn().mockResolvedValue(undefined);
+            const txUpdateSet = vi
+                .fn()
+                .mockReturnValue({ where: txUpdateWhere });
+            const txUpdate = vi.fn().mockReturnValue({ set: txUpdateSet });
+
+            const tx = {
+                select: vi
+                    .fn()
+                    .mockReturnValueOnce({
+                        from: vi.fn().mockReturnValue({
+                            where: vi.fn().mockReturnValue({
+                                for: vi.fn().mockReturnValue({
+                                    limit: vi
+                                        .fn()
+                                        .mockResolvedValue(
+                                            opts.stillActive
+                                                ? [opts.stillActive]
+                                                : [],
+                                        ),
+                                }),
+                            }),
+                        }),
+                    })
+                    .mockReturnValueOnce({
+                        from: vi.fn().mockReturnValue({
+                            where: vi.fn().mockReturnValue({
+                                limit: vi
+                                    .fn()
+                                    .mockResolvedValue(
+                                        opts.existingTranscription
+                                            ? [opts.existingTranscription]
+                                            : [],
+                                    ),
+                            }),
+                        }),
+                    }),
+                insert: txInsert,
+                update: txUpdate,
+            };
+            (db.transaction as Mock).mockImplementation(
+                async (
+                    callback: (
+                        transaction: typeof tx,
+                    ) => Promise<unknown> | unknown,
+                ) => callback(tx),
+            );
+            return { tx, txInsert, txInsertValues, txUpdate, txUpdateSet };
+        }
+
+        it("returns RECORDING_NOT_FOUND when recording does not exist or is tombstoned", async () => {
+            mockOwnershipLookup([]);
+            const result = await storeBrowserTranscription({
+                userId: mockUserId,
+                recordingId: mockRecordingId,
+                text: "hello world",
+                detectedLanguage: "en",
+                model: "whisper-base",
+            });
+            expect(result.success).toBe(false);
+            expect(result.errorCode).toBe("RECORDING_NOT_FOUND");
+            expect(emitEvent).not.toHaveBeenCalled();
+        });
+
+        it("returns RECORDING_DELETED when the row is tombstoned mid-transaction", async () => {
+            mockOwnershipLookup([{ id: mockRecordingId, deletedAt: null }]);
+            makeTxMock({
+                stillActive: { deletedAt: new Date() },
+                existingTranscription: null,
+            });
+            const result = await storeBrowserTranscription({
+                userId: mockUserId,
+                recordingId: mockRecordingId,
+                text: "hello world",
+                detectedLanguage: "en",
+                model: "whisper-base",
+            });
+            expect(result.success).toBe(false);
+            expect(result.errorCode).toBe("RECORDING_DELETED");
+            expect(emitEvent).not.toHaveBeenCalled();
+        });
+
+        it("inserts a new transcription row with type='browser' and provider='browser' (model preserved)", async () => {
+            mockOwnershipLookup([{ id: mockRecordingId, deletedAt: null }]);
+            const harness = makeTxMock({
+                stillActive: { deletedAt: null },
+                existingTranscription: null,
+            });
+
+            const result = await storeBrowserTranscription({
+                userId: mockUserId,
+                recordingId: mockRecordingId,
+                text: "new transcript text",
+                detectedLanguage: "fr",
+                model: "whisper-base",
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.text).toBe("new transcript text");
+            expect(result.detectedLanguage).toBe("fr");
+            expect(harness.txInsert).toHaveBeenCalled();
+            const inserted = harness.txInsertValues.mock.calls[0][0] as Record<
+                string,
+                unknown
+            >;
+            expect(inserted.transcriptionType).toBe("browser");
+            expect(inserted.provider).toBe("browser");
+            expect(inserted.model).toBe("whisper-base");
+            expect(inserted.detectedLanguage).toBe("fr");
+            // Text is at-rest-encrypted before storage.
+            expect(inserted.text).toBe("v1:encrypted:new transcript text");
+            expect(emitEvent).toHaveBeenCalledWith(
+                "transcription.completed",
+                mockUserId,
+                mockRecordingId,
+            );
+        });
+
+        it("updates an existing transcription row (idempotent re-run)", async () => {
+            mockOwnershipLookup([{ id: mockRecordingId, deletedAt: null }]);
+            const harness = makeTxMock({
+                stillActive: { deletedAt: null },
+                existingTranscription: { id: "trans-existing" },
+            });
+
+            const result = await storeBrowserTranscription({
+                userId: mockUserId,
+                recordingId: mockRecordingId,
+                text: "updated transcript",
+                detectedLanguage: null,
+                model: "whisper-small",
+            });
+
+            expect(result.success).toBe(true);
+            expect(harness.txInsert).not.toHaveBeenCalled();
+            expect(harness.txUpdate).toHaveBeenCalled();
+            const updated = harness.txUpdateSet.mock.calls[0][0] as Record<
+                string,
+                unknown
+            >;
+            expect(updated.transcriptionType).toBe("browser");
+            expect(updated.provider).toBe("browser");
+            expect(updated.model).toBe("whisper-small");
+            expect(updated.detectedLanguage).toBeNull();
+            expect(emitEvent).toHaveBeenCalledWith(
+                "transcription.completed",
+                mockUserId,
+                mockRecordingId,
+            );
         });
     });
 });

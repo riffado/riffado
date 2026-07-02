@@ -7,8 +7,10 @@ import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { encryptText } from "@/lib/encryption/fields";
+import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
 
@@ -54,6 +56,14 @@ async function getAudioDurationMs(
 export const POST = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
 
+    if (await isHostedLockedOut(session.user.id)) {
+        throw new AppError(
+            ErrorCode.ACCOUNT_LOCKED,
+            "Your hosted plan has lapsed. Subscribe to resume uploads, or export your data.",
+            403,
+        );
+    }
+
     const formData = await request.formData();
     const fileEntry = formData.get("file");
 
@@ -74,6 +84,20 @@ export const POST = apiHandler(async (request: Request) => {
         throw new AppError(
             ErrorCode.FILE_TOO_LARGE,
             "File exceeds the 500 MB size limit",
+            413,
+        );
+    }
+
+    // Storage cap: block the upload before reading the body when it would
+    // push the user over their plan's storage limit. No-op on self-host.
+    const cap = await enforceStorageCap({
+        userId: session.user.id,
+        additionalBytes: file.size,
+    });
+    if (!cap.allowed) {
+        throw new AppError(
+            ErrorCode.STORAGE_QUOTA_EXCEEDED,
+            "This upload would exceed your plan's storage limit. Upgrade or free up space to continue.",
             413,
         );
     }

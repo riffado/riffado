@@ -84,6 +84,14 @@ export default function PrivacyPage() {
                     and summaries the service syncs or generates for you.
                 </li>
                 <li>
+                    <strong>Payment data</strong> — if you subscribe, payment
+                    details (card number, billing address) are collected
+                    and processed by our payment processor, Stripe. We store
+                    only a reference to your Stripe customer account and
+                    subscription status; we never see or store your full card
+                    number.
+                </li>
+                <li>
                     <strong>Usage analytics</strong> — privacy-friendly,
                     aggregate usage data collected through analytics software we
                     host ourselves. It uses no advertising cookies and is not
@@ -99,7 +107,8 @@ export default function PrivacyPage() {
                     you (Art. 6(1)(b) GDPR).
                 </li>
                 <li>
-                    To send transactional email (password resets, recording
+                    To send transactional email (account verification, billing
+                    notifications, grace-period reminders, recording
                     notifications you enable), also as performance of the
                     contract.
                 </li>
@@ -194,10 +203,16 @@ export default function PrivacyPage() {
             <h2>Retention</h2>
             <p>
                 We keep your content and account data for as long as your
-                account is active. When you delete your account, we remove the
-                associated data from active storage; residual copies in routine
-                backups age out on the backup rotation. We keep the minimum
-                records we are legally required to retain.
+                account is active. If your subscription or trial ends, your
+                account enters a read-only grace period (7 days for accounts
+                that never paid; 30 days for accounts that previously had a
+                subscription). At the end of the grace period, or when you
+                choose to delete your account from Settings, we permanently
+                delete your account and all associated data — recordings,
+                transcripts, summaries, and stored files — from active storage.
+                Residual copies in routine backups age out on the backup
+                rotation. We keep the minimum records we are legally required to
+                retain.
             </p>
 
             <h2>Your rights</h2>

@@ -49,7 +49,7 @@ export const GOVERNING_LAW = {
 export const MIN_AGE = 16;
 
 /** ISO date the current documents take effect. */
-export const EFFECTIVE_DATE = "2026-05-29";
+export const EFFECTIVE_DATE = "2026-06-20";
 
 /** Human-readable effective date, pinned to UTC to avoid off-by-one. */
 export const EFFECTIVE_DATE_DISPLAY = new Date(
@@ -94,6 +94,13 @@ export type Subprocessor = {
  * it introduces no new international-transfer concern.
  */
 export const SUBPROCESSORS: Subprocessor[] = [
+    {
+        name: "Stripe Payments Europe, Ltd.",
+        purpose: "Payment processing for hosted subscriptions",
+        location: "Ireland (EEA), with onward transfer to Stripe, Inc. (USA)",
+        safeguard:
+            "EU Standard Contractual Clauses; EU-U.S. Data Privacy Framework",
+    },
     {
         name: "netcup GmbH",
         purpose: "Application hosting and database",

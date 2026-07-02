@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
     boolean,
     date,
@@ -11,9 +12,16 @@ import {
     text,
     timestamp,
     unique,
+    uniqueIndex,
     varchar,
 } from "drizzle-orm/pg-core";
 import { nanoid } from "nanoid";
+
+export const userPlanEnum = pgEnum("user_plan", [
+    "self_host",
+    "hosted_free",
+    "hosted_pro",
+]);
 
 // Better Auth tables (handled by Better Auth)
 export const users = pgTable("users", {
@@ -32,6 +40,36 @@ export const users = pgTable("users", {
     // is locked behind IS_HOSTED.
     suspendedAt: timestamp("suspended_at"),
     suspendedReason: text("suspended_reason"),
+    marketingEmailConsent: boolean("marketing_email_consent")
+        .notNull()
+        .default(false),
+    // Hosted billing plan. NULL on self-host and for hosted users created
+    // before the billing rollout (backfilled by scripts/billing-backfill.ts).
+    plan: userPlanEnum("plan"),
+    // Set by the billing rollout backfill to (launch_date + 30 days) for
+    // every pre-launch hosted user. While > now(), enforcement skips caps.
+    planTransitionUntil: timestamp("plan_transition_until"),
+    // Per-cycle Mynah transcription budget in seconds. Reset by cycle-close.
+    monthlyMynahSecondsRemaining: integer("monthly_mynah_seconds_remaining")
+        .notNull()
+        .default(0),
+    // Next time cycle-close should refresh the Mynah counter. NULL = never.
+    monthlyMynahGrantResetAt: timestamp("monthly_mynah_grant_reset_at"),
+    // True iff first paid subscription was created within the founding window.
+    // Locks the $5/mo price forever per the consolidated plan.
+    foundingMember: boolean("founding_member").notNull().default(false),
+    // First time the user was successfully charged. NULL = never paid.
+    // Used to branch the grace-period policy on lapse:
+    //  - NULL (trial non-convert) -> BILLING_TRIAL_GRACE_DAYS (7)
+    //  - set (former paying user)  -> BILLING_PAID_GRACE_DAYS (30)
+    // Grandfather: pre-launch users are treated as Path B (paid) by checking
+    // `createdAt < BILLING_LAUNCH_DATE` at deletion-scheduling time, so this
+    // column staying NULL for grandfathered users is intentional.
+    everPaidAt: timestamp("ever_paid_at"),
+    // When the user enters a lapsed state (trial ended w/o payment, sub
+    // canceled/failed-out, etc.) this is set to now() + grace_days. The
+    // billing worker deletes the account at that time. Cleared on reactivate.
+    accountDeletionScheduledAt: timestamp("account_deletion_scheduled_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -583,5 +621,190 @@ export const installScriptHits = pgTable(
     },
     (table) => ({
         pk: primaryKey({ columns: [table.day, table.version] }),
+    }),
+);
+
+export const emailSuppressions = pgTable(
+    "email_suppressions",
+    {
+        email: text("email").primaryKey(),
+        reason: varchar("reason", { length: 20 }).notNull(),
+        note: text("note"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        createdAtIdx: index("email_suppressions_created_at_idx").on(
+            table.createdAt,
+        ),
+    }),
+);
+
+export const emailCampaigns = pgTable("email_campaigns", {
+    id: text("id")
+        .primaryKey()
+        .$defaultFn(() => nanoid()),
+    slug: text("slug").notNull().unique(),
+    subject: text("subject").notNull(),
+    kind: varchar("kind", { length: 20 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const emailDeliveries = pgTable(
+    "email_deliveries",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        campaignId: text("campaign_id")
+            .notNull()
+            .references(() => emailCampaigns.id, { onDelete: "cascade" }),
+        userId: text("user_id").references(() => users.id, {
+            onDelete: "set null",
+        }),
+        subscriberId: text("subscriber_id").references(
+            () => newsletterSubscriptions.id,
+            { onDelete: "set null" },
+        ),
+        email: text("email").notNull(),
+        status: varchar("status", { length: 30 }).notNull(),
+        messageId: text("message_id"),
+        error: text("error"),
+        sentAt: timestamp("sent_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        campaignEmailUnique: unique(
+            "email_deliveries_campaign_email_unique",
+        ).on(table.campaignId, table.email),
+        campaignStatusIdx: index("email_deliveries_campaign_status_idx").on(
+            table.campaignId,
+            table.status,
+        ),
+        userIdIdx: index("email_deliveries_user_id_idx").on(table.userId),
+    }),
+);
+
+export const emailValidations = pgTable(
+    "email_validations",
+    {
+        email: text("email").primaryKey(),
+        reachable: varchar("reachable", { length: 20 }).notNull(),
+        isDisposable: boolean("is_disposable").notNull().default(false),
+        isRoleAccount: boolean("is_role_account").notNull().default(false),
+        hasFullInbox: boolean("has_full_inbox").notNull().default(false),
+        isCatchAll: boolean("is_catch_all").notNull().default(false),
+        mxAccepts: boolean("mx_accepts").notNull().default(false),
+        rawResponse: jsonb("raw_response"),
+        provider: varchar("provider", { length: 30 })
+            .notNull()
+            .default("reacher-stacked"),
+        checkedAt: timestamp("checked_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        checkedAtIdx: index("email_validations_checked_at_idx").on(
+            table.checkedAt,
+        ),
+    }),
+);
+
+export const newsletterSubscriptions = pgTable(
+    "newsletter_subscriptions",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        email: text("email").notNull().unique(),
+        source: varchar("source", { length: 20 }).notNull(), // 'landing' | 'install' | 'admin'
+        consentedAt: timestamp("consented_at").notNull().defaultNow(),
+        confirmedAt: timestamp("confirmed_at"),
+        unsubscribedAt: timestamp("unsubscribed_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        confirmedAtIdx: index("newsletter_subscriptions_confirmed_at_idx").on(
+            table.confirmedAt,
+        ),
+    }),
+);
+
+export const billingCustomers = pgTable("billing_customers", {
+    userId: text("user_id")
+        .primaryKey()
+        .references(() => users.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").notNull().unique(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const subscriptions = pgTable(
+    "subscriptions",
+    {
+        id: text("id").primaryKey(),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        stripeCustomerId: text("stripe_customer_id").notNull(),
+        stripePriceId: text("stripe_price_id"),
+        status: varchar("status", { length: 24 }).notNull(),
+        amountValue: text("amount_value").notNull(),
+        amountCurrency: varchar("amount_currency", { length: 3 }).notNull(),
+        interval: text("interval").notNull(),
+        description: text("description"),
+        /** ISO-3166-1 alpha-2 billing country, for our own VAT-OSS records. */
+        billingCountry: varchar("billing_country", { length: 2 }),
+        startDate: timestamp("start_date"),
+        nextPaymentAt: timestamp("next_payment_at"),
+        canceledAt: timestamp("canceled_at"),
+        withdrawalWaiverAcceptedAt: timestamp("withdrawal_waiver_accepted_at"),
+        metadata: jsonb("metadata"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdActiveUnique: uniqueIndex("subscriptions_user_id_active_unique")
+            .on(table.userId)
+            .where(sql`${table.status} IN ('active', 'trialing', 'past_due')`),
+        userStatusIdx: index("subscriptions_user_status_idx").on(
+            table.userId,
+            table.status,
+        ),
+    }),
+);
+
+export const stripeWebhookEvents = pgTable(
+    "stripe_webhook_events",
+    {
+        eventId: text("event_id").primaryKey(),
+        type: varchar("type", { length: 60 }).notNull(),
+        processedAt: timestamp("processed_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        processedAtIdx: index("stripe_webhook_events_processed_at_idx").on(
+            table.processedAt,
+        ),
+    }),
+);
+
+export const emailLog = pgTable(
+    "email_log",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        // Wide enough for namespaced per-object keys such as
+        // `payment_failed:<invoiceId>` (prefix + `in_...` id ~= 42 chars).
+        kind: varchar("kind", { length: 120 }).notNull(),
+        sentAt: timestamp("sent_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userKindUnique: unique("email_log_user_kind_unique").on(
+            table.userId,
+            table.kind,
+        ),
     }),
 );

@@ -1,6 +1,13 @@
 "use client";
 
-import { Bell, BellRing, Mail, Smartphone, Volume2 } from "lucide-react";
+import {
+    Bell,
+    BellRing,
+    Mail,
+    Megaphone,
+    Smartphone,
+    Volume2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
@@ -23,6 +30,7 @@ export function NotificationsSection() {
     const [emailNotifications, setEmailNotifications] = useState(false);
     const [barkNotifications, setBarkNotifications] = useState(false);
     const [notificationSound, setNotificationSound] = useState(true);
+    const [marketingEmailConsent, setMarketingEmailConsent] = useState(false);
     const [notificationEmail, setNotificationEmail] = useState<string>("");
     const [barkPushUrl, setBarkPushUrl] = useState<string>("");
     const [, setBarkPushUrlSet] = useState(false);
@@ -43,6 +51,9 @@ export function NotificationsSection() {
                     setEmailNotifications(data.emailNotifications ?? false);
                     setBarkNotifications(data.barkNotifications ?? false);
                     setNotificationSound(data.notificationSound ?? true);
+                    setMarketingEmailConsent(
+                        data.marketingEmailConsent ?? false,
+                    );
                     setUserEmail(data.userEmail ?? "");
                     setNotificationEmail(
                         data.notificationEmail || data.userEmail || "",
@@ -319,6 +330,28 @@ export function NotificationsSection() {
                         onCheckedChange={(checked) => {
                             setNotificationSound(checked);
                             handleChange({ notificationSound: checked });
+                        }}
+                        disabled={isSavingSettings}
+                    />
+                </SettingsCard>
+
+                <SettingsCard>
+                    <ToggleRow
+                        id="marketing-email-consent"
+                        label={
+                            <span className="inline-flex items-center gap-2">
+                                <Megaphone
+                                    className="size-4 text-muted-foreground"
+                                    aria-hidden="true"
+                                />
+                                Product updates
+                            </span>
+                        }
+                        description="Occasional emails about new features and releases. A few times a year at most, never more than once a month."
+                        checked={marketingEmailConsent}
+                        onCheckedChange={(checked) => {
+                            setMarketingEmailConsent(checked);
+                            handleChange({ marketingEmailConsent: checked });
                         }}
                         disabled={isSavingSettings}
                     />

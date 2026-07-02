@@ -78,6 +78,7 @@
         "react-email": "^5.0.5",
         "react-hook-form": "^7.66.1",
         "sonner": "^2.0.7",
+        "stripe": "^22.3.0",
         "tailwind-merge": "^3.4.0",
         "undici": "^7.16.0",
         "vitest": "^4.0.12",

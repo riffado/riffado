@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+    buildSettingsNav,
     SETTINGS_STORAGE_KEY,
-    settingsNav,
 } from "@/components/settings-nav-config";
 import type { SettingsSection } from "@/types/settings";
 
@@ -17,39 +17,62 @@ import type { SettingsSection } from "@/types/settings";
  * keydown listener whenever `open` is true, mirroring the original
  * component's behavior exactly.
  */
-export function useSettingsNav(open: boolean, onClose: () => void) {
+export function useSettingsNav(
+    open: boolean,
+    onClose: () => void,
+    isHosted: boolean,
+) {
+    const settingsNav = useMemo(
+        () => buildSettingsNav({ isHosted }),
+        [isHosted],
+    );
     const [activeSection, setActiveSection] =
         useState<SettingsSection>("providers");
     const [keyboardSelectedIndex, setKeyboardSelectedIndex] = useState(0);
 
     // Initial section resolution: prefer URL hash, fall back to
-    // localStorage. Runs once on mount; subsequent changes are
-    // pushed to the hash + storage in the effect below.
+    // localStorage. Re-runs on hashchange so in-app hash writes (e.g.
+    // the grace-state banner "Export my data" button) navigate the
+    // settings dialog without a full reload.
     useEffect(() => {
         if (typeof window === "undefined") return;
 
-        const hash = window.location.hash.slice(1);
-        const validSection = settingsNav.find((item) => item.id === hash)?.id;
-
-        if (validSection) {
+        const applyHash = (): boolean => {
+            const hash = window.location.hash.slice(1);
+            const validSection = settingsNav.find(
+                (item) => item.id === hash,
+            )?.id;
+            if (!validSection) return false;
             setActiveSection(validSection);
             setKeyboardSelectedIndex(
                 settingsNav.findIndex((item) => item.id === validSection),
             );
-            return;
+            return true;
+        };
+
+        if (!applyHash()) {
+            const lastSection = localStorage.getItem(SETTINGS_STORAGE_KEY);
+            if (lastSection) {
+                const validLastSection = settingsNav.find(
+                    (item) => item.id === lastSection,
+                )?.id;
+                if (validLastSection) {
+                    setActiveSection(validLastSection);
+                    setKeyboardSelectedIndex(
+                        settingsNav.findIndex(
+                            (item) => item.id === validLastSection,
+                        ),
+                    );
+                }
+            }
         }
-        const lastSection = localStorage.getItem(SETTINGS_STORAGE_KEY);
-        if (!lastSection) return;
-        const validLastSection = settingsNav.find(
-            (item) => item.id === lastSection,
-        )?.id;
-        if (validLastSection) {
-            setActiveSection(validLastSection);
-            setKeyboardSelectedIndex(
-                settingsNav.findIndex((item) => item.id === validLastSection),
-            );
-        }
-    }, []);
+
+        const onHashChange = () => {
+            applyHash();
+        };
+        window.addEventListener("hashchange", onHashChange);
+        return () => window.removeEventListener("hashchange", onHashChange);
+    }, [settingsNav]);
 
     // Persist active section to URL hash + localStorage so deep links
     // round-trip and reopening the dialog lands on the last-visited
@@ -84,7 +107,7 @@ export function useSettingsNav(open: boolean, onClose: () => void) {
         if (index !== -1) {
             setKeyboardSelectedIndex(index);
         }
-    }, [activeSection]);
+    }, [activeSection, settingsNav]);
 
     const handleKeyDown = useCallback(
         (e: KeyboardEvent) => {
@@ -130,7 +153,7 @@ export function useSettingsNav(open: boolean, onClose: () => void) {
                 }
             }
         },
-        [open, keyboardSelectedIndex, onClose],
+        [open, keyboardSelectedIndex, onClose, settingsNav],
     );
 
     useEffect(() => {

@@ -51,12 +51,12 @@ const GROUPS: FaqGroup[] = [
         label: "Getting started",
         items: [
             {
-                q: "Is hosted Riffado really free? What does it cost?",
-                a: "The hosted free tier is real and stays real — sign up, connect your recorder, and use it. A paid Pro tier with higher limits and priority transcription is on a waitlist, but nothing about the free tier expires into it. And if you ever want zero cost and full control, self-hosting Riffado is free forever — same code, your machine.",
+                q: "What does hosted Riffado cost?",
+                a: "Five dollars a month (in the EU, €5/mo with VAT included). You start with a 14-day free trial — no card required — and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it — same code, your machine, AGPL-3.0, free forever.",
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
-                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. The browser path is on by default and stays free forever.",
+                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. Hosted Pro also includes 15 hours per month of cloud transcription on our keys, so you don't have to bring your own. Browser-based Whisper stays free forever, hosted or self-hosted.",
             },
             {
                 q: "Which voice recorders does Riffado work with?",

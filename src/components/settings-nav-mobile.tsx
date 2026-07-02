@@ -1,6 +1,7 @@
 "use client";
 
-import { settingsNav } from "@/components/settings-nav-config";
+import { useMemo } from "react";
+import { buildSettingsNav } from "@/components/settings-nav-config";
 import {
     Select,
     SelectContent,
@@ -13,6 +14,7 @@ import type { SettingsSection } from "@/types/settings";
 interface Props {
     activeSection: SettingsSection;
     onSectionChange: (section: SettingsSection) => void;
+    isHosted: boolean;
 }
 
 /**
@@ -20,7 +22,15 @@ interface Props {
  * sidebar (hidden at that breakpoint) so users on small screens
  * still have a way to switch sections without a separate route.
  */
-export function SettingsNavMobile({ activeSection, onSectionChange }: Props) {
+export function SettingsNavMobile({
+    activeSection,
+    onSectionChange,
+    isHosted,
+}: Props) {
+    const settingsNav = useMemo(
+        () => buildSettingsNav({ isHosted }),
+        [isHosted],
+    );
     const activeNavItem = settingsNav.find((item) => item.id === activeSection);
 
     return (

@@ -3,8 +3,8 @@ import Link from "next/link";
 import { MetalButton } from "@/components/metal-button";
 
 /**
- * Three ways to run Riffado. Same source, same features -- the axis
- * is "who runs the server."
+ * Two ways to run Riffado. Same source. Pay for someone else to run
+ * the server, or run it yourself for free.
  *
  * Design rules (read before editing):
  *
@@ -14,14 +14,17 @@ import { MetalButton } from "@/components/metal-button";
  *   are intended to read as a single argument; do not introduce a
  *   second visual system here.
  *
- * - Exactly one tier carries emphasis (`emphasis: true`). Everything
- *   else uses the muted chrome. Three competing visual signatures
- *   (dashed, plain, glow) was the previous mistake -- the eye had
- *   nowhere to land. Hosted Pro is the focal point; Self-host and
- *   Hosted Free are equal siblings around it.
+ * - Two tiers only. There is no Hosted Free plan. The historical
+ *   "Hosted Free" column was removed when the hosted product moved
+ *   to a Pro-only model with a 14-day trial. Anyone who wants
+ *   Riffado free runs it themselves. That positioning is the whole
+ *   reason for the two-column layout -- restoring a "Hosted Free"
+ *   sibling here will reintroduce the freemium-funnel mistake we
+ *   explicitly rejected.
  *
- * - Pills (AGPL badge, "Recommended", "Coming soon") share one
- *   primitive so they read as the same element type, not three.
+ * - Hosted Pro carries emphasis. Self-host is the equal sibling,
+ *   not a downgrade. The point is "two valid paths," not "free
+ *   teaser + real product."
  *
  * - Feature copy names real vendors (OpenAI, Groq, Whisper) instead
  *   of "OpenAI-compatible providers." Per AGENTS.md positioning:
@@ -29,21 +32,22 @@ import { MetalButton } from "@/components/metal-button";
  *   OpenAI-compatible" is the escape hatch in small print -- never
  *   single-vendor framing that implies a default cloud.
  *
- * - Feature lists only claim what the code actually delivers today.
- *   The previous Hosted Free caps (500 min / 10 GB / 1 device) were
- *   placeholders; there is no quota plumbing. Until it exists, do
- *   not invent numbers.
+ * - Hosted Pro numbers (50 GB / 15 hr / unlimited devices) come from
+ *   the entitlements catalog in `src/lib/entitlements.ts` and the
+ *   `BILLING_PRO_*` env vars. If those move, update this copy in
+ *   the same commit. Do not invent numbers that don't match the
+ *   billing layer.
  *
- * - Hosted Pro is a waitlist tier. There is no billing layer, no
- *   `?plan=pro` handler in `/register`, no Stripe. The CTA captures
- *   intent (free signup) and the "Coming soon" pill is the honest
- *   signal. Do not re-introduce a "Start Pro" CTA until billing
- *   actually ships.
+ * - Trial copy is "14-day Pro trial, no card required." That's the
+ *   actual signup flow. Founding-member (price locked for life) is
+ *   the conversion lever; surface it visibly in the Hosted Pro
+ *   column so the offer reaches users before they click through.
  *
- * - The bottom "Industry context" callout was removed. `TheMath`
- *   already runs the three-vendor survey directly above this
- *   section; repeating it here was noise and risked
- *   commercial-disparagement framing.
+ * - Price is shown in USD ($5). EU buyers are billed EUR (5 euro,
+ *   VAT included) -- Stripe Checkout localizes the real charge from
+ *   the buyer's country. The note under Hosted Pro states the EUR
+ *   figure so the landing isn't misleading; if the price points in
+ *   `BILLING_PRICE_USD` / `BILLING_PRICE_EUR` move, update both.
  */
 type Tier = {
     name: string;
@@ -54,6 +58,8 @@ type Tier = {
     features: string[];
     cta: { label: string; href: string };
     emphasis: boolean;
+    /** Optional small print under the feature list. */
+    note?: string;
 };
 
 const TIERS: Tier[] = [
@@ -72,38 +78,26 @@ const TIERS: Tier[] = [
         ],
         cta: { label: "Deploy with Docker", href: "/install" },
         emphasis: false,
-    },
-    {
-        name: "Hosted Free",
-        price: "$0",
-        priceSuffix: "/ month",
-        tagline: "We run the server. You bring the keys.",
-        pill: null,
-        features: [
-            "Sync from your Plaud recorder",
-            "Free transcription in your browser (Whisper)",
-            "Plug in OpenAI or Groq for cloud transcription",
-            "Export everything anytime — JSON, TXT, SRT, VTT",
-            "Same source as self-host (AGPL-3.0)",
-        ],
-        cta: { label: "Start free", href: "/register" },
-        emphasis: false,
+        note: "Want Riffado free? This is how. Bring your own server, AGPL source, no strings.",
     },
     {
         name: "Hosted Pro",
         price: "$5",
         priceSuffix: "/ month",
         tagline: "Hosted, with the rough edges paid for.",
-        pill: { label: "Coming soon", tone: "primary" },
+        pill: { label: "14-day free trial", tone: "primary" },
         features: [
-            "Everything in Hosted Free",
-            "Priority sync and background jobs",
-            "Off-site encrypted backups",
+            "50 GB encrypted storage",
+            "15 hours of cloud transcription per month",
+            "Unlimited devices, background sync",
+            "Off-site encrypted backups (coming soon)",
+            "Plug in OpenAI, Groq, Ollama — or use ours",
+            "Export everything any time — JSON, TXT, SRT, VTT",
             "Email support from the people who build it",
-            "Early access to new device support",
         ],
-        cta: { label: "Join the waitlist", href: "/register" },
+        cta: { label: "Start 14-day trial", href: "/register" },
         emphasis: true,
+        note: "No card required to start. Add a card during launch to lock founding-member pricing for life -- $5/mo, or €5/mo with VAT included in the EU.",
     },
 ];
 
@@ -111,29 +105,27 @@ export function Pricing() {
     return (
         <section id="pricing" className="py-24 md:py-32">
             <div className="container mx-auto px-4">
-                <div className="mx-auto max-w-6xl">
+                <div className="mx-auto max-w-5xl">
                     <div className="max-w-2xl mb-12 md:mb-16">
                         <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mb-4">
                             Pricing
                         </p>
                         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4 text-balance">
-                            Pick the version that fits you.
+                            Two ways to run it. Same source.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Same product, same source. The only difference is
-                            who runs the server — and whether you'd rather not
-                            think about it.
+                            Pay us five bucks a month and we run the server. Or
+                            run it yourself for free — same code, same features,
+                            every export round-trips.
                         </p>
                     </div>
 
                     {/*
                      * Subgrid on each card so header / features / CTA /
-                     * note rows line up across all three tiers regardless
-                     * of how tall any individual section is. Without
-                     * this, varying feature-list lengths and the Pro-only
-                     * note push buttons onto different baselines.
+                     * note rows line up across both tiers regardless of
+                     * how tall any individual section is.
                      */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-[auto_1fr_auto] gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 md:grid-rows-[auto_1fr_auto_auto] gap-4 md:gap-6">
                         {TIERS.map((tier) => (
                             <TierCard key={tier.name} tier={tier} />
                         ))}
@@ -160,7 +152,7 @@ export function Pricing() {
 function TierCard({ tier }: { tier: Tier }) {
     return (
         <div
-            className={`relative rounded-2xl border p-6 md:p-7 md:grid md:grid-rows-subgrid md:row-span-3 flex flex-col gap-6 ${
+            className={`relative rounded-2xl border p-6 md:p-7 md:grid md:grid-rows-subgrid md:row-span-4 flex flex-col gap-6 ${
                 tier.emphasis
                     ? "border-primary/40 bg-card shadow-[0_0_0_1px_color-mix(in_oklch,var(--primary)_18%,transparent)_inset]"
                     : "border-border bg-card/50"
@@ -216,6 +208,12 @@ function TierCard({ tier }: { tier: Tier }) {
             >
                 <Link href={tier.cta.href}>{tier.cta.label}</Link>
             </MetalButton>
+
+            {tier.note ? (
+                <p className="text-xs text-muted-foreground/70 leading-relaxed text-pretty">
+                    {tier.note}
+                </p>
+            ) : null}
         </div>
     );
 }

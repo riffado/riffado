@@ -15,4 +15,5 @@ export type SettingsSection =
     | "display"
     | "notifications"
     | "export"
+    | "billing"
     | "dev";

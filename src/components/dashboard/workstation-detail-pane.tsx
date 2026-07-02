@@ -19,6 +19,8 @@ interface Props {
     isCurrentTranscribing: boolean;
     visibleRecordings: Recording[];
     onTranscribe: () => void;
+    /** Called after a browser-side transcription completes (refresh data). */
+    onTranscribeComplete?: () => void;
     onSelectRecording: (r: Recording) => void;
     onBackToList: () => void;
     /** When true, the pane is hidden (mobile list view active). */
@@ -45,6 +47,7 @@ export function WorkstationDetailPane({
     isCurrentTranscribing,
     visibleRecordings,
     onTranscribe,
+    onTranscribeComplete,
     onSelectRecording,
     onBackToList,
     hiddenOnMobile,
@@ -102,6 +105,7 @@ export function WorkstationDetailPane({
                         transcription={currentTranscription}
                         isTranscribing={isCurrentTranscribing}
                         onTranscribe={onTranscribe}
+                        onTranscribeComplete={onTranscribeComplete}
                     />
                 </>
             ) : (

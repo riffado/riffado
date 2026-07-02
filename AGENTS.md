@@ -302,7 +302,7 @@ Decrypt only at the moment of HTTP request construction. Never log decrypted val
 
 Always edit `src/db/schema.ts` first, then run `pnpm db:generate` to produce the migration. **NEVER hand-write migration SQL files.** Drizzle tracks migrations via snapshot files in `src/db/migrations/meta/` — hand-written files don't generate snapshots, which causes future `db:generate` runs to re-emit already-applied columns. That's silent history corruption.
 
-Same applies to rebases, conflict resolution, and renumbering: rerun `pnpm db:generate` against the rebased schema. Never hand-edit `meta/_journal.json` or `meta/*_snapshot.json`.
+Same applies to rebases, conflict resolution, and renumbering: rerun `pnpm db:generate` against the rebased schema. Never hand-edit `meta/_journal.json` or `meta/*_snapshot.json`, and never delete or consolidate migrations drizzle-kit has already produced — even unreleased ones. Stacked migrations within one release (e.g. add-then-drop) ship as two files.
 
 If drizzle-kit generates SQL that re-adds columns that already exist, meta snapshots are out of sync with reality. **Fix the drift, don't hand-edit around it.** Migrations `0010-0012` are historical examples of this drift; `0013+` are clean.
 

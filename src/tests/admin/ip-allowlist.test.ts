@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     clientIpFromHeaders,
     ipMatchesAllowlist,
-} from "@/lib/admin/ip-allowlist";
+} from "@/lib/hosted/admin/ip-allowlist";
 
 describe("ipMatchesAllowlist", () => {
     it("empty list disables the check (true)", () => {
