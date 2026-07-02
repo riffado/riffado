@@ -79,6 +79,7 @@ function planLabel(plan: BillingState["plan"]): string {
 export function BillingSection() {
     const [state, setState] = useState<BillingState | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [waiver, setWaiver] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
@@ -89,12 +90,14 @@ export function BillingSection() {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = (await res.json()) as BillingState;
             setState(data);
+            setLoadError(null);
         } catch (err) {
-            toast.error(
+            const message =
                 err instanceof Error
                     ? err.message
-                    : "Failed to load billing state",
-            );
+                    : "Failed to load billing state";
+            setLoadError(message);
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -196,10 +199,23 @@ export function BillingSection() {
         }
     }, [load]);
 
-    if (loading || !state) {
+    if (loading) {
         return (
             <div className="flex items-center justify-center py-16">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    if (!state) {
+        return (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
+                <p className="text-sm text-muted-foreground">
+                    {loadError ?? "Failed to load billing state."}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => void load()}>
+                    Try again
+                </Button>
             </div>
         );
     }
