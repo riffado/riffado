@@ -44,7 +44,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+    // NOTE: "js" is deliberately NOT in this extension exclusion list.
+    // /api/int/script.js and /api/int/replay.js (the Rybbit analytics
+    // proxy paths) must still hit this middleware -- excluding .js would
+    // skip both the admin-host isolation gate and the auth-header
+    // stripping below for those routes.
     matcher: [
-        "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|js|woff|woff2|ttf|otf|map)).*)",
+        "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|woff|woff2|ttf|otf|map)).*)",
     ],
 };
