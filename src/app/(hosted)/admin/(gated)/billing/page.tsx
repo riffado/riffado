@@ -178,6 +178,7 @@ export default async function AdminBillingPage({
                     <div className="flex gap-2 mt-2 text-xs">
                         {Array.from({ length: pages }, (_, i) => (
                             <Link
+                                // biome-ignore lint/suspicious/noArrayIndexKey: page numbers are stable and sequential
                                 key={i + 1}
                                 href={`/admin/billing?page=${i + 1}${status ? `&status=${status}` : ""}`}
                                 className={`px-2 py-1 rounded border ${

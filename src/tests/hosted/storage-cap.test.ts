@@ -19,9 +19,7 @@ function stubUserEmail(email: string | null) {
     dbMock.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-                limit: vi
-                    .fn()
-                    .mockResolvedValue(email ? [{ email }] : []),
+                limit: vi.fn().mockResolvedValue(email ? [{ email }] : []),
             }),
         }),
     });
