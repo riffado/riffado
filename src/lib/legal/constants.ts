@@ -121,6 +121,14 @@ export const SUBPROCESSORS: Subprocessor[] = [
         safeguard:
             "Data Processing Addendum and EU Standard Contractual Clauses",
     },
+    {
+        name: "Together Computer, Inc. (Together AI)",
+        purpose:
+            "Cloud transcription for hosted-Pro users who have not configured their own AI provider, via our Mynah proxy",
+        location: "USA",
+        safeguard:
+            "Data Processing Addendum and EU Standard Contractual Clauses",
+    },
 ];
 
 /** Formatted one-line postal address for the operator. */
