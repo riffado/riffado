@@ -5,6 +5,7 @@ import { isSmtpConfigured } from "@/lib/smtp";
 interface SendEmailWithHeadersOptions {
     to: string;
     from: string;
+    replyTo?: string;
     subject: string;
     html: string;
     text: string;
@@ -48,6 +49,7 @@ export async function sendEmailWithHeaders(
     const result = await mailer.sendMail({
         from: options.from,
         to: options.to,
+        replyTo: options.replyTo,
         subject: options.subject,
         html: options.html,
         text: options.text,
@@ -55,6 +57,11 @@ export async function sendEmailWithHeaders(
     });
 
     return typeof result.messageId === "string" ? result.messageId : undefined;
+}
+
+/** Resolve the `Reply-To:` address for outbound mail. Unset means no header. */
+export function resolveReplyToAddress(): string | undefined {
+    return env.SMTP_REPLY_TO;
 }
 
 /** Resolve the `From:` address for a given campaign kind. */

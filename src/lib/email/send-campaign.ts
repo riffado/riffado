@@ -13,6 +13,7 @@ import { buildUnsubscribeHeaders } from "@/lib/email/headers";
 import {
     htmlToText,
     resolveFromAddress,
+    resolveReplyToAddress,
     SmtpNotConfiguredError,
     sendEmailWithHeaders,
 } from "@/lib/email/transport";
@@ -193,6 +194,7 @@ export async function sendCampaign(
             const messageId = await sendEmailWithHeaders({
                 to: recipientEmail,
                 from,
+                replyTo: resolveReplyToAddress(),
                 subject: campaign.subject,
                 html: rendered.html,
                 text,

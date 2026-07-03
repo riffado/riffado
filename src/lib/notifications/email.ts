@@ -72,6 +72,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         await mailer.sendMail({
             from: fromEmail,
             to: options.to,
+            replyTo: env.SMTP_REPLY_TO,
             subject: options.subject,
             html: options.html,
             text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML if no text provided
@@ -103,6 +104,7 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
         await mailer.sendMail({
             from: fromEmail,
             to: options.to,
+            replyTo: env.SMTP_REPLY_TO,
             subject: options.subject,
             html: options.html,
             text: options.text || options.html.replace(/<[^>]*>/g, ""),

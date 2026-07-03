@@ -214,6 +214,28 @@ export const envSchema = z.object({
             },
         ),
 
+    /**
+     * Reply-To address applied to every outbound email (transactional,
+     * marketing, and announcement). Distinct from SMTP_FROM/SMTP_MARKETING_FROM
+     * -- lets the From: address stay a no-reply/branded sender while replies
+     * land in a monitored inbox. Unset means no Reply-To header is added.
+     */
+    SMTP_REPLY_TO: z
+        .string()
+        .optional()
+        .refine(
+            (val) => {
+                if (!val) return true;
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const nameEmailRegex = /^.+ <[^\s@]+@[^\s@]+\.[^\s@]+>$/;
+                return emailRegex.test(val) || nameEmailRegex.test(val);
+            },
+            {
+                message:
+                    'SMTP_REPLY_TO must be an email address (e.g., "user@example.com") or formatted as "Name <user@example.com>"',
+            },
+        ),
+
     EMAIL_SEND_RATE_PER_SECOND: z
         .string()
         .regex(/^\d+$/, "EMAIL_SEND_RATE_PER_SECOND must be a positive integer")
@@ -498,6 +520,7 @@ function validateEnv(): Env {
             REACHER_API_URL: process.env.REACHER_API_URL,
             REACHER_API_KEY: process.env.REACHER_API_KEY,
             SMTP_MARKETING_FROM: process.env.SMTP_MARKETING_FROM,
+            SMTP_REPLY_TO: process.env.SMTP_REPLY_TO,
             EMAIL_SEND_RATE_PER_SECOND: process.env.EMAIL_SEND_RATE_PER_SECOND,
             STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
             STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
