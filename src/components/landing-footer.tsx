@@ -151,6 +151,19 @@ export function LandingFooter() {
                                 <X className="size-[18px]" />
                             </Link>
                         </div>
+
+                        <div className="mt-6">
+                            <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-foreground/80">
+                                Product updates
+                            </h3>
+                            <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-sm">
+                                Occasional emails when we ship something worth
+                                telling you about.
+                            </p>
+                            <div className="mt-4 max-w-md">
+                                <NewsletterForm source="landing" />
+                            </div>
+                        </div>
                     </div>
 
                     {COLUMNS.map((col) => (
@@ -168,19 +181,6 @@ export function LandingFooter() {
                             </ul>
                         </div>
                     ))}
-                </div>
-
-                <div className="mt-16 pt-8 border-t border-border/40 grid md:grid-cols-[auto_minmax(0,1fr)] gap-x-12 gap-y-4 items-start max-w-3xl">
-                    <div>
-                        <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-foreground/80">
-                            Product updates
-                        </h3>
-                        <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-xs">
-                            Occasional emails when we ship something worth
-                            telling you about.
-                        </p>
-                    </div>
-                    <NewsletterForm source="landing" />
                 </div>
 
                 {/* Honesty rail + copyright share one top border. The
