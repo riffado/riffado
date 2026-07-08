@@ -150,7 +150,7 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                         ? mode.path === "trial"
                             ? "Your trial ended."
                             : "Your subscription ended."
-                        : "Your hosted plan has lapsed."}
+                        : "Your subscription has ended."}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
                     {isGrace
