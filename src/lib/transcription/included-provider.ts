@@ -1,5 +1,4 @@
 import { getEntitlements } from "@/lib/entitlements";
-import { env } from "@/lib/env";
 import { isMynahConfigured } from "@/lib/hosted/transcription/mynah";
 
 /**
@@ -60,8 +59,6 @@ export async function getManagedTranscriptionProvider(
     if (!isMynahConfigured()) return null;
 
     const entitlements = await getEntitlements(userId);
-    const headlineSeconds =
-        env.BILLING_PRO_INCLUDED_SECONDS || entitlements.monthlyMynahSeconds;
 
     return {
         id: RIFFADO_INCLUDED_PROVIDER_ID,
@@ -71,7 +68,7 @@ export async function getManagedTranscriptionProvider(
         isDefaultTranscription: isDefault,
         isDefaultEnhancement: false,
         managed: true,
-        includedSeconds: headlineSeconds,
+        includedSeconds: entitlements.monthlyMynahSeconds,
         available: entitlements.monthlyMynahSeconds > 0,
         // Sort key only; managed provider is rendered first regardless.
         createdAt: new Date(0),

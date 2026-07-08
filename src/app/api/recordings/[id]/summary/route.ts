@@ -127,7 +127,6 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         .select()
         .from(apiCredentials)
         .where(eq(apiCredentials.userId, session.user.id))
-        .orderBy(apiCredentials.createdAt)
         .limit(1);
 
     const credentials = enhancementCredentials || fallbackCredentials;

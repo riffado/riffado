@@ -15,7 +15,6 @@ import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import {
     isMynahConfigured,
-    MynahBudgetExhaustedError,
     transcribeViaMynah,
 } from "@/lib/hosted/transcription/mynah";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -274,6 +273,19 @@ export async function transcribeRecording(
             };
         }
 
+        const [legacyDefaultCredentials] = opts.providerId
+            ? []
+            : await db
+                  .select()
+                  .from(apiCredentials)
+                  .where(
+                      and(
+                          eq(apiCredentials.userId, userId),
+                          eq(apiCredentials.isDefaultTranscription, true),
+                      ),
+                  )
+                  .limit(1);
+
         const [settings] = await db
             .select()
             .from(userSettings)
@@ -291,19 +303,21 @@ export async function transcribeRecording(
 
         void quality;
 
-        const [credentials] =
-            !useManaged && requested
-                ? await db
-                      .select()
-                      .from(apiCredentials)
-                      .where(
-                          and(
-                              eq(apiCredentials.id, requested),
-                              eq(apiCredentials.userId, userId),
-                          ),
-                      )
-                      .limit(1)
-                : [];
+        let credentials: typeof apiCredentials.$inferSelect | undefined;
+        if (!useManaged && requested) {
+            [credentials] = await db
+                .select()
+                .from(apiCredentials)
+                .where(
+                    and(
+                        eq(apiCredentials.id, requested),
+                        eq(apiCredentials.userId, userId),
+                    ),
+                )
+                .limit(1);
+        } else if (!useManaged) {
+            credentials = legacyDefaultCredentials;
+        }
 
         const runManagedTranscription = async () => {
             const input = {
@@ -439,7 +453,7 @@ export async function transcribeRecording(
                 }
             }
         } else {
-            if (opts.providerId || !isMynahConfigured()) {
+            if (requested || !isMynahConfigured()) {
                 return {
                     success: false,
                     error: "No transcription API configured",
@@ -629,7 +643,7 @@ export async function transcribeRecording(
         };
     } catch (error) {
         console.error("Error transcribing recording:", error);
-        if (error instanceof MynahBudgetExhaustedError) {
+        if (isMynahBudgetExhausted(error)) {
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: "included_transcription_budget_exhausted",
             });
@@ -649,6 +663,10 @@ export async function transcribeRecording(
             errorCode: "TRANSCRIPTION_FAILED",
         };
     }
+}
+
+function isMynahBudgetExhausted(error: unknown): boolean {
+    return error instanceof Error && error.name === "MynahBudgetExhaustedError";
 }
 
 const DEFAULT_WHISPER_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
