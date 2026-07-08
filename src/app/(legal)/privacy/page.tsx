@@ -6,7 +6,7 @@ import {
     LEGAL_ADDRESS_LINE,
     LEGAL_ENTITY,
     MIN_AGE,
-    SUBPROCESSORS,
+    RECIPIENT_CATEGORIES,
     SUPERVISORY_AUTHORITY,
 } from "@/lib/legal/constants";
 
@@ -15,15 +15,16 @@ import {
  * when `!IS_HOSTED`, so this never serves on a self-hosted instance.
  *
  * Structure follows the GDPR Article 13 information obligations: who the
- * controller is, what we process and why, the legal bases, recipients
- * (sub-processors), transfers, retention, data-subject rights, and the
- * right to lodge a complaint with the supervisory authority.
+ * controller is, what we process and why, the legal bases, categories of
+ * recipients, transfers, retention, data-subject rights, and the right
+ * to lodge a complaint with the supervisory authority.
  *
  * Every factual claim here is traceable to code: AES-256-GCM token
  * encryption (`src/lib/encryption.ts`), full-archive export, account
  * deletion, self-hosted Rybbit analytics, user-configured AI providers.
  * Do not add claims the code does not back. Variable facts (entity,
- * address, sub-processors, contacts) come from `@/lib/legal/constants`.
+ * address, recipient categories, contacts) come from
+ * `@/lib/legal/constants`.
  */
 
 export const metadata: Metadata = {
@@ -86,9 +87,10 @@ export default function PrivacyPage() {
                 <li>
                     <strong>Payment data</strong> — if you subscribe, payment
                     details (card number, billing address) are collected and
-                    processed by our payment processor, Stripe. We store only a
-                    reference to your Stripe customer account and subscription
-                    status; we never see or store your full card number.
+                    processed by our payment processor. We store only a
+                    reference to your customer account with that processor and
+                    your subscription status; we never see or store your full
+                    card number.
                 </li>
                 <li>
                     <strong>Usage analytics</strong> — privacy-friendly,
@@ -135,16 +137,16 @@ export default function PrivacyPage() {
 
             <h2>Who processes data for us</h2>
             <p>
-                We use the following sub-processors to run the hosted service.
-                Each handles personal data only on our instructions under a data
-                processing agreement:
+                We use the following categories of service providers to run the
+                hosted service. Each handles personal data only on our
+                instructions under a data processing agreement:
             </p>
             <div className="overflow-x-auto mb-4">
                 <table className="w-full text-sm border-collapse">
                     <thead>
                         <tr className="border-b border-border text-left">
                             <th className="py-2 pr-4 font-semibold text-foreground">
-                                Sub-processor
+                                Category
                             </th>
                             <th className="py-2 pr-4 font-semibold text-foreground">
                                 Purpose
@@ -158,13 +160,13 @@ export default function PrivacyPage() {
                         </tr>
                     </thead>
                     <tbody className="text-muted-foreground">
-                        {SUBPROCESSORS.map((p) => (
+                        {RECIPIENT_CATEGORIES.map((p) => (
                             <tr
-                                key={p.name}
+                                key={p.category}
                                 className="border-b border-border/40 align-top"
                             >
                                 <td className="py-2 pr-4 text-foreground">
-                                    {p.name}
+                                    {p.category}
                                 </td>
                                 <td className="py-2 pr-4">{p.purpose}</td>
                                 <td className="py-2 pr-4">{p.location}</td>
@@ -185,16 +187,16 @@ export default function PrivacyPage() {
                 Anthropic, or Groq) the service forwards the relevant audio or
                 text to that provider at your direction. You contract with that
                 provider directly and their privacy terms govern that processing
-                — they are not our sub-processors. We do not retain a separate
-                copy beyond what is already stored in your account. If you
-                transcribe in your browser or with a local model, no audio
+                — they are not our service providers. We do not retain a
+                separate copy beyond what is already stored in your account. If
+                you transcribe in your browser or with a local model, no audio
                 leaves your control through a third party at all.
             </p>
 
             <h2>International transfers</h2>
             <p>
                 Most processing happens within the European Economic Area. Where
-                a sub-processor is established outside the EEA (see the table
+                a service provider is established outside the EEA (see the table
                 above), transfers are covered by the EU Standard Contractual
                 Clauses and the provider&apos;s data processing agreement.
             </p>
