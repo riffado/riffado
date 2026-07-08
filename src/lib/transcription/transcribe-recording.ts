@@ -15,6 +15,7 @@ import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import {
     isMynahConfigured,
+    MynahBudgetExhaustedError,
     transcribeViaMynah,
 } from "@/lib/hosted/transcription/mynah";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -28,6 +29,7 @@ import {
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
+import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
 import { emitEvent } from "@/lib/webhooks/emit";
 
 /**
@@ -272,31 +274,6 @@ export async function transcribeRecording(
             };
         }
 
-        // Provider selection: explicit `providerId` (manual override
-        // from the route, user-scoped lookup by id) takes precedence
-        // over the user's default transcription provider.
-        const [credentials] = opts.providerId
-            ? await db
-                  .select()
-                  .from(apiCredentials)
-                  .where(
-                      and(
-                          eq(apiCredentials.id, opts.providerId),
-                          eq(apiCredentials.userId, userId),
-                      ),
-                  )
-                  .limit(1)
-            : await db
-                  .select()
-                  .from(apiCredentials)
-                  .where(
-                      and(
-                          eq(apiCredentials.userId, userId),
-                          eq(apiCredentials.isDefaultTranscription, true),
-                      ),
-                  )
-                  .limit(1);
-
         const [settings] = await db
             .select()
             .from(userSettings)
@@ -308,30 +285,49 @@ export async function transcribeRecording(
         const quality = settings?.transcriptionQuality || "balanced";
         const autoGenerateTitle = settings?.autoGenerateTitle ?? true;
         const syncTitleToPlaud = settings?.syncTitleToPlaud ?? false;
+        const pointer = settings?.defaultTranscriptionProviderId ?? null;
+        const requested = opts.providerId || pointer || null;
+        const useManaged = isRiffadoIncludedProviderId(requested);
 
         void quality;
+
+        const [credentials] =
+            !useManaged && requested
+                ? await db
+                      .select()
+                      .from(apiCredentials)
+                      .where(
+                          and(
+                              eq(apiCredentials.id, requested),
+                              eq(apiCredentials.userId, userId),
+                          ),
+                      )
+                      .limit(1)
+                : [];
+
+        const runManagedTranscription = async () => {
+            const input = {
+                userId,
+                storagePath: recording.storagePath,
+                durationMs: recording.duration,
+                language: defaultLanguage,
+                filename: decryptText(recording.filename),
+            };
+            const result = await transcribeViaMynah(input);
+            return {
+                text: result.text,
+                detectedLanguage: result.detectedLanguage,
+                provider: "mynah",
+                model: "parakeet",
+            };
+        };
 
         let transcriptionText: string;
         let detectedLanguage: string | null;
         let persistProvider: string;
         let persistModel: string;
 
-        if (!credentials) {
-            // An explicit providerId override that didn't resolve (invalid,
-            // stale, or belongs to another user) must fail loudly rather
-            // than silently falling back to Mynah -- otherwise the caller's
-            // requested provider is ignored and hosted fallback usage gets
-            // charged against their Mynah budget unexpectedly.
-            if (opts.providerId) {
-                return {
-                    success: false,
-                    error: "No transcription API configured",
-                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
-                };
-            }
-            // No user-configured provider. On hosted, fall back to Mynah
-            // (metered against the user's monthly second budget). On
-            // self-host there is no fallback.
+        if (useManaged) {
             if (!isMynahConfigured()) {
                 return {
                     success: false,
@@ -339,17 +335,12 @@ export async function transcribeRecording(
                     errorCode: "NO_TRANSCRIPTION_PROVIDER",
                 };
             }
-            const result = await transcribeViaMynah({
-                userId,
-                storagePath: recording.storagePath,
-                durationMs: recording.duration,
-                language: defaultLanguage,
-            });
+            const result = await runManagedTranscription();
             transcriptionText = result.text;
             detectedLanguage = result.detectedLanguage;
-            persistProvider = "mynah";
-            persistModel = "parakeet";
-        } else {
+            persistProvider = result.provider;
+            persistModel = result.model;
+        } else if (credentials) {
             const apiKey = decrypt(credentials.apiKey);
 
             const storage = await createUserStorageProvider(userId);
@@ -447,6 +438,19 @@ export async function transcribeRecording(
                     detectedLanguage = parsed.detectedLanguage;
                 }
             }
+        } else {
+            if (opts.providerId || !isMynahConfigured()) {
+                return {
+                    success: false,
+                    error: "No transcription API configured",
+                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
+                };
+            }
+            const result = await runManagedTranscription();
+            transcriptionText = result.text;
+            detectedLanguage = result.detectedLanguage;
+            persistProvider = result.provider;
+            persistModel = result.model;
         }
 
         const RECORDING_TOMBSTONED = Symbol("recording-tombstoned");
@@ -625,6 +629,16 @@ export async function transcribeRecording(
         };
     } catch (error) {
         console.error("Error transcribing recording:", error);
+        if (error instanceof MynahBudgetExhaustedError) {
+            await emitEvent("transcription.failed", userId, recordingId, {
+                error: "included_transcription_budget_exhausted",
+            });
+            return {
+                success: false,
+                error: "You've used all of your included Mynah transcription for this cycle. It resets next cycle, or add your own AI provider to keep transcribing.",
+                errorCode: "TRANSCRIPTION_FAILED",
+            };
+        }
         await emitEvent("transcription.failed", userId, recordingId, {
             error: error instanceof Error ? error.message : String(error),
         });

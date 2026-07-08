@@ -183,6 +183,13 @@
       "when": 1783013166299,
       "tag": "0025_ambiguous_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783426525823,
+      "tag": "0026_kind_argent",
+      "breakpoints": true
     }
   ]
 }

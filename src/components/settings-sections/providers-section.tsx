@@ -20,6 +20,9 @@ interface Provider {
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
     createdAt: Date;
+    managed?: boolean;
+    includedSeconds?: number;
+    available?: boolean;
 }
 
 const EMPTY_PROVIDERS: Provider[] = [];
@@ -62,7 +65,7 @@ export function ProvidersSection({
         try {
             const response = await fetch("/api/settings/ai/providers");
             if (!response.ok) throw new Error("Failed to fetch");
-            const data = await response.json();
+            const data = (await response.json()) as { providers: Provider[] };
             setProviders(data.providers);
         } catch {
             toast.error("Failed to refresh providers");
@@ -72,6 +75,33 @@ export function ProvidersSection({
     const handleEdit = (provider: Provider) => {
         setEditingProvider(provider);
         setIsEditProviderOpen(true);
+    };
+
+    const handleSetDefaultTranscription = (providerId: string) => {
+        void (async () => {
+            try {
+                const res = await fetch(
+                    "/api/settings/ai/providers/default-transcription",
+                    {
+                        method: "PUT",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ providerId }),
+                    },
+                );
+                if (!res.ok) {
+                    const b = (await res.json().catch(() => ({}))) as {
+                        error?: string;
+                    };
+                    throw new Error(b.error ?? `HTTP ${res.status}`);
+                }
+                toast.success("Default transcription provider updated");
+                await refreshProviders();
+            } catch (e) {
+                toast.error(
+                    e instanceof Error ? e.message : "Failed to update default",
+                );
+            }
+        })();
     };
 
     const handleDelete = (id: string) => {
@@ -90,7 +120,9 @@ export function ProvidersSection({
                         { method: "DELETE" },
                     );
                     if (!response.ok) {
-                        const error = await response.json();
+                        const error = (await response.json()) as {
+                            error?: string;
+                        };
                         throw new Error(error.error || "Failed to delete");
                     }
                     toast.success("Provider deleted successfully");
@@ -156,6 +188,7 @@ export function ProvidersSection({
                         onAdd={() => setIsAddProviderOpen(true)}
                         onEdit={handleEdit}
                         onDelete={handleDelete}
+                        onSetDefault={handleSetDefaultTranscription}
                     />
                 )}
 
@@ -192,6 +225,11 @@ export function ProvidersSection({
     );
 }
 
+function formatIncludedSeconds(seconds: number | undefined): string {
+    if (!seconds) return "Included with your subscription";
+    return `Up to ${Math.round(seconds / 3600)}h of transcription per month`;
+}
+
 /**
  * Configured-providers list with edit/delete row actions. Pure
  * presentation -- the parent owns the data + dialog state.
@@ -202,12 +240,14 @@ function ProvidersList({
     onAdd,
     onEdit,
     onDelete,
+    onSetDefault,
 }: {
     providers: Provider[];
     deletingId: string | null;
     onAdd: () => void;
     onEdit: (provider: Provider) => void;
     onDelete: (id: string) => void;
+    onSetDefault: (id: string) => void;
 }) {
     if (providers.length === 0) {
         return (
@@ -226,61 +266,117 @@ function ProvidersList({
     }
     return (
         <div className="space-y-3">
-            {providers.map((provider) => (
-                <div
-                    key={provider.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
-                >
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold">
-                                {provider.provider}
-                            </h3>
-                            {provider.isDefaultTranscription && (
-                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                    Transcription
-                                </span>
+            {providers.map((provider) => {
+                if (provider.managed === true) {
+                    return (
+                        <div
+                            key={provider.id}
+                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+                        >
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-semibold">
+                                        {provider.provider}
+                                    </h3>
+                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
+                                        Included with your plan
+                                    </span>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    {formatIncludedSeconds(
+                                        provider.includedSeconds,
+                                    )}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                                {provider.isDefaultTranscription ? (
+                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
+                                        Default
+                                    </span>
+                                ) : (
+                                    <Button
+                                        onClick={() =>
+                                            onSetDefault(provider.id)
+                                        }
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={provider.available === false}
+                                    >
+                                        {provider.available === false
+                                            ? "Resubscribe to use"
+                                            : "Use for transcription"}
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div
+                        key={provider.id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+                    >
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold">
+                                    {provider.provider}
+                                </h3>
+                                {provider.isDefaultTranscription && (
+                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
+                                        Transcription
+                                    </span>
+                                )}
+                                {provider.isDefaultEnhancement && (
+                                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded border border-purple-500/20">
+                                        Enhancement
+                                    </span>
+                                )}
+                            </div>
+                            {provider.defaultModel && (
+                                <p className="text-sm text-muted-foreground">
+                                    Model: {provider.defaultModel}
+                                </p>
                             )}
-                            {provider.isDefaultEnhancement && (
-                                <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded border border-purple-500/20">
-                                    Enhancement
-                                </span>
+                            {provider.baseUrl && (
+                                <p className="text-xs text-muted-foreground font-mono truncate">
+                                    {provider.baseUrl}
+                                </p>
                             )}
                         </div>
-                        {provider.defaultModel && (
-                            <p className="text-sm text-muted-foreground">
-                                Model: {provider.defaultModel}
-                            </p>
-                        )}
-                        {provider.baseUrl && (
-                            <p className="text-xs text-muted-foreground font-mono truncate">
-                                {provider.baseUrl}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2 ml-4">
-                        <Button
-                            onClick={() => onEdit(provider)}
-                            variant="outline"
-                            size="icon"
-                        >
-                            <Pencil className="size-4" />
-                        </Button>
-                        <Button
-                            onClick={() => onDelete(provider.id)}
-                            variant="outline"
-                            size="icon"
-                            disabled={deletingId === provider.id}
-                        >
-                            {deletingId === provider.id ? (
-                                <div className="animate-spin size-4 border-2 border-destructive border-t-transparent rounded-full" />
-                            ) : (
-                                <Trash2 className="size-4 text-destructive" />
+                        <div className="flex items-center gap-2 ml-4">
+                            {!provider.isDefaultTranscription && (
+                                <Button
+                                    onClick={() => onSetDefault(provider.id)}
+                                    variant="outline"
+                                    size="sm"
+                                >
+                                    Use for transcription
+                                </Button>
                             )}
-                        </Button>
+                            <Button
+                                onClick={() => onEdit(provider)}
+                                variant="outline"
+                                size="icon"
+                            >
+                                <Pencil className="size-4" />
+                            </Button>
+                            <Button
+                                onClick={() => onDelete(provider.id)}
+                                variant="outline"
+                                size="icon"
+                                disabled={deletingId === provider.id}
+                            >
+                                {deletingId === provider.id ? (
+                                    <div className="animate-spin size-4 border-2 border-destructive border-t-transparent rounded-full" />
+                                ) : (
+                                    <Trash2 className="size-4 text-destructive" />
+                                )}
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

@@ -119,6 +119,59 @@ describe("issue #70: IS_HOSTED env contract", () => {
         ).toBe("token-hash-secret-with-32-characters");
     });
 
+    it("does not default MYNAH_BASE_URL", () => {
+        expect(envSchema.parse({}).MYNAH_BASE_URL).toBeUndefined();
+        expect(
+            envSchema.parse({ MYNAH_BASE_URL: "https://mynah.example.com/" })
+                .MYNAH_BASE_URL,
+        ).toBe("https://mynah.example.com");
+        expect(() =>
+            envSchema.parse({ MYNAH_BASE_URL: "not-a-url" }),
+        ).toThrow();
+    });
+
+    it("requires MYNAH_BASE_URL when billing is enabled", async () => {
+        const originalEnv = { ...process.env };
+
+        try {
+            process.env = {
+                ...originalEnv,
+                APP_URL: "http://localhost:3000",
+                BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
+                BILLING_ENABLED: "true",
+                DATABASE_URL:
+                    "postgresql://user:password@localhost:5432/riffado",
+                ENCRYPTION_KEY:
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                IS_HOSTED: "true",
+                MYNAH_SERVICE_TOKEN: "secret",
+                RATE_LIMIT_TRUST_PROXY_HEADERS: "true",
+                STRIPE_PRICE_ID_USD: "price_123",
+                STRIPE_SECRET_KEY: "sk_test_123",
+                STRIPE_WEBHOOK_SECRET: "whsec_123",
+            } as NodeJS.ProcessEnv;
+            delete process.env.MYNAH_BASE_URL;
+            delete process.env.NEXT_PHASE;
+            vi.resetModules();
+
+            await expect(import("@/lib/env")).rejects.toThrow(
+                "BILLING_ENABLED=true requires MYNAH_BASE_URL to be set",
+            );
+
+            process.env.MYNAH_BASE_URL = "https://mynah.example.com";
+            vi.resetModules();
+
+            await expect(import("@/lib/env")).resolves.toMatchObject({
+                env: expect.objectContaining({
+                    MYNAH_BASE_URL: "https://mynah.example.com",
+                }),
+            });
+        } finally {
+            process.env = originalEnv;
+            vi.resetModules();
+        }
+    });
+
     it("requires trusted proxy IP headers when hosted mode serves runtime requests", async () => {
         const originalEnv = { ...process.env };
         const runtimeEnv = {

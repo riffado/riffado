@@ -19,13 +19,15 @@ The worker starts automatically via `instrumentation.ts` when `BILLING_ENABLED` 
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `BILLING_ENABLED` | unset | Master switch. Requires `IS_HOSTED=true` + `STRIPE_SECRET_KEY`. |
+| `BILLING_ENABLED` | unset | Master switch. Requires `IS_HOSTED=true`, Stripe credentials, at least one Stripe Price id, `MYNAH_BASE_URL`, and `MYNAH_SERVICE_TOKEN`. |
 | `STRIPE_SECRET_KEY` | unset | Stripe secret key (`sk_live_...` / `sk_test_...`). |
 | `STRIPE_WEBHOOK_SECRET` | unset | Signing secret for `/api/stripe/webhook` (`whsec_...`). |
 | `STRIPE_PRICE_ID_USD` | unset | Stripe Price id for the USD Pro subscription. |
 | `STRIPE_PRICE_ID_EUR` | unset | Stripe Price id for the EUR Pro subscription. |
 | `STRIPE_PORTAL_CONFIGURATION_ID` | unset | Optional. Pins the Customer Portal to a specific configuration (`bpc_...`). Unset falls back to the account's default portal config. |
 | `STRIPE_TAX_RATE_ID_EUR` | unset | Optional. Inclusive VAT rate (`txr_...`) applied to EUR (EU/EEA) subscriptions so invoices show the VAT line. Match the EUR Price's inclusive `tax_behavior`. Never applied to USD sales. |
+| `MYNAH_BASE_URL` | unset | Mynah transcription proxy base URL. Required with `BILLING_ENABLED=true`; configure explicitly in hosted production. |
+| `MYNAH_SERVICE_TOKEN` | unset | Shared secret for authenticating Riffado to Mynah. Required with `BILLING_ENABLED=true`. |
 | `BILLING_PRICE_USD` | `5.00` | Display amount (decimal string) for USD copy/emails. |
 | `BILLING_PRICE_EUR` | `5.00` | Display amount (decimal string) for EUR copy/emails. |
 | `BILLING_DEFAULT_CURRENCY` | `usd` | Currency used when geo is unknown (non-EU/EEA buyers). |

@@ -322,12 +322,15 @@ export const envSchema = z.object({
      */
     BILLING_ENABLED: optionalStrictBoolean,
 
-    /** Mynah transcription proxy base URL. Default https://mynah.riffado.com. */
+    /** Mynah transcription proxy base URL. Required iff BILLING_ENABLED. */
     MYNAH_BASE_URL: z
         .string()
+        .url("MYNAH_BASE_URL must be a valid URL")
         .optional()
         .transform((val) =>
-            val ? val.replace(/\/+$/, "") : "https://mynah.riffado.com",
+            val && val.trim() !== ""
+                ? val.trim().replace(/\/+$/, "")
+                : undefined,
         ),
 
     /** Shared service token for Mynah. Required iff BILLING_ENABLED. */
@@ -597,6 +600,11 @@ function validateEnv(): Env {
             ) {
                 throw new Error(
                     "BILLING_ENABLED=true requires at least one of STRIPE_PRICE_ID_USD / STRIPE_PRICE_ID_EUR",
+                );
+            }
+            if (parsed.BILLING_ENABLED && !parsed.MYNAH_BASE_URL) {
+                throw new Error(
+                    "BILLING_ENABLED=true requires MYNAH_BASE_URL to be set",
                 );
             }
             if (parsed.BILLING_ENABLED && !parsed.MYNAH_SERVICE_TOKEN) {

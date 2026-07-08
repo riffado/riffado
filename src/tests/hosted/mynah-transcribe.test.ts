@@ -78,6 +78,51 @@ describe("transcribeViaMynah", () => {
         expect(result).toEqual({ text: "hello", detectedLanguage: "en" });
     });
 
+    it("sends a JSON url body when the signed URL is absolute (S3)", async () => {
+        reserveMock.mockResolvedValue({
+            userId: "u1",
+            seconds: 65,
+            reserved: true,
+        });
+        const fetchSpy = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ text: "hi", language: "en" }), {
+                status: 200,
+            }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await transcribeViaMynah(input);
+
+        const [, init] = fetchSpy.mock.calls[0];
+        expect(init.headers["content-type"]).toBe("application/json");
+        expect(JSON.parse(init.body)).toMatchObject({
+            url: "https://signed.test/rec",
+            response_format: "verbose_json",
+        });
+        expect(storageMock.getSignedUrl).toHaveBeenCalled();
+    });
+
+    it("fails clearly and refunds when the signed URL is not fetchable (local)", async () => {
+        storageMock.getSignedUrl.mockResolvedValue(
+            "/api/recordings/audio/u1%2Frec.mp3",
+        );
+        reserveMock.mockResolvedValue({
+            userId: "u1",
+            seconds: 65,
+            reserved: true,
+        });
+        const fetchSpy = vi.fn();
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(transcribeViaMynah(input)).rejects.toThrow(
+            /object storage/i,
+        );
+        // Never hits Mynah, and the reservation is refunded.
+        expect(fetchSpy).not.toHaveBeenCalled();
+        expect(releaseMock).toHaveBeenCalledOnce();
+        expect(commitMock).not.toHaveBeenCalled();
+    });
+
     it("throws budget error and never calls fetch when reservation fails", async () => {
         reserveMock.mockResolvedValue({
             userId: "u1",

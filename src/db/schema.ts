@@ -426,6 +426,11 @@ export const userSettings = pgTable("user_settings", {
     transcriptionQuality: varchar("transcription_quality", { length: 20 })
         .notNull()
         .default("balanced"), // 'fast', 'balanced', 'accurate'
+    // Authoritative default transcription provider: an api_credentials id,
+    // the managed "riffado-included" sentinel, or null (no explicit choice
+    // -> hosted managed fallback). Supersedes the per-row
+    // api_credentials.is_default_transcription boolean for selection.
+    defaultTranscriptionProviderId: text("default_transcription_provider_id"),
     // Display/UI settings
     dateTimeFormat: varchar("date_time_format", { length: 20 })
         .notNull()

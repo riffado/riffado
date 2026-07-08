@@ -251,6 +251,16 @@ When designing or reviewing any feature, assume hosted is real and check both mo
 - **Rate limiting on `/api/v1/*`.** Per-token + per-IP. Required before hosted exposes a new write endpoint or a new external surface.
 - **No claims of compliance we don't own.** Hosted does not make us HIPAA/SOC2 compliant. Don't ship copy that says it does.
 
+### Mynah — hosted included transcription
+
+**Mynah** is a real Riffado product (`mynah.riffado.com`), not an internal codename — the hosted transcription backend included with a paid plan. Surface it as **"Mynah"** in user-facing copy; only the underlying model name (`parakeet`) stays internal.
+
+- **First-class managed provider, not a hidden fallback.** Instance-configured via env (`MYNAH_BASE_URL`, `MYNAH_SERVICE_TOKEN`); `isMynahConfigured()` requires `IS_HOSTED`, so self-host never sees it. It is **never** a row in `api_credentials` — it's surfaced as a synthetic managed provider with id `RIFFADO_INCLUDED_PROVIDER_ID` (`"riffado-included"`) and label from `RIFFADO_INCLUDED_PROVIDER_LABEL`, both in `src/lib/transcription/included-provider.ts`. `listUserProviders()` (`src/lib/ai/list-providers.ts`) prepends it for the Providers UI + SSR seed.
+- **Authoritative transcription default is `userSettings.defaultTranscriptionProviderId`** (a credential id, the `"riffado-included"` sentinel, or null). The per-row `apiCredentials.isDefaultTranscription` boolean is now a **derived mirror** — do not read it as the source of truth for transcription selection. All writes go through `setDefaultTranscriptionProvider()` (`src/lib/ai/set-default-transcription.ts`), which keeps pointer + mirror consistent. (`isDefaultEnhancement` is unchanged and still authoritative for enhancement.)
+- **Selection precedence** (`transcribe-recording.ts`): explicit `opts.providerId` → stored pointer → managed-if-configured fallback → `NO_TRANSCRIPTION_PROVIDER`. An explicit credential id that doesn't resolve **must fail loudly**, never silently fall to managed.
+- **Entitlement-gated.** Only `hosted_pro` (incl. the transition window) has `monthlyMynahSeconds > 0`. Metered per-user via `reserveMynah`/`commit`/`release`; budget exhaustion surfaces product copy, not the raw error. Self-host has no Mynah; lapsed accounts show it locked.
+- **Complimentary, not a replacement.** Users can always add their own provider (Settings → Providers) and switch the transcription default between Mynah and their key; both coexist. Onboarding frames Mynah as included + optional-own, and must not treat "has Mynah" as "user brought their own provider."
+
 ### Marketing-vs-product gap
 
 Riffado has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
