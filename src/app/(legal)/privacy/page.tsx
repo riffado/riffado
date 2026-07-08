@@ -86,11 +86,13 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                     <strong>Payment data</strong> — if you subscribe, payment
-                    details (card number, billing address) are collected and
-                    processed by our payment processor. We store only a
-                    reference to your customer account with that processor and
-                    your subscription status; we never see or store your full
-                    card number.
+                    details (card number and full billing address) are collected
+                    and processed by our payment processor. We store the
+                    processor customer and subscription references, subscription
+                    status, plan/price, amount, currency, billing interval,
+                    billing country, renewal or cancellation dates, withdrawal
+                    waiver timestamp, and processor metadata needed to reconcile
+                    billing. We never see or store your full card number.
                 </li>
                 <li>
                     <strong>Usage analytics</strong> — privacy-friendly,
