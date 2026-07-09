@@ -40,9 +40,9 @@
         "release": "bun scripts/release.ts"
     },
     "dependencies": {
-        "@aws-sdk/client-s3": "^3.937.0",
-        "@aws-sdk/lib-storage": "^3.1081.0",
-        "@aws-sdk/s3-request-presigner": "^3.937.0",
+        "@aws-sdk/client-s3": "^3.1083.0",
+        "@aws-sdk/lib-storage": "^3.1083.0",
+        "@aws-sdk/s3-request-presigner": "^3.1083.0",
         "@google/generative-ai": "^0.24.1",
         "@radix-ui/react-accordion": "^1.2.12",
         "@radix-ui/react-dialog": "^1.1.15",
