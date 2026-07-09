@@ -15,9 +15,9 @@ import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 
 export const metadata: Metadata = {
-    title: "Riffado — open-source AI transcription for voice recorders",
+    title: "Riffado | Open-source AI transcription for voice recorders",
     description:
-        "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family — Note, Note Pro, and NotePin.",
+        "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family: Note, Note Pro, and NotePin.",
 };
 
 export default async function HomePage() {

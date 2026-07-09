@@ -72,7 +72,7 @@ const TIERS: Tier[] = [
         features: [
             "Unlimited recordings and storage",
             "Runs on your laptop, NAS, or VPS via Docker",
-            "Plug in OpenAI, Groq, Ollama — or transcribe free in your browser",
+            "Plug in OpenAI, Groq, Ollama, or transcribe free in your browser",
             "Store locally, or push to Cloudflare R2, Backblaze B2, or AWS S3",
             "Every feature, no gates",
         ],
@@ -91,8 +91,8 @@ const TIERS: Tier[] = [
             "15 hours of included Mynah transcription per month",
             "Unlimited devices, background sync",
             "Off-site encrypted backups (coming soon)",
-            "Plug in OpenAI, Groq, Ollama — or use ours",
-            "Export everything any time — JSON, TXT, SRT, VTT",
+            "Plug in OpenAI, Groq, Ollama, or use ours",
+            "Export everything any time: JSON, TXT, SRT, VTT",
             "Email support from the people who build it",
         ],
         cta: { label: "Start 14-day trial", href: "/register" },
@@ -115,7 +115,7 @@ export function Pricing() {
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             Pay us five bucks a month and we run the server. Or
-                            run it yourself for free — same code, same features,
+                            run it yourself for free. Same code, same features,
                             every export round-trips.
                         </p>
                     </div>
@@ -133,7 +133,7 @@ export function Pricing() {
 
                     <p className="mt-8 text-xs text-muted-foreground/80 leading-relaxed text-pretty max-w-3xl">
                         Hosted runs the exact AGPL-3.0 source you can self-host
-                        — no hidden fork, no proprietary add-ons.{" "}
+                        with no hidden fork and no proprietary add-ons.{" "}
                         <Link
                             href="https://github.com/riffado/riffado"
                             className="underline decoration-muted-foreground/40 underline-offset-2 hover:text-foreground transition-colors"

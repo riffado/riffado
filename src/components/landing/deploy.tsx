@@ -50,10 +50,10 @@ import { INSTALL_ONELINER } from "@/lib/install-commands";
  */
 
 const PROOF_POINTS = [
-    "AGPL-3.0 — full source on GitHub, no proprietary fork",
+    "AGPL-3.0, full source on GitHub, no proprietary fork",
     "No telemetry, no phone home, no license server",
     "Local disk, or push to Cloudflare R2, Backblaze B2, or AWS S3",
-    "Bring OpenAI or Groq for cloud transcription — or run Whisper and Ollama locally",
+    "Bring OpenAI or Groq for cloud transcription, or run Whisper and Ollama locally",
 ];
 
 export function Deploy() {
@@ -73,7 +73,7 @@ export function Deploy() {
                             One command. Your server. Yours forever.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Riffado ships as a Docker Compose stack — the app, a
+                            Riffado ships as a Docker Compose stack: the app, a
                             database, your storage. Move from Hosted whenever
                             you want via full-archive export. Same source, your
                             machine.

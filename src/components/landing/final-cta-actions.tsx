@@ -79,7 +79,7 @@ export function FinalCtaActions() {
             >
                 <Link
                     href="/register"
-                    aria-label="Start Riffado free — no card required"
+                    aria-label="Start Riffado free, no card required"
                     onClick={() =>
                         track("final_cta_primary_click", {
                             location: "final_cta",

@@ -52,19 +52,19 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "What does hosted Riffado cost?",
-                a: "Five dollars a month (in the EU, €5/mo with VAT included). You start with a 14-day free trial — no card required — and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it — same code, your machine, AGPL-3.0, free forever.",
+                a: "Five dollars a month (in the EU, €5/mo with VAT included). You start with a 14-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.",
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
-                a: "No. Riffado transcribes right in your browser by default using Whisper — no API keys, no extra accounts, no per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. Hosted Pro also includes 15 hours per month of cloud transcription on our keys, so you don't have to bring your own. Browser-based Whisper stays free forever, hosted or self-hosted.",
+                a: "No. Riffado transcribes right in your browser by default using Whisper, with no API keys, extra accounts, or per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. Hosted Pro also includes 15 hours per month of cloud transcription on our keys, so you don't have to bring your own. Browser-based Whisper stays free forever, hosted or self-hosted.",
             },
             {
                 q: "Which voice recorders does Riffado work with?",
-                a: "Today, the Plaud Note family — Note, Note Pro, and NotePin. Support for more recorders is on the roadmap. If you own a Plaud, you can sign in with your existing account and your recordings start syncing in under a minute.",
+                a: "Today, the Plaud Note family: Note, Note Pro, and NotePin. Support for more recorders is on the roadmap. If you own a Plaud, you can sign in with your existing account and your recordings start syncing in under a minute.",
             },
             {
                 q: "Is Riffado really open source? What does that mean for me?",
-                a: "Yes — the full source is on GitHub under AGPL-3.0. In practice: you can read every line, run it on your own machine, fork it, and leave whenever you want. The AGPL only adds obligations if you offer Riffado as a service to other people. For personal or team use, it's just free, forever, with the code in the open.",
+                a: "Yes. The full source is on GitHub under AGPL-3.0. In practice: you can read every line, run it on your own machine, fork it, and leave whenever you want. The AGPL only adds obligations if you offer Riffado as a service to other people. For personal or team use, it's just free, forever, with the code in the open.",
             },
             {
                 q: "How long does setup take?",
@@ -95,7 +95,7 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "Which AI providers can I use?",
-                a: "Hosted Pro includes Mynah for 15 hours of cloud transcription every month. You can also connect OpenAI or Groq for cloud transcription. Use Ollama or LM Studio if you want a model running entirely on your own machine — nothing leaves your laptop. Browser-based Whisper works if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works — that includes OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
+                a: "Hosted Pro includes Mynah for 15 hours of cloud transcription every month. You can also connect OpenAI or Groq for cloud transcription. Use Ollama or LM Studio if you want a model running entirely on your own machine, so nothing leaves your laptop. Browser-based Whisper works if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works, including OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
                 body: (
                     <>
                         <p>
@@ -116,7 +116,7 @@ const GROUPS: FaqGroup[] = [
                                 LM Studio
                             </strong>{" "}
                             if you want a model running entirely on your own
-                            machine — nothing leaves your laptop.{" "}
+                            machine, so nothing leaves your laptop.{" "}
                             <strong className="text-foreground font-medium">
                                 Browser-based Whisper
                             </strong>{" "}
@@ -125,19 +125,19 @@ const GROUPS: FaqGroup[] = [
                         </p>
                         <p className="mt-3 text-sm text-muted-foreground/80">
                             For summaries, any OpenAI-compatible endpoint works
-                            — that includes OpenAI, Anthropic via OpenRouter,
-                            Groq, Together, Azure, and others.
+                            including OpenAI, Anthropic via OpenRouter, Groq,
+                            Together, Azure, and others.
                         </p>
                     </>
                 ),
             },
             {
                 q: "Does this affect my recorder's warranty or break the official app?",
-                a: "No. Riffado signs into your Plaud account the same way the official web app does — through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Riffado.",
+                a: "No. Riffado signs into your Plaud account the same way the official web app does, through Plaud's existing API. Nothing about the hardware changes, and the official Plaud app keeps working alongside Riffado.",
             },
             {
                 q: "What happens if Plaud changes their API?",
-                a: "Worst case, new syncs pause until we ship an update — historically a matter of hours to days, because the project is open source and actively maintained. Your existing recordings are unaffected: once a recording has synced, it lives on storage you control and never depends on Plaud's servers again.",
+                a: "Worst case, new syncs pause until we ship an update. Historically that means hours to days, because the project is open source and actively maintained. Your existing recordings are unaffected: once a recording has synced, it lives on storage you control and never depends on Plaud's servers again.",
             },
         ],
     },
@@ -146,7 +146,7 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "Can I move between hosted and self-host later?",
-                a: "Yes, in one click. The full-backup export gives you a single archive with every recording, transcript, and summary. Restore it into a self-hosted instance, or back into the hosted version, with nothing lost. Easy to leave is the whole point — so you don't have to overthink which one to start with.",
+                a: "Yes, in one click. The full-backup export gives you a single archive with every recording, transcript, and summary. Restore it into a self-hosted instance, or back into the hosted version, with nothing lost. Easy to leave is the whole point, so you don't have to overthink which one to start with.",
             },
             {
                 q: "Where does my data live on the hosted version?",
@@ -199,7 +199,7 @@ export function FAQ() {
                         Questions before you sign up.
                     </h2>
                     <p className="text-muted-foreground leading-relaxed mb-10 md:mb-12 max-w-2xl">
-                        The honest answers — including the boring ones.
+                        The honest answers, including the boring ones.
                     </p>
 
                     <div className="rounded-2xl border border-border/60 bg-card/50 px-6 md:px-8 py-2 md:py-3">

@@ -22,7 +22,7 @@ const BEATS: Beat[] = [
         step: "01",
         icon: <RefreshCw className="size-5" />,
         title: "Sign in once, sync forever.",
-        body: "Log in with the same email you use for your recorder — Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
+        body: "Log in with the same email you use for your recorder. Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
     },
     {
         step: "02",
@@ -34,7 +34,7 @@ const BEATS: Beat[] = [
         step: "03",
         icon: <LayoutDashboard className="size-5" />,
         title: "Search, listen, send it anywhere.",
-        body: "Player and transcript side-by-side. Search across every word you've ever recorded. Send a single recording to Notion, Obsidian, or your video editor — or download everything as one archive. Open source, end to end.",
+        body: "Player and transcript side-by-side. Search across every word you've ever recorded. Send a single recording to Notion, Obsidian, or your video editor, or download everything as one archive. Open source, end to end.",
     },
 ];
 
@@ -52,8 +52,8 @@ export function Features() {
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             Your recorder keeps recording. Riffado picks up
-                            after the audio leaves the device — and lets you
-                            pick the AI, the storage, and where it all lives.
+                            after the audio leaves the device. You pick the AI,
+                            the storage, and where it all lives.
                         </p>
                     </div>
 
