@@ -10,6 +10,7 @@ const ITEMS = [
     { href: "/admin/storage", label: "Storage" },
     { href: "/admin/transcription", label: "Transcription" },
     { href: "/admin/sync", label: "Sync" },
+    { href: "/admin/exports", label: "Exports" },
     { href: "/admin/signups", label: "Signups" },
     { href: "/admin/billing", label: "Billing" },
     { href: "/admin/pricing-snapshot", label: "Pricing" },
