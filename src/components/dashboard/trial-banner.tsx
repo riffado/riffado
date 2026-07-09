@@ -105,7 +105,13 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
     if (!mode) return null;
 
     if (mode.kind === "trial") {
-        if (dismissed && (mode.daysLeft === null || mode.daysLeft > 3)) {
+        // Last 3 days: force the banner to stay visible regardless of an
+        // earlier dismissal, since a card-add nudge right before the
+        // trial ends is the whole point. The dismiss control is hidden
+        // for this window below so it isn't a button that visibly does
+        // nothing when clicked.
+        const forcedVisible = mode.daysLeft !== null && mode.daysLeft <= 3;
+        if (dismissed && !forcedVisible) {
             return null;
         }
         return (
@@ -134,14 +140,16 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                 >
                     Add card
                 </Button>
-                <button
-                    type="button"
-                    onClick={dismiss}
-                    className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label="Dismiss trial banner"
-                >
-                    <X className="size-4" />
-                </button>
+                {!forcedVisible && (
+                    <button
+                        type="button"
+                        onClick={dismiss}
+                        className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                        aria-label="Dismiss trial banner"
+                    >
+                        <X className="size-4" />
+                    </button>
+                )}
             </div>
         );
     }
