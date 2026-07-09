@@ -81,11 +81,7 @@ export function TheMath() {
                         </p>
                     </div>
 
-                    <p className="mt-10 text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                        Published plan context &middot; transcription options
-                    </p>
-
-                    <div className="mt-3 grid gap-4 lg:grid-cols-2 lg:gap-6 items-stretch">
+                    <div className="mt-10 grid gap-4 lg:grid-cols-2 lg:gap-6 items-stretch">
                         <PriceTable
                             label="Subscription services"
                             rows={SUBSCRIPTION_SERVICES}
