@@ -30,6 +30,8 @@ interface SettingsDialogProps {
     initialProviders?: Provider[];
     onReRunOnboarding?: () => void;
     isHosted?: boolean;
+    /** Forwarded to `SettingsContent` -> `PlaudAccountSection`. */
+    onPlaudReconnected?: () => void;
 }
 
 const EMPTY_PROVIDERS: Provider[] = [];
@@ -40,6 +42,7 @@ export function SettingsDialog({
     initialProviders = EMPTY_PROVIDERS,
     onReRunOnboarding,
     isHosted = false,
+    onPlaudReconnected,
 }: SettingsDialogProps) {
     const onClose = useCallback(() => onOpenChange(false), [onOpenChange]);
     const { activeSection, setActiveSection, keyboardSelectedIndex } =
@@ -95,6 +98,7 @@ export function SettingsDialog({
                                     initialProviders={initialProviders}
                                     onReRunOnboarding={onReRunOnboarding}
                                     isHosted={isHosted}
+                                    onPlaudReconnected={onPlaudReconnected}
                                 />
                             </div>
                         </div>

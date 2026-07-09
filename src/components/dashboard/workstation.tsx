@@ -459,6 +459,7 @@ export function Workstation({
                     setSettingsOpen(false);
                     setOnboardingOpen(true);
                 }}
+                onPlaudReconnected={handleReconnected}
             />
 
             <OnboardingDialog

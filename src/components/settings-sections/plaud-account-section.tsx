@@ -45,7 +45,21 @@ function regionLabel(
     return server;
 }
 
-export function PlaudAccountSection() {
+interface PlaudAccountSectionProps {
+    /**
+     * Called after a successful reconnect or account switch, in addition
+     * to this component's own `fetchConnection()`. Lets the dashboard
+     * (`Workstation`) refresh its server-rendered `plaudNeedsReconnect`
+     * prop and kick off a fresh sync -- without it, the dashboard's
+     * `PlaudReconnectBanner` can stay stale until the next periodic sync
+     * since it's driven by separate client state, not this section's.
+     */
+    onReconnected?: () => void;
+}
+
+export function PlaudAccountSection({
+    onReconnected,
+}: PlaudAccountSectionProps = {}) {
     const [info, setInfo] = useState<ConnectionInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [confirmOpen, setConfirmOpen] = useState<
@@ -132,12 +146,14 @@ export function PlaudAccountSection() {
     const handleSwitchSuccess = useCallback(async () => {
         setSwitchDialogOpen(false);
         await fetchConnection();
-    }, [fetchConnection]);
+        onReconnected?.();
+    }, [fetchConnection, onReconnected]);
 
     const handleReconnectSuccess = useCallback(async () => {
         setReconnectDialogOpen(false);
         await fetchConnection();
-    }, [fetchConnection]);
+        onReconnected?.();
+    }, [fetchConnection, onReconnected]);
 
     if (isLoading) {
         return (

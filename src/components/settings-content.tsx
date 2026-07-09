@@ -33,6 +33,8 @@ interface SettingsContentProps {
     initialProviders?: Provider[];
     onReRunOnboarding?: () => void;
     isHosted?: boolean;
+    /** Forwarded to `PlaudAccountSection`; see its prop doc. */
+    onPlaudReconnected?: () => void;
 }
 
 export function SettingsContent({
@@ -40,6 +42,7 @@ export function SettingsContent({
     initialProviders = EMPTY_PROVIDERS,
     onReRunOnboarding,
     isHosted = false,
+    onPlaudReconnected,
 }: SettingsContentProps) {
     switch (activeSection) {
         case "providers":
@@ -60,7 +63,7 @@ export function SettingsContent({
         case "sync":
             return <SyncSection />;
         case "plaud-account":
-            return <PlaudAccountSection />;
+            return <PlaudAccountSection onReconnected={onPlaudReconnected} />;
         case "playback":
             return <PlaybackSection />;
         case "display":
