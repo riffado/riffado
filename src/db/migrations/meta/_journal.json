@@ -211,6 +211,13 @@
       "when": 1783590934141,
       "tag": "0029_milky_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1783593085542,
+      "tag": "0030_nasty_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

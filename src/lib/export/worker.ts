@@ -2,12 +2,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
     claimPendingExportJobs,
+    clearStaleStorageKey,
     completeExportJob,
     deleteExportJobRow,
     EXPORT_MAX_ATTEMPTS,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
     selectExpiredExportJobs,
+    selectStaleStorageKeys,
 } from "@/db/queries/export-jobs";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -21,6 +23,7 @@ const TICK_MS = 30 * 1000;
 // starve sync/transcription work on the same instance (hosted fairness).
 const MAX_JOBS_PER_TICK = 2;
 const MAX_CLEANUP_PER_TICK = 20;
+const MAX_STALE_KEY_SWEEP_PER_TICK = 20;
 // No forward progress (bytes written, or a recording finished) for this
 // long means the build is genuinely stuck (hung network read, wedged
 // storage call) -- abort it. This is deliberately about progress, not
@@ -227,6 +230,34 @@ async function cleanupExpired(): Promise<void> {
     }
 }
 
+async function sweepStaleStorageKeys(): Promise<void> {
+    const stale = await selectStaleStorageKeys(MAX_STALE_KEY_SWEEP_PER_TICK);
+    if (stale.length === 0) return;
+    const storage = createStorageProvider();
+    let swept = 0;
+    for (const entry of stale) {
+        try {
+            // Deleting an already-gone key is expected and fine -- the
+            // reclaim that recorded it can't know whether the crashed
+            // worker's upload ever actually landed in storage before it
+            // died.
+            await storage.deleteFile(entry.key);
+            await clearStaleStorageKey(entry.jobId, entry.key);
+            swept += 1;
+        } catch (error) {
+            console.error(
+                `[export-worker] stale storage key sweep failed for job ${entry.jobId} key ${entry.key}, will retry next tick:`,
+                error,
+            );
+        }
+    }
+    if (swept > 0) {
+        console.log(
+            `[export-worker] swept ${swept} orphaned storage key(s) from reclaimed attempts`,
+        );
+    }
+}
+
 let started = false;
 let running = false;
 
@@ -247,6 +278,7 @@ export async function tick(): Promise<void> {
         }
 
         await cleanupExpired();
+        await sweepStaleStorageKeys();
     } catch (error) {
         console.error("[export-worker] tick failed:", error);
     } finally {

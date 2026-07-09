@@ -13,6 +13,7 @@ export interface ExportJobRow {
     recordingCount: number | null;
     errorMessage: string | null;
     attempts: number;
+    staleStorageKeys: string[];
     createdAt: Date;
     startedAt: Date | null;
     completedAt: Date | null;
@@ -309,10 +310,19 @@ export async function deleteExportJobRow(jobId: string): Promise<void> {
 /**
  * Stuck jobs: claimed by a process that crashed mid-build (no in-process
  * timer survives a process death, so elapsed time since `started_at` is
- * the only signal available). Reset to pending and clear the claim token
- * so another tick can claim it fresh; a late write from the original
- * process, if it's not actually dead, will find its old token no longer
- * matches and no-op instead of corrupting the new claim's work.
+ * the only signal available). Reset to pending and clear the claim
+ * token so another tick can claim it fresh; a late write from the
+ * original process, if it's not actually dead, will find its old token
+ * no longer matches and no-op instead of corrupting the new claim's
+ * work.
+ *
+ * Before clearing the claim token, the storage key that token backed
+ * (`exports/{userId}/{jobId}-{claimToken}.zip` -- see `processJob` in
+ * the worker) is appended to `stale_storage_keys`. Nothing else will
+ * ever look that key up again once the token is gone, so without
+ * recording it here a crash mid-upload would permanently orphan
+ * whatever partial object made it to storage. `sweepStaleStorageKeys`
+ * (below) is what actually deletes them.
  */
 export async function reclaimStaleProcessingExportJobs(
     olderThanMs: number,
@@ -320,7 +330,20 @@ export async function reclaimStaleProcessingExportJobs(
     const cutoff = new Date(Date.now() - olderThanMs);
     const result = await db
         .update(exportJobs)
-        .set({ status: "pending", startedAt: null, claimToken: null })
+        .set({
+            status: "pending",
+            startedAt: null,
+            claimToken: null,
+            staleStorageKeys: sql`
+                case
+                    when ${exportJobs.claimToken} is not null then
+                        ${exportJobs.staleStorageKeys} || to_jsonb(
+                            'exports/' || ${exportJobs.userId} || '/' || ${exportJobs.id} || '-' || ${exportJobs.claimToken} || '.zip'
+                        )
+                    else ${exportJobs.staleStorageKeys}
+                end
+            `,
+        })
         .where(
             and(
                 eq(exportJobs.status, "processing"),
@@ -329,4 +352,48 @@ export async function reclaimStaleProcessingExportJobs(
         )
         .returning({ id: exportJobs.id });
     return result.length;
+}
+
+/** One orphaned storage key from a reclaimed (crashed-worker) claim, pending sweep. */
+export interface StaleStorageKeyEntry {
+    jobId: string;
+    key: string;
+}
+
+/**
+ * Lists pending stale storage keys across all jobs, one row per key (a
+ * job can accumulate more than one if it's reclaimed repeatedly).
+ * Deliberately a plain read, same rationale as `selectExpiredExportJobs`:
+ * a key is only cleared (`clearStaleStorageKey`) after `storage.deleteFile`
+ * actually succeeds, so a duplicate select across worker processes in
+ * the same tick is a harmless, low-cost race.
+ */
+export async function selectStaleStorageKeys(
+    limit: number,
+): Promise<StaleStorageKeyEntry[]> {
+    const rows = await db.execute<{ id: string; key: string }>(sql`
+        select j.id, elem as key
+        from ${exportJobs} j, jsonb_array_elements_text(j.stale_storage_keys) elem
+        limit ${limit}
+    `);
+    const list = Array.isArray(rows)
+        ? rows
+        : ((rows as { rows: { id: string; key: string }[] }).rows ?? []);
+    return list.map((r) => ({ jobId: r.id, key: r.key }));
+}
+
+/** Removes one key from a job's `stale_storage_keys` after it's been successfully deleted from storage. */
+export async function clearStaleStorageKey(
+    jobId: string,
+    key: string,
+): Promise<void> {
+    await db.execute(sql`
+        update ${exportJobs}
+        set stale_storage_keys = (
+            select coalesce(jsonb_agg(elem), '[]'::jsonb)
+            from jsonb_array_elements_text(stale_storage_keys) elem
+            where elem <> ${key}
+        )
+        where id = ${jobId}
+    `);
 }

@@ -642,6 +642,19 @@ export const exportJobs = pgTable(
         // affects zero rows instead of corrupting whatever the new
         // claim has since done with the job.
         claimToken: text("claim_token"),
+        // Storage keys from abandoned attempts (per-claim-token keys --
+        // see `claimToken` above -- from claims reclaimed as stale,
+        // i.e. the worker holding them almost certainly crashed
+        // mid-build). Nothing else ever looks these up once the claim
+        // is cleared, so without tracking them here they'd be permanent
+        // storage leaks: `reclaimStaleProcessingExportJobs` appends the
+        // abandoned key here before clearing `claimToken`, and the
+        // worker's cleanup pass sweeps + clears entries from this list
+        // once the underlying object is actually deleted.
+        staleStorageKeys: jsonb("stale_storage_keys")
+            .$type<string[]>()
+            .notNull()
+            .default(sql`'[]'::jsonb`),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         startedAt: timestamp("started_at"),
         completedAt: timestamp("completed_at"),

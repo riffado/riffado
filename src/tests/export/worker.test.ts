@@ -16,6 +16,8 @@ const {
         completeExportJob: vi.fn(),
         recordExportJobFailure: vi.fn(),
         reclaimStaleProcessingExportJobs: vi.fn(),
+        selectStaleStorageKeys: vi.fn(),
+        clearStaleStorageKey: vi.fn(),
         EXPORT_MAX_ATTEMPTS: 3,
     },
     buildArchiveMock: { buildAndUploadExportArchive: vi.fn() },
@@ -55,6 +57,8 @@ describe("export worker tick", () => {
         queriesMock.claimPendingExportJobs.mockResolvedValue([]);
         queriesMock.selectExpiredExportJobs.mockResolvedValue([]);
         queriesMock.deleteExportJobRow.mockResolvedValue(undefined);
+        queriesMock.selectStaleStorageKeys.mockResolvedValue([]);
+        queriesMock.clearStaleStorageKey.mockResolvedValue(undefined);
         queriesMock.completeExportJob.mockResolvedValue(true);
         // Safe pass-through default: a test that calls `tick()` without
         // overriding this would otherwise silently look like a
@@ -276,6 +280,43 @@ describe("export worker tick", () => {
 
         expect(queriesMock.reclaimStaleProcessingExportJobs).toHaveBeenCalled();
     });
+
+    it("sweeps orphaned storage keys left behind by reclaimed (crashed-worker) claims", async () => {
+        queriesMock.selectStaleStorageKeys.mockResolvedValue([
+            {
+                jobId: "job-crashed",
+                key: "exports/user-1/job-crashed-old-token.zip",
+            },
+        ]);
+
+        await tick();
+
+        expect(storageMock.deleteFile).toHaveBeenCalledWith(
+            "exports/user-1/job-crashed-old-token.zip",
+        );
+        expect(queriesMock.clearStaleStorageKey).toHaveBeenCalledWith(
+            "job-crashed",
+            "exports/user-1/job-crashed-old-token.zip",
+        );
+    });
+
+    it("does not clear a stale key from the row when its storage delete fails, so the next tick retries", async () => {
+        queriesMock.selectStaleStorageKeys.mockResolvedValue([
+            {
+                jobId: "job-crashed",
+                key: "exports/user-1/job-crashed-old-token.zip",
+            },
+        ]);
+        storageMock.deleteFile.mockRejectedValue(new Error("network error"));
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
+
+        await expect(tick()).resolves.toBeUndefined();
+        errorSpy.mockRestore();
+
+        expect(queriesMock.clearStaleStorageKey).not.toHaveBeenCalled();
+    });
 });
 
 describe("export worker stall guard", () => {
@@ -284,6 +325,8 @@ describe("export worker stall guard", () => {
         vi.useFakeTimers();
         queriesMock.reclaimStaleProcessingExportJobs.mockResolvedValue(0);
         queriesMock.selectExpiredExportJobs.mockResolvedValue([]);
+        queriesMock.selectStaleStorageKeys.mockResolvedValue([]);
+        queriesMock.clearStaleStorageKey.mockResolvedValue(undefined);
         queriesMock.completeExportJob.mockResolvedValue(true);
         queriesMock.recordExportJobFailure.mockResolvedValue({
             status: "pending",

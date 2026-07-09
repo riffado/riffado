@@ -1,0 +1,1 @@
+ALTER TABLE "export_jobs" ADD COLUMN "stale_storage_keys" jsonb DEFAULT '[]'::jsonb NOT NULL;
