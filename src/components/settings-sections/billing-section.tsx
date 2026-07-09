@@ -38,6 +38,10 @@ interface BillingState {
         monthlyMynahSecondsRemaining: number;
         monthlyMynahGrantResetAt: string | null;
     };
+    pricing: {
+        usd: string | null;
+        eur: string | null;
+    };
     subscription: {
         id: string;
         status: string;
@@ -83,6 +87,14 @@ function formatDate(iso: string): string {
         month: "long",
         day: "numeric",
     });
+}
+
+function formatProPrice(pricing: BillingState["pricing"]): string {
+    const parts = [
+        pricing.usd ? `$${Number.parseFloat(pricing.usd).toString()}/mo` : null,
+        pricing.eur ? `€${Number.parseFloat(pricing.eur).toString()}/mo` : null,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(" or ") : "Pro monthly";
 }
 
 /** formatBytes but without a noisy trailing ".00" on round caps. */
@@ -428,6 +440,11 @@ export function BillingSection() {
     );
     const mynahPct = mynahTotal > 0 ? (mynahUsed / mynahTotal) * 100 : null;
 
+    const proPrice = formatProPrice(state.pricing);
+    const proPriceNote = isTrial
+        ? "Add a card before your trial ends. Stripe confirms the exact charge before you subscribe."
+        : "Stripe confirms the exact charge before you subscribe.";
+
     const graceBanner =
         state.grace !== null ? (
             <SettingsCard>
@@ -571,6 +588,14 @@ export function BillingSection() {
                         }
                     >
                         <div className="space-y-4">
+                            <div>
+                                <p className="text-2xl font-semibold tracking-tight tabular-nums">
+                                    {proPrice}
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {proPriceNote}
+                                </p>
+                            </div>
                             <ul className="ml-5 list-disc space-y-1 text-sm text-muted-foreground">
                                 <li>50 GB storage</li>
                                 <li>
@@ -592,11 +617,10 @@ export function BillingSection() {
                                     htmlFor="waiver"
                                     className="text-xs leading-snug text-muted-foreground"
                                 >
-                                    I agree to immediate performance of the
-                                    service and waive the 14-day EU withdrawal
-                                    right (Polish art. 38 ust. 13 or local
-                                    equivalent). The first charge takes Pro live
-                                    now and counts as performance.
+                                    Start Pro immediately after checkout. I
+                                    understand the service begins right away and
+                                    that the usual 14-day EU withdrawal right no
+                                    longer applies once the paid plan starts.
                                 </Label>
                             </div>
                             <Button

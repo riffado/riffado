@@ -223,7 +223,11 @@ export function OnboardingStepAiProvider({
     );
 }
 
-export function OnboardingStepComplete() {
+export function OnboardingStepComplete({
+    hasIncludedProvider,
+}: {
+    hasIncludedProvider: boolean;
+}) {
     return (
         <div className="space-y-6">
             <div className="text-center space-y-2">
@@ -258,8 +262,9 @@ export function OnboardingStepComplete() {
                                     AI-powered transcriptions
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Set up an AI provider to transcribe
-                                    recordings automatically
+                                    {hasIncludedProvider
+                                        ? "Mynah transcription is ready with your plan"
+                                        : "Set up an AI provider to transcribe recordings automatically"}
                                 </p>
                             </div>
                         </div>

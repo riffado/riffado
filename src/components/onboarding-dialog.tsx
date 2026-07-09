@@ -140,7 +140,11 @@ export function OnboardingDialog({
                             }}
                         />
                     )}
-                    {step === "complete" && <OnboardingStepComplete />}
+                    {step === "complete" && (
+                        <OnboardingStepComplete
+                            hasIncludedProvider={hasIncludedProvider}
+                        />
+                    )}
 
                     <DialogFooter className="gap-2 sm:gap-3 relative">
                         <div className="flex gap-2 flex-1">

@@ -15,7 +15,7 @@ interface BillingState {
 }
 
 type BannerMode =
-    | { kind: "trial"; daysLeft: number | null }
+    | { kind: "trial"; daysLeft: number | null; transitionUntil: string | null }
     | { kind: "grace"; deletionAt: string; path: "trial" | "paid" }
     | { kind: "locked" };
 
@@ -51,6 +51,7 @@ function resolveMode(body: BillingState): BannerMode | null {
             daysLeft: body.planTransitionUntil
                 ? daysUntil(body.planTransitionUntil)
                 : null,
+            transitionUntil: body.planTransitionUntil,
         };
     }
 
@@ -78,15 +79,20 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
             });
     }, [isHosted]);
 
+    const dismissKey =
+        mode?.kind === "trial"
+            ? `${DISMISS_KEY}:${mode.transitionUntil ?? "unknown"}`
+            : DISMISS_KEY;
+
     useEffect(() => {
         if (typeof window === "undefined") return;
-        setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
-    }, []);
+        setDismissed(localStorage.getItem(dismissKey) === "1");
+    }, [dismissKey]);
 
     const dismiss = useCallback(() => {
-        localStorage.setItem(DISMISS_KEY, "1");
+        localStorage.setItem(dismissKey, "1");
         setDismissed(true);
-    }, []);
+    }, [dismissKey]);
 
     const goToBilling = useCallback(() => {
         window.location.href = "/settings#billing";
@@ -99,7 +105,9 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
     if (!mode) return null;
 
     if (mode.kind === "trial") {
-        if (dismissed) return null;
+        if (dismissed && (mode.daysLeft === null || mode.daysLeft > 3)) {
+            return null;
+        }
         return (
             <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                 <CreditCard className="size-4 shrink-0 text-primary" />
