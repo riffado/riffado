@@ -52,6 +52,7 @@ export function PlaudAccountSection() {
         null | "switch" | "disconnect"
     >(null);
     const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
+    const [reconnectDialogOpen, setReconnectDialogOpen] = useState(false);
     const [isMutating, setIsMutating] = useState(false);
 
     const fetchConnection = useCallback(async () => {
@@ -133,6 +134,11 @@ export function PlaudAccountSection() {
         await fetchConnection();
     }, [fetchConnection]);
 
+    const handleReconnectSuccess = useCallback(async () => {
+        setReconnectDialogOpen(false);
+        await fetchConnection();
+    }, [fetchConnection]);
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-8">
@@ -195,12 +201,20 @@ export function PlaudAccountSection() {
                         {info.needsReconnect && (
                             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
                                 Plaud stopped accepting this sign-in, so syncing
-                                is paused. Use “Switch account” to reconnect —
-                                your recordings stay put.
+                                is paused. Reconnect to resume — your recordings
+                                stay put.
                             </p>
                         )}
 
                         <div className="flex flex-wrap gap-2">
+                            {info.needsReconnect && (
+                                <Button
+                                    onClick={() => setReconnectDialogOpen(true)}
+                                >
+                                    <RefreshCw className="size-4 mr-2" />
+                                    Reconnect
+                                </Button>
+                            )}
                             <Button
                                 variant="outline"
                                 onClick={() => setConfirmOpen("switch")}
@@ -319,6 +333,33 @@ export function PlaudAccountSection() {
                     {switchDialogOpen && (
                         <PlaudConnectTabs
                             onConnected={handleSwitchSuccess}
+                            variant="dialog"
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Reconnect: same-account recovery from an invalidated token.
+                Unlike "Switch account", this never deletes the existing
+                connection/device rows first -- persistPlaudConnection()
+                upserts, so re-authenticating with the same (or a new)
+                account is safe even if the user backs out of the dialog
+                without finishing. */}
+            <Dialog
+                open={reconnectDialogOpen}
+                onOpenChange={(open) => setReconnectDialogOpen(open)}
+            >
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Reconnect your Plaud account</DialogTitle>
+                        <DialogDescription>
+                            Sign back in to resume syncing. Your existing
+                            recordings and transcripts are unaffected.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {reconnectDialogOpen && (
+                        <PlaudConnectTabs
+                            onConnected={handleReconnectSuccess}
                             variant="dialog"
                         />
                     )}
