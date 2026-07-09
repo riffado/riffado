@@ -22,6 +22,8 @@ interface SyncStatus {
         success: boolean;
         newRecordings?: number;
         error?: string;
+        /** True when Plaud rejected the stored token during this sync. */
+        needsReconnect?: boolean;
     } | null;
 }
 
@@ -180,6 +182,7 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                         lastSyncResult: {
                             success: true,
                             newRecordings: result.newRecordings || 0,
+                            needsReconnect: result.needsReconnect === true,
                         },
                     }));
 

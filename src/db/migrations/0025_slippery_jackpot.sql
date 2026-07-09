@@ -1,0 +1,1 @@
+ALTER TABLE "plaud_connections" ADD COLUMN "invalidated_at" timestamp;

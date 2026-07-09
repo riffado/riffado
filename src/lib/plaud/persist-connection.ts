@@ -68,6 +68,9 @@ export async function persistPlaudConnection({
                     apiBase,
                     plaudEmail,
                     workspaceId: resolvedWorkspaceId,
+                    // Reconnecting with a fresh token clears any prior
+                    // "needs reconnect" state so the banner disappears.
+                    invalidatedAt: null,
                     updatedAt: new Date(),
                 })
                 .where(

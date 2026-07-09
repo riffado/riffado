@@ -22,6 +22,7 @@ interface ConnectionInfo {
     connected: boolean;
     server?: PlaudServerKey;
     plaudEmail?: string | null;
+    needsReconnect?: boolean;
     createdAt?: string;
     updatedAt?: string;
     apiBase?: string;
@@ -190,6 +191,14 @@ export function PlaudAccountSection() {
                                 </p>
                             </div>
                         </div>
+
+                        {info.needsReconnect && (
+                            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
+                                Plaud stopped accepting this sign-in, so syncing
+                                is paused. Use “Switch account” to reconnect —
+                                your recordings stay put.
+                            </p>
+                        )}
 
                         <div className="flex flex-wrap gap-2">
                             <Button

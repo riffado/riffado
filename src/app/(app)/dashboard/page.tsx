@@ -3,6 +3,7 @@ import { Workstation } from "@/components/dashboard/workstation";
 import { db } from "@/db";
 import {
     aiEnhancements,
+    plaudConnections,
     recordings,
     transcriptions,
     userSettings,
@@ -17,56 +18,66 @@ import { serializeRecording } from "@/types/recording";
 export default async function DashboardPage() {
     const session = await requireAuth();
 
-    const [userRecordings, userTranscriptions, userSummaryRows, [settingsRow]] =
-        await Promise.all([
-            db
-                .select({
-                    id: recordings.id,
-                    filename: recordings.filename,
-                    duration: recordings.duration,
-                    startTime: recordings.startTime,
-                    filesize: recordings.filesize,
-                    deviceSn: recordings.deviceSn,
-                    waveformPeaks: recordings.waveformPeaks,
-                })
-                .from(recordings)
-                .where(
-                    and(
-                        eq(recordings.userId, session.user.id),
-                        isNull(recordings.deletedAt),
-                    ),
-                )
-                .orderBy(desc(recordings.startTime)),
-            db
-                .select({
-                    recordingId: transcriptions.recordingId,
-                    text: transcriptions.text,
-                    language: transcriptions.detectedLanguage,
-                })
-                .from(transcriptions)
-                .where(eq(transcriptions.userId, session.user.id)),
-            // We only need to know IF a summary exists per recording for the
-            // list status chip — the full summary is still fetched on
-            // selection by the existing /api/recordings/[id]/summary route.
-            db
-                .select({ recordingId: aiEnhancements.recordingId })
-                .from(aiEnhancements)
-                .where(
-                    and(
-                        eq(aiEnhancements.userId, session.user.id),
-                        isNotNull(aiEnhancements.summary),
-                    ),
+    const [
+        userRecordings,
+        userTranscriptions,
+        userSummaryRows,
+        [settingsRow],
+        [connectionRow],
+    ] = await Promise.all([
+        db
+            .select({
+                id: recordings.id,
+                filename: recordings.filename,
+                duration: recordings.duration,
+                startTime: recordings.startTime,
+                filesize: recordings.filesize,
+                deviceSn: recordings.deviceSn,
+                waveformPeaks: recordings.waveformPeaks,
+            })
+            .from(recordings)
+            .where(
+                and(
+                    eq(recordings.userId, session.user.id),
+                    isNull(recordings.deletedAt),
                 ),
-            // Load user settings server-side so the Workstation, list, and
-            // player render with the user's preferences on first paint — no
-            // waterfall of /api/settings/user fetches from three different
-            // components.
-            db
-                .select()
-                .from(userSettings)
-                .where(eq(userSettings.userId, session.user.id))
-                .limit(1),
-        ]);
+            )
+            .orderBy(desc(recordings.startTime)),
+        db
+            .select({
+                recordingId: transcriptions.recordingId,
+                text: transcriptions.text,
+                language: transcriptions.detectedLanguage,
+            })
+            .from(transcriptions)
+            .where(eq(transcriptions.userId, session.user.id)),
+        // We only need to know IF a summary exists per recording for the
+        // list status chip — the full summary is still fetched on
+        // selection by the existing /api/recordings/[id]/summary route.
+        db
+            .select({ recordingId: aiEnhancements.recordingId })
+            .from(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.userId, session.user.id),
+                    isNotNull(aiEnhancements.summary),
+                ),
+            ),
+        // Load user settings server-side so the Workstation, list, and
+        // player render with the user's preferences on first paint — no
+        // waterfall of /api/settings/user fetches from three different
+        // components.
+        db
+            .select()
+            .from(userSettings)
+            .where(eq(userSettings.userId, session.user.id))
+            .limit(1),
+        db
+            .select({ invalidatedAt: plaudConnections.invalidatedAt })
+            .from(plaudConnections)
+            .where(eq(plaudConnections.userId, session.user.id))
+            .limit(1),
+    ]);
     const summaryIds = new Set(userSummaryRows.map((r) => r.recordingId));
     const transcriptIds = new Set(userTranscriptions.map((t) => t.recordingId));
 
@@ -106,6 +117,7 @@ export default async function DashboardPage() {
             isAdmin={isAdminEmail(session.user.email)}
             userEmail={session.user.email ?? null}
             initialSettings={initialSettings}
+            plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
             isHosted={env.IS_HOSTED}
         />
     );

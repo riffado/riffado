@@ -25,6 +25,10 @@ export const GET = apiHandler(async (request: Request) => {
         connected: true,
         server,
         plaudEmail: connection.plaudEmail ?? null,
+        // True once Plaud has rejected the stored token during a sync; the UI
+        // uses this to prompt a reconnect. Cleared on the next good sync or
+        // on reconnect.
+        needsReconnect: connection.invalidatedAt != null,
         createdAt: connection.createdAt,
         updatedAt: connection.updatedAt,
         // Include the raw URL so the UI can populate the custom field

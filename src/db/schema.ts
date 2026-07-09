@@ -171,6 +171,12 @@ export const plaudConnections = pgTable("plaud_connections", {
     // Null for connections created before this column existed; resolved and
     // persisted lazily on next sync.
     workspaceId: text("workspace_id"),
+    // Set when Plaud rejects the stored token during sync (HTTP 401 ->
+    // PLAUD_INVALID_TOKEN), meaning the user must reconnect. Cleared on the
+    // next successful sync (self-healing on transient 401s) and on reconnect.
+    // Distinct from deleting the row: the connection and synced recordings
+    // stay put so reconnect is a modal, not re-onboarding.
+    invalidatedAt: timestamp("invalidated_at"),
     lastSync: timestamp("last_sync"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

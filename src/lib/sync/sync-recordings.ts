@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
 import { encryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
+import { AppError, ErrorCode } from "@/lib/errors";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -24,6 +25,12 @@ interface SyncResult {
     pendingTranscriptionIds: string[];
     /** True when this call coalesced into an already-running in-process sync. */
     inProgress?: boolean;
+    /**
+     * True when Plaud rejected the stored token (HTTP 401) during this sync,
+     * so the user must reconnect. Surfaced to the client so the dashboard can
+     * show a reconnect banner.
+     */
+    needsReconnect?: boolean;
 }
 
 // Per-user in-flight dedup within one process. Cross-process correctness
@@ -414,6 +421,9 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             .update(plaudConnections)
             .set({
                 lastSync: new Date(),
+                // A successful sync proves the token works again, so clear any
+                // prior invalidation (self-heals transient 401s).
+                invalidatedAt: null,
                 ...(workspaceIdChanged
                     ? { workspaceId: resolvedWorkspaceId }
                     : {}),
@@ -477,6 +487,34 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
     } catch (error) {
         const errorMessage =
             error instanceof Error ? error.message : String(error);
+
+        // A 401 from Plaud means the stored token is no longer accepted
+        // (expired ~300-day UT, a mistakenly-pasted 24h workspace token that
+        // has now died, or a revoked token). Mark the connection so the
+        // dashboard can prompt a reconnect instead of silently failing every
+        // sync. The row and synced recordings are preserved.
+        if (
+            error instanceof AppError &&
+            error.code === ErrorCode.PLAUD_INVALID_TOKEN
+        ) {
+            result.needsReconnect = true;
+            try {
+                await db
+                    .update(plaudConnections)
+                    .set({ invalidatedAt: new Date() })
+                    .where(eq(plaudConnections.userId, userId));
+            } catch (stampError) {
+                console.error(
+                    "Failed to mark Plaud connection as invalidated:",
+                    stampError,
+                );
+            }
+            result.errors.push(
+                "Plaud rejected the stored token. Reconnect your Plaud account.",
+            );
+            return result;
+        }
+
         result.errors.push(`Sync failed: ${errorMessage}`);
         return result;
     }

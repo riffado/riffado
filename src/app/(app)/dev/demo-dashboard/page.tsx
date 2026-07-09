@@ -48,6 +48,7 @@ export default async function DemoDashboardPage() {
             isAdmin={false}
             userEmail={session.user.email ?? null}
             initialSettings={DEMO_INITIAL_SETTINGS}
+            plaudNeedsReconnect={false}
             isHosted={env.IS_HOSTED}
         />
     );

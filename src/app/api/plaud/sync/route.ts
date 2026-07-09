@@ -18,5 +18,6 @@ export const POST = apiHandler(async (request: Request) => {
         updatedRecordings: result.updatedRecordings,
         errors: result.errors,
         inProgress: result.inProgress,
+        needsReconnect: result.needsReconnect ?? false,
     });
 });
