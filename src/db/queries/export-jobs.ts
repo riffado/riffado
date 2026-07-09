@@ -367,6 +367,12 @@ export interface StaleStorageKeyEntry {
  * a key is only cleared (`clearStaleStorageKey`) after `storage.deleteFile`
  * actually succeeds, so a duplicate select across worker processes in
  * the same tick is a harmless, low-cost race.
+ *
+ * Ordered oldest-job-first (`created_at`, tie-broken by `id`) so sweep
+ * progress under a backlog is deterministic across ticks -- without an
+ * explicit order, a `limit`-bounded scan over an unordered join can
+ * return an inconsistent subset run to run, letting some keys keep
+ * getting skipped while the same ones are retried.
  */
 export async function selectStaleStorageKeys(
     limit: number,
@@ -374,6 +380,7 @@ export async function selectStaleStorageKeys(
     const rows = await db.execute<{ id: string; key: string }>(sql`
         select j.id, elem as key
         from ${exportJobs} j, jsonb_array_elements_text(j.stale_storage_keys) elem
+        order by j.created_at asc, j.id asc
         limit ${limit}
     `);
     const list = Array.isArray(rows)
