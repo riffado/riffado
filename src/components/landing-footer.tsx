@@ -126,11 +126,11 @@ export function LandingFooter() {
                         >
                             <LogoWordmark className="h-7 w-auto" />
                         </Link>
-                        <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+                        {/*<p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
                             Open-source transcription for the voice recorder you
                             already own. Your recordings, your transcripts,
                             yours to keep.
-                        </p>
+                        </p>*/}
                         <div className="flex items-center gap-3 mt-1">
                             <Link
                                 href="https://github.com/riffado/riffado"
@@ -152,7 +152,7 @@ export function LandingFooter() {
                             </Link>
                         </div>
 
-                        <div className="mt-6">
+                        <div>
                             <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-foreground/80">
                                 Product updates
                             </h3>
