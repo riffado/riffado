@@ -34,7 +34,13 @@ export default async function AdminExportsPage({
     searchParams: Promise<{ status?: string; page?: string }>;
 }) {
     const sp = await searchParams;
-    const status = sp.status || undefined;
+    // Validate against the known enum values -- an arbitrary querystring
+    // value would otherwise reach the raw-SQL status filter in
+    // `listRecentExportJobs` and 500 instead of falling back to "all".
+    const status =
+        sp.status && STATUSES.includes(sp.status as (typeof STATUSES)[number])
+            ? (sp.status as (typeof STATUSES)[number])
+            : undefined;
     const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
     const offset = (page - 1) * PAGE_SIZE;
 
@@ -156,7 +162,7 @@ export default async function AdminExportsPage({
                                         {job.recordingCount ?? "\u2014"}
                                     </td>
                                     <td className="px-3 py-2">
-                                        {job.fileSize
+                                        {job.fileSize != null
                                             ? formatBytes(job.fileSize)
                                             : "\u2014"}
                                     </td>
