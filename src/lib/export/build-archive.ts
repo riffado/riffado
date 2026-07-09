@@ -3,7 +3,7 @@ import { ZipArchive } from "archiver";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { aiEnhancements, recordings, transcriptions } from "@/db/schema";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import type { StorageProvider } from "@/lib/storage/types";
 
 export interface ArchiveResult {
@@ -93,8 +93,19 @@ export async function buildAndUploadExportArchive(input: {
                   .from(aiEnhancements)
                   .where(eq(aiEnhancements.userId, userId))
             : [];
+    // `summary` is a `text` column (encryptText); `actionItems`/`keyPoints`
+    // are `jsonb` envelopes (encryptJsonField) -- same at-rest scheme the
+    // summary API decrypts before returning to the client.
     const enhancementMap = new Map(
-        userEnhancements.map((e) => [e.recordingId, e]),
+        userEnhancements.map((e) => [
+            e.recordingId,
+            {
+                ...e,
+                summary: decryptText(e.summary),
+                actionItems: decryptJsonField<string[]>(e.actionItems),
+                keyPoints: decryptJsonField<string[]>(e.keyPoints),
+            },
+        ]),
     );
 
     const archive = new ZipArchive({ zlib: { level: 6 } });
@@ -140,6 +151,13 @@ export async function buildAndUploadExportArchive(input: {
         recordings: [],
     };
 
+    // Resolves once each recording's audio entry has fully settled
+    // (archiver finished draining it, or it errored and was ended
+    // gracefully) -- awaited below, before the manifest is serialized,
+    // so `entry.audio` reflects what actually landed in the archive
+    // rather than an optimistic guess made before the stream ran.
+    const audioSettled: Promise<void>[] = [];
+
     for (const recording of userRecordings) {
         // Per-recording DB/metadata work has no byte-stream progress of
         // its own to trigger the passthrough listener above -- mark
@@ -166,14 +184,54 @@ export async function buildAndUploadExportArchive(input: {
             .catch(() => false);
         if (audioExists) {
             try {
-                const audioStream = await storage.downloadStream(
+                const rawStream = await storage.downloadStream(
                     recording.storagePath,
                 );
                 const audioPath = `${folder}/audio.${audioExtension(recording.storagePath)}`;
+
+                // Proxy the raw storage stream through our own PassThrough
+                // instead of appending it to the archive directly. A
+                // mid-stream error on the raw stream (network drop,
+                // storage hiccup) would otherwise surface as an archiver
+                // `error` event and abort the *entire* archive -- the
+                // try/catch above only covers stream *creation*, not
+                // errors emitted while archiver is draining it. Ending
+                // the proxy gracefully on such an error instead leaves
+                // this one entry truncated (or empty) while every other
+                // recording still makes it into the archive.
+                const proxy = new PassThrough();
+                const settled = new Promise<void>((resolve) => {
+                    let done = false;
+                    const finish = () => {
+                        if (done) return;
+                        done = true;
+                        resolve();
+                    };
+                    rawStream.once("error", (err) => {
+                        entry.audio = {
+                            included: false,
+                            path: null,
+                            reason: `Audio stream interrupted: ${err instanceof Error ? err.message : String(err)}`,
+                        };
+                        // Gracefully end the proxy instead of letting the
+                        // error propagate into archiver -- archiver treats
+                        // a source-stream error as fatal to the whole
+                        // archive. Ending early just truncates this one
+                        // entry.
+                        proxy.end();
+                        finish();
+                    });
+                    proxy.once("error", finish);
+                    proxy.once("close", finish);
+                    proxy.once("end", finish);
+                });
+                audioSettled.push(settled);
+                rawStream.pipe(proxy);
+
                 // Audio is already compressed (mp3/opus/etc.) -- deflating
                 // it again wastes CPU for near-zero size benefit. `store:
                 // true` writes it uncompressed into the zip.
-                archive.append(audioStream, { name: audioPath, store: true });
+                archive.append(proxy, { name: audioPath, store: true });
                 entry.audio = { included: true, path: audioPath };
             } catch (error) {
                 entry.audio = {
@@ -225,6 +283,12 @@ export async function buildAndUploadExportArchive(input: {
 
         manifest.recordings.push(entry);
     }
+
+    // Wait for every audio entry to actually settle (archiver finished
+    // draining it, or it errored and was gracefully truncated) before
+    // serializing the manifest, so `entry.audio` reflects reality
+    // instead of the optimistic guess made when the stream was appended.
+    await Promise.all(audioSettled);
 
     archive.append(Buffer.from(JSON.stringify(manifest, null, 2)), {
         name: "manifest.json",

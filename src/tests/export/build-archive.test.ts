@@ -12,7 +12,9 @@ vi.mock("@/db/schema", () => ({
     aiEnhancements: "aiEnhancements",
 }));
 vi.mock("@/lib/encryption/fields", () => ({
-    decryptText: (v: string) => `decrypted:${v}`,
+    decryptText: (v: string | null) => (v == null ? v : `decrypted:${v}`),
+    decryptJsonField: (v: unknown) =>
+        Array.isArray(v) ? v.map((x) => `decrypted:${x}`) : v,
 }));
 
 type Row = Record<string, unknown>;
@@ -167,6 +169,20 @@ describe("buildAndUploadExportArchive", () => {
         expect(transcriptEntry?.[1].buffer.toString("utf-8")).toBe(
             "decrypted:enc-transcript",
         );
+
+        // Regression: the summary must go through decryptText/
+        // decryptJsonField before landing in the archive, same as the
+        // transcript -- otherwise the "summary.json" entry would contain
+        // ciphertext instead of the user's readable summary.
+        const summaryEntry = [...entries.entries()].find(([n]) =>
+            n.endsWith("/summary.json"),
+        );
+        const summaryJson = JSON.parse(
+            summaryEntry?.[1].buffer.toString("utf-8") ?? "{}",
+        );
+        expect(summaryJson.summary).toBe("decrypted:A concise summary");
+        expect(summaryJson.actionItems).toEqual(["decrypted:do a thing"]);
+        expect(summaryJson.keyPoints).toEqual(["decrypted:key point"]);
 
         // Audio is already-compressed media -- deflating it again wastes
         // CPU for no size benefit, so it should be stored (method 0), not

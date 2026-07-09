@@ -8,7 +8,7 @@ import {
     userSettings,
 } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 // GET - Export recordings in specified format
@@ -59,13 +59,24 @@ export const GET = apiHandler(async (request: Request) => {
                   .from(aiEnhancements)
                   .where(eq(aiEnhancements.userId, session.user.id))
             : [];
-    const enhancementMap = new Map(
-        userEnhancements.map((e) => [e.recordingId, e]),
-    );
-
     // Decrypt content fields up front so each format branch can rely on
     // plaintext. The export file is the user's plaintext data — they own
-    // it once it leaves the server.
+    // it once it leaves the server. `summary` is a `text` column
+    // (encryptText); `actionItems`/`keyPoints` are `jsonb` envelopes
+    // (encryptJsonField) -- same at-rest scheme the summary API itself
+    // decrypts before returning to the client.
+    const enhancementMap = new Map(
+        userEnhancements.map((e) => [
+            e.recordingId,
+            {
+                ...e,
+                summary: decryptText(e.summary),
+                actionItems: decryptJsonField<string[]>(e.actionItems),
+                keyPoints: decryptJsonField<string[]>(e.keyPoints),
+            },
+        ]),
+    );
+
     const transcriptionMap = new Map(
         userTranscriptions.map((t) => [
             t.recordingId,
