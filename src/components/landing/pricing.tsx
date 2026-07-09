@@ -88,7 +88,7 @@ const TIERS: Tier[] = [
         pill: { label: "14-day free trial", tone: "primary" },
         features: [
             "50 GB encrypted storage",
-            "15 hours of cloud transcription per month",
+            "15 hours of included Mynah transcription per month",
             "Unlimited devices, background sync",
             "Off-site encrypted backups (coming soon)",
             "Plug in OpenAI, Groq, Ollama — or use ours",

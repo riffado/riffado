@@ -28,7 +28,7 @@ const BEATS: Beat[] = [
         step: "02",
         icon: <Cpu className="size-5" />,
         title: "Pick the AI. Get the transcript.",
-        body: "Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries — you pay them directly at their published rate. No account anywhere? Transcription runs free, right in your browser. Every recording comes back with a summary, key points, and action items.",
+        body: "Hosted Pro includes 15 hours of Mynah transcription every month. Need more, or want another model? Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries, and pay providers directly at their published rate. No account anywhere? Transcription also runs free, right in your browser.",
     },
     {
         step: "03",
@@ -64,8 +64,9 @@ export function Features() {
                     </ol>
 
                     <p className="mt-8 text-sm text-muted-foreground text-pretty">
-                        Free in your browser. Or plug in OpenAI or Groq and pay
-                        them directly.
+                        Hosted Pro includes Mynah transcription. Free in your
+                        browser still works, and you can always plug in OpenAI
+                        or Groq directly.
                     </p>
                 </div>
             </div>

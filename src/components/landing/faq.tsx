@@ -95,14 +95,19 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "Which AI providers can I use?",
-                a: "OpenAI or Groq for cloud transcription. Ollama or LM Studio if you want a model running entirely on your own machine — nothing leaves your laptop. Browser-based Whisper if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works — that includes OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
+                a: "Hosted Pro includes Mynah for 15 hours of cloud transcription every month. You can also connect OpenAI or Groq for cloud transcription. Use Ollama or LM Studio if you want a model running entirely on your own machine — nothing leaves your laptop. Browser-based Whisper works if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works — that includes OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
                 body: (
                     <>
                         <p>
                             <strong className="text-foreground font-medium">
+                                Hosted Pro includes Mynah
+                            </strong>{" "}
+                            for 15 hours of cloud transcription every month. You
+                            can also connect{" "}
+                            <strong className="text-foreground font-medium">
                                 OpenAI or Groq
                             </strong>{" "}
-                            for cloud transcription.{" "}
+                            for cloud transcription, or use{" "}
                             <strong className="text-foreground font-medium">
                                 Ollama
                             </strong>{" "}
@@ -115,8 +120,8 @@ const GROUPS: FaqGroup[] = [
                             <strong className="text-foreground font-medium">
                                 Browser-based Whisper
                             </strong>{" "}
-                            if you don't want to configure anything at all. Pick
-                            per recording; change your mind any time.
+                            works if you don't want to configure anything at
+                            all. Pick per recording; change your mind any time.
                         </p>
                         <p className="mt-3 text-sm text-muted-foreground/80">
                             For summaries, any OpenAI-compatible endpoint works
