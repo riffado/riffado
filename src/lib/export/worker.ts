@@ -100,7 +100,14 @@ async function processJob(job: {
     claimToken: string;
 }): Promise<void> {
     const storage = createStorageProvider();
-    const storageKey = `exports/${job.userId}/${job.id}.zip`;
+    // Keyed per claim attempt (not just per job) -- a job that's
+    // reclaimed as stale and re-claimed gets a fresh claimToken and
+    // therefore a fresh key. That means a superseded claim can never
+    // step on the winning claim's object: cleaning up `storageKey` here
+    // only ever touches *this attempt's own* upload, whether it's a
+    // partial from a failed build or a finished one nobody ended up
+    // using because the row moved on without it.
+    const storageKey = `exports/${job.userId}/${job.id}-${job.claimToken}.zip`;
 
     try {
         const result = await runWithStallGuard(
@@ -126,8 +133,9 @@ async function processJob(job: {
         if (!completed) {
             // This claim was reclaimed as stale while the build was still
             // in flight -- some other worker owns the job now (or already
-            // finished it). Don't notify or leave a dangling archive
-            // under a job row we no longer control.
+            // finished it). Don't notify; the winning claim's row already
+            // points at *its own* storageKey, so deleting this one only
+            // discards this now-unreferenced attempt's own upload.
             console.warn(
                 `[export-worker] job ${job.id} finished but its claim was superseded; discarding result`,
             );
@@ -150,7 +158,10 @@ async function processJob(job: {
         );
         if (outcome === null) {
             // Claim superseded -- another worker owns (or already resolved)
-            // this job. Nothing to record against a claim we no longer hold.
+            // this job. Nothing to record against a claim we no longer
+            // hold. Cleanup below still runs: `storageKey` is scoped to
+            // *this* claim attempt, so deleting it can't affect whatever
+            // the current owner has done.
             console.warn(
                 `[export-worker] job ${job.id} failed but its claim was superseded; not recording`,
             );
@@ -166,8 +177,9 @@ async function processJob(job: {
             );
         }
         // Clean up any partial object left behind by a failed/aborted
-        // upload -- safe even when retrying, since the next attempt
-        // overwrites the same key anyway.
+        // upload. A retry gets a fresh claim token and therefore a fresh
+        // key (see above), so this never collides with a subsequent
+        // attempt's object.
         await storage.deleteFile(storageKey).catch(() => {});
     }
 }

@@ -93,13 +93,13 @@ describe("export worker tick", () => {
         ).toHaveBeenCalledWith(
             expect.objectContaining({
                 userId: "user-1",
-                storageKey: "exports/user-1/job-1.zip",
+                storageKey: "exports/user-1/job-1-token-1.zip",
             }),
         );
         expect(queriesMock.completeExportJob).toHaveBeenCalledWith({
             jobId: "job-1",
             claimToken: "token-1",
-            storageKey: "exports/user-1/job-1.zip",
+            storageKey: "exports/user-1/job-1-token-1.zip",
             fileSize: 12345,
             recordingCount: 3,
         });
@@ -125,8 +125,11 @@ describe("export worker tick", () => {
         warnSpy.mockRestore();
 
         expect(emailMock.sendExportReadyEmail).not.toHaveBeenCalled();
+        // Deleting this claim's own (unique, per-claim-token) key only
+        // ever discards this attempt's own upload -- never the winning
+        // claim's object.
         expect(storageMock.deleteFile).toHaveBeenCalledWith(
-            "exports/user-1/job-1.zip",
+            "exports/user-1/job-1-stale-token.zip",
         );
     });
 
@@ -155,7 +158,7 @@ describe("export worker tick", () => {
         );
         expect(queriesMock.completeExportJob).not.toHaveBeenCalled();
         expect(storageMock.deleteFile).toHaveBeenCalledWith(
-            "exports/user-2/job-2.zip",
+            "exports/user-2/job-2-token-2.zip",
         );
         expect(emailMock.sendExportReadyEmail).not.toHaveBeenCalled();
     });
