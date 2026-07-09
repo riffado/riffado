@@ -1,4 +1,4 @@
-import { PassThrough } from "node:stream";
+import { PassThrough, type Readable } from "node:stream";
 import { ZipArchive } from "archiver";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
@@ -127,9 +127,22 @@ export async function buildAndUploadExportArchive(input: {
         console.warn(`[export] archiver warning for user ${userId}:`, err);
     });
 
+    // Audio streams currently in flight, so an abort can actively tear
+    // them down instead of leaving them half-open. Without this, a
+    // proxy stream that archiver has stopped draining (post-abort)
+    // would never emit `end`/`close`/`error` on its own, and the
+    // per-entry `settled` promise it backs would never resolve --
+    // exactly the hang this `onAbort` handler exists to prevent.
+    const activeAudioStreams: { rawStream: Readable; proxy: PassThrough }[] =
+        [];
+
     const onAbort = () => {
         archive.abort();
         passthrough.destroy(new Error("Export aborted"));
+        for (const { rawStream, proxy } of activeAudioStreams) {
+            rawStream.destroy(new Error("Export aborted"));
+            proxy.destroy(new Error("Export aborted"));
+        }
     };
     signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -138,6 +151,17 @@ export async function buildAndUploadExportArchive(input: {
         passthrough,
         "application/zip",
     );
+    // `uploadPromise` is only *awaited* much later (after the
+    // audio-settled wait and `archive.finalize()`), but it starts
+    // rejecting the moment `passthrough` errors -- including from
+    // `onAbort` firing while this function is still stuck earlier (e.g.
+    // the audio-settled race below). Without this passive catch, that
+    // earlier path throws first and the function returns without ever
+    // reaching the real `await uploadPromise` below, leaving this
+    // rejection unhandled. The actual error is still surfaced through
+    // whichever path threw first; this only prevents an unobserved
+    // rejection from the one that lost the race.
+    uploadPromise.catch(() => {});
 
     const manifest: {
         version: string;
@@ -226,6 +250,7 @@ export async function buildAndUploadExportArchive(input: {
                     proxy.once("end", finish);
                 });
                 audioSettled.push(settled);
+                activeAudioStreams.push({ rawStream, proxy });
                 rawStream.pipe(proxy);
 
                 // Audio is already compressed (mp3/opus/etc.) -- deflating
@@ -288,7 +313,46 @@ export async function buildAndUploadExportArchive(input: {
     // draining it, or it errored and was gracefully truncated) before
     // serializing the manifest, so `entry.audio` reflects reality
     // instead of the optimistic guess made when the stream was appended.
-    await Promise.all(audioSettled);
+    //
+    // Raced against `signal` rather than awaited bare: if an abort
+    // fires while this is pending, `onAbort` destroys the in-flight
+    // audio streams above, but there's still a window where archiver
+    // itself has simply stopped draining a stream without formally
+    // ending it. Without this race, that would hang here forever
+    // instead of rejecting -- defeating the whole point of the worker's
+    // stall/max-duration guard, which needs this promise to actually
+    // settle to stop the job.
+    await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const onAbortWhileWaiting = () => {
+            if (settled) return;
+            settled = true;
+            reject(
+                new Error(
+                    "Export aborted while waiting for audio entries to settle",
+                ),
+            );
+        };
+        if (signal?.aborted) {
+            onAbortWhileWaiting();
+            return;
+        }
+        signal?.addEventListener("abort", onAbortWhileWaiting, { once: true });
+        Promise.all(audioSettled).then(
+            () => {
+                if (settled) return;
+                settled = true;
+                signal?.removeEventListener("abort", onAbortWhileWaiting);
+                resolve();
+            },
+            (err) => {
+                if (settled) return;
+                settled = true;
+                signal?.removeEventListener("abort", onAbortWhileWaiting);
+                reject(err);
+            },
+        );
+    });
 
     archive.append(Buffer.from(JSON.stringify(manifest, null, 2)), {
         name: "manifest.json",

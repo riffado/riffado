@@ -34,6 +34,8 @@ import { buildAndUploadExportArchive } from "@/lib/export/build-archive";
 class FakeStorage implements StorageProvider {
     uploaded: Buffer | null = null;
     files = new Map<string, Buffer>();
+    /** Paths that `exists()` reports present but `downloadStream()` returns a `StuckReadable` for. */
+    stuckPaths = new Set<string>();
 
     async uploadFile(key: string, buffer: Buffer): Promise<string> {
         this.files.set(key, buffer);
@@ -45,6 +47,7 @@ class FakeStorage implements StorageProvider {
         return buf;
     }
     async downloadStream(key: string): Promise<Readable> {
+        if (this.stuckPaths.has(key)) return new StuckReadable();
         const buf = this.files.get(key);
         if (!buf) throw new Error(`not found: ${key}`);
         return Readable.from(buf);
@@ -62,7 +65,7 @@ class FakeStorage implements StorageProvider {
         return key;
     }
     async exists(key: string): Promise<boolean> {
-        return this.files.has(key);
+        return this.files.has(key) || this.stuckPaths.has(key);
     }
     async getSignedUrl(): Promise<string> {
         return "https://example.com/signed";
@@ -72,6 +75,27 @@ class FakeStorage implements StorageProvider {
     }
     async testConnection(): Promise<boolean> {
         return true;
+    }
+}
+
+/**
+ * A stream that never produces data and, crucially, never finishes
+ * being destroyed -- `_destroy` deliberately never calls its callback.
+ * Simulates archiver having stopped draining a source stream without
+ * formally ending it: nothing about this stream will ever emit
+ * `end`/`close`/`error` on its own. Used to prove that aborting
+ * `buildAndUploadExportArchive` rejects via the abort-signal race
+ * itself, not as a side effect of stream teardown completing.
+ */
+class StuckReadable extends Readable {
+    _read(): void {
+        // Never pushes data, never calls this.push(null).
+    }
+    _destroy(
+        _err: Error | null,
+        _callback: (error?: Error | null) => void,
+    ): void {
+        // Deliberately never calls `_callback`.
     }
 }
 
@@ -261,4 +285,43 @@ describe("buildAndUploadExportArchive", () => {
         const entries = await readZipEntries(storage.uploaded as Buffer);
         expect([...entries.keys()]).toEqual(["manifest.json"]);
     });
+
+    it("rejects (rather than hanging forever) when aborted while waiting for a stuck audio stream to settle", async () => {
+        // Regression: the pre-manifest `await` on every audio entry
+        // settling was not raced against `signal`, so an abort while an
+        // entry was still draining (or stuck) would hang the whole
+        // function instead of rejecting -- silently defeating the
+        // worker's stall/max-duration guard, which needs this promise to
+        // actually settle to stop the job.
+        storage.stuckPaths.add("audio/stuck.mp3");
+        mockSelectSequence([
+            [
+                {
+                    id: "rec-stuck",
+                    userId: "user-1",
+                    filename: "enc-filename",
+                    startTime: new Date("2026-01-01T00:00:00Z"),
+                    endTime: new Date("2026-01-01T00:01:00Z"),
+                    duration: 1000,
+                    filesize: 100,
+                    deviceSn: "SN1",
+                    storagePath: "audio/stuck.mp3",
+                },
+            ],
+            [],
+            [],
+        ]);
+
+        const controller = new AbortController();
+        const promise = buildAndUploadExportArchive({
+            userId: "user-1",
+            storage,
+            storageKey: "exports/user-1/job-5.zip",
+            signal: controller.signal,
+        });
+        // Let the build start and reach the audio-settled wait, then abort.
+        setTimeout(() => controller.abort(), 20);
+
+        await expect(promise).rejects.toThrow(/abort/i);
+    }, 5000);
 });
