@@ -200,10 +200,27 @@ export function Workstation({
     }, [manualSync]);
 
     // Prefer the live sync result once we have one; fall back to the
-    // server-rendered flag on first paint (before any sync runs).
-    const showReconnect = lastSyncResult
-        ? lastSyncResult.needsReconnect === true
-        : plaudNeedsReconnect;
+    // server-rendered flag on first paint (before any sync runs). A
+    // change in `plaudNeedsReconnect` only happens when fresh server
+    // truth arrives (e.g. a `router.refresh()` after another tab's sync
+    // invalidated the token), so it always resets the override rather
+    // than letting a stale client-side result keep masking it.
+    const [reconnectOverride, setReconnectOverride] = useState<boolean | null>(
+        null,
+    );
+    const prevPlaudNeedsReconnect = useRef(plaudNeedsReconnect);
+    useEffect(() => {
+        if (plaudNeedsReconnect !== prevPlaudNeedsReconnect.current) {
+            prevPlaudNeedsReconnect.current = plaudNeedsReconnect;
+            setReconnectOverride(null);
+        }
+    }, [plaudNeedsReconnect]);
+    useEffect(() => {
+        if (typeof lastSyncResult?.needsReconnect === "boolean") {
+            setReconnectOverride(lastSyncResult.needsReconnect);
+        }
+    }, [lastSyncResult]);
+    const showReconnect = reconnectOverride ?? plaudNeedsReconnect;
 
     const handleReconnected = useCallback(() => {
         refresh();
