@@ -20,7 +20,7 @@ export function WelcomeHostedProEmail({
 }: Props) {
     return (
         <EmailLayout
-            previewText="You're on Riffado Hosted Pro — 50 GB storage, 15 hours of Mynah transcription, unlimited devices."
+            previewText="You're on Riffado Hosted Pro: 50 GB storage, 15 hours of Mynah transcription, unlimited devices."
             footerLink={{ href: settingsUrl, label: "Manage subscription" }}
         >
             <Heading style={emailStyles.h1}>You're on Hosted Pro.</Heading>

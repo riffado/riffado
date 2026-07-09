@@ -59,7 +59,7 @@ export function EditProviderDialog({
     const visiblePresets = getVisiblePresets({ isHosted });
     // Legacy case: a hosted user has an existing LM Studio / Ollama provider
     // (added before hosted enforcement, or imported). Keep their currently
-    // selected preset visible in the dropdown — disabled — so the Select
+    // selected preset visible in the dropdown, disabled, so the Select
     // doesn't render an empty trigger. The save will still fail server-side
     // because the stored baseUrl is loopback; we surface a notice so the
     // user knows to delete and re-add with a public endpoint.
@@ -217,7 +217,7 @@ export function EditProviderDialog({
                                 <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
                                 <span>
                                     {legacyLocalProvider} isn&apos;t usable on
-                                    the hosted app — we can&apos;t reach your
+                                    the hosted app. We can&apos;t reach your
                                     machine. Delete this provider and re-add one
                                     with a public endpoint, or self-host Riffado
                                     (

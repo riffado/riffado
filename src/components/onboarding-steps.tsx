@@ -153,7 +153,7 @@ export function OnboardingStepAiProvider({
                 </h3>
                 <p className="text-muted-foreground">
                     {includedOnly
-                        ? "Mynah transcription comes with your plan — you're ready to go"
+                        ? "Mynah transcription comes with your plan. You're ready to go."
                         : "Configure an AI provider to enable automatic transcriptions"}
                 </p>
             </div>
@@ -186,7 +186,7 @@ export function OnboardingStepAiProvider({
                                 <p className="text-sm text-muted-foreground">
                                     Transcription works out of the box with your
                                     plan. Adding your own AI provider is
-                                    optional — use it for summaries or a
+                                    optional. Use it for summaries or a
                                     different transcription engine alongside
                                     Mynah.
                                 </p>

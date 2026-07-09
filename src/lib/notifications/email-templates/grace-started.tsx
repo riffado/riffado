@@ -53,8 +53,8 @@ export function GraceStartedEmail({
                 Changed your mind?{" "}
                 <a href={reactivateUrl} style={emailStyles.link}>
                     Add a card to reactivate
-                </a>{" "}
-                — everything resumes instantly, nothing is lost.
+                </a>
+                . Everything resumes instantly, and nothing is lost.
             </Text>
         </EmailLayout>
     );

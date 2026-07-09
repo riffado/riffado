@@ -35,8 +35,8 @@ export function GraceLastDayEmail({
                 Want to keep your account?{" "}
                 <a href={reactivateUrl} style={emailStyles.link}>
                     Add a card to reactivate
-                </a>{" "}
-                — instant, no data loss.
+                </a>
+                . Reactivation is instant, with no data loss.
             </Text>
         </EmailLayout>
     );

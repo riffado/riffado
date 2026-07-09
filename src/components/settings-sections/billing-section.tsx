@@ -312,7 +312,7 @@ export function BillingSection() {
                         {periodEnd
                             ? ` until ${formatDate(periodEnd)}`
                             : " until the end of your current paid period"}
-                        . After that your account becomes read-only — your
+                        . After that your account becomes read-only. Your
                         recordings and transcripts stay put, but sync, upload,
                         and transcription pause until you resubscribe.
                     </>
@@ -459,14 +459,15 @@ export function BillingSection() {
                             </h3>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 Your account will be permanently deleted on{" "}
-                                {formatDate(state.grace.deletionAt)} — in{" "}
+                                {formatDate(state.grace.deletionAt)} (in{" "}
                                 {daysBetween(
                                     new Date(state.grace.deletionAt),
                                     new Date(),
                                 )}{" "}
-                                day(s). Until then you can still play and export
-                                your recordings; syncing and new transcriptions
-                                are paused. Subscribe below to keep everything.
+                                day(s)). Until then you can still play and
+                                export your recordings; syncing and new
+                                transcriptions are paused. Subscribe below to
+                                keep everything.
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -645,8 +646,8 @@ export function BillingSection() {
                                         Your subscription is set to end on{" "}
                                         {formatDate(sub.canceledAt)}. You keep
                                         full access until then. Resume any time
-                                        before that date at no extra charge —
-                                        your next payment simply continues as
+                                        before that date at no extra charge.
+                                        Your next payment simply continues as
                                         scheduled.
                                     </p>
                                     <div className="flex flex-wrap gap-2">

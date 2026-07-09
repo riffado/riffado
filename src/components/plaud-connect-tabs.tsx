@@ -314,7 +314,7 @@ function EmailCodePane({
             setApiBase(data.apiBase);
             setLastSentAt(Date.now());
             setStep("code");
-            toast.success("Verification code sent — check your email");
+            toast.success("Verification code sent. Check your email.");
         } catch (err) {
             toast.error(
                 err instanceof Error ? err.message : "Failed to send code",

@@ -163,7 +163,7 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                 <p className="mt-0.5 text-muted-foreground">
                     {isGrace
                         ? `Your recordings are still playable and exportable, but sync and new transcriptions are paused. Scheduled for deletion in ${daysUntil(mode.deletionAt)} day(s).`
-                        : "Your account is read-only — sync, upload, and transcription are paused. Subscribe to resume, or export your data."}
+                        : "Your account is read-only. Sync, upload, and transcription are paused. Subscribe to resume, or export your data."}
                 </p>
             </div>
             <div className="flex shrink-0 gap-2">

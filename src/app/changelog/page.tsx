@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const TECHNICAL_CHANGELOG_URL = `${RIFFADO_REPO_URL}/blob/main/CHANGELOG.md`;
 
 export const metadata: Metadata = {
-    title: "What's new — Riffado",
+    title: "What's new | Riffado",
     description:
         "Plain-language changelog for Riffado. New features, improvements, and fixes, written for the people who use the app.",
 };

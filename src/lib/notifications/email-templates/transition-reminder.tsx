@@ -20,9 +20,9 @@ interface Props {
     selfHostUrl: string;
 }
 
-// DRAFT COPY — review before sending. Sent ~3 days before the free Pro
+// DRAFT COPY: review before sending. Sent ~3 days before the free Pro
 // window closes. States the fork plainly: subscribe, self-host, or go
-// read-only. No deletion threat — grandfathered data is never deleted.
+// read-only. No deletion threat; grandfathered data is never deleted.
 export function TransitionReminderEmail({
     daysLeft,
     transitionEndsAt,
@@ -45,7 +45,7 @@ export function TransitionReminderEmail({
                 Your free hosted window closes on{" "}
                 <strong>{formatEmailDate(transitionEndsAt)}</strong>. To keep
                 background sync, new transcriptions, and uploads running, add a
-                card and lock founding-member pricing — {amountValue}{" "}
+                card and lock founding-member pricing at {amountValue}{" "}
                 {amountCurrency}/month for life.
             </Text>
             <Section style={emailStyles.buttonSection}>
@@ -54,7 +54,7 @@ export function TransitionReminderEmail({
                 </Button>
             </Section>
             <Text style={emailStyles.text}>
-                If you'd rather not subscribe, that's fine — nothing gets
+                If you'd rather not subscribe, that's fine. Nothing gets
                 deleted. After {formatEmailDate(transitionEndsAt)} your account
                 goes read-only: your recordings stay playable and exportable,
                 but sync and new transcriptions pause until you subscribe. You

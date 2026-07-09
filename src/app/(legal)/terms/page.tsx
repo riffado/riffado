@@ -28,7 +28,7 @@ import {
  */
 
 export const metadata: Metadata = {
-    title: "Terms of Service — Riffado",
+    title: "Terms of Service | Riffado",
     description:
         "Terms governing your use of the hosted Riffado service at riffado.com.",
 };
@@ -67,8 +67,7 @@ export default function TermsPage() {
                 transcribes and summarizes them using the AI provider you choose
                 (or in your browser), stores them, and lets you export
                 everything. To use it you need a compatible browser, internet
-                access, an account, and — for sync — a connected recorder
-                account.
+                access, an account, and a connected recorder account for sync.
             </p>
 
             <h2>The software vs. the service</h2>

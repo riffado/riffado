@@ -179,7 +179,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Export & Backup"
-                description="Take your data with you — recordings, transcripts, and summaries."
+                description="Take your data with you: recordings, transcripts, and summaries."
                 icon={Download}
             />
             <div className="space-y-4">

@@ -18,7 +18,7 @@ interface Props {
     selfHostUrl: string;
 }
 
-// DRAFT COPY — review before sending. Sent to grandfathered hosted users
+// DRAFT COPY: review before sending. Sent to grandfathered hosted users
 // on launch day. Tone: respectful, no surprise, the 30-day window is the
 // grace. Positioning rules: name the price plainly, self-host is the free
 // path, no disparagement.
@@ -40,14 +40,14 @@ export function TransitionStartEmail({
             </Heading>
             <Text style={emailStyles.text}>
                 You've been using Riffado on our hosted servers for free. From
-                today, hosted runs as a paid plan — Hosted Pro at {amountValue}{" "}
+                today, hosted runs as a paid plan: Hosted Pro at {amountValue}{" "}
                 {amountCurrency}/month. Nothing changes for you right now: you
                 keep full Pro access, free, until{" "}
                 <strong>{formatEmailDate(transitionEndsAt)}</strong>.
             </Text>
             <Text style={emailStyles.text}>
                 Add a card before then to keep everything running and lock{" "}
-                <strong>founding-member pricing</strong> — {amountValue}{" "}
+                <strong>founding-member pricing</strong> at {amountValue}{" "}
                 {amountCurrency}/month for as long as your subscription stays
                 active, even when the price goes up for everyone else.
             </Text>
@@ -62,7 +62,7 @@ export function TransitionStartEmail({
                 </Button>
             </Section>
             <Text style={emailStyles.text}>
-                Prefer to run it yourself? Riffado is open source — you can{" "}
+                Prefer to run it yourself? Riffado is open source, and you can{" "}
                 <a href={selfHostUrl} style={emailStyles.link}>
                     self-host for free
                 </a>{" "}

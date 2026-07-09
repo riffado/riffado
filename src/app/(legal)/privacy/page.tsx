@@ -28,7 +28,7 @@ import {
  */
 
 export const metadata: Metadata = {
-    title: "Privacy Policy — Riffado",
+    title: "Privacy Policy | Riffado",
     description: "How the hosted Riffado service handles your personal data.",
 };
 
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
                 Riffado service at riffado.com. Riffado is also open-source
                 software you can run yourself under the AGPL-3.0 license. If you
                 self-host, your data never touches our infrastructure and this
-                policy does not apply to you — see the{" "}
+                policy does not apply to you. See the{" "}
                 <Link href="https://github.com/riffado/riffado#readme">
                     project README
                 </Link>{" "}
@@ -70,22 +70,22 @@ export default function PrivacyPage() {
             <h2>What we collect</h2>
             <ul>
                 <li>
-                    <strong>Account data</strong> — the email address and name
+                    <strong>Account data</strong>: the email address and name
                     you provide when you register, and authentication data
                     needed to sign you in.
                 </li>
                 <li>
-                    <strong>Connected recorder credentials</strong> — the Plaud
+                    <strong>Connected recorder credentials</strong>: the Plaud
                     account token you connect, stored encrypted at rest with
                     AES-256-GCM and decrypted only when we make a request to
                     Plaud on your behalf.
                 </li>
                 <li>
-                    <strong>Your content</strong> — the recordings, transcripts,
+                    <strong>Your content</strong>: the recordings, transcripts,
                     and summaries the service syncs or generates for you.
                 </li>
                 <li>
-                    <strong>Payment data</strong> — if you subscribe, payment
+                    <strong>Payment data</strong>: if you subscribe, payment
                     details (card number and full billing address) are collected
                     and processed by our payment processor. We store the
                     processor customer and subscription references, subscription
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
                     billing. We never see or store your full card number.
                 </li>
                 <li>
-                    <strong>Usage analytics</strong> — privacy-friendly,
+                    <strong>Usage analytics</strong>: privacy-friendly,
                     aggregate usage data collected through analytics software we
                     host ourselves. It uses no advertising cookies and is not
                     shared with any third party.
@@ -105,8 +105,8 @@ export default function PrivacyPage() {
             <h2>Why we process it, and on what legal basis</h2>
             <ul>
                 <li>
-                    To provide the service — sync, transcription, storage, and
-                    export — on the legal basis of performing our contract with
+                    To provide the service: sync, transcription, storage, and
+                    export, on the legal basis of performing our contract with
                     you (Art. 6(1)(b) GDPR).
                 </li>
                 <li>
@@ -188,11 +188,11 @@ export default function PrivacyPage() {
                 When you configure a cloud AI provider (such as OpenAI,
                 Anthropic, or Groq) the service forwards the relevant audio or
                 text to that provider at your direction. You contract with that
-                provider directly and their privacy terms govern that processing
-                — they are not our service providers. We do not retain a
-                separate copy beyond what is already stored in your account. If
-                you transcribe in your browser or with a local model, no audio
-                leaves your control through a third party at all.
+                provider directly and their privacy terms govern that
+                processing. They are not our service providers. We do not retain
+                a separate copy beyond what is already stored in your account.
+                If you transcribe in your browser or with a local model, no
+                audio leaves your control through a third party at all.
             </p>
 
             <h2>International transfers</h2>
@@ -211,11 +211,11 @@ export default function PrivacyPage() {
                 that never paid; 30 days for accounts that previously had a
                 subscription). At the end of the grace period, or when you
                 choose to delete your account from Settings, we permanently
-                delete your account and all associated data — recordings,
-                transcripts, summaries, and stored files — from active storage.
-                Residual copies in routine backups age out on the backup
-                rotation. We keep the minimum records we are legally required to
-                retain.
+                delete your account and all associated data, including
+                recordings, transcripts, summaries, and stored files, from
+                active storage. Residual copies in routine backups age out on
+                the backup rotation. We keep the minimum records we are legally
+                required to retain.
             </p>
 
             <h2>Your rights</h2>

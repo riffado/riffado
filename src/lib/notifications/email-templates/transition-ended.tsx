@@ -15,7 +15,7 @@ interface Props {
     selfHostUrl: string;
 }
 
-// DRAFT COPY — review before sending. Sent when the free Pro window has
+// DRAFT COPY: review before sending. Sent when the free Pro window has
 // closed and the account is now read-only. No deletion clock for the
 // grandfathered cohort: data stays put indefinitely until they subscribe,
 // export, or self-host.
@@ -28,7 +28,7 @@ export function TransitionEndedEmail({
 }: Props) {
     return (
         <EmailLayout
-            previewText="Your hosted account is now read-only. Your data is safe — subscribe anytime to resume."
+            previewText="Your hosted account is now read-only. Your data is safe, and you can subscribe anytime to resume."
             footerLink={{ href: billingUrl, label: "Manage billing" }}
         >
             <Heading style={emailStyles.h1}>
@@ -36,13 +36,13 @@ export function TransitionEndedEmail({
             </Heading>
             <Text style={emailStyles.text}>
                 Your account is now read-only. Your recordings, transcripts, and
-                summaries are all still here and fully exportable — but sync,
+                summaries are all still here and fully exportable, but sync,
                 uploads, and new transcriptions are paused until you subscribe.
             </Text>
             <Text style={emailStyles.text}>
-                Nothing will be deleted. Pick this back up whenever you're ready
-                — subscribe and everything resumes instantly at {amountValue}{" "}
-                {amountCurrency}/month.
+                Nothing will be deleted. Pick this back up whenever you're
+                ready. Subscribe and everything resumes instantly at{" "}
+                {amountValue} {amountCurrency}/month.
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
@@ -54,7 +54,7 @@ export function TransitionEndedEmail({
                 <a href={selfHostUrl} style={emailStyles.link}>
                     self-host
                 </a>{" "}
-                the open-source version and bring your data with you —{" "}
+                the open-source version and bring your data with you. You can{" "}
                 <a href={exportUrl} style={emailStyles.link}>
                     export everything here
                 </a>

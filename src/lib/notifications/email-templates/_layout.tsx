@@ -70,7 +70,7 @@ export function EmailLayout({
                             </Text>
                         ) : null}
                         <Text style={emailStyles.footerText}>
-                            Riffado — your recordings, your transcripts.
+                            Riffado. Your recordings, your transcripts.
                         </Text>
                     </Section>
                 </Container>

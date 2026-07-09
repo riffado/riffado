@@ -30,7 +30,7 @@ export function HostedAuthChrome({
     const bullets = [
         {
             label: "Choose your AI",
-            body: "OpenAI or Groq for transcription, Anthropic and others for summaries — or Whisper running locally on your machine.",
+            body: "OpenAI or Groq for transcription, Anthropic and others for summaries, or Whisper running locally on your machine.",
         },
         {
             label: "Own your transcripts",

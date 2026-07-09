@@ -6,7 +6,7 @@ import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
-    title: "Account suspended — Riffado",
+    title: "Account suspended | Riffado",
     robots: { index: false, follow: false },
 };
 
