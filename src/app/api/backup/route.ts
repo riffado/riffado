@@ -8,28 +8,7 @@ import {
 } from "@/db/queries/export-jobs";
 import { requireApiSession } from "@/lib/auth-server";
 import { apiHandler } from "@/lib/errors";
-
-function serializeJob(job: {
-    id: string;
-    status: string;
-    createdAt: Date;
-    completedAt: Date | null;
-    expiresAt: Date | null;
-    recordingCount: number | null;
-    fileSize: number | null;
-    errorMessage: string | null;
-}) {
-    return {
-        id: job.id,
-        status: job.status,
-        createdAt: job.createdAt.toISOString(),
-        completedAt: job.completedAt?.toISOString() ?? null,
-        expiresAt: job.expiresAt?.toISOString() ?? null,
-        recordingCount: job.recordingCount,
-        fileSize: job.fileSize,
-        errorMessage: job.errorMessage,
-    };
-}
+import { serializeExportJob as serializeJob } from "@/lib/export/serialize-job";
 
 /**
  * Create a full-data export archive job (audio + transcripts + summaries,

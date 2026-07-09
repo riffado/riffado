@@ -33,6 +33,15 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
             409,
         );
     }
+    // The row can outlive its retention window if the cleanup worker's
+    // storage delete is still retrying after an earlier failure (the row
+    // is kept until the delete actually succeeds -- see
+    // `selectExpiredExportJobs`). Enforce the window here regardless of
+    // whether the object has actually been removed yet, so an export
+    // never stays downloadable past its stated retention period.
+    if (job.expiresAt !== null && job.expiresAt.getTime() <= Date.now()) {
+        throw new AppError(ErrorCode.NOT_FOUND, "Export has expired", 404);
+    }
 
     const storage = createStorageProvider();
     const filename = `riffado-export-${job.id}.zip`;

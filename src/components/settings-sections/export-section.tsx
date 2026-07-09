@@ -32,7 +32,11 @@ const backupFrequencyOptions = [
 
 interface ExportJobStatus {
     id: string;
-    status: "pending" | "processing" | "completed" | "failed";
+    // "expired" is a client-facing derived status: the server reports it
+    // instead of "completed" once `expiresAt` has passed, even if the
+    // row hasn't been swept from the DB yet (the cleanup worker keeps it
+    // until the storage delete actually succeeds).
+    status: "pending" | "processing" | "completed" | "failed" | "expired";
     createdAt: string;
     completedAt: string | null;
     expiresAt: string | null;
@@ -482,6 +486,12 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                                 <span className="text-destructive">
                                     Backup failed to build. Try again, or
                                     contact support if it keeps failing.
+                                </span>
+                            )}
+                            {backupJob.status === "expired" && (
+                                <span className="text-muted-foreground">
+                                    That backup has expired. Create a new one to
+                                    download it again.
                                 </span>
                             )}
                         </div>
