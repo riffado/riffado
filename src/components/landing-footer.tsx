@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Github, X } from "@/components/icons/icons";
 import { LogoWordmark } from "@/components/icons/logo";
+import { NewsletterForm } from "@/components/marketing/newsletter-form";
 
 /**
  * Marketing footer for hosted public surfaces. Currently mounted on:
@@ -125,11 +126,11 @@ export function LandingFooter() {
                         >
                             <LogoWordmark className="h-7 w-auto" />
                         </Link>
-                        <p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
+                        {/*<p className="text-sm text-muted-foreground leading-relaxed max-w-xs">
                             Open-source transcription for the voice recorder you
                             already own. Your recordings, your transcripts,
                             yours to keep.
-                        </p>
+                        </p>*/}
                         <div className="flex items-center gap-3 mt-1">
                             <Link
                                 href="https://github.com/riffado/riffado"
@@ -149,6 +150,19 @@ export function LandingFooter() {
                             >
                                 <X className="size-[18px]" />
                             </Link>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xs font-semibold font-mono uppercase tracking-wider text-foreground/80">
+                                Product updates
+                            </h3>
+                            <p className="mt-2 text-sm text-muted-foreground leading-relaxed max-w-sm">
+                                Occasional emails when we ship something worth
+                                telling you about.
+                            </p>
+                            <div className="mt-4 max-w-md">
+                                <NewsletterForm source="landing" />
+                            </div>
                         </div>
                     </div>
 
@@ -176,7 +190,7 @@ export function LandingFooter() {
                     answer. Previously these sat under two adjacent
                     rules ~30px apart; merged into one block to quiet
                     the bottom of the page. */}
-                <div className="mt-16 pt-6 border-t border-border/40 flex flex-col gap-6">
+                <div className="mt-12 pt-6 border-t border-border/40 flex flex-col gap-6">
                     <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-2xl">
                         Riffado is not HIPAA or SOC 2 certified. For regulated
                         work, self-host and plug in an AI provider that signs a

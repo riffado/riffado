@@ -1,0 +1,34 @@
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  sharp: true
+
+minimumReleaseAgeExclude:
+  - '@aws-sdk/checksums@3.1000.16'
+  - '@aws-sdk/client-s3@3.1083.0'
+  - '@aws-sdk/core@3.975.1'
+  - '@aws-sdk/credential-provider-env@3.972.57'
+  - '@aws-sdk/credential-provider-http@3.972.59'
+  - '@aws-sdk/credential-provider-ini@3.973.1'
+  - '@aws-sdk/credential-provider-login@3.972.63'
+  - '@aws-sdk/credential-provider-node@3.972.66'
+  - '@aws-sdk/credential-provider-process@3.972.57'
+  - '@aws-sdk/credential-provider-sso@3.973.1'
+  - '@aws-sdk/credential-provider-web-identity@3.972.63'
+  - '@aws-sdk/lib-storage@3.1083.0'
+  - '@aws-sdk/middleware-sdk-s3@3.972.62'
+  - '@aws-sdk/nested-clients@3.997.31'
+  - '@aws-sdk/s3-request-presigner@3.1083.0'
+  - '@aws-sdk/signature-v4-multi-region@3.996.39'
+  - '@aws-sdk/token-providers@3.1083.0'
+  - '@aws-sdk/types@3.974.0'
+  - '@aws-sdk/xml-builder@3.972.34'
+  - '@smithy/core@3.29.2'
+  - '@smithy/credential-provider-imds@4.4.7'
+  - '@smithy/fetch-http-handler@5.6.4'
+  - '@smithy/node-http-handler@4.9.4'
+  - '@smithy/signature-v4@5.6.3'
+  - '@smithy/types@4.16.0'

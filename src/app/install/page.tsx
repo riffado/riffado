@@ -28,7 +28,7 @@ import { APP_VERSION_TAG } from "@/lib/version";
  */
 
 export const metadata: Metadata = {
-    title: "Install Riffado — Self-host in one command",
+    title: "Install Riffado | Self-host in one command",
     description:
         "Self-host Riffado with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
 };

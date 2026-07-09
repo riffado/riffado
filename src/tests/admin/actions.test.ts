@@ -26,13 +26,14 @@ vi.mock("@/db/schema", () => {
     };
 });
 
+import { ErrorCode } from "@/lib/errors";
 import {
+    extendTransitionWindow,
     forceDisconnectPlaud,
     softDeleteRecording,
     suspendUser,
     unsuspendUser,
-} from "@/lib/admin/actions";
-import { ErrorCode } from "@/lib/errors";
+} from "@/lib/hosted/admin/actions";
 
 function makeChainable(result: unknown[]) {
     // Drizzle queries are thenable: `await db.select().from().where()`
@@ -150,6 +151,74 @@ describe("admin actions reason guard", () => {
         await expect(softDeleteRecording(baseCtx, "r1")).rejects.toMatchObject({
             code: ErrorCode.MISSING_REQUIRED_FIELD,
         });
+    });
+
+    it("extendTransitionWindow rejects empty reason", async () => {
+        await expect(
+            extendTransitionWindow(baseCtx, "u1", 7),
+        ).rejects.toMatchObject({
+            code: ErrorCode.MISSING_REQUIRED_FIELD,
+        });
+    });
+});
+
+describe("extendTransitionWindow guards", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    const validCtx = { ...baseCtx, reason: "goodwill extension" };
+
+    it.each([
+        0,
+        -1,
+        1.5,
+        366,
+        Number.NaN,
+    ])("rejects invalid days=%s", async (days) => {
+        await expect(
+            extendTransitionWindow(validCtx, "u1", days),
+        ).rejects.toMatchObject({
+            code: ErrorCode.MISSING_REQUIRED_FIELD,
+        });
+    });
+
+    it("throws NOT_FOUND when user is missing", async () => {
+        const harness = makeTransactionImpl({ selectResult: [] });
+        dbMock.transaction.mockImplementation(harness.transaction);
+        await expect(
+            extendTransitionWindow(validCtx, "missing", 7),
+        ).rejects.toMatchObject({ code: ErrorCode.NOT_FOUND });
+    });
+
+    it("extends a null window forward and writes audit row", async () => {
+        const harness = makeTransactionImpl({
+            selectResult: [{ id: "u1", planTransitionUntil: null }],
+        });
+        dbMock.transaction.mockImplementation(harness.transaction);
+        const before = Date.now();
+        const res = await extendTransitionWindow(validCtx, "u1", 7);
+        expect(res.ok).toBe(true);
+        expect(res.extendedFrom).toBeNull();
+        const diff = res.planTransitionUntil.getTime() - before;
+        expect(diff).toBeGreaterThan(7 * 86400 * 1000 - 5000);
+        expect(diff).toBeLessThan(7 * 86400 * 1000 + 5000);
+        expect(harness.updateCalls).toHaveLength(1);
+        const audit = harness.insertCalls[0] as { action: string };
+        expect(audit.action).toBe("extend_transition_window");
+    });
+
+    it("refuses to move boundary backwards (noop when existing > proposed)", async () => {
+        const farFuture = new Date(Date.now() + 365 * 86400 * 1000);
+        const harness = makeTransactionImpl({
+            selectResult: [{ id: "u1", planTransitionUntil: farFuture }],
+        });
+        dbMock.transaction.mockImplementation(harness.transaction);
+        const res = await extendTransitionWindow(validCtx, "u1", 7);
+        expect(res.planTransitionUntil.getTime()).toBe(farFuture.getTime());
+        expect(harness.updateCalls).toHaveLength(0);
+        const audit = harness.insertCalls[0] as { action: string };
+        expect(audit.action).toBe("extend_transition_window_noop");
     });
 });
 

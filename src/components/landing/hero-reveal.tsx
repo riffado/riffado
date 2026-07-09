@@ -97,7 +97,7 @@ export function HeroReveal() {
                     >
                         <Link
                             href="/register"
-                            aria-label="Start Riffado free — no card required"
+                            aria-label="Start Riffado free, no card required"
                             onClick={() =>
                                 track("hero_cta_primary_click", {
                                     location: "hero",
@@ -156,7 +156,7 @@ export function HeroReveal() {
                         <Link
                             href="/register"
                             tabIndex={showStickyCta ? 0 : -1}
-                            aria-label="Start Riffado free — no card required"
+                            aria-label="Start Riffado free, no card required"
                             onClick={() =>
                                 track("hero_cta_primary_click", {
                                     location: "sticky_mobile",

@@ -2,6 +2,18 @@ type WebhookWorkerModule = {
     startWebhookWorker: () => void;
 };
 
+type BillingWorkerModule = {
+    startBillingWorker: () => void;
+};
+
+type BackgroundSyncWorkerModule = {
+    startBackgroundSyncWorker: () => void;
+};
+
+type ExportWorkerModule = {
+    startExportWorker: () => void;
+};
+
 type EnvModule = {
     env: {
         IS_HOSTED: boolean;
@@ -36,4 +48,16 @@ export async function register() {
     const { startWebhookWorker } =
         require("./lib/webhooks/worker") as WebhookWorkerModule;
     startWebhookWorker();
+
+    const { startBillingWorker } =
+        require("./lib/hosted/billing/worker") as BillingWorkerModule;
+    startBillingWorker();
+
+    const { startBackgroundSyncWorker } =
+        require("./lib/hosted/sync/worker") as BackgroundSyncWorkerModule;
+    startBackgroundSyncWorker();
+
+    const { startExportWorker } =
+        require("./lib/export/worker") as ExportWorkerModule;
+    startExportWorker();
 }

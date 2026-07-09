@@ -38,7 +38,7 @@ export function ForProfessionals() {
                         <Pillar
                             kicker="03 / AI"
                             headline="Yours, including local."
-                            body="Run Whisper locally via Ollama — recordings never leave the machine. Or plug in any OpenAI-compatible cloud."
+                            body="Run Whisper locally via Ollama, so recordings never leave the machine. Or plug in any OpenAI-compatible cloud."
                         />
                     </div>
 
@@ -68,8 +68,8 @@ export function ForProfessionals() {
                                 className="text-foreground font-medium hover:text-primary transition-colors underline-offset-4 hover:underline"
                             >
                                 support@riffado.com
-                            </Link>{" "}
-                            — I'll reply personally.
+                            </Link>
+                            . I'll reply personally.
                         </p>
                     </div>
                 </div>

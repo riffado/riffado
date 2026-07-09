@@ -25,8 +25,11 @@ vi.mock("@/lib/auth", () => ({
     },
 }));
 
-import { requireAdminApi, requireAdminMutation } from "@/lib/admin/guard";
 import { ErrorCode } from "@/lib/errors";
+import {
+    requireAdminApi,
+    requireAdminMutation,
+} from "@/lib/hosted/admin/guard";
 
 describe("admin API guard", () => {
     it("throws a JSON-mappable 404 AppError for failed API reads", async () => {

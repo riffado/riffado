@@ -123,18 +123,13 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
         )
         .limit(1);
 
-    const [transcriptionCredentials] = await db
+    const [fallbackCredentials] = await db
         .select()
         .from(apiCredentials)
-        .where(
-            and(
-                eq(apiCredentials.userId, session.user.id),
-                eq(apiCredentials.isDefaultTranscription, true),
-            ),
-        )
+        .where(eq(apiCredentials.userId, session.user.id))
         .limit(1);
 
-    const credentials = enhancementCredentials || transcriptionCredentials;
+    const credentials = enhancementCredentials || fallbackCredentials;
 
     if (!credentials) {
         throw new AppError(

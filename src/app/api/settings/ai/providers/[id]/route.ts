@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { apiCredentials } from "@/db/schema";
+import { apiCredentials, userSettings } from "@/db/schema";
+import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
@@ -111,6 +112,20 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
             );
     });
 
+    if (isDefaultTranscription) {
+        await setDefaultTranscriptionProvider(session.user.id, id);
+    } else {
+        const [settings] = await db
+            .select({ pointer: userSettings.defaultTranscriptionProviderId })
+            .from(userSettings)
+            .where(eq(userSettings.userId, session.user.id))
+            .limit(1);
+
+        if (settings?.pointer === id) {
+            await setDefaultTranscriptionProvider(session.user.id, null);
+        }
+    }
+
     return NextResponse.json({ success: true });
 });
 
@@ -119,6 +134,12 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
 
     const { id } = await (context as IdContext).params;
+
+    const [settings] = await db
+        .select({ pointer: userSettings.defaultTranscriptionProviderId })
+        .from(userSettings)
+        .where(eq(userSettings.userId, session.user.id))
+        .limit(1);
 
     // Verify ownership and delete
     await db
@@ -129,6 +150,10 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
                 eq(apiCredentials.userId, session.user.id),
             ),
         );
+
+    if (settings?.pointer === id) {
+        await setDefaultTranscriptionProvider(session.user.id, null);
+    }
 
     return NextResponse.json({ success: true });
 });

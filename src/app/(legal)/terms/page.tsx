@@ -22,13 +22,13 @@ import {
  * disclaimers, liability, governing law).
  *
  * Factual claims track the code: AGPL-3.0 source, full-archive export,
- * Plaud-upstream dependence, user-configured AI providers, no paid tier
- * live yet (Pro is a waitlist). Variable facts come from
- * `@/lib/legal/constants`.
+ * Plaud-upstream dependence, user-configured AI providers, paid Pro tier
+ * via Stripe, 14-day trial, grace periods, account deletion. Variable
+ * facts come from `@/lib/legal/constants`.
  */
 
 export const metadata: Metadata = {
-    title: "Terms of Service — Riffado",
+    title: "Terms of Service | Riffado",
     description:
         "Terms governing your use of the hosted Riffado service at riffado.com.",
 };
@@ -67,8 +67,7 @@ export default function TermsPage() {
                 transcribes and summarizes them using the AI provider you choose
                 (or in your browser), stores them, and lets you export
                 everything. To use it you need a compatible browser, internet
-                access, an account, and — for sync — a connected recorder
-                account.
+                access, an account, and a connected recorder account for sync.
             </p>
 
             <h2>The software vs. the service</h2>
@@ -123,13 +122,61 @@ export default function TermsPage() {
                 pricing.
             </p>
 
-            <h2>Fees</h2>
+            <h2>Plans and fees</h2>
             <p>
-                The hosted service is currently free. There is no paid tier yet;
-                the &quot;Pro&quot; plan is a waitlist. If we introduce paid
-                plans, we will publish the pricing and terms before you are
-                charged, and any consumer withdrawal rights under EU law will
-                apply at that point.
+                The hosted service offers a single paid plan (Hosted Pro) at the
+                price published on the pricing page. New accounts start with a
+                14-day free trial of Hosted Pro with no payment method required.
+                At the end of the trial you can add a payment method to
+                continue, or let the trial expire.
+            </p>
+            <p>
+                Subscriptions are billed monthly via Stripe and renew
+                automatically until you cancel. You can cancel at any time from
+                Settings; cancellation takes effect at the end of the current
+                billing period and you keep access until then. No partial-month
+                refunds are issued for the remaining days of a billing period.
+            </p>
+            <p>
+                Prices are listed exclusive of VAT. If VAT applies to your
+                purchase (based on your country of residence), it will be added
+                at checkout.
+            </p>
+
+            <h2>Right of withdrawal (EU consumers)</h2>
+            <p>
+                If you are a consumer in the European Union, you have the right
+                to withdraw from a distance contract within 14 days of
+                concluding it, without giving a reason. Because the service
+                begins immediately upon your first payment (digital content
+                supplied before the withdrawal period expires), we ask you to
+                acknowledge at checkout that you lose the right of withdrawal
+                once the service has started. If you do not give that
+                acknowledgment, the 14-day withdrawal right applies and you may
+                exercise it by emailing{" "}
+                <Link href={`mailto:${CONTACT_EMAILS.support}`}>
+                    {CONTACT_EMAILS.support}
+                </Link>
+                .
+            </p>
+
+            <h2>Trial expiry, grace period, and account deletion</h2>
+            <p>
+                If your trial expires without a subscription, or if your
+                subscription ends (cancellation, failed payment, or any other
+                reason), your account enters a read-only grace period. During
+                grace you can still sign in, play back recordings, and export
+                your data. Sync from your device and new transcriptions are
+                paused.
+            </p>
+            <p>
+                The grace period is 7 days for accounts that never had a paid
+                subscription and 30 days for accounts that previously paid. We
+                send email reminders during grace. At the end of the grace
+                period, your account and all associated data (recordings,
+                transcripts, summaries, stored files) are permanently deleted.
+                You can also delete your account immediately at any time from
+                Settings.
             </p>
 
             <h2>Availability</h2>

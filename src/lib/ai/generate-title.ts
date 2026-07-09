@@ -58,7 +58,7 @@ export async function generateTitleFromTranscription(
             }
         }
 
-        // Get user's AI credentials (prefer enhancement provider, fallback to transcription)
+        // Get user's AI credentials (prefer enhancement provider, fallback to any configured provider)
         const [enhancementCredentials] = await db
             .select()
             .from(apiCredentials)
@@ -70,19 +70,15 @@ export async function generateTitleFromTranscription(
             )
             .limit(1);
 
-        const [transcriptionCredentials] = await db
+        const [fallbackCredentials] = await db
             .select()
             .from(apiCredentials)
-            .where(
-                and(
-                    eq(apiCredentials.userId, userId),
-                    eq(apiCredentials.isDefaultTranscription, true),
-                ),
-            )
+            .where(eq(apiCredentials.userId, userId))
+            .orderBy(apiCredentials.createdAt)
             .limit(1);
 
-        // Prefer enhancement provider, fallback to transcription provider
-        const credentials = enhancementCredentials || transcriptionCredentials;
+        // Prefer enhancement provider, fallback to any configured provider
+        const credentials = enhancementCredentials || fallbackCredentials;
 
         if (!credentials) {
             console.warn("No AI provider found for title generation");

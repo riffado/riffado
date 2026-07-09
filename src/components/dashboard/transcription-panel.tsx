@@ -11,6 +11,7 @@ import {
     Sparkles,
     Trash2,
 } from "lucide-react";
+import { TranscribeInBrowserButton } from "@/components/dashboard/transcribe-in-browser-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,6 +35,8 @@ interface TranscriptionPanelProps {
     transcription?: Transcription;
     isTranscribing: boolean;
     onTranscribe: () => void;
+    /** Refresh handler called after a browser-side transcription completes. */
+    onTranscribeComplete?: () => void;
 }
 
 export function TranscriptionPanel({
@@ -41,6 +44,7 @@ export function TranscriptionPanel({
     transcription,
     isTranscribing,
     onTranscribe,
+    onTranscribeComplete,
 }: TranscriptionPanelProps) {
     const {
         summaryData,
@@ -79,14 +83,31 @@ export function TranscriptionPanel({
                                 </Button>
                             )}
                             {!transcription?.text && !isTranscribing && (
-                                <Button
-                                    onClick={onTranscribe}
-                                    size="sm"
-                                    disabled={isTranscribing}
-                                >
-                                    <Sparkles className="size-4 mr-2" />
-                                    Transcribe
-                                </Button>
+                                <>
+                                    <Button
+                                        onClick={onTranscribe}
+                                        size="sm"
+                                        disabled={isTranscribing}
+                                    >
+                                        <Sparkles className="size-4 mr-2" />
+                                        Transcribe
+                                    </Button>
+                                    <TranscribeInBrowserButton
+                                        recordingId={recording.id}
+                                        disabled={isTranscribing}
+                                        onComplete={
+                                            // Falling back to `onTranscribe` here
+                                            // would kick off a redundant SERVER
+                                            // transcription right after a
+                                            // successful browser one, possibly
+                                            // overwriting it. Callers that care
+                                            // about refreshing after a browser
+                                            // transcription must pass
+                                            // `onTranscribeComplete` explicitly.
+                                            onTranscribeComplete ?? (() => {})
+                                        }
+                                    />
+                                </>
                             )}
                         </div>
                     </div>

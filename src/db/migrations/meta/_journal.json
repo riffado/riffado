@@ -176,6 +176,48 @@
       "when": 1780126747513,
       "tag": "0024_sour_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783013166299,
+      "tag": "0025_ambiguous_black_bird",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1783426525823,
+      "tag": "0026_kind_argent",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1783584444573,
+      "tag": "0027_parched_true_believers",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783587599807,
+      "tag": "0028_awesome_agent_zero",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1783590934141,
+      "tag": "0029_milky_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1783593085542,
+      "tag": "0030_nasty_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

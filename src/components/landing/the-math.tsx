@@ -6,11 +6,12 @@
  * services are overpriced. We show how the underlying-AI economics
  * work -- the reader does the math themselves.
  *
- * `perHour` is the price normalized to one hour of audio so the two
- * tables compare on the same unit. Subscription rows divide the
- * sticker price by the plan's included minutes; Riffado rows use the
- * upstream provider's published per-minute or per-hour rate. Always
- * the vendor's own number -- never a derived "savings" claim.
+ * `perHour` is the price normalized to one hour of audio where a row
+ * has a fixed minute allowance or published metered rate. Subscription
+ * rows divide the sticker price by the plan's included minutes;
+ * Riffado rows either show the Hosted Pro included allowance or the
+ * upstream provider's published per-minute/per-hour rate. Always the
+ * vendor's own number -- never a derived "savings" claim.
  */
 const SUBSCRIPTION_SERVICES = [
     {
@@ -38,6 +39,13 @@ const SUBSCRIPTION_SERVICES = [
 
 const RIFFADO_OPTIONS = [
     {
+        name: "Hosted Pro + Mynah",
+        price: "$5",
+        unit: "/ month",
+        scope: "15 hours of included cloud transcription + 50 GB storage",
+        perHour: "$0.33 / included hr",
+    },
+    {
         name: "Riffado in your browser",
         price: "$0.00",
         unit: "free",
@@ -45,18 +53,11 @@ const RIFFADO_OPTIONS = [
         perHour: "$0.00 / hr",
     },
     {
-        name: "Riffado + Groq Whisper",
-        price: "$2.22",
-        unit: "one-time",
-        scope: "Billed by Groq at $0.111 / hr",
-        perHour: "$0.11 / hr",
-    },
-    {
-        name: "Riffado + OpenAI Whisper",
-        price: "$7.20",
-        unit: "one-time",
-        scope: "Billed by OpenAI at $0.006 / min",
-        perHour: "$0.36 / hr",
+        name: "Bring your own AI provider",
+        price: "At cost",
+        unit: "no markup",
+        scope: "OpenAI, Groq, Ollama, LM Studio, or another compatible provider",
+        perHour: "provider rate",
     },
 ];
 
@@ -70,25 +71,17 @@ export function TheMath() {
                             How transcription pricing works
                         </p>
                         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4 text-balance">
-                            Buy the AI directly. Pay what the provider charges.
+                            Hosted Pro includes 15 hours of transcription.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            Most voice-AI services don't transcribe audio
-                            themselves — OpenAI, Groq, and Deepgram do. Riffado
-                            connects you to those providers directly, with your
-                            own key.
+                            Riffado Hosted is $5/month with Mynah transcription
+                            included for everyday use. Need more, or want a
+                            different model? Bring your own provider and pay
+                            them directly at their published rate.
                         </p>
                     </div>
 
-                    <p className="mt-10 text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                        Same workload &middot; 20 hours of audio
-                        <span className="text-muted-foreground/60">
-                            {" "}
-                            (1,200 minutes)
-                        </span>
-                    </p>
-
-                    <div className="mt-3 grid gap-4 lg:grid-cols-2 lg:gap-6 items-stretch">
+                    <div className="mt-10 grid gap-4 lg:grid-cols-2 lg:gap-6 items-stretch">
                         <PriceTable
                             label="Subscription services"
                             rows={SUBSCRIPTION_SERVICES}
@@ -106,7 +99,8 @@ export function TheMath() {
                         Published pricing as of May 2026. Plans, minute
                         ceilings, and trademarks belong to their respective
                         owners; shown for descriptive context, not comparison.
-                        Riffado itself is free to self-host.
+                        Hosted Pro includes 15 hours of Mynah transcription per
+                        month; Riffado itself is free to self-host.
                     </p>
                 </div>
             </div>

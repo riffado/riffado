@@ -16,6 +16,7 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 - No emojis in commits, issues, PR comments, or code
 - No fluff or cheerful filler text
 - Technical prose only, be kind but direct (e.g., "Thanks @user" not "Thanks so much @user!")
+- Avoid overusing spaced em dashes (` — `), especially in user-facing copy. Prefer a period, comma, colon, parenthetical, or a shorter sentence unless the dash is clearly the best punctuation.
 
 Marketing surfaces (landing page copy, README feature sections) are exempt — they follow product design, not agent rules.
 
@@ -229,7 +230,7 @@ Riffado is **not** positioned as a Plaud competitor or a "subscription killer." 
 - **Self-host (Free, forever)** — AGPL source, `docker compose up`. Shipped. Default for Slice 2. `IS_HOSTED` unset or false.
 - **Hosted (we operate it)** — same codebase, `IS_HOSTED=true`. **Live, multi-tenant, profit-bearing.** Multiple Next.js processes behind a load balancer, shared Postgres, real users paying real money. This is not aspirational. Treat it as production.
 
-`IS_HOSTED` is the deployment-mode switch. Today it gates the marketing landing page (`src/app/page.tsx` redirects to `/login` when unset) and is the default for hosted-strict safety knobs (see Hosted mode invariants below). It is **not** the signup switch — sign-up is gated by `DISABLE_REGISTRATION` (wired into `src/lib/auth.ts` via `disableSignUp`). Other hosted-only concerns (plan-aware UI, billing, etc.) are not implemented yet; when added, prefer dedicated env knobs that default off `IS_HOSTED` rather than overloading `IS_HOSTED` itself. Code that needs to branch on mode reads `env.IS_HOSTED`; never sniff `process.env` directly. Default behavior must always be the self-host path — `IS_HOSTED=true` is opt-in to the stricter/marketing-enabled mode.
+`IS_HOSTED` is the deployment-mode switch. Today it gates the marketing landing page (`src/app/page.tsx` redirects to `/login` when unset) and is the default for hosted-strict safety knobs (see Hosted mode invariants below). It is **not** the signup switch — sign-up is gated by `DISABLE_REGISTRATION` (wired into `src/lib/auth.ts` via `disableSignUp`). Billing and plan-aware hosted UI are gated by dedicated billing/provider env knobs such as `BILLING_ENABLED`, Stripe configuration, and Mynah configuration; do not overload `IS_HOSTED` as a feature switch. Code that needs to branch on mode reads `env.IS_HOSTED`; never sniff `process.env` directly. Default behavior must always be the self-host path — `IS_HOSTED=true` is opt-in to the stricter/marketing-enabled mode.
 
 ### Core invariants
 
@@ -250,6 +251,16 @@ When designing or reviewing any feature, assume hosted is real and check both mo
 - **Per-user fairness.** Background queues (webhook delivery, transcription, sync) must not let one slow/abusive user starve others. Per-user concurrency caps or fair-share claim queries.
 - **Rate limiting on `/api/v1/*`.** Per-token + per-IP. Required before hosted exposes a new write endpoint or a new external surface.
 - **No claims of compliance we don't own.** Hosted does not make us HIPAA/SOC2 compliant. Don't ship copy that says it does.
+
+### Mynah — hosted included transcription
+
+**Mynah** is a real Riffado product (`mynah.riffado.com`), not an internal codename — the hosted transcription backend included with a paid plan. Surface it as **"Mynah"** in user-facing copy; only the underlying model name (`parakeet`) stays internal.
+
+- **First-class managed provider, not a hidden fallback.** Instance-configured via env (`MYNAH_BASE_URL`, `MYNAH_SERVICE_TOKEN`); `isMynahConfigured()` requires `IS_HOSTED`, so self-host never sees it. It is **never** a row in `api_credentials` — it's surfaced as a synthetic managed provider with id `RIFFADO_INCLUDED_PROVIDER_ID` (`"riffado-included"`) and label from `RIFFADO_INCLUDED_PROVIDER_LABEL`, both in `src/lib/transcription/included-provider.ts`. `listUserProviders()` (`src/lib/ai/list-providers.ts`) prepends it for the Providers UI + SSR seed.
+- **Authoritative transcription default is `userSettings.defaultTranscriptionProviderId`** (a credential id, the `"riffado-included"` sentinel, or null). The per-row `apiCredentials.isDefaultTranscription` boolean is now a **derived mirror** — do not read it as the source of truth for transcription selection. All writes go through `setDefaultTranscriptionProvider()` (`src/lib/ai/set-default-transcription.ts`), which keeps pointer + mirror consistent. (`isDefaultEnhancement` is unchanged and still authoritative for enhancement.)
+- **Selection precedence** (`transcribe-recording.ts`): explicit `opts.providerId` → stored pointer → managed-if-configured fallback → `NO_TRANSCRIPTION_PROVIDER`. An explicit credential id that doesn't resolve **must fail loudly**, never silently fall to managed.
+- **Entitlement-gated.** Only `hosted_pro` (incl. the transition window) has `monthlyMynahSeconds > 0`. Metered per-user via `reserveMynah`/`commit`/`release`; budget exhaustion surfaces product copy, not the raw error. Self-host has no Mynah; lapsed accounts show it locked.
+- **Complimentary, not a replacement.** Users can always add their own provider (Settings → Providers) and switch the transcription default between Mynah and their key; both coexist. Onboarding frames Mynah as included + optional-own, and must not treat "has Mynah" as "user brought their own provider."
 
 ### Marketing-vs-product gap
 
@@ -302,7 +313,7 @@ Decrypt only at the moment of HTTP request construction. Never log decrypted val
 
 Always edit `src/db/schema.ts` first, then run `pnpm db:generate` to produce the migration. **NEVER hand-write migration SQL files.** Drizzle tracks migrations via snapshot files in `src/db/migrations/meta/` — hand-written files don't generate snapshots, which causes future `db:generate` runs to re-emit already-applied columns. That's silent history corruption.
 
-Same applies to rebases, conflict resolution, and renumbering: rerun `pnpm db:generate` against the rebased schema. Never hand-edit `meta/_journal.json` or `meta/*_snapshot.json`.
+Same applies to rebases, conflict resolution, and renumbering: rerun `pnpm db:generate` against the rebased schema. Never hand-edit `meta/_journal.json` or `meta/*_snapshot.json`, and never delete or consolidate migrations drizzle-kit has already produced — even unreleased ones. Stacked migrations within one release (e.g. add-then-drop) ship as two files.
 
 If drizzle-kit generates SQL that re-adds columns that already exist, meta snapshots are out of sync with reality. **Fix the drift, don't hand-edit around it.** Migrations `0010-0012` are historical examples of this drift; `0013+` are clean.
 
