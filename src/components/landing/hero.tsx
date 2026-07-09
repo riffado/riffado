@@ -33,9 +33,9 @@ export function Hero() {
                     </h1>
 
                     <p className="mt-6 text-lg text-muted-foreground leading-[1.55] text-pretty mx-auto max-w-xl">
-                        Sync in the background, transcribe with the AI you
-                        choose — or free in your browser with Whisper — and keep
-                        your audio where you choose.
+                        Sync in the background and transcribe with included
+                        Mynah on Hosted Pro. Bring your own AI, or run Whisper
+                        free in your browser.
                     </p>
 
                     <div className="mt-8 mx-auto max-w-md sm:max-w-none">

@@ -64,6 +64,8 @@ function mapErrorCodeToAppError(
             return new AppError(ErrorCode.NOT_FOUND, msg, 410);
         case "NO_TRANSCRIPTION_PROVIDER":
             return new AppError(ErrorCode.NO_TRANSCRIPTION_PROVIDER, msg, 400);
+        case "HOSTED_LOCKED_OUT":
+            return new AppError(ErrorCode.ACCOUNT_LOCKED, msg, 403);
         default:
             return new AppError(ErrorCode.TRANSCRIPTION_FAILED, msg, 500);
     }

@@ -22,19 +22,19 @@ const BEATS: Beat[] = [
         step: "01",
         icon: <RefreshCw className="size-5" />,
         title: "Sign in once, sync forever.",
-        body: "Log in with the same email you use for your recorder — Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
+        body: "Log in with the same email you use for your recorder. Riffado sends you a code, just like the app. New recordings show up on their own, and you get a notification when they're ready.",
     },
     {
         step: "02",
         icon: <Cpu className="size-5" />,
         title: "Pick the AI. Get the transcript.",
-        body: "Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries — you pay them directly at their published rate. No account anywhere? Transcription runs free, right in your browser. Every recording comes back with a summary, key points, and action items.",
+        body: "Hosted Pro includes 15 hours of Mynah transcription every month. Need more, or want another model? Use OpenAI or Groq for transcription, plug in Anthropic or others for summaries, and pay providers directly at their published rate. No account anywhere? Transcription also runs free, right in your browser.",
     },
     {
         step: "03",
         icon: <LayoutDashboard className="size-5" />,
         title: "Search, listen, send it anywhere.",
-        body: "Player and transcript side-by-side. Search across every word you've ever recorded. Send a single recording to Notion, Obsidian, or your video editor — or download everything as one archive. Open source, end to end.",
+        body: "Player and transcript side-by-side. Search across every word you've ever recorded. Send a single recording to Notion, Obsidian, or your video editor, or download everything as one archive. Open source, end to end.",
     },
 ];
 
@@ -52,8 +52,8 @@ export function Features() {
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             Your recorder keeps recording. Riffado picks up
-                            after the audio leaves the device — and lets you
-                            pick the AI, the storage, and where it all lives.
+                            after the audio leaves the device. You pick the AI,
+                            the storage, and where it all lives.
                         </p>
                     </div>
 
@@ -64,8 +64,9 @@ export function Features() {
                     </ol>
 
                     <p className="mt-8 text-sm text-muted-foreground text-pretty">
-                        Free in your browser. Or plug in OpenAI or Groq and pay
-                        them directly.
+                        Hosted Pro includes Mynah transcription. Free in your
+                        browser still works, and you can always plug in OpenAI
+                        or Groq directly.
                     </p>
                 </div>
             </div>

@@ -1,9 +1,10 @@
 "use client";
 
 import { Settings as SettingsIcon } from "lucide-react";
+import { useMemo } from "react";
 import {
-    settingsNav,
-    settingsNavGroups,
+    buildSettingsNav,
+    buildSettingsNavGroups,
 } from "@/components/settings-nav-config";
 import {
     Sidebar,
@@ -20,6 +21,7 @@ interface Props {
     activeSection: SettingsSection;
     keyboardSelectedIndex: number;
     onSectionChange: (section: SettingsSection) => void;
+    isHosted: boolean;
 }
 
 /**
@@ -32,7 +34,16 @@ export function SettingsNavSidebar({
     activeSection,
     keyboardSelectedIndex,
     onSectionChange,
+    isHosted,
 }: Props) {
+    const settingsNavGroups = useMemo(
+        () => buildSettingsNavGroups({ isHosted }),
+        [isHosted],
+    );
+    const settingsNav = useMemo(
+        () => buildSettingsNav({ isHosted }),
+        [isHosted],
+    );
     return (
         // Sidebar needs an explicit height to match <main>'s h-[600px],
         // otherwise SidebarContent's overflow-y-auto has no bound to

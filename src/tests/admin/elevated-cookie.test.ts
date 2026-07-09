@@ -13,7 +13,7 @@ import {
     isWithinReauthTtl,
     signElevatedCookie,
     verifyElevatedCookie,
-} from "@/lib/admin/elevated-cookie";
+} from "@/lib/hosted/admin/elevated-cookie";
 
 describe("elevated cookie", () => {
     beforeEach(() => {

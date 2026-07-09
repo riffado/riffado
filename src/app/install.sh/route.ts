@@ -1,4 +1,4 @@
-import { recordInstallHit } from "@/lib/admin/install-hits";
+import { recordInstallHit } from "@/lib/hosted/admin/install-hits";
 import {
     fetchLatestReleaseTag,
     INSTALL_SCRIPT_HEADERS,

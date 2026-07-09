@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSuspended } from "@/lib/admin/suspension";
+import { isSuspended } from "@/lib/hosted/admin/suspension";
 
 describe("isSuspended", () => {
     it("returns false for null/undefined user", () => {

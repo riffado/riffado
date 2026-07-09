@@ -6,7 +6,7 @@ import {
     LEGAL_ADDRESS_LINE,
     LEGAL_ENTITY,
     MIN_AGE,
-    SUBPROCESSORS,
+    RECIPIENT_CATEGORIES,
     SUPERVISORY_AUTHORITY,
 } from "@/lib/legal/constants";
 
@@ -15,19 +15,20 @@ import {
  * when `!IS_HOSTED`, so this never serves on a self-hosted instance.
  *
  * Structure follows the GDPR Article 13 information obligations: who the
- * controller is, what we process and why, the legal bases, recipients
- * (sub-processors), transfers, retention, data-subject rights, and the
- * right to lodge a complaint with the supervisory authority.
+ * controller is, what we process and why, the legal bases, categories of
+ * recipients, transfers, retention, data-subject rights, and the right
+ * to lodge a complaint with the supervisory authority.
  *
  * Every factual claim here is traceable to code: AES-256-GCM token
  * encryption (`src/lib/encryption.ts`), full-archive export, account
  * deletion, self-hosted Rybbit analytics, user-configured AI providers.
  * Do not add claims the code does not back. Variable facts (entity,
- * address, sub-processors, contacts) come from `@/lib/legal/constants`.
+ * address, recipient categories, contacts) come from
+ * `@/lib/legal/constants`.
  */
 
 export const metadata: Metadata = {
-    title: "Privacy Policy — Riffado",
+    title: "Privacy Policy | Riffado",
     description: "How the hosted Riffado service handles your personal data.",
 };
 
@@ -43,7 +44,7 @@ export default function PrivacyPage() {
                 Riffado service at riffado.com. Riffado is also open-source
                 software you can run yourself under the AGPL-3.0 license. If you
                 self-host, your data never touches our infrastructure and this
-                policy does not apply to you — see the{" "}
+                policy does not apply to you. See the{" "}
                 <Link href="https://github.com/riffado/riffado#readme">
                     project README
                 </Link>{" "}
@@ -69,22 +70,32 @@ export default function PrivacyPage() {
             <h2>What we collect</h2>
             <ul>
                 <li>
-                    <strong>Account data</strong> — the email address and name
+                    <strong>Account data</strong>: the email address and name
                     you provide when you register, and authentication data
                     needed to sign you in.
                 </li>
                 <li>
-                    <strong>Connected recorder credentials</strong> — the Plaud
+                    <strong>Connected recorder credentials</strong>: the Plaud
                     account token you connect, stored encrypted at rest with
                     AES-256-GCM and decrypted only when we make a request to
                     Plaud on your behalf.
                 </li>
                 <li>
-                    <strong>Your content</strong> — the recordings, transcripts,
+                    <strong>Your content</strong>: the recordings, transcripts,
                     and summaries the service syncs or generates for you.
                 </li>
                 <li>
-                    <strong>Usage analytics</strong> — privacy-friendly,
+                    <strong>Payment data</strong>: if you subscribe, payment
+                    details (card number and full billing address) are collected
+                    and processed by our payment processor. We store the
+                    processor customer and subscription references, subscription
+                    status, plan/price, amount, currency, billing interval,
+                    billing country, renewal or cancellation dates, withdrawal
+                    waiver timestamp, and processor metadata needed to reconcile
+                    billing. We never see or store your full card number.
+                </li>
+                <li>
+                    <strong>Usage analytics</strong>: privacy-friendly,
                     aggregate usage data collected through analytics software we
                     host ourselves. It uses no advertising cookies and is not
                     shared with any third party.
@@ -94,12 +105,13 @@ export default function PrivacyPage() {
             <h2>Why we process it, and on what legal basis</h2>
             <ul>
                 <li>
-                    To provide the service — sync, transcription, storage, and
-                    export — on the legal basis of performing our contract with
+                    To provide the service: sync, transcription, storage, and
+                    export, on the legal basis of performing our contract with
                     you (Art. 6(1)(b) GDPR).
                 </li>
                 <li>
-                    To send transactional email (password resets, recording
+                    To send transactional email (account verification, billing
+                    notifications, grace-period reminders, recording
                     notifications you enable), also as performance of the
                     contract.
                 </li>
@@ -127,16 +139,16 @@ export default function PrivacyPage() {
 
             <h2>Who processes data for us</h2>
             <p>
-                We use the following sub-processors to run the hosted service.
-                Each handles personal data only on our instructions under a data
-                processing agreement:
+                We use the following categories of service providers to run the
+                hosted service. Each handles personal data only on our
+                instructions under a data processing agreement:
             </p>
             <div className="overflow-x-auto mb-4">
                 <table className="w-full text-sm border-collapse">
                     <thead>
                         <tr className="border-b border-border text-left">
                             <th className="py-2 pr-4 font-semibold text-foreground">
-                                Sub-processor
+                                Category
                             </th>
                             <th className="py-2 pr-4 font-semibold text-foreground">
                                 Purpose
@@ -150,13 +162,13 @@ export default function PrivacyPage() {
                         </tr>
                     </thead>
                     <tbody className="text-muted-foreground">
-                        {SUBPROCESSORS.map((p) => (
+                        {RECIPIENT_CATEGORIES.map((p) => (
                             <tr
-                                key={p.name}
+                                key={p.category}
                                 className="border-b border-border/40 align-top"
                             >
                                 <td className="py-2 pr-4 text-foreground">
-                                    {p.name}
+                                    {p.category}
                                 </td>
                                 <td className="py-2 pr-4">{p.purpose}</td>
                                 <td className="py-2 pr-4">{p.location}</td>
@@ -176,17 +188,17 @@ export default function PrivacyPage() {
                 When you configure a cloud AI provider (such as OpenAI,
                 Anthropic, or Groq) the service forwards the relevant audio or
                 text to that provider at your direction. You contract with that
-                provider directly and their privacy terms govern that processing
-                — they are not our sub-processors. We do not retain a separate
-                copy beyond what is already stored in your account. If you
-                transcribe in your browser or with a local model, no audio
-                leaves your control through a third party at all.
+                provider directly and their privacy terms govern that
+                processing. They are not our service providers. We do not retain
+                a separate copy beyond what is already stored in your account.
+                If you transcribe in your browser or with a local model, no
+                audio leaves your control through a third party at all.
             </p>
 
             <h2>International transfers</h2>
             <p>
                 Most processing happens within the European Economic Area. Where
-                a sub-processor is established outside the EEA (see the table
+                a service provider is established outside the EEA (see the table
                 above), transfers are covered by the EU Standard Contractual
                 Clauses and the provider&apos;s data processing agreement.
             </p>
@@ -194,10 +206,16 @@ export default function PrivacyPage() {
             <h2>Retention</h2>
             <p>
                 We keep your content and account data for as long as your
-                account is active. When you delete your account, we remove the
-                associated data from active storage; residual copies in routine
-                backups age out on the backup rotation. We keep the minimum
-                records we are legally required to retain.
+                account is active. If your subscription or trial ends, your
+                account enters a read-only grace period (7 days for accounts
+                that never paid; 30 days for accounts that previously had a
+                subscription). At the end of the grace period, or when you
+                choose to delete your account from Settings, we permanently
+                delete your account and all associated data, including
+                recordings, transcripts, summaries, and stored files, from
+                active storage. Residual copies in routine backups age out on
+                the backup rotation. We keep the minimum records we are legally
+                required to retain.
             </p>
 
             <h2>Your rights</h2>

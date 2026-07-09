@@ -14,6 +14,25 @@ const nextConfig: NextConfig = {
         loaderFile: "./loader.ts",
         remotePatterns: [],
     },
+    // @xenova/transformers statically imports Node-only optional deps
+    // (`onnxruntime-node`, `sharp`). Browser transcription uses
+    // `onnxruntime-web` inside a Web Worker, so stub those native deps
+    // for both Next 16's Turbopack build path and the webpack fallback.
+    turbopack: {
+        resolveAlias: {
+            "onnxruntime-node": "./src/lib/transcription/empty-module.ts",
+            sharp: "./src/lib/transcription/empty-module.ts",
+        },
+    },
+    webpack: (config) => {
+        config.resolve = config.resolve ?? {};
+        config.resolve.alias = {
+            ...config.resolve.alias,
+            "onnxruntime-node": false,
+            sharp: false,
+        };
+        return config;
+    },
 };
 
 const withMDX = createMDX({ outDir: "src/.source" });

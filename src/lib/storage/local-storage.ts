@@ -1,5 +1,8 @@
+import { createReadStream, createWriteStream } from "node:fs";
 import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
+import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { env } from "../env";
 import type { StorageProvider } from "./types";
 
@@ -88,6 +91,48 @@ export class LocalStorage implements StorageProvider {
             throw new Error(
                 `Failed to download file from local storage: ${error instanceof Error ? error.message : String(error)}`,
             );
+        }
+    }
+
+    async downloadStream(key: string): Promise<Readable> {
+        // Existence check up front so callers get a clean rejection
+        // instead of a stream that errors after they've already started
+        // piping it (e.g. mid-way through an archive entry).
+        const filePath = this.getFilePath(key);
+        await access(filePath);
+        return createReadStream(filePath);
+    }
+
+    async uploadStream(
+        key: string,
+        stream: Readable,
+        contentType: string,
+    ): Promise<string> {
+        void contentType;
+        try {
+            await this.ensureBaseDir();
+            const filePath = this.getFilePath(key);
+            const fileDir = dirname(filePath);
+            try {
+                await access(fileDir);
+            } catch {
+                await mkdir(fileDir, { recursive: true });
+            }
+            await pipeline(stream, createWriteStream(filePath));
+            return key;
+        } catch (error) {
+            throw new Error(
+                `Failed to stream upload to local storage: ${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+    }
+
+    async exists(key: string): Promise<boolean> {
+        try {
+            await access(this.getFilePath(key));
+            return true;
+        } catch {
+            return false;
         }
     }
 

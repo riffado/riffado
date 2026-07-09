@@ -1,9 +1,14 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { recordings, transcriptions, userSettings } from "@/db/schema";
+import {
+    aiEnhancements,
+    recordings,
+    transcriptions,
+    userSettings,
+} from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptJsonField, decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 
 // GET - Export recordings in specified format
@@ -47,9 +52,31 @@ export const GET = apiHandler(async (request: Request) => {
                   .where(eq(transcriptions.userId, session.user.id))
             : [];
 
+    const userEnhancements =
+        recordingIds.length > 0
+            ? await db
+                  .select()
+                  .from(aiEnhancements)
+                  .where(eq(aiEnhancements.userId, session.user.id))
+            : [];
     // Decrypt content fields up front so each format branch can rely on
     // plaintext. The export file is the user's plaintext data — they own
-    // it once it leaves the server.
+    // it once it leaves the server. `summary` is a `text` column
+    // (encryptText); `actionItems`/`keyPoints` are `jsonb` envelopes
+    // (encryptJsonField) -- same at-rest scheme the summary API itself
+    // decrypts before returning to the client.
+    const enhancementMap = new Map(
+        userEnhancements.map((e) => [
+            e.recordingId,
+            {
+                ...e,
+                summary: decryptText(e.summary),
+                actionItems: decryptJsonField<string[]>(e.actionItems),
+                keyPoints: decryptJsonField<string[]>(e.keyPoints),
+            },
+        ]),
+    );
+
     const transcriptionMap = new Map(
         userTranscriptions.map((t) => [
             t.recordingId,
@@ -69,15 +96,25 @@ export const GET = apiHandler(async (request: Request) => {
     switch (exportFormat) {
         case "json":
             exportData = JSON.stringify(
-                decryptedRecordings.map((recording) => ({
-                    id: recording.id,
-                    filename: recording.filename,
-                    duration: recording.duration,
-                    startTime: recording.startTime,
-                    filesize: recording.filesize,
-                    transcription:
-                        transcriptionMap.get(recording.id)?.text || null,
-                })),
+                decryptedRecordings.map((recording) => {
+                    const enhancement = enhancementMap.get(recording.id);
+                    return {
+                        id: recording.id,
+                        filename: recording.filename,
+                        duration: recording.duration,
+                        startTime: recording.startTime,
+                        filesize: recording.filesize,
+                        transcription:
+                            transcriptionMap.get(recording.id)?.text || null,
+                        summary: enhancement
+                            ? {
+                                  summary: enhancement.summary,
+                                  actionItems: enhancement.actionItems,
+                                  keyPoints: enhancement.keyPoints,
+                              }
+                            : null,
+                    };
+                }),
                 null,
                 2,
             );

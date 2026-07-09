@@ -1,25 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { env } from "@/lib/env";
+import { decideHostnameGate } from "@/lib/hosted/hostname-gate";
 
-/**
- * Two responsibilities:
- *
- * 1. `/api/int/*` (Rybbit analytics proxy): strip auth-bearing request
- *    headers so the upstream Rybbit instance never sees app session
- *    cookies or bearer tokens. The browser sends these by default for any
- *    same-origin request; without this middleware, Next's `rewrites()`
- *    would forward them to Rybbit as-is. X-Forwarded-For / User-Agent /
- *    Accept-Language are preserved so Rybbit can still derive geo,
- *    device, and language data.
- *
- * 2. `/admin/*`: forward the request pathname as `x-pathname` so the gated
- *    admin layout can record a per-page audit row instead of a generic
- *    `/admin` row, and so the reauth bounce can carry the originally
- *    requested URL in `?next=`. Server components don't have access to
- *    the request URL otherwise.
- */
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    /* ── hostname gate (admin host isolation) ── */
+    const requestHostname = (request.headers.get("host") ?? "")
+        .split(":")[0]
+        .toLowerCase();
+
+    const decision = decideHostnameGate({
+        requestHostname,
+        pathname,
+        adminHostname: env.ADMIN_HOSTNAME,
+    });
+
+    switch (decision.kind) {
+        case "not-found":
+            return new NextResponse(null, { status: 404 });
+        case "redirect":
+            return NextResponse.redirect(new URL(decision.to, request.url));
+        case "next":
+            break;
+    }
+
+    /* ── Rybbit analytics proxy: strip auth headers ── */
     if (pathname.startsWith("/api/int/")) {
         const headers = new Headers(request.headers);
         headers.delete("cookie");
@@ -27,6 +33,7 @@ export function proxy(request: NextRequest) {
         return NextResponse.next({ request: { headers } });
     }
 
+    /* ── Admin: expose pathname to server components ── */
     if (pathname.startsWith("/admin")) {
         const headers = new Headers(request.headers);
         headers.set("x-pathname", pathname);
@@ -37,5 +44,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/api/int/:path*", "/admin/:path*"],
+    // NOTE: "js" is deliberately NOT in this extension exclusion list.
+    // /api/int/script.js and /api/int/replay.js (the Rybbit analytics
+    // proxy paths) must still hit this middleware -- excluding .js would
+    // skip both the admin-host isolation gate and the auth-header
+    // stripping below for those routes.
+    matcher: [
+        "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|woff|woff2|ttf|otf|map)).*)",
+    ],
 };

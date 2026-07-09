@@ -30,6 +30,36 @@ const backupFrequencyOptions = [
     { label: "Monthly", value: "monthly" },
 ];
 
+interface ExportJobStatus {
+    id: string;
+    // "expired" is a client-facing derived status: the server reports it
+    // instead of "completed" once `expiresAt` has passed, even if the
+    // row hasn't been swept from the DB yet (the cleanup worker keeps it
+    // until the storage delete actually succeeds).
+    status: "pending" | "processing" | "completed" | "failed" | "expired";
+    createdAt: string;
+    completedAt: string | null;
+    expiresAt: string | null;
+    recordingCount: number | null;
+    fileSize: number | null;
+    errorMessage: string | null;
+}
+
+const ACTIVE_STATUSES = new Set(["pending", "processing"]);
+const POLL_INTERVAL_MS = 4000;
+
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ["KB", "MB", "GB"];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+    return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
 interface ExportSectionProps {
     onReRunOnboarding?: () => void;
 }
@@ -41,7 +71,8 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
     const [autoExport, setAutoExport] = useState(false);
     const [backupFrequency, setBackupFrequency] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
-    const [isBackingUp, setIsBackingUp] = useState(false);
+    const [isStartingBackup, setIsStartingBackup] = useState(false);
+    const [backupJob, setBackupJob] = useState<ExportJobStatus | null>(null);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -61,6 +92,63 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         };
         fetchSettings();
     }, [setIsLoadingSettings]);
+
+    // Pick up the most recent job on load -- covers reopening Settings
+    // after starting a backup elsewhere, or arriving from the
+    // "export ready" email.
+    useEffect(() => {
+        const fetchJobs = async () => {
+            try {
+                const response = await fetch("/api/backup");
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.jobs?.[0]) setBackupJob(data.jobs[0]);
+            } catch {
+                // Non-fatal -- the user can still start a fresh backup.
+            }
+        };
+        fetchJobs();
+    }, []);
+
+    // Poll while a job is active. Stops itself once the job leaves
+    // pending/processing, so there's no polling overhead once idle.
+    // Single-flight by construction: the next poll is only scheduled
+    // from the previous one's `finally`, so a slow response (>4s)
+    // can't cause overlapping in-flight requests and duplicate
+    // terminal-state handling (extra toasts).
+    useEffect(() => {
+        if (!backupJob || !ACTIVE_STATUSES.has(backupJob.status)) return;
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout>;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(`/api/backup/${backupJob.id}`);
+                if (!cancelled && response.ok) {
+                    const data = await response.json();
+                    if (!cancelled) {
+                        setBackupJob(data.job);
+                        if (data.job.status === "completed") {
+                            toast.success("Backup ready to download");
+                        } else if (data.job.status === "failed") {
+                            toast.error("Backup failed to build");
+                        }
+                    }
+                }
+            } catch {
+                // Transient -- the next tick will retry.
+            } finally {
+                if (!cancelled) {
+                    timer = setTimeout(poll, POLL_INTERVAL_MS);
+                }
+            }
+        };
+        timer = setTimeout(poll, POLL_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [backupJob]);
 
     const handleExportBackupSettingChange = async (updates: {
         defaultExportFormat?: string;
@@ -139,31 +227,22 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         }
     };
 
-    const handleBackup = async () => {
-        setIsBackingUp(true);
+    const handleStartBackup = async () => {
+        setIsStartingBackup(true);
         try {
             const response = await fetch("/api/backup", { method: "POST" });
-            if (!response.ok) throw new Error("Backup failed");
-
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download =
-                response.headers
-                    .get("Content-Disposition")
-                    ?.split("filename=")[1]
-                    ?.replace(/"/g, "") || "backup.json";
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-
-            toast.success("Backup created");
+            if (!response.ok) throw new Error("Backup request failed");
+            const data = await response.json();
+            setBackupJob(data.job);
+            toast.success(
+                ACTIVE_STATUSES.has(data.job.status)
+                    ? "Backup started -- this can take a few minutes for large libraries"
+                    : "Backup ready to download",
+            );
         } catch {
-            toast.error("Failed to create backup");
+            toast.error("Failed to start backup");
         } finally {
-            setIsBackingUp(false);
+            setIsStartingBackup(false);
         }
     };
 
@@ -179,7 +258,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         <div className="space-y-6">
             <SettingsSectionHeader
                 title="Export & Backup"
-                description="Take your data with you — recordings, transcripts, and summaries."
+                description="Take your data with you: recordings, transcripts, and summaries."
                 icon={Download}
             />
             <div className="space-y-4">
@@ -337,29 +416,86 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             ) : (
                                 <>
                                     <Download className="size-4 mr-2" />
-                                    Export All
+                                    Export text
                                 </>
                             )}
                         </Button>
                         <Button
-                            onClick={handleBackup}
-                            disabled={isBackingUp}
+                            onClick={handleStartBackup}
+                            disabled={
+                                isStartingBackup ||
+                                (backupJob !== null &&
+                                    ACTIVE_STATUSES.has(backupJob.status))
+                            }
                             variant="outline"
                             className="flex-1"
                         >
-                            {isBackingUp ? (
+                            {isStartingBackup ||
+                            (backupJob !== null &&
+                                ACTIVE_STATUSES.has(backupJob.status)) ? (
                                 <>
                                     <div className="animate-spin size-4 mr-2 border-2 border-primary border-t-transparent rounded-full" />
-                                    Creating…
+                                    Building archive…
                                 </>
                             ) : (
                                 <>
                                     <Download className="size-4 mr-2" />
-                                    Create Backup
+                                    Create full backup
                                 </>
                             )}
                         </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                        "Export text" downloads transcripts + summaries
+                        instantly. "Create full backup" also bundles the
+                        original audio into a zip archive; large libraries take
+                        a few minutes to build in the background, and you'll get
+                        an email when it's ready.
+                    </p>
+                    {backupJob && (
+                        <div className="rounded-md border p-3 text-sm space-y-1">
+                            {backupJob.status === "completed" && (
+                                <div className="flex items-center justify-between gap-2">
+                                    <span>
+                                        Backup ready
+                                        {backupJob.recordingCount !== null &&
+                                            ` \u2014 ${backupJob.recordingCount} recording${backupJob.recordingCount === 1 ? "" : "s"}`}
+                                        {backupJob.fileSize !== null &&
+                                            ` (${formatBytes(backupJob.fileSize)})`}
+                                    </span>
+                                    <Button asChild size="sm">
+                                        <a
+                                            href={`/api/backup/${backupJob.id}/download`}
+                                        >
+                                            <Download className="size-4 mr-2" />
+                                            Download
+                                        </a>
+                                    </Button>
+                                </div>
+                            )}
+                            {ACTIVE_STATUSES.has(backupJob.status) && (
+                                <span className="text-muted-foreground">
+                                    Building your archive
+                                    {backupJob.status === "pending"
+                                        ? " (queued)"
+                                        : ""}
+                                    …
+                                </span>
+                            )}
+                            {backupJob.status === "failed" && (
+                                <span className="text-destructive">
+                                    Backup failed to build. Try again, or
+                                    contact support if it keeps failing.
+                                </span>
+                            )}
+                            {backupJob.status === "expired" && (
+                                <span className="text-muted-foreground">
+                                    That backup has expired. Create a new one to
+                                    download it again.
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -1,7 +1,7 @@
 /**
  * Single source of truth for the operator's legal identity and the facts
  * the hosted `(legal)` pages render. Centralized so the entity name,
- * address, governing law, contacts, and sub-processor list live in one
+ * address, governing law, contacts, and recipient categories live in one
  * reviewable place instead of being duplicated across the privacy and
  * terms documents.
  *
@@ -49,7 +49,7 @@ export const GOVERNING_LAW = {
 export const MIN_AGE = 16;
 
 /** ISO date the current documents take effect. */
-export const EFFECTIVE_DATE = "2026-05-29";
+export const EFFECTIVE_DATE = "2026-06-20";
 
 /** Human-readable effective date, pinned to UTC to avoid off-by-one. */
 export const EFFECTIVE_DATE_DISPLAY = new Date(
@@ -76,40 +76,63 @@ export const SUPERVISORY_AUTHORITY = {
     url: "https://uodo.gov.pl",
 } as const;
 
-export type Subprocessor = {
-    name: string;
+export type RecipientCategory = {
+    category: string;
     purpose: string;
     location: string;
     safeguard: string;
 };
 
 /**
- * Third parties that process personal data on the operator's behalf for
- * the hosted service. Self-hosted analytics (Rybbit) runs on the
- * operator's own infrastructure and is intentionally NOT a third-party
- * sub-processor. User-configured AI providers are not the operator's
- * sub-processors either -- the user contracts with them directly.
+ * Categories of recipients that process personal data on the operator's
+ * behalf for the hosted service (GDPR Art. 13(1)(e) -- disclosed as
+ * categories, not named vendors, per the operator's decision). Each
+ * category must stay specific enough to satisfy the EDPB transparency
+ * guidelines: what kind of provider, what it does, where it processes,
+ * and the transfer safeguard.
  *
- * When error monitoring (PostHog EU) ships, add it here; being EU-hosted
- * it introduces no new international-transfer concern.
+ * Self-hosted analytics (Rybbit) runs on the operator's own
+ * infrastructure and is intentionally NOT a third-party recipient.
+ * User-configured AI providers are not the operator's processors either
+ * -- the user contracts with them directly.
+ *
+ * When error monitoring (PostHog EU) ships, add an "error monitoring
+ * provider" category here; being EU-hosted it introduces no new
+ * international-transfer concern.
  */
-export const SUBPROCESSORS: Subprocessor[] = [
+export const RECIPIENT_CATEGORIES: RecipientCategory[] = [
     {
-        name: "netcup GmbH",
+        category: "Payment processor",
+        purpose: "Payment processing for hosted subscriptions",
+        location:
+            "Ireland (EEA), with onward transfer to its US parent company",
+        safeguard:
+            "EU Standard Contractual Clauses; EU-U.S. Data Privacy Framework",
+    },
+    {
+        category: "Cloud hosting provider",
         purpose: "Application hosting and database",
         location: "Germany (EEA)",
         safeguard: "Processed within the EEA",
     },
     {
-        name: "Cloudflare R2",
+        category: "Object storage provider",
         purpose: "Encrypted audio file storage",
-        location: "EU-region bucket; provider established in the USA",
+        location: "EU-region storage; provider established in the USA",
         safeguard:
             "Data Processing Addendum and EU Standard Contractual Clauses",
     },
     {
-        name: "MXroute",
+        category: "Email delivery provider",
         purpose: "Transactional email delivery",
+        location: "USA",
+        safeguard:
+            "Data Processing Addendum and EU Standard Contractual Clauses",
+    },
+    {
+        category: "AI transcription provider",
+        purpose:
+            "Cloud transcription for hosted-Pro users who have not configured their own AI provider",
         location: "USA",
         safeguard:
             "Data Processing Addendum and EU Standard Contractual Clauses",

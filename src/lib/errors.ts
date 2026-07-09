@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { APIError as OpenAIAPIError } from "openai";
 
 export enum ErrorCode {
     UNAUTHORIZED = "UNAUTHORIZED",
     FORBIDDEN = "FORBIDDEN",
     ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED",
+    ACCOUNT_LOCKED = "ACCOUNT_LOCKED",
     SESSION_EXPIRED = "SESSION_EXPIRED",
     AUTH_SESSION_MISSING = "AUTH_SESSION_MISSING",
     AUTH_SESSION_EXPIRED = "AUTH_SESSION_EXPIRED",
@@ -41,6 +43,7 @@ export enum ErrorCode {
     AI_PROVIDER_NOT_CONFIGURED = "AI_PROVIDER_NOT_CONFIGURED",
     AI_PROVIDER_API_ERROR = "AI_PROVIDER_API_ERROR",
     AI_RATE_LIMITED = "AI_RATE_LIMITED",
+    AI_CONTEXT_LENGTH_EXCEEDED = "AI_CONTEXT_LENGTH_EXCEEDED",
 
     RECORDING_NOT_FOUND = "RECORDING_NOT_FOUND",
     RECORDING_STREAM_INVALID_RANGE = "RECORDING_STREAM_INVALID_RANGE",
@@ -125,6 +128,31 @@ export function apiHandler<Ctx = unknown>(
     };
 }
 
+// Detect a context-window-overflow error across OpenAI-compatible
+// providers. OpenAI/Groq use the `context_length_exceeded` code, but
+// providers reached through a custom `baseURL` (OpenRouter, Together,
+// local servers) report it under different codes or only in the message,
+// so we also match on common message phrasing. Used purely for
+// classification; the outbound message is always our own fixed copy.
+function isContextLengthError(error: OpenAIAPIError): boolean {
+    const code = typeof error.code === "string" ? error.code.toLowerCase() : "";
+    if (
+        code.includes("context_length") ||
+        code.includes("context_window") ||
+        code === "string_above_max_length"
+    ) {
+        return true;
+    }
+    const message = (error.message ?? "").toLowerCase();
+    return (
+        message.includes("context length") ||
+        message.includes("context window") ||
+        message.includes("maximum context") ||
+        message.includes("too many tokens") ||
+        message.includes("reduce the length")
+    );
+}
+
 function attachErrorId(app: AppError): string {
     const existing = app.details?.errorId;
     if (typeof existing === "string" && existing.startsWith("err_")) {
@@ -138,6 +166,48 @@ function attachErrorId(app: AppError): string {
 export function mapErrorToAppError(error: unknown): AppError {
     if (error instanceof AppError) {
         return error;
+    }
+
+    // Errors from any OpenAI-compatible provider (summary, title, etc.).
+    // Surface a useful message instead of a generic 500 -- the common case
+    // is an over-long transcript exceeding the model's context window.
+    if (error instanceof OpenAIAPIError) {
+        const status =
+            typeof error.status === "number" ? error.status : undefined;
+
+        if (isContextLengthError(error)) {
+            return new AppError(
+                ErrorCode.AI_CONTEXT_LENGTH_EXCEEDED,
+                "Transcript is too long for the selected model's context window. Choose a model with a larger context or a different provider.",
+                400,
+            );
+        }
+        if (status === 429) {
+            return new AppError(
+                ErrorCode.AI_RATE_LIMITED,
+                "Too many requests to the AI provider. Please try again later.",
+                429,
+            );
+        }
+        // No HTTP status means a connection/transport failure (DNS, TLS,
+        // timeout) -- the provider was never reached. That is upstream
+        // unavailability, not a client error, so it maps the same as a
+        // provider 5xx.
+        if (status === undefined || status >= 500) {
+            return new AppError(
+                ErrorCode.UPSTREAM_BAD_RESPONSE,
+                "The AI provider is temporarily unavailable. Please try again later.",
+                502,
+            );
+        }
+        // Other 4xx: a generic provider rejection. Never echo the raw
+        // provider message back to the client -- it can carry upstream
+        // request details (or key fragments). Keep the detail server-side.
+        return new AppError(
+            ErrorCode.AI_PROVIDER_API_ERROR,
+            "The AI provider rejected the request.",
+            400,
+        );
     }
 
     if (error instanceof Error) {

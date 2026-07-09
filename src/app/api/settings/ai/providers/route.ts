@@ -2,6 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
+import { listUserProviders } from "@/lib/ai/list-providers";
+import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
@@ -12,20 +14,9 @@ import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 export const GET = apiHandler(async (request: Request) => {
     const session = await requireApiSession(request);
 
-    const providers = await db
-        .select({
-            id: apiCredentials.id,
-            provider: apiCredentials.provider,
-            baseUrl: apiCredentials.baseUrl,
-            defaultModel: apiCredentials.defaultModel,
-            isDefaultTranscription: apiCredentials.isDefaultTranscription,
-            isDefaultEnhancement: apiCredentials.isDefaultEnhancement,
-            createdAt: apiCredentials.createdAt,
-        })
-        .from(apiCredentials)
-        .where(eq(apiCredentials.userId, session.user.id));
-
-    return NextResponse.json({ providers });
+    return NextResponse.json({
+        providers: await listUserProviders(session.user.id),
+    });
 });
 
 // POST - Add new AI provider
@@ -112,6 +103,10 @@ export const POST = apiHandler(async (request: Request) => {
                 isDefaultEnhancement: apiCredentials.isDefaultEnhancement,
             });
     });
+
+    if (isDefaultTranscription) {
+        await setDefaultTranscriptionProvider(session.user.id, newProvider.id);
+    }
 
     return NextResponse.json({ provider: newProvider });
 });

@@ -138,6 +138,15 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/entitlements", () => ({
+    isHostedLockedOut: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock("@/lib/hosted/transcription/mynah", () => ({
+    isMynahConfigured: vi.fn().mockReturnValue(false),
+    transcribeViaMynah: vi.fn(),
+}));
+
 vi.mock("@/lib/ai/generate-title", () => ({
     generateTitleFromTranscription: vi.fn().mockResolvedValue(null),
 }));

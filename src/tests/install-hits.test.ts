@@ -47,7 +47,10 @@ vi.mock("@/db", () => ({
     },
 }));
 
-import { getInstallHitStats, recordInstallHit } from "@/lib/admin/install-hits";
+import {
+    getInstallHitStats,
+    recordInstallHit,
+} from "@/lib/hosted/admin/install-hits";
 
 beforeEach(() => {
     mockEnv.IS_HOSTED = false;

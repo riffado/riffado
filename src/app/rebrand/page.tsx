@@ -5,7 +5,7 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing-footer";
 
 export const metadata: Metadata = {
-    title: "OpenPlaud is now Riffado — Read the rebrand note",
+    title: "OpenPlaud is now Riffado | Read the rebrand note",
     description:
         "Same team. Same code. New name. Here's why we renamed and what doesn't change for you.",
 };

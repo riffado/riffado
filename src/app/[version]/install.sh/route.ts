@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { recordInstallHit } from "@/lib/admin/install-hits";
+import { recordInstallHit } from "@/lib/hosted/admin/install-hits";
 import {
     INSTALL_SCRIPT_HEADERS,
     isValidVersionTag,
