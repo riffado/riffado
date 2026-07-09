@@ -108,24 +108,42 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
 
     // Poll while a job is active. Stops itself once the job leaves
     // pending/processing, so there's no polling overhead once idle.
+    // Single-flight by construction: the next poll is only scheduled
+    // from the previous one's `finally`, so a slow response (>4s)
+    // can't cause overlapping in-flight requests and duplicate
+    // terminal-state handling (extra toasts).
     useEffect(() => {
         if (!backupJob || !ACTIVE_STATUSES.has(backupJob.status)) return;
-        const interval = setInterval(async () => {
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout>;
+
+        const poll = async () => {
             try {
                 const response = await fetch(`/api/backup/${backupJob.id}`);
-                if (!response.ok) return;
-                const data = await response.json();
-                setBackupJob(data.job);
-                if (data.job.status === "completed") {
-                    toast.success("Backup ready to download");
-                } else if (data.job.status === "failed") {
-                    toast.error("Backup failed to build");
+                if (!cancelled && response.ok) {
+                    const data = await response.json();
+                    if (!cancelled) {
+                        setBackupJob(data.job);
+                        if (data.job.status === "completed") {
+                            toast.success("Backup ready to download");
+                        } else if (data.job.status === "failed") {
+                            toast.error("Backup failed to build");
+                        }
+                    }
                 }
             } catch {
                 // Transient -- the next tick will retry.
+            } finally {
+                if (!cancelled) {
+                    timer = setTimeout(poll, POLL_INTERVAL_MS);
+                }
             }
-        }, POLL_INTERVAL_MS);
-        return () => clearInterval(interval);
+        };
+        timer = setTimeout(poll, POLL_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
     }, [backupJob]);
 
     const handleExportBackupSettingChange = async (updates: {
