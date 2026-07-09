@@ -4,6 +4,7 @@ import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import {
     decodeAccessTokenExpiry,
     fetchPlaudUserMeEmail,
+    isPlaudWorkspaceToken,
 } from "@/lib/plaud/auth";
 import { DEFAULT_PLAUD_API_BASE } from "@/lib/plaud/client";
 import { persistPlaudConnection } from "@/lib/plaud/persist-connection";
@@ -60,6 +61,21 @@ export const POST = apiHandler(async (request: Request) => {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
             "That doesn't look like a Plaud access token. Copy the value of the Authorization header on a request to api*.plaud.ai (without the leading 'Bearer ').",
+            400,
+            { field: "accessToken" },
+        );
+    }
+
+    // Reject a workspace token (WT). web.plaud.ai uses the short-lived (~24h)
+    // WT on the data requests users inspect (/device/list, /file/simple/web),
+    // so SSO users paste it by mistake. A WT validates against /device/list
+    // (so the connect would *appear* to succeed) but cannot mint a fresh WT,
+    // so the connection dies within a day. Catch it here with actionable copy
+    // instead of letting it rot. (issue #203)
+    if (isPlaudWorkspaceToken(accessToken)) {
+        throw new AppError(
+            ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED,
+            "That's a workspace token, which expires in about 24 hours. Riffado needs your long-lived account token. Easiest fix: use the Riffado Connector. To paste manually, grab the value of localStorage 'pld_tokenstr' on web.plaud.ai (Application → Local Storage), not the Authorization header from a /device/list request.",
             400,
             { field: "accessToken" },
         );

@@ -104,8 +104,26 @@ export async function plaudVerifyOtp(
     return { accessToken };
 }
 
-/** Decode the JWT `exp` claim without verifying. UX hint only — never authorise from this. */
-export function decodeAccessTokenExpiry(token: string): Date | null {
+/**
+ * Claims we read off a Plaud JWT. Plaud signs both long-lived user tokens
+ * (UT) and short-lived workspace tokens (WT) with the same alg; the claim
+ * set is what tells them apart. WTs carry `ut_ref`/`wid`/`wtype`; UTs don't.
+ */
+export interface PlaudTokenClaims {
+    exp?: number;
+    iat?: number;
+    sub?: string;
+    /** Reference to the originating user token. Present on WTs only. */
+    ut_ref?: string;
+    /** Workspace id the token is scoped to. Present on WTs only. */
+    wid?: string;
+    /** Workspace type. Present on WTs only. */
+    wtype?: string;
+    [key: string]: unknown;
+}
+
+/** Decode JWT claims without verifying. UX/diagnostic hint only — never authorise from this. */
+export function decodeJwtClaims(token: string): PlaudTokenClaims | null {
     if (typeof token !== "string") return null;
     const parts = token.split(".");
     if (parts.length !== 3) return null;
@@ -117,14 +135,37 @@ export function decodeAccessTokenExpiry(token: string): Date | null {
             typeof atob === "function"
                 ? atob(b64)
                 : Buffer.from(b64, "base64").toString("utf8");
-        const payload = JSON.parse(json) as { exp?: unknown };
-        if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
-            return null;
-        }
-        return new Date(payload.exp * 1000);
+        const payload = JSON.parse(json) as unknown;
+        if (typeof payload !== "object" || payload === null) return null;
+        return payload as PlaudTokenClaims;
     } catch {
         return null;
     }
+}
+
+/** Decode the JWT `exp` claim without verifying. UX hint only — never authorise from this. */
+export function decodeAccessTokenExpiry(token: string): Date | null {
+    const claims = decodeJwtClaims(token);
+    if (!claims) return null;
+    if (typeof claims.exp !== "number" || !Number.isFinite(claims.exp)) {
+        return null;
+    }
+    return new Date(claims.exp * 1000);
+}
+
+/**
+ * True if `token` is a Plaud workspace token (WT) rather than a user token
+ * (UT). WTs are workspace-scoped (`ut_ref`/`wid` claims) and short-lived
+ * (~24h). Riffado must store the long-lived UT: minting a fresh WT requires
+ * a UT, so a connection built on a pasted WT cannot be refreshed and dies
+ * within a day. web.plaud.ai puts the WT on the data requests users tend to
+ * inspect (`/device/list`, `/file/simple/web`), which is why users paste it
+ * by mistake — hence this guard. (issue #203)
+ */
+export function isPlaudWorkspaceToken(token: string): boolean {
+    const claims = decodeJwtClaims(token);
+    if (!claims) return false;
+    return typeof claims.ut_ref === "string" || typeof claims.wid === "string";
 }
 
 /** Best-effort `/user/me` email lookup. Caller must pre-validate `apiBase`. */

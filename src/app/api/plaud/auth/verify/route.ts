@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/auth-server";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
-import { plaudVerifyOtp } from "@/lib/plaud/auth";
+import { isPlaudWorkspaceToken, plaudVerifyOtp } from "@/lib/plaud/auth";
 import { persistPlaudConnection } from "@/lib/plaud/persist-connection";
 import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
 
@@ -58,6 +58,17 @@ export const POST = apiHandler(async (request: Request) => {
 
     // Verify OTP with Plaud → get the (long-lived) user token (UT)
     const { accessToken } = await plaudVerifyOtp(code, otpToken, apiBase);
+
+    // Defensive: OTP login returns a long-lived UT today. If Plaud ever
+    // starts handing back a short-lived workspace token here, fail loud
+    // rather than silently storing a token that dies within a day. (issue #203)
+    if (isPlaudWorkspaceToken(accessToken)) {
+        throw new AppError(
+            ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED,
+            "Plaud returned a short-lived workspace token instead of an account token. This is unexpected — please report it.",
+            502,
+        );
+    }
 
     // Hand off to the shared persistence path: workspace discovery,
     // end-to-end /device/list validation, encrypted upsert, device sync.
