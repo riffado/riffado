@@ -41,6 +41,7 @@
 - Newsletter signup form embedded in the landing footer (above the honesty rail) so visitors can subscribe without leaving the page. Same `/api/newsletter/subscribe` endpoint + double-opt-in flow as the dedicated `/updates` page.
 
 ### Fixed
+- Browser transcription now decodes and resamples audio to mono 16 kHz PCM before handing it to Transformers.js, and the production build stubs Transformers.js's Node-only optional dependencies so the Web Worker bundles under Next 16/Turbopack ([#130](https://github.com/riffado/riffado/issues/130)).
 - Long-meeting summaries no longer drop the end of the transcript. The summary endpoint hard-truncated transcripts to the first 8000 characters (~2000 tokens) before sending them to the model, silently discarding everything after — so end-of-call decisions and action items never reached the summary. The full transcript is now sent. If a transcript exceeds the configured model's context window, the provider error is surfaced as a clear 400 ("transcript too long, pick a larger-context model") instead of a generic 500 ([#213](https://github.com/riffado/riffado/issues/213)).
 
 ### Removed

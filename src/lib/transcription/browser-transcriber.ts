@@ -1,8 +1,9 @@
 /**
- * Browser-based transcription using Transformers.js
- * Runs Whisper models in the browser via WebAssembly
+ * Browser-based transcription using Transformers.js.
+ * Runs Whisper models in the browser via WebAssembly.
  */
 
+import { decodeAudioToMono16k } from "@/lib/transcription/decode-audio";
 import type {
     TranscriptionModel,
     TranscriptionResult,
@@ -20,9 +21,7 @@ export class BrowserTranscriber {
     private worker: Worker | null = null;
     private isReady = false;
 
-    /**
-     * Initialize the transcription worker
-     */
+    /** Initialize the transcription worker. */
     async initialize(): Promise<void> {
         if (this.worker) {
             return;
@@ -30,25 +29,29 @@ export class BrowserTranscriber {
 
         return new Promise((resolve, reject) => {
             try {
-                this.worker = new Worker(
+                const worker = new Worker(
                     new URL("./worker.ts", import.meta.url),
                     { type: "module" },
                 );
 
-                this.worker.addEventListener("message", (event) => {
-                    if (event.data.type === "ready") {
+                const onReady = (event: MessageEvent) => {
+                    if (event.data?.type === "ready") {
+                        worker.removeEventListener("message", onReady);
                         this.isReady = true;
                         resolve();
                     }
-                });
+                };
 
-                this.worker.addEventListener("error", (error) => {
+                worker.addEventListener("message", onReady);
+                worker.addEventListener("error", (error) => {
                     reject(
                         new Error(
                             `Worker initialization failed: ${error.message}`,
                         ),
                     );
                 });
+
+                this.worker = worker;
             } catch (error) {
                 reject(error);
             }
@@ -56,77 +59,56 @@ export class BrowserTranscriber {
     }
 
     /**
-     * Transcribe audio file using the browser-based model
+     * Transcribe an audio file using the browser-based model.
+     *
+     * Transformers.js ASR expects raw mono PCM samples at the model's
+     * sampling rate, not encoded MP3/Opus bytes. Decode and resample the
+     * file before transferring the `Float32Array` to the worker.
      */
     async transcribe(
         audioFile: File,
         model: TranscriptionModel = "whisper-base",
         onProgress?: (status: string) => void,
     ): Promise<TranscriptionResult> {
-        if (!this.worker || !this.isReady) {
+        const worker = this.worker;
+        if (!worker || !this.isReady) {
             throw new Error(
                 "Transcriber not initialized. Call initialize() first.",
             );
         }
 
+        onProgress?.("decoding-audio");
+        const samples = await decodeAudioToMono16k(audioFile);
+
         return new Promise((resolve, reject) => {
-            if (!this.worker) {
-                reject(new Error("Worker not available"));
-                return;
-            }
+            const messageHandler = (event: MessageEvent) => {
+                const { type, text, detectedLanguage, error, status } =
+                    event.data ?? {};
 
-            const reader = new FileReader();
-
-            reader.onload = async () => {
-                if (!this.worker) {
-                    reject(new Error("Worker not available"));
-                    return;
+                if (type === "progress" && onProgress) {
+                    onProgress(status);
+                } else if (type === "complete") {
+                    worker.removeEventListener("message", messageHandler);
+                    resolve({ text, detectedLanguage });
+                } else if (type === "error") {
+                    worker.removeEventListener("message", messageHandler);
+                    reject(new Error(error));
                 }
+            };
 
-                const audioData = reader.result;
-                const modelPath = MODEL_MAP[model];
-
-                const messageHandler = (event: MessageEvent) => {
-                    const { type, text, detectedLanguage, error, status } =
-                        event.data;
-
-                    if (type === "progress" && onProgress) {
-                        onProgress(status);
-                    } else if (type === "complete") {
-                        this.worker?.removeEventListener(
-                            "message",
-                            messageHandler,
-                        );
-                        resolve({ text, detectedLanguage });
-                    } else if (type === "error") {
-                        this.worker?.removeEventListener(
-                            "message",
-                            messageHandler,
-                        );
-                        reject(new Error(error));
-                    }
-                };
-
-                this.worker.addEventListener("message", messageHandler);
-
-                this.worker.postMessage({
+            worker.addEventListener("message", messageHandler);
+            worker.postMessage(
+                {
                     type: "transcribe",
-                    audioData,
-                    model: modelPath,
-                });
-            };
-
-            reader.onerror = () => {
-                reject(new Error("Failed to read audio file"));
-            };
-
-            reader.readAsArrayBuffer(audioFile);
+                    samples,
+                    model: MODEL_MAP[model],
+                },
+                [samples.buffer],
+            );
         });
     }
 
-    /**
-     * Clean up the worker
-     */
+    /** Clean up the worker. */
     terminate(): void {
         if (this.worker) {
             this.worker.terminate();
@@ -136,9 +118,7 @@ export class BrowserTranscriber {
     }
 }
 
-/**
- * Convenience function to transcribe audio in the browser
- */
+/** Convenience function to transcribe audio in the browser. */
 export async function transcribeInBrowser(
     audioFile: File,
     model: TranscriptionModel = "whisper-base",

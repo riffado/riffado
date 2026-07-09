@@ -17,10 +17,16 @@ interface Props {
     model?: TranscriptionModel;
 }
 
-type Phase = "idle" | "downloading-audio" | "loading-model" | "transcribing";
+type Phase =
+    | "idle"
+    | "downloading-audio"
+    | "decoding-audio"
+    | "loading-model"
+    | "transcribing";
 
 const PHASE_LABEL: Record<Exclude<Phase, "idle">, string> = {
     "downloading-audio": "Downloading audio…",
+    "decoding-audio": "Decoding audio…",
     "loading-model": "Loading Whisper (one-time download)…",
     transcribing: "Transcribing locally…",
 };
@@ -58,8 +64,10 @@ export function TranscribeInBrowserButton({
                 type: blob.type || "audio/mpeg",
             });
 
-            setPhase("loading-model");
+            setPhase("decoding-audio");
             const result = await transcribeInBrowser(file, model, (status) => {
+                if (status === "decoding-audio") setPhase("decoding-audio");
+                if (status === "loading-model") setPhase("loading-model");
                 if (status === "transcribing") setPhase("transcribing");
             });
 
