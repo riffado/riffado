@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
-    claimExpiredExportJobs,
     claimPendingExportJobs,
     completeExportJob,
+    deleteExportJobRow,
     EXPORT_MAX_ATTEMPTS,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
+    selectExpiredExportJobs,
 } from "@/db/queries/export-jobs";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -20,11 +21,6 @@ const TICK_MS = 30 * 1000;
 // starve sync/transcription work on the same instance (hosted fairness).
 const MAX_JOBS_PER_TICK = 2;
 const MAX_CLEANUP_PER_TICK = 20;
-// If a job has been "processing" for longer than this, the process that
-// claimed it almost certainly crashed or was redeployed mid-build (no
-// in-process timer survives a process death to catch it another way).
-// Reset it to pending so another tick picks it back up.
-const STALE_PROCESSING_MS = 30 * 60 * 1000;
 // No forward progress (bytes written, or a recording finished) for this
 // long means the build is genuinely stuck (hung network read, wedged
 // storage call) -- abort it. This is deliberately about progress, not
@@ -34,7 +30,21 @@ const STALL_TIMEOUT_MS = 5 * 60 * 1000;
 // Absolute safety ceiling regardless of progress, so a pathological case
 // (e.g. a library so large it never stops making *some* progress but
 // never finishes in practice) still can't wedge a worker slot forever.
+// Every in-process build is guaranteed to resolve/reject by this point.
 const MAX_TOTAL_MS = 3 * 60 * 60 * 1000;
+// If a job has been "processing" for longer than this, the process that
+// claimed it almost certainly crashed or was redeployed mid-build (no
+// in-process timer survives a process death to catch it another way).
+// Reset it to pending so another tick picks it back up.
+//
+// Set safely above MAX_TOTAL_MS -- not just above the old fixed job
+// timeout -- so this only ever fires for genuinely dead processes, never
+// for a job that's still legitimately running toward its own internal
+// ceiling. A reclaim while the original worker is still alive is made
+// safe by the claim-token scoping on every write (see `claimToken` on
+// the schema and `completeExportJob`/`recordExportJobFailure`), but it's
+// still wasted duplicate work to avoid where possible.
+const STALE_PROCESSING_MS = MAX_TOTAL_MS + 30 * 60 * 1000;
 
 /**
  * Runs `run` under both a stall timeout (reset on every `onProgress()`
@@ -84,7 +94,11 @@ function runWithStallGuard<T>(
     });
 }
 
-async function processJob(job: { id: string; userId: string }): Promise<void> {
+async function processJob(job: {
+    id: string;
+    userId: string;
+    claimToken: string;
+}): Promise<void> {
     const storage = createStorageProvider();
     const storageKey = `exports/${job.userId}/${job.id}.zip`;
 
@@ -101,12 +115,25 @@ async function processJob(job: { id: string; userId: string }): Promise<void> {
             { stallMs: STALL_TIMEOUT_MS, maxTotalMs: MAX_TOTAL_MS },
         );
 
-        await completeExportJob({
+        const completed = await completeExportJob({
             jobId: job.id,
+            claimToken: job.claimToken,
             storageKey,
             fileSize: result.fileSize,
             recordingCount: result.recordingCount,
         });
+
+        if (!completed) {
+            // This claim was reclaimed as stale while the build was still
+            // in flight -- some other worker owns the job now (or already
+            // finished it). Don't notify or leave a dangling archive
+            // under a job row we no longer control.
+            console.warn(
+                `[export-worker] job ${job.id} finished but its claim was superseded; discarding result`,
+            );
+            await storage.deleteFile(storageKey).catch(() => {});
+            return;
+        }
 
         await notifyExportReady(job.userId, job.id).catch((error) => {
             console.error(
@@ -116,8 +143,18 @@ async function processJob(job: { id: string; userId: string }): Promise<void> {
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const outcome = await recordExportJobFailure(job.id, message);
-        if (outcome.status === "failed") {
+        const outcome = await recordExportJobFailure(
+            job.id,
+            job.claimToken,
+            message,
+        );
+        if (outcome === null) {
+            // Claim superseded -- another worker owns (or already resolved)
+            // this job. Nothing to record against a claim we no longer hold.
+            console.warn(
+                `[export-worker] job ${job.id} failed but its claim was superseded; not recording`,
+            );
+        } else if (outcome.status === "failed") {
             console.error(
                 `[export-worker] job ${job.id} failed permanently after ${outcome.attempts} attempt(s):`,
                 error,
@@ -153,22 +190,29 @@ async function notifyExportReady(userId: string, jobId: string): Promise<void> {
 }
 
 async function cleanupExpired(): Promise<void> {
-    const expired = await claimExpiredExportJobs(MAX_CLEANUP_PER_TICK);
+    const expired = await selectExpiredExportJobs(MAX_CLEANUP_PER_TICK);
     if (expired.length === 0) return;
     const storage = createStorageProvider();
+    let cleaned = 0;
     for (const job of expired) {
         try {
+            // Row deletion only happens after the storage delete
+            // succeeds -- deleting the row first would permanently
+            // orphan the archive object (no record left to retry
+            // against) if the storage call then failed.
             await storage.deleteFile(job.storageKey);
+            await deleteExportJobRow(job.id);
+            cleaned += 1;
         } catch (error) {
             console.error(
-                `[export-worker] cleanup deleteFile failed for job ${job.id}:`,
+                `[export-worker] cleanup deleteFile failed for job ${job.id}, will retry next tick:`,
                 error,
             );
         }
     }
-    console.log(
-        `[export-worker] cleaned up ${expired.length} expired archive(s)`,
-    );
+    if (cleaned > 0) {
+        console.log(`[export-worker] cleaned up ${cleaned} expired archive(s)`);
+    }
 }
 
 let started = false;

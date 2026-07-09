@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+    bigint,
     boolean,
     date,
     index,
@@ -618,7 +619,10 @@ export const exportJobs = pgTable(
             .references(() => users.id, { onDelete: "cascade" }),
         status: exportJobStatusEnum("status").notNull().default("pending"),
         storageKey: text("storage_key"),
-        fileSize: integer("file_size"),
+        // bigint, not integer: a full-library archive (audio for every
+        // recording, uncompressed) can exceed 2^31-1 bytes (~2GB) well
+        // within the hosted_pro 50GB storage cap.
+        fileSize: bigint("file_size", { mode: "number" }),
         recordingCount: integer("recording_count"),
         errorMessage: text("error_message"),
         // Bumped on every failed build attempt. Once it reaches the
@@ -627,6 +631,17 @@ export const exportJobs = pgTable(
         // job that's failing for a durable reason (not just a transient
         // blip) instead of retrying it forever.
         attempts: integer("attempts").notNull().default(0),
+        // Random token stamped on every claim (`claimPendingExportJobs`).
+        // A worker may only complete/fail the specific claim it holds --
+        // every write is scoped `where id = ... and claim_token = ...`.
+        // This is what makes the stale-processing reclaim safe even
+        // though it can't distinguish "process crashed" from "still
+        // running, just slow": if a reclaimed job's original (zombie)
+        // worker eventually finishes and tries to write, its claim token
+        // no longer matches (the reclaim cleared it), so the write
+        // affects zero rows instead of corrupting whatever the new
+        // claim has since done with the job.
+        claimToken: text("claim_token"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         startedAt: timestamp("started_at"),
         completedAt: timestamp("completed_at"),
@@ -641,6 +656,14 @@ export const exportJobs = pgTable(
         ),
         // Cleanup pass scans completed rows past expiry.
         expiresAtIdx: index("export_jobs_expires_at_idx").on(table.expiresAt),
+        // Enforces "one active job per user" at the database layer --
+        // the application-level check-then-insert in POST /api/backup is
+        // only a fast path; this index is what actually prevents two
+        // concurrent requests from both slipping past that check and
+        // enqueuing duplicate jobs.
+        userActiveUnique: uniqueIndex("export_jobs_user_active_unique")
+            .on(table.userId)
+            .where(sql`${table.status} in ('pending', 'processing')`),
     }),
 );
 
