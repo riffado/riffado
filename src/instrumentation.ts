@@ -10,6 +10,10 @@ type BackgroundSyncWorkerModule = {
     startBackgroundSyncWorker: () => void;
 };
 
+type ExportWorkerModule = {
+    startExportWorker: () => void;
+};
+
 type EnvModule = {
     env: {
         IS_HOSTED: boolean;
@@ -52,4 +56,8 @@ export async function register() {
     const { startBackgroundSyncWorker } =
         require("./lib/hosted/sync/worker") as BackgroundSyncWorkerModule;
     startBackgroundSyncWorker();
+
+    const { startExportWorker } =
+        require("./lib/export/worker") as ExportWorkerModule;
+    startExportWorker();
 }

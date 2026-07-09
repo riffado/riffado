@@ -190,6 +190,20 @@
       "when": 1783426525823,
       "tag": "0026_kind_argent",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1783584444573,
+      "tag": "0027_parched_true_believers",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783587599807,
+      "tag": "0028_awesome_agent_zero",
+      "breakpoints": true
     }
   ]
 }

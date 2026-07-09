@@ -587,6 +587,63 @@ export const webhookDeliveries = pgTable(
     }),
 );
 
+export const exportJobStatusEnum = pgEnum("export_job_status", [
+    "pending",
+    "processing",
+    "completed",
+    "failed",
+]);
+
+/**
+ * A queued request to build a full-data archive (audio + transcript +
+ * summary per recording, zipped) for one user. Built asynchronously by
+ * the worker in `src/lib/export/worker.ts` -- creating this row must
+ * stay cheap; all the heavy lifting (streaming audio out of storage,
+ * zipping, streaming the archive back into storage) happens off the
+ * request thread.
+ *
+ * `storageKey` + `expiresAt` are only set once `status = 'completed'`.
+ * The cleanup pass in the same worker deletes the archive from storage
+ * and the row once `expiresAt` has passed, so archives don't accumulate
+ * storage cost indefinitely.
+ */
+export const exportJobs = pgTable(
+    "export_jobs",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        status: exportJobStatusEnum("status").notNull().default("pending"),
+        storageKey: text("storage_key"),
+        fileSize: integer("file_size"),
+        recordingCount: integer("recording_count"),
+        errorMessage: text("error_message"),
+        // Bumped on every failed build attempt. Once it reaches the
+        // worker's max-attempts constant, a failure sticks as `failed`
+        // instead of being requeued to `pending` -- bounds retries for a
+        // job that's failing for a durable reason (not just a transient
+        // blip) instead of retrying it forever.
+        attempts: integer("attempts").notNull().default(0),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        startedAt: timestamp("started_at"),
+        completedAt: timestamp("completed_at"),
+        expiresAt: timestamp("expires_at"),
+    },
+    (table) => ({
+        userIdIdx: index("export_jobs_user_id_idx").on(table.userId),
+        // Claim query scans pending rows oldest-first.
+        statusCreatedAtIdx: index("export_jobs_status_created_at_idx").on(
+            table.status,
+            table.createdAt,
+        ),
+        // Cleanup pass scans completed rows past expiry.
+        expiresAtIdx: index("export_jobs_expires_at_idx").on(table.expiresAt),
+    }),
+);
+
 export const apiRateLimitBuckets = pgTable(
     "api_rate_limit_buckets",
     {

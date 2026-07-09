@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
 import { AccountDeletedEmail } from "./email-templates/account-deleted";
 import { EmailChangeConfirmEmail } from "./email-templates/email-change-confirm";
+import { ExportReadyEmail } from "./email-templates/export-ready";
 import { GraceLastDayEmail } from "./email-templates/grace-last-day";
 import { GraceReminderEmail } from "./email-templates/grace-reminder";
 import { GraceStartedEmail } from "./email-templates/grace-started";
@@ -437,6 +438,31 @@ export async function sendGraceStartedEmail(input: {
                     input.gracePath === "trial"
                         ? `Your Riffado trial ended — ${input.graceDays} days to export`
                         : `Your Riffado subscription ended — ${input.graceDays} days to export`,
+                html,
+            };
+        },
+    );
+}
+
+/** Sent once per completed export job (dedup keyed on jobId). */
+export async function sendExportReadyEmail(input: {
+    userId: string;
+    email: string;
+    jobId: string;
+    downloadUrl: string;
+}): Promise<boolean> {
+    return sendClaimedEmail(
+        { userId: input.userId, kind: `export_ready:${input.jobId}` },
+        async () => {
+            const html = await render(
+                React.createElement(ExportReadyEmail, {
+                    downloadUrl: input.downloadUrl,
+                }),
+                { pretty: false },
+            );
+            return {
+                to: input.email,
+                subject: "Your Riffado export is ready",
                 html,
             };
         },
