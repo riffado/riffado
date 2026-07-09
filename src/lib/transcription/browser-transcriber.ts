@@ -17,6 +17,12 @@ const MODEL_MAP: Record<TranscriptionModel, string> = {
     "whisper-small": "Xenova/whisper-small",
 };
 
+const MAX_BROWSER_TRANSCRIPTION_BYTES = 150 * 1024 * 1024;
+
+function formatMiB(bytes: number): string {
+    return `${(bytes / (1024 * 1024)).toFixed(0)} MiB`;
+}
+
 export class BrowserTranscriber {
     private worker: Worker | null = null;
     private isReady = false;
@@ -77,8 +83,27 @@ export class BrowserTranscriber {
             );
         }
 
+        if (audioFile.size > MAX_BROWSER_TRANSCRIPTION_BYTES) {
+            throw new Error(
+                `This recording is too large for browser transcription (${formatMiB(audioFile.size)}). Use a server-side provider for recordings over ${formatMiB(MAX_BROWSER_TRANSCRIPTION_BYTES)}.`,
+            );
+        }
+
         onProgress?.("decoding-audio");
-        const samples = await decodeAudioToMono16k(audioFile);
+        let samples: Float32Array;
+        try {
+            samples = await decodeAudioToMono16k(audioFile);
+        } catch (error) {
+            throw new Error(
+                error instanceof Error
+                    ? `Failed to decode audio in the browser: ${error.message}`
+                    : "Failed to decode audio in the browser",
+            );
+        }
+
+        if (this.worker !== worker || !this.isReady) {
+            throw new Error("Transcription worker was terminated");
+        }
 
         return new Promise((resolve, reject) => {
             const messageHandler = (event: MessageEvent) => {
