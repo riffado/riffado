@@ -16,6 +16,7 @@ Using AI to write code is fine. Submitting AI-generated code you don't understan
 - No emojis in commits, issues, PR comments, or code
 - No fluff or cheerful filler text
 - Technical prose only, be kind but direct (e.g., "Thanks @user" not "Thanks so much @user!")
+- Avoid overusing spaced em dashes (` — `), especially in user-facing copy. Prefer a period, comma, colon, parenthetical, or a shorter sentence unless the dash is clearly the best punctuation.
 
 Marketing surfaces (landing page copy, README feature sections) are exempt — they follow product design, not agent rules.
 
