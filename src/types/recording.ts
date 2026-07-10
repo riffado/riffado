@@ -3,7 +3,13 @@ import type { recordings } from "@/db/schema";
 
 export type RecordingQueryResult = Pick<
     InferSelectModel<typeof recordings>,
-    "id" | "filename" | "duration" | "startTime" | "filesize" | "deviceSn"
+    | "id"
+    | "filename"
+    | "duration"
+    | "startTime"
+    | "filesize"
+    | "deviceSn"
+    | "filetagId"
 >;
 
 export type Recording = Omit<RecordingQueryResult, "startTime"> & {

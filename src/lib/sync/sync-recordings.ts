@@ -10,6 +10,10 @@ import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import {
+    type FiletagSyncState,
+    syncFiletagsForUser,
+} from "@/lib/sync/sync-filetags";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 import { emitEvent } from "@/lib/webhooks/emit";
 import type { PlaudRecording } from "@/types/plaud";
@@ -46,6 +50,7 @@ interface SyncContext {
     barkNotifications: boolean;
     notificationEmail: string | null;
     barkPushUrl: string | null;
+    filetags: FiletagSyncState;
 }
 
 async function uniqueStorageKey(
@@ -113,10 +118,42 @@ async function processRecording(
 
         const versionKey = plaudRecording.version_ms.toString();
 
+        const remoteTagId = plaudRecording.filetag_id_list?.[0];
+        const desiredFiletagId =
+            remoteTagId != null
+                ? (context.filetags.map.get(String(remoteTagId)) ?? null)
+                : null;
+
         if (
             existingRecording &&
             existingRecording.plaudVersion === versionKey
         ) {
+            // Folder moves in the official app don't bump version_ms, so
+            // reconcile the directory assignment even when the version is
+            // unchanged.
+            const currentIsLocalOnly =
+                existingRecording.filetagId !== null &&
+                context.filetags.localOnlyTagIds.has(
+                    existingRecording.filetagId,
+                );
+            if (
+                !existingRecording.deletedAt &&
+                !currentIsLocalOnly &&
+                existingRecording.filetagId !== desiredFiletagId
+            ) {
+                await db
+                    .update(recordings)
+                    .set({
+                        filetagId: desiredFiletagId,
+                        updatedAt: new Date(),
+                    })
+                    .where(
+                        and(
+                            eq(recordings.id, existingRecording.id),
+                            eq(recordings.userId, context.userId),
+                        ),
+                    );
+            }
             return { status: "skipped" };
         }
 
@@ -178,6 +215,7 @@ async function processRecording(
             zonemins: plaudRecording.zonemins,
             scene: plaudRecording.scene,
             isTrash: plaudRecording.is_trash,
+            filetagId: desiredFiletagId,
         };
 
         if (existingRecording) {
@@ -385,6 +423,17 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             return result;
         }
 
+        const plaudClient = await createPlaudClient(
+            connection.bearerToken,
+            connection.apiBase,
+            connection.workspaceId,
+        );
+
+        // Mirror Plaud directories first (one extra request per sync) so
+        // each recording's filetag_id_list can be resolved to a local id.
+        // Never fails the sync: degrades to the existing local mapping.
+        const filetags = await syncFiletagsForUser(userId, plaudClient);
+
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
@@ -393,13 +442,8 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             notificationEmail:
                 settings?.notificationEmail || user?.email || null,
             barkPushUrl: settings?.barkPushUrl || null,
+            filetags,
         };
-
-        const plaudClient = await createPlaudClient(
-            connection.bearerToken,
-            connection.apiBase,
-            connection.workspaceId,
-        );
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const capState: CapState = { blocked: false };

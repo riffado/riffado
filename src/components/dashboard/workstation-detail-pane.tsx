@@ -6,6 +6,7 @@ import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 interface TranscriptionData {
@@ -16,6 +17,8 @@ interface TranscriptionData {
 interface Props {
     currentRecording: Recording | null;
     currentTranscription: TranscriptionData | undefined;
+    /** Directory of the current recording (resolved by the Workstation). */
+    currentFiletag: Filetag | null;
     isCurrentTranscribing: boolean;
     visibleRecordings: Recording[];
     onTranscribe: () => void;
@@ -44,6 +47,7 @@ interface Props {
 export function WorkstationDetailPane({
     currentRecording,
     currentTranscription,
+    currentFiletag,
     isCurrentTranscribing,
     visibleRecordings,
     onTranscribe,
@@ -82,6 +86,7 @@ export function WorkstationDetailPane({
                 <>
                     <RecordingPlayer
                         recording={currentRecording}
+                        filetag={currentFiletag}
                         initialPlaybackSpeed={initialPlaybackSpeed}
                         initialVolume={initialVolume}
                         initialAutoPlayNext={initialAutoPlayNext}

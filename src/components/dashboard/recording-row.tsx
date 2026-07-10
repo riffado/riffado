@@ -1,6 +1,13 @@
 "use client";
 
-import { Loader2, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import {
+    Check,
+    FolderInput,
+    Loader2,
+    MoreHorizontal,
+    Play,
+    Trash2,
+} from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,12 +15,17 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
+import { getFiletagIcon } from "@/lib/plaud/filetag-icons";
 import { cn } from "@/lib/utils";
 import type { DateTimeFormat } from "@/types/common";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 export function RecordingRow({
@@ -24,8 +36,10 @@ export function RecordingRow({
     isCompact,
     rowPadding,
     dateTimeFormat,
+    filetags,
     onSelect,
     onDelete,
+    onMoveToFiletag,
     registerRef,
 }: {
     recording: Recording;
@@ -35,11 +49,20 @@ export function RecordingRow({
     isCompact: boolean;
     rowPadding: string;
     dateTimeFormat: DateTimeFormat;
+    filetags: Filetag[];
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    onMoveToFiletag: (
+        recording: Recording,
+        filetagId: string | null,
+    ) => Promise<void>;
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
 }) {
     const confirm = useConfirm();
+    const currentTag = recording.filetagId
+        ? filetags.find((tag) => tag.id === recording.filetagId)
+        : undefined;
+    const CurrentTagIcon = currentTag ? getFiletagIcon(currentTag.icon) : null;
     return (
         <div
             className={cn(
@@ -62,6 +85,13 @@ export function RecordingRow({
             >
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
+                        {currentTag && CurrentTagIcon && (
+                            <CurrentTagIcon
+                                aria-label={`Directory: ${currentTag.name}`}
+                                className="size-3.5 shrink-0"
+                                style={{ color: currentTag.color }}
+                            />
+                        )}
                         <h3 className="truncate text-sm font-medium">
                             {recording.filename}
                         </h3>
@@ -94,7 +124,7 @@ export function RecordingRow({
                             )}
                         >
                             {formatDurationMs(recording.duration)}
-                            {" \u00b7 "}
+                            {" · "}
                             {formatDateTime(
                                 recording.startTime,
                                 dateTimeFormat,
@@ -120,6 +150,52 @@ export function RecordingRow({
                             <Play />
                             Open
                         </DropdownMenuItem>
+                        <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                                <FolderInput className="mr-2 size-4 text-muted-foreground" />
+                                Move to directory
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                                {filetags.map((tag) => {
+                                    const Icon = getFiletagIcon(tag.icon);
+                                    return (
+                                        <DropdownMenuItem
+                                            key={tag.id}
+                                            onSelect={() =>
+                                                void onMoveToFiletag(
+                                                    recording,
+                                                    tag.id,
+                                                )
+                                            }
+                                        >
+                                            <Icon
+                                                style={{ color: tag.color }}
+                                            />
+                                            <span className="truncate">
+                                                {tag.name}
+                                            </span>
+                                            {recording.filetagId === tag.id && (
+                                                <Check className="ml-auto" />
+                                            )}
+                                        </DropdownMenuItem>
+                                    );
+                                })}
+                                {filetags.length > 0 && (
+                                    <DropdownMenuSeparator />
+                                )}
+                                <DropdownMenuItem
+                                    onSelect={() =>
+                                        void onMoveToFiletag(recording, null)
+                                    }
+                                    disabled={recording.filetagId === null}
+                                >
+                                    No directory
+                                    {recording.filetagId === null && (
+                                        <Check className="ml-auto" />
+                                    )}
+                                </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             variant="destructive"

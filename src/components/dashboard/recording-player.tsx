@@ -6,10 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { usePlaybackEngine } from "@/hooks/use-playback-engine";
 import { usePlaybackKeyboard } from "@/hooks/use-playback-keyboard";
 import { useWaveform } from "@/hooks/use-waveform";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 interface RecordingPlayerProps {
     recording: Recording;
+    /** Directory the recording belongs to (chip in the header). */
+    filetag?: Filetag | null;
     onEnded?: () => void;
     initialPlaybackSpeed?: number;
     initialVolume?: number;
@@ -32,6 +35,7 @@ interface RecordingPlayerProps {
  */
 export function RecordingPlayer({
     recording,
+    filetag,
     onEnded,
     initialPlaybackSpeed = 1.0,
     initialVolume = 75,
@@ -90,6 +94,7 @@ export function RecordingPlayer({
             <RecordingPlayerHeader
                 recording={recording}
                 duration={duration}
+                filetag={filetag}
                 scrubberStyle={scrubberStyle}
                 waveformStatus={waveformStatus}
                 onDecodeWaveform={triggerWaveformDecode}

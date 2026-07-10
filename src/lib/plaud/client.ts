@@ -2,10 +2,14 @@ import { AppError, ErrorCode } from "@/lib/errors";
 import type {
     PlaudApiError,
     PlaudDeviceListResponse,
+    PlaudFiletagListResponse,
+    PlaudFiletagMutationResponse,
     PlaudRecordingsResponse,
     PlaudTempUrlResponse,
+    PlaudUpdateFileTagsResponse,
 } from "@/types/plaud";
 import { plaudFetch } from "./fetch";
+import { denormalizeFiletagIcon } from "./filetag-icons";
 import { safeParseJson } from "./parse";
 import { DEFAULT_SERVER_KEY, PLAUD_SERVERS, PLAUD_USER_AGENT } from "./servers";
 import { resolveWorkspaceToken } from "./workspace";
@@ -270,6 +274,100 @@ export class PlaudClient {
             method: "PATCH",
             body: JSON.stringify({ filename }),
         });
+    }
+
+    private assertFiletagOk<T extends { status: number; msg?: string }>(
+        response: T,
+    ): T {
+        if (response.status === 0) return response;
+        if (response.status === -2) {
+            throw new AppError(
+                ErrorCode.ALREADY_EXISTS,
+                "A Plaud directory with this name already exists.",
+                409,
+                { plaudStatus: response.status },
+            );
+        }
+        throw new AppError(
+            ErrorCode.PLAUD_API_ERROR,
+            response.msg || "Plaud rejected the directory operation.",
+            400,
+            { plaudStatus: response.status },
+        );
+    }
+
+    async listFiletags(): Promise<PlaudFiletagListResponse> {
+        return this.request<PlaudFiletagListResponse>("/filetag/");
+    }
+
+    async createFiletag(input: {
+        name: string;
+        icon: string;
+        color: string;
+    }): Promise<PlaudFiletagMutationResponse> {
+        const response = await this.request<PlaudFiletagMutationResponse>(
+            "/filetag/",
+            {
+                method: "POST",
+                // The official apps read `icon` as an iconfont codepoint;
+                // a canonical name renders as the default folder there.
+                body: JSON.stringify({
+                    ...input,
+                    icon: denormalizeFiletagIcon(input.icon),
+                }),
+            },
+        );
+        return this.assertFiletagOk(response);
+    }
+
+    /** Plaud expects the full body on PATCH — partial updates are not supported upstream. */
+    async updateFiletag(
+        tagId: string,
+        input: { name: string; color: string; icon: string },
+    ): Promise<PlaudFiletagMutationResponse> {
+        const response = await this.request<PlaudFiletagMutationResponse>(
+            `/filetag/${tagId}`,
+            {
+                method: "PATCH",
+                body: JSON.stringify({
+                    ...input,
+                    icon: denormalizeFiletagIcon(input.icon),
+                }),
+            },
+        );
+        return this.assertFiletagOk(response);
+    }
+
+    async deleteFiletag(tagId: string): Promise<PlaudFiletagMutationResponse> {
+        const response = await this.request<PlaudFiletagMutationResponse>(
+            `/filetag/${tagId}`,
+            {
+                method: "DELETE",
+            },
+        );
+        return this.assertFiletagOk(response);
+    }
+
+    /**
+     * Replace the directory assignment for a batch of files. Plaud stores
+     * the assignment as a single-element list; `filetagId = ""` clears it
+     * ("Unorganized").
+     */
+    async updateFileTags(
+        fileIdList: string[],
+        filetagId: string,
+    ): Promise<PlaudUpdateFileTagsResponse> {
+        const response = await this.request<PlaudUpdateFileTagsResponse>(
+            "/file/update-tags",
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    file_id_list: fileIdList,
+                    filetag_id: filetagId,
+                }),
+            },
+        );
+        return this.assertFiletagOk(response);
     }
 }
 
