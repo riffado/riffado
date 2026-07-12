@@ -217,9 +217,17 @@ export function RecordingRow({
                             <DropdownMenuSubContent>
                                 {filetags.map((tag) => {
                                     const Icon = getFiletagIcon(tag.icon);
+                                    // Plaud-backed recordings can't live in
+                                    // local-only directories (the API rejects
+                                    // the move with 409), so disable those
+                                    // targets instead of offering a dead end.
+                                    const incompatible =
+                                        tag.isLocalOnly &&
+                                        !recording.isLocalOnly;
                                     return (
                                         <DropdownMenuItem
                                             key={tag.id}
+                                            disabled={incompatible}
                                             onSelect={() =>
                                                 void onMoveToFiletag(
                                                     recording,
@@ -235,6 +243,11 @@ export function RecordingRow({
                                             </span>
                                             {recording.filetagId === tag.id && (
                                                 <Check className="ml-auto" />
+                                            )}
+                                            {incompatible && (
+                                                <span className="ml-auto text-xs text-muted-foreground">
+                                                    local
+                                                </span>
                                             )}
                                         </DropdownMenuItem>
                                     );

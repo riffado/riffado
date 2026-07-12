@@ -65,16 +65,21 @@ function RailRow({
                 )}
             >
                 {icon}
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-                {localBadge && (
-                    <span className="shrink-0 rounded border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        local
-                    </span>
-                )}
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="min-w-0 truncate">{label}</span>
+                    {localBadge && (
+                        <span className="shrink-0 rounded border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            local
+                        </span>
+                    )}
+                </span>
                 <span
                     className={cn(
-                        "shrink-0 text-xs tabular-nums text-muted-foreground",
-                        actions && "group-hover/tag:opacity-0",
+                        "shrink-0 text-right text-xs tabular-nums text-muted-foreground",
+                        // Reserve at least the footprint of the hover actions
+                        // button (size-8 at right-1) so it swaps in over the
+                        // count alone and never covers the local badge.
+                        actions && "min-w-8 group-hover/tag:opacity-0",
                     )}
                 >
                     {count}

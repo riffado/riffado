@@ -12,7 +12,7 @@ import {
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
-import { serializeFiletag } from "@/lib/filetags/service";
+import { isLocalOnlyRecording, serializeFiletag } from "@/lib/filetags/service";
 import { isAdminEmail } from "@/lib/hosted/admin/guard";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
 import { serializeRecording } from "@/types/recording";
@@ -37,6 +37,7 @@ export default async function DashboardPage() {
                 filesize: recordings.filesize,
                 deviceSn: recordings.deviceSn,
                 filetagId: recordings.filetagId,
+                plaudFileId: recordings.plaudFileId,
                 waveformPeaks: recordings.waveformPeaks,
             })
             .from(recordings)
@@ -93,18 +94,22 @@ export default async function DashboardPage() {
     // Content fields are encrypted at rest; decrypt server-side (this is
     // an RSC — client never sees a key) before serializing for the
     // workstation. Legacy plaintext rows pass through verbatim.
-    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) =>
-        serializeRecording(
-            { ...r, filename: decryptText(r.filename) },
-            {
-                hasTranscript: transcriptIds.has(r.id),
-                hasSummary: summaryIds.has(r.id),
-                // jsonb comes back already-parsed; coerce to the typed shape.
-                waveformPeaks: Array.isArray(waveformPeaks)
-                    ? (waveformPeaks as number[])
-                    : null,
-            },
-        ),
+    const recordingsData = userRecordings.map(
+        ({ waveformPeaks, plaudFileId, ...r }) =>
+            serializeRecording(
+                { ...r, filename: decryptText(r.filename) },
+                {
+                    hasTranscript: transcriptIds.has(r.id),
+                    hasSummary: summaryIds.has(r.id),
+                    // Derived flag only — the raw plaudFileId never
+                    // reaches the client.
+                    isLocalOnly: isLocalOnlyRecording({ plaudFileId }),
+                    // jsonb comes back already-parsed; coerce to the typed shape.
+                    waveformPeaks: Array.isArray(waveformPeaks)
+                        ? (waveformPeaks as number[])
+                        : null,
+                },
+            ),
     );
 
     const transcriptionMap = new Map(
