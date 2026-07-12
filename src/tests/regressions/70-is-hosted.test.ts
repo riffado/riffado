@@ -103,6 +103,101 @@ describe("issue #70: IS_HOSTED env contract", () => {
         }
     });
 
+    it("parses annual and legacy Stripe Price env vars safely", () => {
+        const parsed = envSchema.parse({
+            STRIPE_PRICE_ID_USD: "price_usd",
+            STRIPE_PRICE_ID_EUR: "price_eur",
+            STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
+            STRIPE_STANDARD_PRICE_ID_EUR: "price_eur_standard",
+            STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+            STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+            STRIPE_LEGACY_PRO_PRICE_IDS:
+                " price_old_usd,price_old_eur, ,price_old_extra ",
+            BILLING_PRICE_USD_ANNUAL: "50.00",
+            BILLING_PRICE_EUR_ANNUAL: "50.00",
+        });
+        expect(parsed.STRIPE_STANDARD_PRICE_ID_USD).toBe("price_usd_standard");
+        expect(parsed.STRIPE_STANDARD_PRICE_ID_EUR).toBe("price_eur_standard");
+        expect(parsed.STRIPE_PRICE_ID_USD_ANNUAL).toBe("price_usd_year");
+        expect(parsed.STRIPE_PRICE_ID_EUR_ANNUAL).toBe("price_eur_year");
+        expect(parsed.STRIPE_LEGACY_PRO_PRICE_IDS).toEqual([
+            "price_old_usd",
+            "price_old_eur",
+            "price_old_extra",
+        ]);
+        expect(parsed.BILLING_PRICE_USD_ANNUAL).toBe("50.00");
+        expect(parsed.BILLING_PRICE_EUR_ANNUAL).toBe("50.00");
+        expect(envSchema.parse({}).STRIPE_LEGACY_PRO_PRICE_IDS).toEqual([]);
+        expect(envSchema.parse({}).BILLING_FOUNDING_MEMBER_CAPACITY).toBe(100);
+        expect(envSchema.parse({}).BILLING_STANDARD_PRICE_USD).toBe("9.00");
+        expect(envSchema.parse({}).BILLING_STANDARD_PRICE_EUR).toBe("9.00");
+        expect(() =>
+            envSchema.parse({ BILLING_PRICE_USD_ANNUAL: "50" }),
+        ).toThrow();
+    });
+
+    it("requires complete annual config for every supported monthly currency", () => {
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+            }),
+        ).toThrow("Annual billing requires a display amount");
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD: "price_usd",
+                BILLING_PRICE_USD_ANNUAL: "50.00",
+            }),
+        ).toThrow("Annual billing requires an annual Price");
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_PRICE_ID_EUR: "price_eur",
+                STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+                BILLING_PRICE_USD_ANNUAL: "50.00",
+            }),
+        ).toThrow("EUR missing");
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+                BILLING_PRICE_EUR_ANNUAL: "50.00",
+            }),
+        ).toThrow("requires the monthly EUR Price");
+
+        expect(
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+                BILLING_PRICE_USD_ANNUAL: "50.00",
+            }),
+        ).toMatchObject({
+            STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+            BILLING_PRICE_USD_ANNUAL: "50.00",
+        });
+    });
+
+    it("rejects current Stripe Price ids in legacy Price ids", () => {
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_LEGACY_PRO_PRICE_IDS: "price_old,price_usd",
+            }),
+        ).toThrow(
+            "STRIPE_LEGACY_PRO_PRICE_IDS must not include current Stripe Price ids",
+        );
+        expect(() =>
+            envSchema.parse({
+                STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+                STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+                BILLING_PRICE_USD_ANNUAL: "50.00",
+                BILLING_PRICE_EUR_ANNUAL: "50.00",
+                STRIPE_LEGACY_PRO_PRICE_IDS: "price_usd_year",
+            }),
+        ).toThrow(
+            "STRIPE_LEGACY_PRO_PRICE_IDS must not include current Stripe Price ids",
+        );
+    });
+
     it("requires API_TOKEN_HASH_SECRET to be strong when set", () => {
         expect(envSchema.parse({}).API_TOKEN_HASH_SECRET).toBeUndefined();
         expect(
@@ -146,7 +241,9 @@ describe("issue #70: IS_HOSTED env contract", () => {
                 IS_HOSTED: "true",
                 MYNAH_SERVICE_TOKEN: "secret",
                 RATE_LIMIT_TRUST_PROXY_HEADERS: "true",
-                STRIPE_PRICE_ID_USD: "price_123",
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_PRICE_ID_EUR: "price_eur",
+                STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
                 STRIPE_SECRET_KEY: "sk_test_123",
                 STRIPE_WEBHOOK_SECRET: "whsec_123",
             } as NodeJS.ProcessEnv;

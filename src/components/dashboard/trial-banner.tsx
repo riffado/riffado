@@ -10,12 +10,18 @@ interface BillingState {
     enabled: boolean;
     plan: "self_host" | "hosted_free" | "hosted_pro";
     planTransitionUntil: string | null;
+    foundingOfferAvailable?: boolean;
     grace: { deletionAt: string; path: "trial" | "paid" } | null;
     subscription: { id: string } | null;
 }
 
 type BannerMode =
-    | { kind: "trial"; daysLeft: number | null; transitionUntil: string | null }
+    | {
+          kind: "trial";
+          daysLeft: number | null;
+          transitionUntil: string | null;
+          foundingOfferAvailable: boolean;
+      }
     | { kind: "grace"; deletionAt: string; path: "trial" | "paid" }
     | { kind: "locked" };
 
@@ -52,6 +58,7 @@ function resolveMode(body: BillingState): BannerMode | null {
                 ? daysUntil(body.planTransitionUntil)
                 : null,
             transitionUntil: body.planTransitionUntil,
+            foundingOfferAvailable: body.foundingOfferAvailable === true,
         };
     }
 
@@ -126,11 +133,18 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                             </span>{" "}
                         </>
                     ) : null}
-                    Add a card now to lock{" "}
-                    <span className="font-medium">
-                        founding-member pricing for life
-                    </span>
-                    .
+                    {mode.foundingOfferAvailable ? (
+                        <>
+                            Add a card and pick the monthly plan to claim{" "}
+                            <span className="font-medium">
+                                founding-member monthly pricing
+                            </span>
+                            . You keep it while your subscription remains
+                            active.
+                        </>
+                    ) : (
+                        "Add a card and choose a plan to keep Hosted Pro active after your trial."
+                    )}
                 </p>
                 <Button
                     variant="outline"

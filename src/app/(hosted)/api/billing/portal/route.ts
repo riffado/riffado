@@ -50,6 +50,17 @@ export const POST = apiHandler(async (request) => {
         });
         return NextResponse.json({ url });
     } catch (error) {
+        if (
+            error instanceof CheckoutPreconditionError &&
+            error.code === "missing_portal_configuration"
+        ) {
+            throw new AppError(
+                ErrorCode.SERVICE_UNAVAILABLE,
+                error.message,
+                503,
+                { code: error.code },
+            );
+        }
         if (error instanceof CheckoutPreconditionError) {
             throw new AppError(ErrorCode.NOT_FOUND, error.message, 404, {
                 code: error.code,

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "founding_member_claimed_at" timestamp;

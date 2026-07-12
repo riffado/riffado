@@ -7,11 +7,26 @@ const { envMock, checkoutMock, stripeClientMock, sessionMock } = vi.hoisted(
             BILLING_ENABLED: true,
             BILLING_PRO_INTERVAL: "1 month",
             BILLING_PRO_DESCRIPTION: "Riffado Hosted Pro",
+            STRIPE_PRICE_ID_USD: "price_usd",
+            STRIPE_PRICE_ID_EUR: "price_eur",
+            STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
+            STRIPE_STANDARD_PRICE_ID_EUR: "price_eur_standard",
+            STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+            STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+            BILLING_PRICE_USD: "5.00",
+            BILLING_PRICE_EUR: "5.00",
+            BILLING_STANDARD_PRICE_USD: "9.00",
+            BILLING_STANDARD_PRICE_EUR: "9.00",
+            BILLING_FOUNDING_MEMBER_CAPACITY: 100,
+            BILLING_PRICE_USD_ANNUAL: "50.00",
+            BILLING_PRICE_EUR_ANNUAL: "50.00",
+            BILLING_DEFAULT_CURRENCY: "usd" as "usd" | "eur",
         },
         checkoutMock: {
             startSubscriptionCheckout: vi.fn(),
             reactivateSubscriptionIfStillInPeriod: vi.fn(),
             cancelSubscription: vi.fn(),
+            createBillingPortalSession: vi.fn(),
             CheckoutPreconditionError: class CheckoutPreconditionError extends Error {
                 code: string;
                 constructor(message: string, code: string) {
@@ -37,6 +52,7 @@ vi.mock("@/lib/hosted/billing/stripe-client", () => stripeClientMock);
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/db/schema", () => ({}));
 vi.mock("@/db/queries/billing", () => ({
+    getFoundingMemberAvailability: vi.fn(),
     getUserBillingState: vi.fn(),
     getSubscriptionByUserId: vi.fn(),
     getUserStorageBytes: vi.fn(),
@@ -50,7 +66,9 @@ import { POST as cancelRoute } from "@/app/(hosted)/api/billing/cancel/route";
 import { POST as checkoutRoute } from "@/app/(hosted)/api/billing/checkout/route";
 import { POST as deleteNowRoute } from "@/app/(hosted)/api/billing/delete-now/route";
 import { GET as meRoute } from "@/app/(hosted)/api/billing/me/route";
+import { POST as portalRoute } from "@/app/(hosted)/api/billing/portal/route";
 import {
+    getFoundingMemberAvailability,
     getSubscriptionByUserId,
     getUserBillingState,
     getUserStorageBytes,
@@ -113,6 +131,56 @@ describe("POST /api/billing/checkout", () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.checkoutUrl).toBe("https://checkout.stripe.com/c/abc");
+        expect(checkoutMock.startSubscriptionCheckout).toHaveBeenCalledWith(
+            expect.objectContaining({ interval: "month" }),
+        );
+    });
+
+    it("passes through an annual interval when requested", async () => {
+        checkoutMock.startSubscriptionCheckout.mockResolvedValue({
+            checkoutUrl: "https://checkout.stripe.com/c/annual",
+            sessionId: "cs_test",
+        });
+        const res = await checkoutRoute(
+            makeRequest({
+                withdrawalWaiver: true,
+                redirectUrl: "https://app/redirect",
+                interval: "year",
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect(checkoutMock.startSubscriptionCheckout).toHaveBeenCalledWith(
+            expect.objectContaining({ interval: "year" }),
+        );
+    });
+
+    it("rejects invalid intervals", async () => {
+        const res = await checkoutRoute(
+            makeRequest({
+                withdrawalWaiver: true,
+                redirectUrl: "https://app/redirect",
+                interval: "week",
+            }),
+        );
+        expect(res.status).toBe(400);
+        expect(checkoutMock.startSubscriptionCheckout).not.toHaveBeenCalled();
+    });
+
+    it("returns a controlled non-500 response when annual checkout is unavailable", async () => {
+        checkoutMock.startSubscriptionCheckout.mockRejectedValue(
+            new checkoutMock.CheckoutPreconditionError(
+                "annual unavailable",
+                "price_unavailable",
+            ),
+        );
+        const res = await checkoutRoute(
+            makeRequest({
+                withdrawalWaiver: true,
+                redirectUrl: "https://app/redirect",
+                interval: "year",
+            }),
+        );
+        expect(res.status).toBe(409);
     });
 
     it("reactivates instead of charging when already_subscribed + still in paid period", async () => {
@@ -189,6 +257,36 @@ describe("POST /api/billing/cancel", () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.ok).toBe(true);
+    });
+});
+
+describe("POST /api/billing/portal", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        envMock.IS_HOSTED = true;
+        envMock.BILLING_ENABLED = true;
+        stripeClientMock.isStripeConfigured.mockReturnValue(true);
+    });
+
+    it("returns 503 when the safe Portal configuration is missing", async () => {
+        checkoutMock.createBillingPortalSession.mockRejectedValue(
+            new checkoutMock.CheckoutPreconditionError(
+                "Billing portal is not safely configured",
+                "missing_portal_configuration",
+            ),
+        );
+
+        const res = await portalRoute(
+            new Request("https://example.com/api/billing/portal", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    returnUrl: "https://example.com/settings#billing",
+                }),
+            }),
+        );
+
+        expect(res.status).toBe(503);
     });
 });
 
@@ -276,6 +374,7 @@ describe("GET /api/billing/me", () => {
                 canceledAt: null,
                 amountValue: "5.00",
                 amountCurrency: "EUR",
+                interval: "1 month",
             },
         );
         (getEntitlements as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -287,6 +386,14 @@ describe("GET /api/billing/me", () => {
         (getUserStorageBytes as ReturnType<typeof vi.fn>).mockResolvedValue(
             1_000_000_000,
         );
+        (
+            getFoundingMemberAvailability as ReturnType<typeof vi.fn>
+        ).mockResolvedValue({
+            capacity: 100,
+            claimed: 42,
+            reserved: 2,
+            remaining: 56,
+        });
 
         const res = await meRoute(
             new Request("https://example.com/api/billing/me"),
@@ -297,6 +404,31 @@ describe("GET /api/billing/me", () => {
         expect(body.plan).toBe("hosted_pro");
         expect(body.foundingMember).toBe(true);
         expect(body.subscription.id).toBe("sub_abc");
+        expect(body.subscription.interval).toBe("1 month");
+        expect(body.pricing.monthly.founding.usd).toEqual({
+            currency: "usd",
+            interval: "month",
+            displayAmount: "5.00",
+            available: true,
+        });
+        expect(body.pricing.monthly.standard.usd).toEqual({
+            currency: "usd",
+            interval: "month",
+            displayAmount: "9.00",
+            available: true,
+        });
+        expect(body.pricing.monthly.foundingAvailability).toEqual({
+            capacity: 100,
+            claimed: 42,
+            reserved: 2,
+            remaining: 56,
+        });
+        expect(body.pricing.annual.eur).toEqual({
+            currency: "eur",
+            interval: "year",
+            displayAmount: "50.00",
+            available: true,
+        });
         expect(body.usage.storageBytes).toBe(1_000_000_000);
         expect(body.usage.monthlyMynahSecondsRemaining).toBe(40_000);
     });

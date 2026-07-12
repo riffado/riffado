@@ -5,6 +5,11 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+    billingPriceCatalog,
+    type PublicPrice,
+    trimDisplayAmount,
+} from "@/lib/hosted/billing/pricing";
 
 /**
  * Landing FAQ.
@@ -46,13 +51,61 @@ type FaqGroup = {
     items: FaqItem[];
 };
 
+/**
+ * Price copy is derived from the configured billing prices; the
+ * annual sentence only appears when an annual plan is actually
+ * purchasable, and only quotes an amount when one is configured.
+ * Never invent an annual amount or a discount claim here.
+ */
+function formatCatalogPrice(price: PublicPrice, suffix: string): string {
+    const symbol = price.currency === "usd" ? "$" : "€";
+    const amount = price.displayAmount
+        ? trimDisplayAmount(price.displayAmount)
+        : null;
+    return amount ? `${symbol}${amount}${suffix}` : "";
+}
+
+function hostedCostAnswer(): string {
+    const catalog = billingPriceCatalog();
+    const foundingParts = [
+        catalog.monthly.founding.usd,
+        catalog.monthly.founding.eur,
+    ]
+        .flatMap((price) =>
+            price ? [formatCatalogPrice(price, "/month founding")] : [],
+        )
+        .filter(Boolean);
+    const standardParts = [
+        catalog.monthly.standard.usd,
+        catalog.monthly.standard.eur,
+    ]
+        .flatMap((price) =>
+            price ? [formatCatalogPrice(price, "/month standard")] : [],
+        )
+        .filter(Boolean);
+    const monthlyParts = [...foundingParts, ...standardParts];
+    const annualParts = [catalog.annual.usd, catalog.annual.eur]
+        .flatMap((price) => (price ? [formatCatalogPrice(price, "/year")] : []))
+        .filter(Boolean);
+    const monthlySentence =
+        monthlyParts.length > 0
+            ? `Hosted Pro costs ${monthlyParts.join(" or ")}.`
+            : "Hosted billing is not configured on this instance.";
+    const annualSentence =
+        annualParts.length > 0
+            ? ` Prefer to pay yearly? Annual billing is available at ${annualParts.join(" or ")}.`
+            : "";
+
+    return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a 14-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
+}
+
 const GROUPS: FaqGroup[] = [
     {
         label: "Getting started",
         items: [
             {
                 q: "What does hosted Riffado cost?",
-                a: "Five dollars a month (in the EU, €5/mo with VAT included). You start with a 14-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.",
+                a: hostedCostAnswer(),
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",

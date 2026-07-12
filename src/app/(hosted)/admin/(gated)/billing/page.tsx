@@ -26,6 +26,7 @@ export default async function AdminBillingPage({
         listGraceUsers(),
     ]);
     const pages = Math.max(1, Math.ceil(subs.total / PAGE_SIZE));
+    const counts = overview.counts;
 
     return (
         <div className="flex flex-col gap-6">
@@ -38,24 +39,100 @@ export default async function AdminBillingPage({
 
             {/* Overview tiles */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Tile label="Pro" value={overview.proPlan} />
-                <Tile label="Free/lockout" value={overview.freePlan} />
-                <Tile label="In trial" value={overview.inTrial} />
-                <Tile label="In grace" value={overview.inGrace} />
+                <Tile label="Pro" value={counts.proPlan} />
+                <Tile label="Free/lockout" value={counts.freePlan} />
+                <Tile label="In trial" value={counts.inTrial} />
+                <Tile label="In grace" value={counts.inGrace} />
+                <Tile label="Active subs" value={counts.activeSubscriptions} />
                 <Tile
-                    label="Founding members"
-                    value={overview.foundingMembers}
+                    label="Past-due subs"
+                    value={counts.pastDueSubscriptions}
                 />
                 <Tile
-                    label="Active subs"
-                    value={overview.activeSubscriptions}
+                    label="Cancel pending"
+                    value={counts.cancelPendingSubscriptions}
                 />
                 <Tile
-                    label="Canceled subs"
-                    value={overview.canceledSubscriptions}
+                    label="Monthly / annual"
+                    value={`${counts.monthlySubscriptions} / ${counts.annualSubscriptions}`}
                 />
-                <Tile label="Total users" value={overview.totalUsers} />
+                <Tile
+                    label="First payments, 30d"
+                    value={counts.firstPaymentsLast30Days}
+                />
+                <Tile label="Founding members" value={counts.foundingMembers} />
+                <Tile
+                    label="Founding slots claimed / reserved"
+                    value={`${counts.foundingSlotsClaimed} / ${counts.foundingSlotsReserved}`}
+                />
+                <Tile
+                    label="Founding slots left"
+                    value={counts.foundingSlotsRemaining}
+                />
+                <Tile label="Total users" value={counts.totalUsers} />
             </div>
+
+            {overview.activeMrrByCurrency.length > 0 && (
+                <div>
+                    <h2 className="text-sm font-semibold mb-2">
+                        Active MRR-equivalent by currency
+                    </h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {overview.activeMrrByCurrency.map((row) => (
+                            <Tile
+                                key={row.amountCurrency}
+                                label={`${row.amountCurrency} (${row.subscriptionCount} subs)`}
+                                value={formatMoney(row.monthlyEquivalent)}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {overview.unknownLivePriceGroups.length > 0 && (
+                <div>
+                    <h2 className="text-sm font-semibold mb-2">
+                        Unknown live Stripe Price groups
+                    </h2>
+                    <div className="overflow-x-auto rounded border">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b bg-muted/30 text-left">
+                                    <th className="px-3 py-2">Price id</th>
+                                    <th className="px-3 py-2">Status</th>
+                                    <th className="px-3 py-2">Currency</th>
+                                    <th className="px-3 py-2">Interval</th>
+                                    <th className="px-3 py-2">Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {overview.unknownLivePriceGroups.map((row) => (
+                                    <tr
+                                        key={`${row.stripePriceId ?? "none"}:${row.status}:${row.amountCurrency}:${row.interval}`}
+                                        className="border-b"
+                                    >
+                                        <td className="px-3 py-2 font-mono text-xs">
+                                            {row.stripePriceId ?? "(none)"}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <StatusBadge status={row.status} />
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            {row.amountCurrency}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            {row.interval || "\u2014"}
+                                        </td>
+                                        <td className="px-3 py-2 tabular-nums">
+                                            {row.subscriptionCount}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             {/* Grace users */}
             {graceUsers.length > 0 && (
@@ -108,7 +185,7 @@ export default async function AdminBillingPage({
                         Subscriptions ({subs.total})
                     </h2>
                     <div className="flex gap-2 text-xs">
-                        {["all", "active", "canceled"].map((s) => (
+                        {["all", "active", "past_due", "canceled"].map((s) => (
                             <Link
                                 key={s}
                                 href={`/admin/billing${s === "all" ? "" : `?status=${s}`}`}
@@ -130,6 +207,8 @@ export default async function AdminBillingPage({
                                 <th className="px-3 py-2">User</th>
                                 <th className="px-3 py-2">Status</th>
                                 <th className="px-3 py-2">Amount</th>
+                                <th className="px-3 py-2">Interval</th>
+                                <th className="px-3 py-2">Price id</th>
                                 <th className="px-3 py-2">Next payment</th>
                                 <th className="px-3 py-2">Created</th>
                             </tr>
@@ -152,6 +231,12 @@ export default async function AdminBillingPage({
                                         {s.amountValue} {s.amountCurrency}
                                     </td>
                                     <td className="px-3 py-2">
+                                        {s.interval || "\u2014"}
+                                    </td>
+                                    <td className="px-3 py-2 font-mono text-xs">
+                                        {s.stripePriceId ?? "\u2014"}
+                                    </td>
+                                    <td className="px-3 py-2">
                                         {s.nextPaymentAt
                                             ? formatRelative(s.nextPaymentAt)
                                             : "\u2014"}
@@ -164,7 +249,7 @@ export default async function AdminBillingPage({
                             {subs.rows.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={5}
+                                        colSpan={7}
                                         className="px-3 py-6 text-center text-muted-foreground"
                                     >
                                         No subscriptions found.
@@ -197,7 +282,13 @@ export default async function AdminBillingPage({
     );
 }
 
-function Tile({ label, value }: { label: string; value: number }) {
+function formatMoney(value: string): string {
+    const numeric = Number.parseFloat(value);
+    if (!Number.isFinite(numeric)) return value;
+    return numeric.toFixed(2);
+}
+
+function Tile({ label, value }: { label: string; value: number | string }) {
     return (
         <div className="rounded border bg-card px-4 py-3">
             <div className="text-2xl font-semibold tabular-nums">{value}</div>
@@ -210,9 +301,11 @@ function StatusBadge({ status }: { status: string }) {
     const color =
         status === "active"
             ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30"
-            : status === "canceled"
-              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
-              : "bg-muted text-muted-foreground border-border";
+            : status === "past_due"
+              ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30"
+              : status === "canceled"
+                ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30"
+                : "bg-muted text-muted-foreground border-border";
     return (
         <span className={`text-xs px-1.5 py-0.5 rounded border ${color}`}>
             {status}

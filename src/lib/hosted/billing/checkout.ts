@@ -1,11 +1,23 @@
+import type Stripe from "stripe";
 import {
+    attachFoundingMemberReservationToCheckoutSession,
+    createFoundingMemberReservation,
+    type FoundingMemberReservationRow,
     getBillingCustomerByUserId,
     getSubscriptionByUserId,
+    getUserBillingState,
+    releaseFoundingMemberReservation,
     upsertBillingCustomer,
 } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import { mirrorStripeSubscription } from "./mirror";
-import { resolvePrice } from "./pricing";
+import {
+    type BillingCurrency,
+    type BillingInterval,
+    isFoundingMonthlyPriceId,
+    resolvePrice,
+    resolveStandardMonthlyPriceForCurrency,
+} from "./pricing";
 import { getStripe } from "./stripe-client";
 
 export class CheckoutPreconditionError extends Error {
@@ -18,7 +30,9 @@ export class CheckoutPreconditionError extends Error {
             | "subscription_not_canceled"
             | "subscription_expired"
             | "missing_stripe_customer"
-            | "reactivation_failed",
+            | "missing_portal_configuration"
+            | "reactivation_failed"
+            | "price_unavailable",
     ) {
         super(message);
         this.name = "CheckoutPreconditionError";
@@ -72,6 +86,8 @@ export interface StartCheckoutInput {
     userName?: string | null;
     /** Buyer country (ISO-3166-1 alpha-2) for currency resolution. */
     country?: string | null;
+    /** Billing interval selected for Checkout. Defaults to monthly. */
+    interval?: BillingInterval;
     /** Where Stripe returns the user after a completed checkout. */
     redirectUrl: string;
     /** Where Stripe returns the user if they abandon checkout. */
@@ -90,6 +106,11 @@ export interface StartCheckoutResult {
     checkoutUrl: string;
     sessionId: string;
 }
+
+const FOUNDING_CHECKOUT_TTL_MS = 35 * 60 * 1000;
+const FOUNDING_RESERVATION_METADATA_KEY = "foundingReservationId";
+const FOUNDING_RESERVATION_EXPIRES_METADATA_KEY =
+    "foundingReservationExpiresAt";
 
 /**
  * Start a Stripe Checkout Session (`mode: subscription`). Stripe creates
@@ -119,13 +140,13 @@ export async function startSubscriptionCheckout(
         );
     }
 
-    const stripeCustomerId = await getOrCreateStripeCustomer({
+    const interval = input.interval ?? "month";
+    const { price, reservation } = await resolveCheckoutPrice({
         userId: input.userId,
-        email: input.userEmail,
-        name: input.userName ?? null,
+        country: input.country,
+        interval,
     });
 
-    const price = resolvePrice(input.country);
     const stripe = getStripe();
 
     // VAT line on invoices for EU/EEA (EUR) sales only. USD sales are
@@ -133,32 +154,76 @@ export async function startSubscriptionCheckout(
     const taxRateId =
         price.currency === "eur" ? env.STRIPE_TAX_RATE_ID_EUR : undefined;
 
-    const session = await stripe.checkout.sessions.create(
-        {
-            mode: "subscription",
-            customer: stripeCustomerId,
-            line_items: [{ price: price.priceId, quantity: 1 }],
-            success_url: input.redirectUrl,
-            cancel_url: input.cancelUrl ?? input.redirectUrl,
-            client_reference_id: input.userId,
-            billing_address_collection: "required",
-            // Persist the collected billing address back onto the existing
-            // Customer; Checkout skips this for a passed-in customer unless
-            // customer_update is set, which would leave billing_country null.
-            customer_update: { address: "auto", name: "auto" },
-            subscription_data: {
-                metadata: {
-                    userId: input.userId,
-                    withdrawalWaiverAcceptedAt:
-                        input.withdrawalWaiverAcceptedAt.toISOString(),
+    const metadata = checkoutMetadata({
+        userId: input.userId,
+        reservation,
+    });
+
+    let session: Stripe.Checkout.Session;
+    try {
+        const stripeCustomerId = await getOrCreateStripeCustomer({
+            userId: input.userId,
+            email: input.userEmail,
+            name: input.userName ?? null,
+        });
+        session = await stripe.checkout.sessions.create(
+            {
+                mode: "subscription",
+                customer: stripeCustomerId,
+                line_items: [{ price: price.priceId, quantity: 1 }],
+                success_url: input.redirectUrl,
+                cancel_url: input.cancelUrl ?? input.redirectUrl,
+                client_reference_id: input.userId,
+                billing_address_collection: "required",
+                ...(reservation
+                    ? {
+                          expires_at: Math.floor(
+                              reservation.expiresAt.getTime() / 1000,
+                          ),
+                      }
+                    : {}),
+                // Persist the collected billing address back onto the existing
+                // Customer; Checkout skips this for a passed-in customer unless
+                // customer_update is set, which would leave billing_country null.
+                customer_update: { address: "auto", name: "auto" },
+                subscription_data: {
+                    metadata: {
+                        ...metadata,
+                        withdrawalWaiverAcceptedAt:
+                            input.withdrawalWaiverAcceptedAt.toISOString(),
+                    },
+                    // Applied to every renewal invoice, not just the first.
+                    ...(taxRateId ? { default_tax_rates: [taxRateId] } : {}),
                 },
-                // Applied to every renewal invoice, not just the first.
-                ...(taxRateId ? { default_tax_rates: [taxRateId] } : {}),
+                metadata,
             },
-            metadata: { userId: input.userId },
-        },
-        { idempotencyKey: input.idempotencyKey },
-    );
+            { idempotencyKey: input.idempotencyKey },
+        );
+    } catch (error) {
+        if (reservation) {
+            await releaseFoundingMemberReservation({
+                reservationId: reservation.id,
+                releasedAt: new Date(),
+            });
+        }
+        throw error;
+    }
+
+    if (reservation) {
+        const attached = await attachFoundingMemberReservationToCheckoutSession(
+            {
+                reservationId: reservation.id,
+                checkoutSessionId: session.id,
+            },
+        );
+        if (!attached) {
+            await stripe.checkout.sessions.expire(session.id);
+            throw new CheckoutPreconditionError(
+                "The founding monthly reservation is no longer available",
+                "price_unavailable",
+            );
+        }
+    }
 
     if (!session.url) {
         throw new Error("Stripe did not return a Checkout Session URL");
@@ -198,8 +263,27 @@ export async function reactivateSubscriptionIfStillInPeriod(input: {
         );
     }
 
+    const state = await getUserBillingState(input.userId);
+    const item = current.items.data[0];
+    const priceCurrency = item?.price.currency as BillingCurrency | undefined;
+    const lostFoundingPrice =
+        state?.foundingMember === false &&
+        isFoundingMonthlyPriceId(
+            typeof item?.price.id === "string" ? item.price.id : null,
+        );
+    const replacement =
+        lostFoundingPrice && priceCurrency
+            ? resolveStandardMonthlyPriceForCurrency(priceCurrency)
+            : null;
+
     const updated = await stripe.subscriptions.update(sub.id, {
         cancel_at_period_end: false,
+        ...(replacement && item
+            ? {
+                  items: [{ id: item.id, price: replacement.priceId }],
+                  proration_behavior: "none" as const,
+              }
+            : {}),
     });
     await mirrorStripeSubscription(updated);
 }
@@ -235,6 +319,13 @@ export async function createBillingPortalSession(input: {
     userId: string;
     returnUrl: string;
 }): Promise<string> {
+    if (!env.STRIPE_PORTAL_CONFIGURATION_ID) {
+        throw new CheckoutPreconditionError(
+            "Billing portal is not safely configured",
+            "missing_portal_configuration",
+        );
+    }
+
     const customer = await getBillingCustomerByUserId(input.userId);
     if (!customer) {
         throw new CheckoutPreconditionError(
@@ -246,11 +337,87 @@ export async function createBillingPortalSession(input: {
     const session = await stripe.billingPortal.sessions.create({
         customer: customer.stripeCustomerId,
         return_url: input.returnUrl,
-        ...(env.STRIPE_PORTAL_CONFIGURATION_ID
-            ? { configuration: env.STRIPE_PORTAL_CONFIGURATION_ID }
-            : {}),
+        configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
     });
     return session.url;
+}
+
+async function resolveCheckoutPrice(input: {
+    userId: string;
+    country?: string | null;
+    interval: BillingInterval;
+}): Promise<{
+    price: ReturnType<typeof resolvePrice>;
+    reservation: FoundingMemberReservationRow | null;
+}> {
+    if (input.interval !== "month") {
+        return {
+            price: resolveAvailablePrice(input.country, "year", "standard"),
+            reservation: null,
+        };
+    }
+
+    const foundingPrice = resolveOptionalPrice(
+        input.country,
+        "month",
+        "founding",
+    );
+    if (foundingPrice) {
+        const now = new Date();
+        const reservation = await createFoundingMemberReservation({
+            userId: input.userId,
+            capacity: env.BILLING_FOUNDING_MEMBER_CAPACITY,
+            stripePriceId: foundingPrice.priceId,
+            now,
+            expiresAt: new Date(now.getTime() + FOUNDING_CHECKOUT_TTL_MS),
+        });
+        if (reservation) return { price: foundingPrice, reservation };
+    }
+
+    return {
+        price: resolveAvailablePrice(input.country, "month", "standard"),
+        reservation: null,
+    };
+}
+
+function resolveAvailablePrice(
+    country: string | null | undefined,
+    interval: BillingInterval,
+    monthlyKind: "founding" | "standard" = "founding",
+): ReturnType<typeof resolvePrice> {
+    try {
+        return resolvePrice(country, interval, monthlyKind);
+    } catch {
+        throw new CheckoutPreconditionError(
+            `The ${interval === "year" ? "annual" : "monthly"} plan is not available for checkout`,
+            "price_unavailable",
+        );
+    }
+}
+
+function resolveOptionalPrice(
+    country: string | null | undefined,
+    interval: BillingInterval,
+    monthlyKind: "founding" | "standard",
+): ReturnType<typeof resolvePrice> | null {
+    try {
+        return resolvePrice(country, interval, monthlyKind);
+    } catch {
+        return null;
+    }
+}
+
+function checkoutMetadata(input: {
+    userId: string;
+    reservation: FoundingMemberReservationRow | null;
+}): Record<string, string> {
+    if (!input.reservation) return { userId: input.userId };
+    return {
+        userId: input.userId,
+        [FOUNDING_RESERVATION_METADATA_KEY]: input.reservation.id,
+        [FOUNDING_RESERVATION_EXPIRES_METADATA_KEY]:
+            input.reservation.expiresAt.toISOString(),
+    };
 }
 
 function isLiveStatus(status: string): boolean {
@@ -259,5 +426,5 @@ function isLiveStatus(status: string): boolean {
     );
 }
 
-/** Re-exported so the env-driven founding window lives in one place. */
+/** Legacy re-export for older tests/call sites; founding pricing is capacity-based. */
 export { isWithinFoundingWindow } from "./plans";

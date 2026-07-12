@@ -225,6 +225,20 @@
       "when": 1783618614230,
       "tag": "0031_goofy_jimmy_woo",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1783855328816,
+      "tag": "0032_open_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1783855760404,
+      "tag": "0033_tough_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }

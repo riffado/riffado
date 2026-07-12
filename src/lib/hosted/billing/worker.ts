@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { closeDueCycles } from "./cycle-close";
 import { processDueAccountDeletions } from "./deletion";
+import { reconcileExpiredFoundingReservations } from "./founding-reservations";
 import { processGraceReminders } from "./grace-reminders";
 import { processExpiredTrials } from "./lapse";
 import { reconcileStaleSubscriptions } from "./reconcile";
@@ -79,6 +80,15 @@ export async function tick(): Promise<void> {
             ) {
                 console.log(
                     `[billing-worker] transition-emails start=${transition.start} reminder=${transition.reminder} ended=${transition.ended} errors=${transition.errors}`,
+                );
+            }
+        });
+
+        await runPhase("founding-reservations", async () => {
+            const reservations = await reconcileExpiredFoundingReservations();
+            if (reservations.inspected > 0 || reservations.errors > 0) {
+                console.log(
+                    `[billing-worker] founding-reservations inspected=${reservations.inspected} expired=${reservations.expired} completed=${reservations.completed} errors=${reservations.errors}`,
                 );
             }
         });

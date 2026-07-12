@@ -43,11 +43,22 @@ Pro-granting status defensively, but in practice a live subscription means paid.
 
 ## Currency
 
-Two fixed Stripe Prices, one per currency (`STRIPE_PRICE_ID_USD`,
-`STRIPE_PRICE_ID_EUR`). `pricing.ts` resolves the buyer's currency from the geo
-country at checkout (EU/EEA → EUR, else the configured default), picks the
-matching Price, and the subscription's currency is then fixed for its lifetime.
-`billing_country` is captured for our own records via
+Stripe Prices are resolved by currency + interval. `STRIPE_PRICE_ID_USD` and
+`STRIPE_PRICE_ID_EUR` are the founding monthly Prices.
+`STRIPE_STANDARD_PRICE_ID_USD` and `STRIPE_STANDARD_PRICE_ID_EUR` are the
+standard monthly Prices used once founding capacity is gone; billing requires at
+least one founding monthly and one standard monthly Price.
+`STRIPE_PRICE_ID_USD_ANNUAL` and `STRIPE_PRICE_ID_EUR_ANNUAL` are optional
+annual Prices. When annual billing is enabled, every supported monthly currency
+must have a matching annual Price and `BILLING_PRICE_*_ANNUAL` display amount.
+`pricing.ts` resolves the buyer's currency from the geo country (EU/EEA → EUR,
+else the configured default), then picks founding monthly only when an atomic DB
+reservation succeeds and standard monthly otherwise. Annual Checkout never falls
+back to a monthly Price and never claims founding pricing. The subscription's
+currency/interval are then fixed for its lifetime.
+`STRIPE_LEGACY_PRO_PRICE_IDS` grants Pro when mirrored from Stripe but those ids
+are excluded from new Checkout sessions and must not duplicate current Price
+ids. `billing_country` is captured for our own records via
 `customer_update: { address: "auto" }` on the Session (Checkout does not persist
 a collected address back onto an existing Customer otherwise).
 
@@ -59,6 +70,24 @@ Under dahlia, `current_period_end` lives on the **subscription item**
 subscription reference is `invoice.parent.subscription_details.subscription`,
 not the removed top-level `invoice.subscription`. `mirror.ts` and `webhook.ts`
 read the dahlia locations; do not "fix" them back to the pre-dahlia fields.
+
+## Founding monthly reservations
+
+Founding pricing is capacity-based. Checkout does not choose the founding Price
+from a read-only count. It first creates a short-lived
+`founding_member_reservations` row inside an advisory-lock transaction. Public
+remaining count is `capacity - consumed slots - reserved sessions`, so open
+Checkout Sessions hold capacity. The founding Stripe Price is only sent to
+Stripe when the reservation exists, and the reservation id is copied into both
+Checkout Session metadata and Subscription metadata.
+
+Stripe Checkout Sessions issued for founding pricing get an explicit
+`expires_at`. Expired or abandoned sessions release capacity only after Stripe
+confirms `checkout.session.expired` or the worker retrieves the expired session.
+Successful payment consumes the reservation from subscription metadata and stamps
+`users.founding_member_claimed_at`; that timestamp is never cleared. Cancellation
+clears only `users.founding_member`, so the active price is forfeited without
+reopening capacity.
 
 ## Webhook claim blocks transient-failure retries
 
@@ -101,9 +130,10 @@ host (`ADMIN_HOST_SHARED_PREFIXES`).
 
 `plans.ts` maps `(status, priceId)` → plan + entitlements. Pro requires both a
 Pro-granting status (`active`, `trialing`, `past_due`) AND a configured Pro
-Price id. An unknown price (misconfiguration) yields **free** entitlements,
-never privilege escalation — visible as "active subscription, free
-entitlements" rather than a silent upgrade.
+Price id. Legacy Price ids are accepted for existing subscriptions but are not
+checkoutable. An unknown live Price is mirrored for operator visibility but does
+not mutate `users.plan` or run activation/lapse side effects; a terminal
+subscription still demotes through the normal lapse path.
 
 ## EU consumer-law waiver
 
@@ -117,11 +147,12 @@ through to the subscription metadata and mirrored back onto the local row.
 ## File map
 
 - `stripe-client.ts` — lazy SDK singleton (pinned `apiVersion`) + config check.
-- `pricing.ts` — currency resolution, per-currency Price lookup, `isProPriceId`.
-- `plans.ts` — `(status, priceId)` → entitlements, `unixToDate`, founding window.
+- `pricing.ts` — currency/interval/founding-vs-standard resolution, Price catalog, `isProPriceId`.
+- `founding-reservations.ts` — reconciles expired founding Checkout reservations against Stripe.
+- `plans.ts` — `(status, priceId)` → entitlements and `unixToDate`.
 - `checkout.ts` — `startSubscriptionCheckout`, `reactivateSubscriptionIfStillInPeriod`,
   `cancelSubscription`, `createBillingPortalSession`, `getOrCreateStripeCustomer`.
 - `mirror.ts` — `mirrorStripeSubscription`, `mirrorSubscriptionById`,
   `mirrorCheckoutSession`.
-- `webhook.ts` — dispatch: claim idempotency, delegate to mirror, payment-failed email.
+- `webhook.ts` — dispatch: claim idempotency, delegate to mirror, expire founding reservations, payment-failed email.
 - `reconcile.ts` — periodic drift correction against live Stripe state.

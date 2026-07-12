@@ -24,6 +24,11 @@ export const userPlanEnum = pgEnum("user_plan", [
     "hosted_pro",
 ]);
 
+export const foundingMemberReservationStatusEnum = pgEnum(
+    "founding_member_reservation_status",
+    ["reserved", "consumed", "released", "expired"],
+);
+
 // Better Auth tables (handled by Better Auth)
 export const users = pgTable("users", {
     id: text("id")
@@ -56,9 +61,11 @@ export const users = pgTable("users", {
         .default(0),
     // Next time cycle-close should refresh the Mynah counter. NULL = never.
     monthlyMynahGrantResetAt: timestamp("monthly_mynah_grant_reset_at"),
-    // True iff first paid subscription was created within the founding window.
-    // Locks the $5/mo price forever per the consolidated plan.
+    // True while the user currently retains founding monthly pricing. Cleared
+    // when they cancel/lapse; the separate claimed timestamp is never cleared
+    // so the first-100 capacity does not reopen.
     foundingMember: boolean("founding_member").notNull().default(false),
+    foundingMemberClaimedAt: timestamp("founding_member_claimed_at"),
     // First time the user was successfully charged. NULL = never paid.
     // Used to branch the grace-period policy on lapse:
     //  - NULL (trial non-convert) -> BILLING_TRIAL_GRACE_DAYS (7)
@@ -841,6 +848,43 @@ export const billingCustomers = pgTable("billing_customers", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const foundingMemberReservations = pgTable(
+    "founding_member_reservations",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
+        stripePriceId: text("stripe_price_id").notNull(),
+        status: foundingMemberReservationStatusEnum("status")
+            .notNull()
+            .default("reserved"),
+        reservedAt: timestamp("reserved_at").notNull().defaultNow(),
+        expiresAt: timestamp("expires_at").notNull(),
+        consumedAt: timestamp("consumed_at"),
+        releasedAt: timestamp("released_at"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        statusExpiresAtIdx: index(
+            "founding_member_reservations_status_expires_at_idx",
+        ).on(table.status, table.expiresAt),
+        userStatusIdx: index("founding_member_reservations_user_status_idx").on(
+            table.userId,
+            table.status,
+        ),
+        userReservedUnique: uniqueIndex(
+            "founding_member_reservations_user_reserved_unique",
+        )
+            .on(table.userId)
+            .where(sql`${table.status} = 'reserved'`),
+    }),
+);
 
 export const subscriptions = pgTable(
     "subscriptions",

@@ -3,11 +3,13 @@ import type Stripe from "stripe";
 import { db } from "@/db";
 import {
     clearAccountDeletion,
+    consumeFoundingMemberReservation,
+    forfeitFoundingMember,
     getBillingCustomerByStripeId,
     markEverPaid,
+    releaseFoundingMemberReservation,
     scheduleAccountDeletion,
     setUserPlan,
-    stampFoundingMember,
     upsertSubscription,
 } from "@/db/queries/billing";
 import { users } from "@/db/schema";
@@ -22,11 +24,13 @@ import {
     computeDeletionScheduledAt,
     graceDaysForPath,
 } from "./grace";
+import { entitlementsForSubscription, unixToDate } from "./plans";
 import {
-    entitlementsForSubscription,
-    isWithinFoundingWindow,
-    unixToDate,
-} from "./plans";
+    type BillingCurrency,
+    isFoundingMonthlyPriceId,
+    isProPriceId,
+    resolveStandardMonthlyPriceForCurrency,
+} from "./pricing";
 import { getStripe } from "./stripe-client";
 
 interface NormalizedSubscription {
@@ -43,6 +47,7 @@ interface NormalizedSubscription {
     startDate: Date | null;
     canceledAt: Date | null;
     withdrawalWaiverAcceptedAt: Date | null;
+    foundingReservationId: string | null;
 }
 
 function customerIdOf(
@@ -68,6 +73,7 @@ function normalize(sub: Stripe.Subscription): NormalizedSubscription {
         : unixToDate(sub.canceled_at);
 
     const waiverIso = sub.metadata?.withdrawalWaiverAcceptedAt;
+    const foundingReservationId = sub.metadata?.foundingReservationId;
     return {
         id: sub.id,
         userId:
@@ -86,6 +92,10 @@ function normalize(sub: Stripe.Subscription): NormalizedSubscription {
         canceledAt,
         withdrawalWaiverAcceptedAt:
             typeof waiverIso === "string" ? new Date(waiverIso) : null,
+        foundingReservationId:
+            typeof foundingReservationId === "string"
+                ? foundingReservationId
+                : null,
     };
 }
 
@@ -138,6 +148,14 @@ export async function mirrorStripeSubscription(
         status: n.status,
         priceId: n.stripePriceId,
     });
+
+    if (isLiveSubscriptionStatus(n.status) && !isProPriceId(n.stripePriceId)) {
+        console.warn(
+            `[billing-mirror] subscription ${n.id} has live status "${n.status}" but unrecognized price ${n.stripePriceId}; mirrored subscription without mutating plan`,
+        );
+        return;
+    }
+
     await setUserPlan({ userId, plan: planEntry.plan });
 
     // "trialing" grants Pro entitlements (see PRO_STATUSES) but no invoice
@@ -153,25 +171,41 @@ export async function mirrorStripeSubscription(
         await clearAccountDeletion(userId);
         await closeCycleForUser(userId);
         if (hasPaidInvoice) {
-            await markEverPaid({ userId, paidAt: new Date() });
-            if (isWithinFoundingWindow()) {
-                await stampFoundingMember(userId);
+            if (
+                n.interval === "1 month" &&
+                isFoundingMonthlyPriceId(n.stripePriceId)
+            ) {
+                const consumed = await consumeFoundingMemberReservation({
+                    reservationId: n.foundingReservationId,
+                    userId,
+                    stripePriceId: n.stripePriceId ?? "",
+                    paidAt: n.startDate ?? new Date(),
+                });
+                if (!consumed) {
+                    const updated =
+                        await moveSubscriptionToStandardMonthly(sub);
+                    if (n.foundingReservationId) {
+                        await releaseFoundingMemberReservation({
+                            reservationId: n.foundingReservationId,
+                            releasedAt: new Date(),
+                        });
+                    }
+                    await mirrorStripeSubscription(updated);
+                    return;
+                }
             }
+            await markEverPaid({
+                userId,
+                paidAt: new Date(),
+            });
             await sendActivationWelcome(userId, {
                 amountValue: n.amountValue,
                 amountCurrency: n.amountCurrency,
+                interval: n.interval === "1 year" ? "year" : "month",
             });
         }
-    } else if (isLiveSubscriptionStatus(n.status)) {
-        // Live Stripe status (still being billed) but an unrecognized price
-        // id -- entitlementsForSubscription already demoted to free rather
-        // than escalate, but that's a price-id misconfiguration, not a
-        // cancellation. Don't start the deletion/grace workflow for a user
-        // who's still being charged; just log so it gets reconciled.
-        console.warn(
-            `[billing-mirror] subscription ${n.id} has live status "${n.status}" but unrecognized price ${n.stripePriceId}; demoted to free without scheduling deletion`,
-        );
     } else {
+        await forfeitFoundingMember(userId);
         await scheduleDeletionForLapsedUser(userId);
     }
 }
@@ -206,6 +240,24 @@ export async function mirrorCheckoutSession(
         return;
     }
     await mirrorSubscriptionById(subId);
+}
+
+async function moveSubscriptionToStandardMonthly(
+    sub: Stripe.Subscription,
+): Promise<Stripe.Subscription> {
+    const item = sub.items.data[0];
+    const currency = item?.price.currency as BillingCurrency | undefined;
+    if (!item || !currency) {
+        throw new Error(
+            `Cannot move subscription ${sub.id} to standard monthly pricing without an item currency`,
+        );
+    }
+    const standard = resolveStandardMonthlyPriceForCurrency(currency);
+    if (item.price.id === standard.priceId) return sub;
+    return getStripe().subscriptions.update(sub.id, {
+        items: [{ id: item.id, price: standard.priceId }],
+        proration_behavior: "none",
+    });
 }
 
 async function resolveBillingCountry(
@@ -263,7 +315,11 @@ async function scheduleDeletionForLapsedUser(userId: string): Promise<void> {
 
 async function sendActivationWelcome(
     userId: string,
-    plan: { amountValue: string; amountCurrency: string },
+    plan: {
+        amountValue: string;
+        amountCurrency: string;
+        interval: "month" | "year";
+    },
 ): Promise<void> {
     const base = env.APP_URL?.replace(/\/$/, "");
     if (!base) return;
@@ -285,6 +341,7 @@ async function sendActivationWelcome(
             foundingMember: row.foundingMember,
             amountValue: plan.amountValue,
             amountCurrency: plan.amountCurrency,
+            interval: plan.interval,
         });
     } catch (error) {
         console.error(

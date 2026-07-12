@@ -18,6 +18,17 @@ import { Label } from "@/components/ui/label";
 import { formatBytes } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
 
+interface CatalogPrice {
+    currency: "usd" | "eur";
+    interval: "month" | "year";
+    displayAmount: string | null;
+    available: boolean;
+}
+
+type PriceCatalogSide = Record<"usd" | "eur", CatalogPrice | null>;
+
+type BillingInterval = "month" | "year";
+
 interface BillingState {
     enabled: boolean;
     plan: "self_host" | "hosted_free" | "hosted_pro";
@@ -39,8 +50,17 @@ interface BillingState {
         monthlyMynahGrantResetAt: string | null;
     };
     pricing: {
-        usd: string | null;
-        eur: string | null;
+        monthly: {
+            founding: PriceCatalogSide;
+            standard: PriceCatalogSide;
+            foundingAvailability?: {
+                capacity: number;
+                claimed: number;
+                reserved: number;
+                remaining: number;
+            };
+        };
+        annual: PriceCatalogSide;
     };
     subscription: {
         id: string;
@@ -49,6 +69,7 @@ interface BillingState {
         canceledAt: string | null;
         amountValue: string;
         amountCurrency: string;
+        interval: string;
     } | null;
 }
 
@@ -89,12 +110,39 @@ function formatDate(iso: string): string {
     });
 }
 
-function formatProPrice(pricing: BillingState["pricing"]): string {
+function trimAmount(amount: string): string {
+    const parsed = Number.parseFloat(amount);
+    return Number.isFinite(parsed) ? parsed.toString() : amount;
+}
+
+function formatProPrice(
+    catalog: PriceCatalogSide,
+    interval: BillingInterval,
+): string {
+    const suffix = interval === "year" ? "/year" : "/month";
     const parts = [
-        pricing.usd ? `$${Number.parseFloat(pricing.usd).toString()}/mo` : null,
-        pricing.eur ? `€${Number.parseFloat(pricing.eur).toString()}/mo` : null,
+        catalog.usd?.displayAmount
+            ? `$${trimAmount(catalog.usd.displayAmount)}${suffix}`
+            : null,
+        catalog.eur?.displayAmount
+            ? `€${trimAmount(catalog.eur.displayAmount)}${suffix}`
+            : null,
     ].filter(Boolean);
-    return parts.length > 0 ? parts.join(" or ") : "Pro monthly";
+    if (parts.length > 0) return parts.join(" or ");
+    return interval === "year" ? "Pro annual" : "Pro monthly";
+}
+
+/** Mirrored Stripe interval ("1 month", "1 year") to a display suffix. */
+function subscriptionIntervalSuffix(interval: string): string {
+    if (interval === "1 month") return "/month";
+    if (interval === "1 year") return "/year";
+    return interval ? ` every ${interval}` : "";
+}
+
+function billingIntervalFromMirroredInterval(
+    interval: string,
+): BillingInterval {
+    return interval === "1 year" ? "year" : "month";
 }
 
 /** formatBytes but without a noisy trailing ".00" on round caps. */
@@ -166,6 +214,7 @@ export function BillingSection() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [waiver, setWaiver] = useState(false);
+    const [interval, setInterval] = useState<BillingInterval>("month");
     const [submitting, setSubmitting] = useState(false);
     const [portalLoading, setPortalLoading] = useState(false);
 
@@ -193,54 +242,71 @@ export function BillingSection() {
         void load();
     }, [load]);
 
-    const startCheckout = useCallback(async (): Promise<void> => {
-        const res = await fetch("/api/billing/checkout", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                withdrawalWaiver: true,
-                redirectUrl: `${window.location.origin}/settings#billing`,
-            }),
-        });
-        if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            throw new Error(body.error ?? `HTTP ${res.status}`);
-        }
-        const body = (await res.json()) as {
-            checkoutUrl?: string;
-            reactivated?: boolean;
-        };
-        if (body.checkoutUrl) {
-            window.location.href = body.checkoutUrl;
-            return;
-        }
-        if (body.reactivated) {
-            toast.success("Your subscription will continue");
-            await load();
-            return;
-        }
-        throw new Error("Unexpected checkout response");
-    }, [load]);
+    const startCheckout = useCallback(
+        async (checkoutInterval: BillingInterval): Promise<void> => {
+            const res = await fetch("/api/billing/checkout", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    withdrawalWaiver: true,
+                    redirectUrl: `${window.location.origin}/settings#billing`,
+                    interval: checkoutInterval,
+                }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error ?? `HTTP ${res.status}`);
+            }
+            const body = (await res.json()) as {
+                checkoutUrl?: string;
+                reactivated?: boolean;
+            };
+            if (body.checkoutUrl) {
+                window.location.href = body.checkoutUrl;
+                return;
+            }
+            if (body.reactivated) {
+                toast.success("Your subscription will continue");
+                await load();
+                return;
+            }
+            throw new Error("Unexpected checkout response");
+        },
+        [load],
+    );
 
-    const handleSubscribe = useCallback(async () => {
-        if (!waiver) {
-            toast.error("Please confirm the consumer-law waiver to continue.");
-            return;
-        }
-        setSubmitting(true);
-        try {
-            await startCheckout();
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Checkout failed");
-        } finally {
-            setSubmitting(false);
-        }
-    }, [waiver, startCheckout]);
+    const handleSubscribe = useCallback(
+        async (checkoutInterval: BillingInterval) => {
+            if (!waiver) {
+                toast.error(
+                    "Please confirm the consumer-law waiver to continue.",
+                );
+                return;
+            }
+            setSubmitting(true);
+            try {
+                await startCheckout(checkoutInterval);
+            } catch (err) {
+                toast.error(
+                    err instanceof Error ? err.message : "Checkout failed",
+                );
+            } finally {
+                setSubmitting(false);
+            }
+        },
+        [waiver, startCheckout],
+    );
 
     const handleResume = useCallback(async () => {
         setSubmitting(true);
         try {
-            await startCheckout();
+            // Resuming clears a pending cancel on the existing subscription;
+            // the interval is whatever that subscription already has.
+            await startCheckout(
+                billingIntervalFromMirroredInterval(
+                    state?.subscription?.interval ?? "1 month",
+                ),
+            );
         } catch (err) {
             toast.error(
                 err instanceof Error
@@ -250,7 +316,7 @@ export function BillingSection() {
         } finally {
             setSubmitting(false);
         }
-    }, [startCheckout]);
+    }, [startCheckout, state?.subscription?.interval]);
 
     const handlePortal = useCallback(async () => {
         setPortalLoading(true);
@@ -440,10 +506,37 @@ export function BillingSection() {
     );
     const mynahPct = mynahTotal > 0 ? (mynahUsed / mynahTotal) * 100 : null;
 
-    const proPrice = formatProPrice(state.pricing);
-    const proPriceNote = isTrial
-        ? "Add a card before your trial ends. Stripe confirms the exact charge before you subscribe."
-        : "Stripe confirms the exact charge before you subscribe.";
+    const monthlyCatalog =
+        (state.pricing.monthly.foundingAvailability?.remaining ?? 0) > 0
+            ? state.pricing.monthly.founding
+            : state.pricing.monthly.standard;
+    const monthlyAvailable =
+        monthlyCatalog.usd !== null || monthlyCatalog.eur !== null;
+    const annualAvailable =
+        state.pricing.annual.usd !== null || state.pricing.annual.eur !== null;
+    const showIntervalPicker = monthlyAvailable && annualAvailable;
+    const effectiveInterval: BillingInterval =
+        interval === "year" && annualAvailable
+            ? "year"
+            : monthlyAvailable
+              ? "month"
+              : annualAvailable
+                ? "year"
+                : "month";
+
+    const proPrice = formatProPrice(
+        effectiveInterval === "year" ? state.pricing.annual : monthlyCatalog,
+        effectiveInterval,
+    );
+    const foundingAvailability = state.pricing.monthly.foundingAvailability;
+    const proPriceNote =
+        effectiveInterval === "month" &&
+        foundingAvailability &&
+        foundingAvailability.remaining > 0
+            ? `${foundingAvailability.remaining} founding monthly spot${foundingAvailability.remaining === 1 ? "" : "s"} left. Stripe confirms the exact charge before you subscribe.`
+            : isTrial
+              ? "Add a card before your trial ends. Stripe confirms the exact charge before you subscribe."
+              : "Stripe confirms the exact charge before you subscribe.";
 
     const graceBanner =
         state.grace !== null ? (
@@ -525,6 +618,7 @@ export function BillingSection() {
                                         sub.amountValue,
                                         sub.amountCurrency,
                                     )}
+                                    {subscriptionIntervalSuffix(sub.interval)}
                                     {cancelPending && sub.canceledAt
                                         ? ` · ends ${formatDate(sub.canceledAt)}`
                                         : sub.nextPaymentAt
@@ -567,7 +661,7 @@ export function BillingSection() {
                             detail={`${formatSeconds(mynahUsed)} of ${formatSeconds(mynahTotal)}`}
                             usedPct={mynahPct}
                             footer={[
-                                `${formatSeconds(state.usage.monthlyMynahSecondsRemaining)} left this month`,
+                                `${formatSeconds(state.usage.monthlyMynahSecondsRemaining)} left this cycle`,
                                 state.usage.monthlyMynahGrantResetAt
                                     ? `resets ${formatDate(state.usage.monthlyMynahGrantResetAt)}`
                                     : null,
@@ -589,6 +683,36 @@ export function BillingSection() {
                         }
                     >
                         <div className="space-y-4">
+                            {showIntervalPicker && (
+                                <fieldset className="inline-flex rounded-md border p-0.5">
+                                    <legend className="sr-only">
+                                        Billing interval
+                                    </legend>
+                                    {(
+                                        [
+                                            ["month", "Monthly"],
+                                            ["year", "Annual"],
+                                        ] as const
+                                    ).map(([value, label]) => (
+                                        <button
+                                            key={value}
+                                            type="button"
+                                            onClick={() => setInterval(value)}
+                                            aria-pressed={
+                                                effectiveInterval === value
+                                            }
+                                            className={cn(
+                                                "rounded px-3 py-1 text-xs font-medium transition-colors",
+                                                effectiveInterval === value
+                                                    ? "bg-primary/10 text-primary"
+                                                    : "text-muted-foreground hover:text-foreground",
+                                            )}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </fieldset>
+                            )}
                             <div>
                                 <p className="text-2xl font-semibold tracking-tight tabular-nums">
                                     {proPrice}
@@ -600,7 +724,8 @@ export function BillingSection() {
                             <ul className="ml-5 list-disc space-y-1 text-sm text-muted-foreground">
                                 <li>50 GB storage</li>
                                 <li>
-                                    15 hours of Mynah transcription per month
+                                    15 hours of Mynah transcription every 30
+                                    days
                                 </li>
                                 <li>Unlimited devices, background sync</li>
                             </ul>
@@ -625,7 +750,9 @@ export function BillingSection() {
                                 </Label>
                             </div>
                             <Button
-                                onClick={handleSubscribe}
+                                onClick={() =>
+                                    handleSubscribe(effectiveInterval)
+                                }
                                 disabled={!waiver || submitting}
                             >
                                 {submitting ? (

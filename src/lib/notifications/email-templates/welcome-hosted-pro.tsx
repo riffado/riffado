@@ -5,10 +5,12 @@ import { emailStyles } from "./styles";
 interface Props {
     dashboardUrl: string;
     settingsUrl: string;
-    /** True iff the user signed up within the founding-member window. */
+    /** True iff the user currently has active founding monthly pricing. */
     foundingMember: boolean;
     amountValue: string;
     amountCurrency: string;
+    /** Billing interval of the subscription that triggered this email. */
+    interval: "month" | "year";
 }
 
 export function WelcomeHostedProEmail({
@@ -17,6 +19,7 @@ export function WelcomeHostedProEmail({
     foundingMember,
     amountValue,
     amountCurrency,
+    interval,
 }: Props) {
     return (
         <EmailLayout
@@ -30,16 +33,15 @@ export function WelcomeHostedProEmail({
             </Text>
             <Text style={emailStyles.text}>
                 · 50 GB storage
-                <br />· 15 hours of Mynah transcription this cycle, refreshed
-                monthly
+                <br />· 15 hours of Mynah transcription, refreshed every 30 days
                 <br />· Unlimited devices, background sync
             </Text>
-            {foundingMember ? (
+            {foundingMember && interval === "month" ? (
                 <Text style={emailStyles.text}>
-                    You signed up during the founding-member window, so your
-                    price is locked at {amountValue} {amountCurrency}/month for
-                    as long as your subscription stays active. Thanks for being
-                    early.
+                    You subscribed to the monthly plan during the
+                    founding-member window, so your monthly price is locked at{" "}
+                    {amountValue} {amountCurrency}/month for as long as your
+                    subscription stays active. Thanks for being early.
                 </Text>
             ) : null}
             <Section style={emailStyles.buttonSection}>

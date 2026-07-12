@@ -251,6 +251,7 @@ export async function sendWelcomeHostedProEmail(input: {
     foundingMember: boolean;
     amountValue: string;
     amountCurrency: string;
+    interval: "month" | "year";
 }): Promise<boolean> {
     return sendClaimedEmail(
         { userId: input.userId, kind: "welcome_hosted_pro" },
@@ -262,6 +263,7 @@ export async function sendWelcomeHostedProEmail(input: {
                     foundingMember: input.foundingMember,
                     amountValue: input.amountValue,
                     amountCurrency: input.amountCurrency,
+                    interval: input.interval,
                 }),
                 { pretty: false },
             );

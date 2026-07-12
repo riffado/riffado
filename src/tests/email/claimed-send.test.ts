@@ -49,6 +49,7 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
         foundingMember: false,
         amountValue: "5.00",
         amountCurrency: "USD",
+        interval: "month" as const,
     };
 
     it("does not send (and claims nothing further) when the kind is already claimed", async () => {

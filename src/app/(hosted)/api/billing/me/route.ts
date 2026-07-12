@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+    getFoundingMemberAvailability,
     getSubscriptionByUserId,
     getUserBillingState,
     getUserStorageBytes,
@@ -8,7 +9,7 @@ import { requireApiSession } from "@/lib/auth-server";
 import { getEntitlements } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
-import { priceForCurrency } from "@/lib/hosted/billing/pricing";
+import { billingPriceCatalog } from "@/lib/hosted/billing/pricing";
 
 /**
  * Read the current user's billing snapshot: effective entitlements,
@@ -53,14 +54,17 @@ export const GET = apiHandler(async (request) => {
               }
             : null;
 
-    const usdPrice = priceForCurrency("usd");
-    const eurPrice = priceForCurrency("eur");
+    const foundingAvailability = await getFoundingMemberAvailability(
+        env.BILLING_FOUNDING_MEMBER_CAPACITY,
+    );
+    const priceCatalog = billingPriceCatalog(foundingAvailability);
 
     return NextResponse.json({
         enabled: true,
         plan: state.plan ?? "hosted_free",
         planTransitionUntil: state.planTransitionUntil?.toISOString() ?? null,
         foundingMember: state.foundingMember,
+        foundingOfferAvailable: foundingAvailability.remaining > 0,
         grace,
         everPaidAt: state.everPaidAt?.toISOString() ?? null,
         entitlements,
@@ -70,10 +74,7 @@ export const GET = apiHandler(async (request) => {
             monthlyMynahGrantResetAt:
                 state.monthlyMynahGrantResetAt?.toISOString() ?? null,
         },
-        pricing: {
-            usd: usdPrice?.displayAmount ?? null,
-            eur: eurPrice?.displayAmount ?? null,
-        },
+        pricing: priceCatalog,
         subscription: sub
             ? {
                   id: sub.id,
@@ -82,6 +83,7 @@ export const GET = apiHandler(async (request) => {
                   canceledAt: sub.canceledAt?.toISOString() ?? null,
                   amountValue: sub.amountValue,
                   amountCurrency: sub.amountCurrency,
+                  interval: sub.interval,
               }
             : null,
     });

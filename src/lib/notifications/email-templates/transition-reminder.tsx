@@ -46,7 +46,7 @@ export function TransitionReminderEmail({
                 <strong>{formatEmailDate(transitionEndsAt)}</strong>. To keep
                 background sync, new transcriptions, and uploads running, add a
                 card and lock founding-member pricing at {amountValue}{" "}
-                {amountCurrency}/month for life.
+                {amountCurrency}/month while your subscription stays active.
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>

@@ -5,13 +5,19 @@ const { envMock } = vi.hoisted(() => ({
         IS_HOSTED: true,
         BILLING_FREE_INCLUDED_SECONDS: 1800,
         BILLING_PRO_INCLUDED_SECONDS: 54_000,
-        STRIPE_PRICE_ID_USD: "price_usd",
-        STRIPE_PRICE_ID_EUR: "price_eur",
+        STRIPE_PRICE_ID_USD: "price_usd_found",
+        STRIPE_PRICE_ID_EUR: "price_eur_found",
+        STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
+        STRIPE_STANDARD_PRICE_ID_EUR: "price_eur_standard",
+        STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
+        STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+        STRIPE_LEGACY_PRO_PRICE_IDS: ["price_legacy"],
         BILLING_PRICE_USD: "5.00",
         BILLING_PRICE_EUR: "5.00",
+        BILLING_STANDARD_PRICE_USD: "10.00",
+        BILLING_STANDARD_PRICE_EUR: "10.00",
         BILLING_DEFAULT_CURRENCY: "usd" as "usd" | "eur",
         BILLING_LAUNCH_DATE: undefined as string | undefined,
-        BILLING_FOUNDING_MEMBER_WINDOW_DAYS: undefined as number | undefined,
     },
 }));
 
@@ -23,23 +29,23 @@ import { isWithinFoundingWindow } from "@/lib/hosted/billing/checkout";
 import { entitlementsForSubscription } from "@/lib/hosted/billing/plans";
 
 describe("entitlementsForSubscription price gate", () => {
-    it("matches a configured Pro price id to hosted_pro", () => {
+    it.each([
+        "price_usd_found",
+        "price_eur_found",
+        "price_usd_standard",
+        "price_eur_standard",
+        "price_usd_year",
+        "price_eur_year",
+        "price_legacy",
+    ])("matches configured Pro price id %s to hosted_pro", (priceId) => {
         const entry = entitlementsForSubscription({
             status: "active",
-            priceId: "price_eur",
+            priceId,
         });
         expect(entry.plan).toBe("hosted_pro");
         expect(entry.entitlements.maxStorageBytes).toBe(
             50 * 1024 * 1024 * 1024,
         );
-    });
-
-    it("matches the USD Pro price id too", () => {
-        const entry = entitlementsForSubscription({
-            status: "active",
-            priceId: "price_usd",
-        });
-        expect(entry.plan).toBe("hosted_pro");
     });
 
     it("falls back to hosted_free on an unknown price id (never escalates)", () => {
@@ -67,7 +73,7 @@ describe("entitlementsForSubscription status gate", () => {
     ])("returns hosted_pro for status=%s at a Pro price", (status) => {
         const entry = entitlementsForSubscription({
             status,
-            priceId: "price_eur",
+            priceId: "price_eur_found",
         });
         expect(entry.plan).toBe("hosted_pro");
     });
@@ -81,35 +87,15 @@ describe("entitlementsForSubscription status gate", () => {
     ])("returns hosted_free for status=%s regardless of price", (status) => {
         const entry = entitlementsForSubscription({
             status,
-            priceId: "price_eur",
+            priceId: "price_eur_found",
         });
         expect(entry.plan).toBe("hosted_free");
     });
 });
 
-describe("isWithinFoundingWindow", () => {
-    it("returns false when BILLING_LAUNCH_DATE is unset", () => {
-        envMock.BILLING_LAUNCH_DATE = undefined;
-        expect(isWithinFoundingWindow()).toBe(false);
-    });
-
-    it("returns true within 6 months of launch", () => {
-        envMock.BILLING_LAUNCH_DATE = "2026-01-01";
+describe("isWithinFoundingWindow legacy guard", () => {
+    it("is closed because founding pricing is capacity-based", () => {
         expect(isWithinFoundingWindow(new Date("2026-03-15T12:00:00Z"))).toBe(
-            true,
-        );
-    });
-
-    it("returns false before launch date", () => {
-        envMock.BILLING_LAUNCH_DATE = "2026-07-01";
-        expect(isWithinFoundingWindow(new Date("2026-06-30T23:59:59Z"))).toBe(
-            false,
-        );
-    });
-
-    it("returns false after 6 months", () => {
-        envMock.BILLING_LAUNCH_DATE = "2026-01-01";
-        expect(isWithinFoundingWindow(new Date("2026-07-01T00:00:00Z"))).toBe(
             false,
         );
     });

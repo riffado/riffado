@@ -13,8 +13,8 @@ const { dbMock, emailMock, envMock } = vi.hoisted(() => ({
         BILLING_DEFAULT_CURRENCY: "usd" as "usd" | "eur",
         BILLING_PRICE_USD: "5.00",
         BILLING_PRICE_EUR: "5.00",
-        STRIPE_PRICE_ID_USD: "price_usd",
-        STRIPE_PRICE_ID_EUR: "price_eur",
+        STRIPE_PRICE_ID_USD: "price_usd" as string | undefined,
+        STRIPE_PRICE_ID_EUR: "price_eur" as string | undefined,
     },
 }));
 
@@ -76,6 +76,9 @@ describe("processTransitionEmails", () => {
         // A launch date in the past so the launch-date guard is open;
         // the dedicated "before launch" test overrides this.
         envMock.BILLING_LAUNCH_DATE = "2020-01-01";
+        envMock.BILLING_DEFAULT_CURRENCY = "usd";
+        envMock.STRIPE_PRICE_ID_USD = "price_usd";
+        envMock.STRIPE_PRICE_ID_EUR = "price_eur";
         emailMock.sendTransitionStartEmail.mockResolvedValue(true);
         emailMock.sendTransitionReminderEmail.mockResolvedValue(true);
         emailMock.sendTransitionEndedEmail.mockResolvedValue(true);
@@ -141,6 +144,26 @@ describe("processTransitionEmails", () => {
         );
         expect(emailMock.sendTransitionReminderEmail).not.toHaveBeenCalled();
         expect(emailMock.sendTransitionEndedEmail).not.toHaveBeenCalled();
+    });
+
+    it("uses a configured monthly currency when the default is unavailable", async () => {
+        envMock.STRIPE_PRICE_ID_USD = undefined;
+        queueCohort([
+            {
+                id: "u-eur",
+                email: "eur@example.com",
+                transitionUntil: new Date(NOW + 20 * DAY),
+            },
+        ]);
+
+        await processTransitionEmails();
+
+        expect(emailMock.sendTransitionStartEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                amountValue: "5.00",
+                amountCurrency: "EUR",
+            }),
+        );
     });
 
     it("sends start + reminder in the final 3-day stretch", async () => {

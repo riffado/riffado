@@ -16,7 +16,7 @@ const optionalStrictBoolean = z
         return z.NEVER;
     });
 
-export const envSchema = z.object({
+const baseEnvSchema = z.object({
     /** True for the Riffado-operated hosted instance; default false (self-host). */
     IS_HOSTED: z
         .string()
@@ -266,17 +266,52 @@ export const envSchema = z.object({
         .optional()
         .transform((val) => (val === "" ? undefined : val)),
 
-    /** Stripe Price id (price_...) for the USD Pro plan. */
+    /** Stripe Price id (price_...) for the monthly USD Pro plan. */
     STRIPE_PRICE_ID_USD: z
         .string()
         .optional()
         .transform((val) => (val === "" ? undefined : val)),
 
-    /** Stripe Price id (price_...) for the EUR Pro plan. */
+    /** Stripe Price id (price_...) for the monthly EUR Pro plan. */
     STRIPE_PRICE_ID_EUR: z
         .string()
         .optional()
         .transform((val) => (val === "" ? undefined : val)),
+
+    /** Stripe Price id (price_...) for the standard monthly USD Pro plan after founding capacity is gone. */
+    STRIPE_STANDARD_PRICE_ID_USD: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Stripe Price id (price_...) for the standard monthly EUR Pro plan after founding capacity is gone. */
+    STRIPE_STANDARD_PRICE_ID_EUR: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Stripe Price id (price_...) for the annual USD Pro plan. */
+    STRIPE_PRICE_ID_USD_ANNUAL: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Stripe Price id (price_...) for the annual EUR Pro plan. */
+    STRIPE_PRICE_ID_EUR_ANNUAL: z
+        .string()
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Historical Stripe Price ids that grant Pro but are not used for Checkout. */
+    STRIPE_LEGACY_PRO_PRICE_IDS: z
+        .string()
+        .optional()
+        .transform((val) =>
+            (val ?? "").split(",").flatMap((entry) => {
+                const trimmed = entry.trim();
+                return trimmed ? [trimmed] : [];
+            }),
+        ),
 
     /**
      * Stripe Tax Rate id (txr_...) applied to EUR (EU/EEA) subscriptions so
@@ -361,18 +396,18 @@ export const envSchema = z.object({
         .transform((val) => (val ? Number(val) : 1800))
         .pipe(z.number().int().nonnegative()),
 
-    /** Founding-member window after launch (days). Default 180 (6 months). */
-    BILLING_FOUNDING_MEMBER_WINDOW_DAYS: z
+    /** Maximum number of users who can ever claim founding monthly pricing. */
+    BILLING_FOUNDING_MEMBER_CAPACITY: z
         .string()
         .regex(
             /^\d+$/,
-            "BILLING_FOUNDING_MEMBER_WINDOW_DAYS must be a positive integer",
+            "BILLING_FOUNDING_MEMBER_CAPACITY must be a positive integer",
         )
         .optional()
-        .transform((val) => (val ? Number(val) : 180))
-        .pipe(z.number().int().positive().max(3650)),
+        .transform((val) => (val ? Number(val) : 100))
+        .pipe(z.number().int().positive().max(100000)),
 
-    /** Display price for the USD Pro plan (decimal string). Keep in sync with the Stripe Price. */
+    /** Display price for the founding monthly USD Pro plan (decimal string). Keep in sync with STRIPE_PRICE_ID_USD. */
     BILLING_PRICE_USD: z
         .string()
         .regex(
@@ -382,7 +417,7 @@ export const envSchema = z.object({
         .optional()
         .default("5.00"),
 
-    /** Display price for the EUR Pro plan (decimal string). Keep in sync with the Stripe Price. */
+    /** Display price for the founding monthly EUR Pro plan (decimal string). Keep in sync with STRIPE_PRICE_ID_EUR. */
     BILLING_PRICE_EUR: z
         .string()
         .regex(
@@ -391,6 +426,46 @@ export const envSchema = z.object({
         )
         .optional()
         .default("5.00"),
+
+    /** Display price for the standard monthly USD Pro plan. */
+    BILLING_STANDARD_PRICE_USD: z
+        .string()
+        .regex(
+            /^\d+\.\d{2}$/,
+            "BILLING_STANDARD_PRICE_USD must be a decimal string with two digits after the point (e.g. '9.00')",
+        )
+        .optional()
+        .default("9.00"),
+
+    /** Display price for the standard monthly EUR Pro plan. */
+    BILLING_STANDARD_PRICE_EUR: z
+        .string()
+        .regex(
+            /^\d+\.\d{2}$/,
+            "BILLING_STANDARD_PRICE_EUR must be a decimal string with two digits after the point (e.g. '9.00')",
+        )
+        .optional()
+        .default("9.00"),
+
+    /** Optional display price for the annual USD Pro plan. */
+    BILLING_PRICE_USD_ANNUAL: z
+        .string()
+        .regex(
+            /^\d+\.\d{2}$/,
+            "BILLING_PRICE_USD_ANNUAL must be a decimal string with two digits after the point (e.g. '60.00')",
+        )
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
+
+    /** Optional display price for the annual EUR Pro plan. */
+    BILLING_PRICE_EUR_ANNUAL: z
+        .string()
+        .regex(
+            /^\d+\.\d{2}$/,
+            "BILLING_PRICE_EUR_ANNUAL must be a decimal string with two digits after the point (e.g. '60.00')",
+        )
+        .optional()
+        .transform((val) => (val === "" ? undefined : val)),
 
     /** Fallback currency when geo is unknown (worker emails, no-geo checkout). */
     BILLING_DEFAULT_CURRENCY: z.enum(["usd", "eur"]).optional().default("usd"),
@@ -472,6 +547,83 @@ export const envSchema = z.object({
         .optional(),
 });
 
+export const envSchema = baseEnvSchema.superRefine((parsed, ctx) => {
+    const annualConfigPresent = Boolean(
+        parsed.STRIPE_PRICE_ID_USD_ANNUAL ||
+            parsed.STRIPE_PRICE_ID_EUR_ANNUAL ||
+            parsed.BILLING_PRICE_USD_ANNUAL ||
+            parsed.BILLING_PRICE_EUR_ANNUAL,
+    );
+    if (annualConfigPresent) {
+        const currencies = [
+            {
+                monthlyId: parsed.STRIPE_PRICE_ID_USD,
+                annualId: parsed.STRIPE_PRICE_ID_USD_ANNUAL,
+                annualAmount: parsed.BILLING_PRICE_USD_ANNUAL,
+                idField: "STRIPE_PRICE_ID_USD_ANNUAL",
+                amountField: "BILLING_PRICE_USD_ANNUAL",
+                label: "USD",
+            },
+            {
+                monthlyId: parsed.STRIPE_PRICE_ID_EUR,
+                annualId: parsed.STRIPE_PRICE_ID_EUR_ANNUAL,
+                annualAmount: parsed.BILLING_PRICE_EUR_ANNUAL,
+                idField: "STRIPE_PRICE_ID_EUR_ANNUAL",
+                amountField: "BILLING_PRICE_EUR_ANNUAL",
+                label: "EUR",
+            },
+        ] as const;
+
+        for (const currency of currencies) {
+            if (
+                !currency.monthlyId &&
+                (currency.annualId || currency.annualAmount)
+            ) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: [currency.idField],
+                    message: `Annual ${currency.label} billing requires the monthly ${currency.label} Price`,
+                });
+            }
+            if (currency.monthlyId && !currency.annualId) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: [currency.idField],
+                    message: `Annual billing requires an annual Price for every supported monthly currency (${currency.label} missing)`,
+                });
+            }
+            if (currency.monthlyId && !currency.annualAmount) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: [currency.amountField],
+                    message: `Annual billing requires a display amount for every supported monthly currency (${currency.label} missing)`,
+                });
+            }
+        }
+    }
+
+    const currentPriceIds = [
+        parsed.STRIPE_PRICE_ID_USD,
+        parsed.STRIPE_PRICE_ID_EUR,
+        parsed.STRIPE_STANDARD_PRICE_ID_USD,
+        parsed.STRIPE_STANDARD_PRICE_ID_EUR,
+        parsed.STRIPE_PRICE_ID_USD_ANNUAL,
+        parsed.STRIPE_PRICE_ID_EUR_ANNUAL,
+    ].flatMap((priceId) => (priceId ? [priceId] : []));
+    if (
+        parsed.STRIPE_LEGACY_PRO_PRICE_IDS.some((priceId) =>
+            currentPriceIds.includes(priceId),
+        )
+    ) {
+        ctx.addIssue({
+            code: "custom",
+            path: ["STRIPE_LEGACY_PRO_PRICE_IDS"],
+            message:
+                "STRIPE_LEGACY_PRO_PRICE_IDS must not include current Stripe Price ids",
+        });
+    }
+});
+
 export type Env = z.infer<typeof envSchema>;
 
 function validateEnv(): Env {
@@ -529,6 +681,15 @@ function validateEnv(): Env {
             STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
             STRIPE_PRICE_ID_USD: process.env.STRIPE_PRICE_ID_USD,
             STRIPE_PRICE_ID_EUR: process.env.STRIPE_PRICE_ID_EUR,
+            STRIPE_STANDARD_PRICE_ID_USD:
+                process.env.STRIPE_STANDARD_PRICE_ID_USD,
+            STRIPE_STANDARD_PRICE_ID_EUR:
+                process.env.STRIPE_STANDARD_PRICE_ID_EUR,
+            STRIPE_PRICE_ID_USD_ANNUAL: process.env.STRIPE_PRICE_ID_USD_ANNUAL,
+            STRIPE_PRICE_ID_EUR_ANNUAL: process.env.STRIPE_PRICE_ID_EUR_ANNUAL,
+            STRIPE_LEGACY_PRO_PRICE_IDS:
+                process.env.STRIPE_LEGACY_PRO_PRICE_IDS,
+            STRIPE_TAX_RATE_ID_EUR: process.env.STRIPE_TAX_RATE_ID_EUR,
             STRIPE_PORTAL_CONFIGURATION_ID:
                 process.env.STRIPE_PORTAL_CONFIGURATION_ID,
             BILLING_ENABLED: process.env.BILLING_ENABLED,
@@ -538,10 +699,14 @@ function validateEnv(): Env {
                 process.env.BILLING_PRO_INCLUDED_SECONDS,
             BILLING_FREE_INCLUDED_SECONDS:
                 process.env.BILLING_FREE_INCLUDED_SECONDS,
-            BILLING_FOUNDING_MEMBER_WINDOW_DAYS:
-                process.env.BILLING_FOUNDING_MEMBER_WINDOW_DAYS,
+            BILLING_FOUNDING_MEMBER_CAPACITY:
+                process.env.BILLING_FOUNDING_MEMBER_CAPACITY,
             BILLING_PRICE_USD: process.env.BILLING_PRICE_USD,
             BILLING_PRICE_EUR: process.env.BILLING_PRICE_EUR,
+            BILLING_STANDARD_PRICE_USD: process.env.BILLING_STANDARD_PRICE_USD,
+            BILLING_STANDARD_PRICE_EUR: process.env.BILLING_STANDARD_PRICE_EUR,
+            BILLING_PRICE_USD_ANNUAL: process.env.BILLING_PRICE_USD_ANNUAL,
+            BILLING_PRICE_EUR_ANNUAL: process.env.BILLING_PRICE_EUR_ANNUAL,
             BILLING_DEFAULT_CURRENCY: process.env.BILLING_DEFAULT_CURRENCY,
             BILLING_PRO_INTERVAL: process.env.BILLING_PRO_INTERVAL,
             BILLING_PRO_DESCRIPTION: process.env.BILLING_PRO_DESCRIPTION,
@@ -595,11 +760,20 @@ function validateEnv(): Env {
             }
             if (
                 parsed.BILLING_ENABLED &&
+                !parsed.STRIPE_STANDARD_PRICE_ID_USD &&
+                !parsed.STRIPE_STANDARD_PRICE_ID_EUR
+            ) {
+                throw new Error(
+                    "BILLING_ENABLED=true requires at least one of STRIPE_STANDARD_PRICE_ID_USD / STRIPE_STANDARD_PRICE_ID_EUR for post-founding monthly checkout",
+                );
+            }
+            if (
+                parsed.BILLING_ENABLED &&
                 !parsed.STRIPE_PRICE_ID_USD &&
                 !parsed.STRIPE_PRICE_ID_EUR
             ) {
                 throw new Error(
-                    "BILLING_ENABLED=true requires at least one of STRIPE_PRICE_ID_USD / STRIPE_PRICE_ID_EUR",
+                    "BILLING_ENABLED=true requires at least one of STRIPE_PRICE_ID_USD / STRIPE_PRICE_ID_EUR for founding monthly checkout",
                 );
             }
             if (parsed.BILLING_ENABLED && !parsed.MYNAH_BASE_URL) {

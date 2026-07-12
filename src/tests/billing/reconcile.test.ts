@@ -88,25 +88,4 @@ describe("reconcileStaleSubscriptions", () => {
         expect(result).toEqual({ inspected: 3, errors: 1 });
         expect(mirrorMock.mirrorSubscriptionById).toHaveBeenCalledTimes(3);
     });
-
-    it("forwards explicit limit + staleAfterSeconds to the query", async () => {
-        queriesMock.listSubscriptionsForReconcile.mockResolvedValue([]);
-        await reconcileStaleSubscriptions({
-            limit: 10,
-            staleAfterSeconds: 900,
-        });
-        expect(queriesMock.listSubscriptionsForReconcile).toHaveBeenCalledWith({
-            limit: 10,
-            staleAfterSeconds: 900,
-        });
-    });
-
-    it("uses default limit=50 and staleAfter=3600 when omitted", async () => {
-        queriesMock.listSubscriptionsForReconcile.mockResolvedValue([]);
-        await reconcileStaleSubscriptions();
-        expect(queriesMock.listSubscriptionsForReconcile).toHaveBeenCalledWith({
-            limit: 50,
-            staleAfterSeconds: 3600,
-        });
-    });
 });

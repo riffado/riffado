@@ -18,6 +18,8 @@ const bodySchema = z.object({
     redirectUrl: z.string().url(),
     /** Optional return target if the user abandons checkout. */
     cancelUrl: z.string().url().optional(),
+    /** Billing interval for the Checkout Session. */
+    interval: z.enum(["month", "year"]).optional().default("month"),
 });
 
 /**
@@ -68,6 +70,7 @@ export const POST = apiHandler(async (request) => {
             userEmail: session.user.email,
             userName: session.user.name ?? null,
             country,
+            interval: parsed.data.interval,
             redirectUrl: parsed.data.redirectUrl,
             cancelUrl: parsed.data.cancelUrl,
             withdrawalWaiverAcceptedAt: waiverAt,

@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { db } from "@/db";
 import {
     claimWebhookDelivery,
+    expireFoundingMemberReservationByCheckoutSession,
     getBillingCustomerByStripeId,
 } from "@/db/queries/billing";
 import { users } from "@/db/schema";
@@ -46,6 +47,14 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
         case "checkout.session.completed": {
             await mirrorCheckoutSession(
                 event.data.object as Stripe.Checkout.Session,
+            );
+            return;
+        }
+        case "checkout.session.expired": {
+            const session = event.data.object as Stripe.Checkout.Session;
+            await expireFoundingMemberReservationByCheckoutSession(
+                session.id,
+                new Date(event.created * 1000),
             );
             return;
         }

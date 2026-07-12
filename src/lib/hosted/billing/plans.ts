@@ -3,7 +3,6 @@ import {
     entitlementsForPlan,
     type PlanId,
 } from "@/lib/entitlements";
-import { env } from "@/lib/env";
 import { isProPriceId } from "./pricing";
 
 interface PlanEntry {
@@ -51,15 +50,9 @@ export function unixToDate(seconds: number | null | undefined): Date | null {
 }
 
 /**
- * True when `BILLING_LAUNCH_DATE` is set and `now` is within
- * `BILLING_FOUNDING_MEMBER_WINDOW_DAYS` of it (default 180). Without a
- * launch date the window is closed (no accidental founding stamps).
+ * Founding pricing is capacity-based now, not date-window-based. Keep this
+ * helper as a closed legacy guard for old call sites/tests during rollout.
  */
-export function isWithinFoundingWindow(now = new Date()): boolean {
-    const iso = env.BILLING_LAUNCH_DATE;
-    if (!iso) return false;
-    const launch = new Date(`${iso}T00:00:00Z`);
-    const windowDays = env.BILLING_FOUNDING_MEMBER_WINDOW_DAYS ?? 180;
-    const end = new Date(launch.getTime() + windowDays * 24 * 60 * 60_000);
-    return now >= launch && now < end;
+export function isWithinFoundingWindow(_now = new Date()): boolean {
+    return false;
 }

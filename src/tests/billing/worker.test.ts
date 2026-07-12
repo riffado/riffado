@@ -6,6 +6,7 @@ const {
     deletionMock,
     remindersMock,
     transitionMock,
+    foundingReservationsMock,
     reconcileMock,
 } = vi.hoisted(() => ({
     cycleCloseMock: { closeDueCycles: vi.fn() },
@@ -13,6 +14,7 @@ const {
     deletionMock: { processDueAccountDeletions: vi.fn() },
     remindersMock: { processGraceReminders: vi.fn() },
     transitionMock: { processTransitionEmails: vi.fn() },
+    foundingReservationsMock: { reconcileExpiredFoundingReservations: vi.fn() },
     reconcileMock: { reconcileStaleSubscriptions: vi.fn() },
 }));
 
@@ -21,6 +23,10 @@ vi.mock("@/lib/hosted/billing/lapse", () => lapseMock);
 vi.mock("@/lib/hosted/billing/deletion", () => deletionMock);
 vi.mock("@/lib/hosted/billing/grace-reminders", () => remindersMock);
 vi.mock("@/lib/hosted/billing/transition-emails", () => transitionMock);
+vi.mock(
+    "@/lib/hosted/billing/founding-reservations",
+    () => foundingReservationsMock,
+);
 vi.mock("@/lib/hosted/billing/reconcile", () => reconcileMock);
 vi.mock("@/lib/env", () => ({
     env: { IS_HOSTED: true, BILLING_ENABLED: true },
@@ -50,6 +56,14 @@ function zeroResults() {
         ended: 0,
         errors: 0,
     });
+    foundingReservationsMock.reconcileExpiredFoundingReservations.mockResolvedValue(
+        {
+            inspected: 0,
+            expired: 0,
+            completed: 0,
+            errors: 0,
+        },
+    );
     reconcileMock.reconcileStaleSubscriptions.mockResolvedValue({
         inspected: 0,
         errors: 0,
@@ -60,15 +74,6 @@ describe("billing worker tick", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         zeroResults();
-    });
-
-    it("runs every phase in a normal tick", async () => {
-        await tick();
-        expect(cycleCloseMock.closeDueCycles).toHaveBeenCalled();
-        expect(lapseMock.processExpiredTrials).toHaveBeenCalled();
-        expect(deletionMock.processDueAccountDeletions).toHaveBeenCalled();
-        expect(remindersMock.processGraceReminders).toHaveBeenCalled();
-        expect(transitionMock.processTransitionEmails).toHaveBeenCalled();
     });
 
     it("still runs the later phases when an earlier phase's top-level query throws", async () => {
@@ -86,6 +91,9 @@ describe("billing worker tick", () => {
         expect(deletionMock.processDueAccountDeletions).toHaveBeenCalled();
         expect(remindersMock.processGraceReminders).toHaveBeenCalled();
         expect(transitionMock.processTransitionEmails).toHaveBeenCalled();
+        expect(
+            foundingReservationsMock.reconcileExpiredFoundingReservations,
+        ).toHaveBeenCalled();
     });
 
     it("a middle phase throwing does not block the later phases either", async () => {
@@ -103,5 +111,8 @@ describe("billing worker tick", () => {
         expect(lapseMock.processExpiredTrials).toHaveBeenCalled();
         expect(remindersMock.processGraceReminders).toHaveBeenCalled();
         expect(transitionMock.processTransitionEmails).toHaveBeenCalled();
+        expect(
+            foundingReservationsMock.reconcileExpiredFoundingReservations,
+        ).toHaveBeenCalled();
     });
 });

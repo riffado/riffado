@@ -7,7 +7,7 @@ import {
     sendTransitionReminderEmail,
     sendTransitionStartEmail,
 } from "@/lib/notifications/email";
-import { defaultCurrency, displayAmountForCurrency } from "./pricing";
+import { displayAmountForCurrency, resolveCurrency } from "./pricing";
 
 const BATCH_LIMIT = 200;
 const REMINDER_DAYS_OUT = 3;
@@ -72,7 +72,7 @@ export async function processTransitionEmails(): Promise<TransitionEmailResult> 
 
     // Grandfathered users have no chosen currency yet, so display the
     // default-currency price in the migration emails.
-    const currency = defaultCurrency();
+    const currency = resolveCurrency(null, "month");
     const amountValue = displayAmountForCurrency(currency);
     const amountCurrency = currency.toUpperCase();
     const billingUrl = `${base}/settings#billing`;
