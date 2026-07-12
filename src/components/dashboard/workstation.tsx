@@ -211,6 +211,28 @@ export function Workstation({
         });
     }, [recordings]);
 
+    // Keep the selection inside the active directory scope. When the
+    // filter changes (or a move pushes the current recording out of
+    // scope), fall back to the first visible recording so the detail
+    // pane and auto-advance always operate on the filtered list.
+    useEffect(() => {
+        setCurrentRecording((prev) => {
+            if (!prev) return prev;
+            if (tagFilteredRecordings.some((r) => r.id === prev.id)) {
+                return prev;
+            }
+            return tagFilteredRecordings[0] ?? null;
+        });
+    }, [tagFilteredRecordings]);
+
+    // On mobile, an empty selection has no detail pane to show: go
+    // back to the list.
+    useEffect(() => {
+        if (!currentRecording && mobileView === "detail") {
+            setMobileView("list");
+        }
+    }, [currentRecording, mobileView]);
+
     const {
         isAutoSyncing,
         lastSyncTime,
