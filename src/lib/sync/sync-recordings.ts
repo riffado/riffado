@@ -153,6 +153,11 @@ async function processRecording(
                             eq(recordings.userId, context.userId),
                         ),
                     );
+                await emitEvent(
+                    "recording.updated",
+                    context.userId,
+                    existingRecording.id,
+                );
             }
             return { status: "skipped" };
         }

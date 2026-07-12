@@ -66,6 +66,7 @@ import { db } from "@/db";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { syncFiletagsForUser } from "@/lib/sync/sync-filetags";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
+import { emitEvent } from "@/lib/webhooks/emit";
 
 const USER_ID = "user-reconcile";
 
@@ -166,6 +167,12 @@ describe("recording sync filetag reconciliation (version unchanged)", () => {
         expect(filetagUpdate?.filetagId).toBe("local-tag-1");
         expect(result.newRecordings).toBe(0);
         expect(result.updatedRecordings).toBe(0);
+        // Webhook/incremental consumers must learn about the move.
+        expect(emitEvent).toHaveBeenCalledWith(
+            "recording.updated",
+            USER_ID,
+            "rec-1",
+        );
     });
 
     it("preserves local-only assignments instead of clearing them", async () => {
@@ -201,6 +208,7 @@ describe("recording sync filetag reconciliation (version unchanged)", () => {
 
         expect(result.errors).toEqual([]);
         expect(updates.find((u) => "filetagId" in u)).toBeUndefined();
+        expect(emitEvent).not.toHaveBeenCalled();
     });
 
     it("leaves tombstoned rows untouched even when the assignment differs", async () => {
@@ -237,5 +245,6 @@ describe("recording sync filetag reconciliation (version unchanged)", () => {
         expect(result.errors).toEqual([]);
         expect(downloadRecording).not.toHaveBeenCalled();
         expect(updates.find((u) => "filetagId" in u)).toBeUndefined();
+        expect(emitEvent).not.toHaveBeenCalled();
     });
 });
