@@ -558,7 +558,11 @@ export async function listFoundingReservationsForExpiryCheck(input: {
 export async function forfeitFoundingMember(userId: string): Promise<void> {
     await db
         .update(users)
-        .set({ foundingMember: false, updatedAt: new Date() })
+        .set({
+            foundingMember: false,
+            foundingMemberClaimedAt: sql`coalesce(${users.foundingMemberClaimedAt}, ${users.everPaidAt}, now())`,
+            updatedAt: new Date(),
+        })
         .where(and(eq(users.id, userId), eq(users.foundingMember, true)));
 }
 

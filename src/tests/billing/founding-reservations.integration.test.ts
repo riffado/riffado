@@ -42,6 +42,7 @@ vi.mock("@/db", () => ({ db: dbProxy }));
 import {
     consumeFoundingMemberReservation,
     createFoundingMemberReservation,
+    forfeitFoundingMember,
     getFoundingMemberAvailability,
 } from "@/db/queries/billing";
 
@@ -71,6 +72,7 @@ describeWithDatabase(
 
         beforeEach(async () => {
             if (!database) throw new Error("test database was not initialized");
+            await database.db.delete(foundingMemberReservations);
             await database.db.delete(users);
         });
 
@@ -120,6 +122,56 @@ describeWithDatabase(
             expect(persisted.every((row) => row.status === "reserved")).toBe(
                 true,
             );
+        });
+
+        it("preserves a legacy claim when founding pricing is forfeited", async () => {
+            if (!database) throw new Error("test database was not initialized");
+
+            const legacyPaidAt = new Date("2026-06-01T00:00:00.000Z");
+            await database.db.insert(users).values([
+                {
+                    id: "legacy-founder",
+                    email: "legacy-founder@example.test",
+                    foundingMember: true,
+                    everPaidAt: legacyPaidAt,
+                },
+                {
+                    id: "new-customer",
+                    email: "new-customer@example.test",
+                },
+            ]);
+
+            await expect(
+                getFoundingMemberAvailability(1),
+            ).resolves.toMatchObject({ claimed: 1, remaining: 0 });
+
+            await forfeitFoundingMember("legacy-founder");
+
+            const [legacyFounder] = await database.db
+                .select({
+                    foundingMember: users.foundingMember,
+                    foundingMemberClaimedAt: users.foundingMemberClaimedAt,
+                })
+                .from(users)
+                .where(eq(users.id, "legacy-founder"))
+                .limit(1);
+            expect(legacyFounder).toEqual({
+                foundingMember: false,
+                foundingMemberClaimedAt: legacyPaidAt,
+            });
+            await expect(
+                getFoundingMemberAvailability(1),
+            ).resolves.toMatchObject({ claimed: 1, remaining: 0 });
+
+            await expect(
+                createFoundingMemberReservation({
+                    userId: "new-customer",
+                    capacity: 1,
+                    stripePriceId: "price_found",
+                    now: new Date("2026-07-01T00:00:00.000Z"),
+                    expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+                }),
+            ).resolves.toBeNull();
         });
 
         it("consumes one reservation idempotently under concurrent payment events", async () => {
