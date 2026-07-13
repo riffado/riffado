@@ -42,6 +42,7 @@ vi.mock("@/db", () => ({ db: dbProxy }));
 import {
     consumeFoundingMemberReservation,
     createFoundingMemberReservation,
+    getFoundingMemberAvailability,
 } from "@/db/queries/billing";
 
 const testDatabaseUrl = getTestDatabaseUrl();
@@ -132,7 +133,7 @@ describeWithDatabase(
             });
             const reservation = await createFoundingMemberReservation({
                 userId,
-                capacity: 1,
+                capacity: 100,
                 stripePriceId: "price_found",
                 now: new Date("2026-07-01T00:00:00.000Z"),
                 expiresAt: new Date("2026-07-01T00:35:00.000Z"),
@@ -173,6 +174,23 @@ describeWithDatabase(
             expect(persistedUser).toEqual({
                 foundingMember: true,
                 foundingMemberClaimedAt: paidAt,
+            });
+
+            await database.db.delete(users).where(eq(users.id, userId));
+
+            const [preservedClaim] = await database.db
+                .select()
+                .from(foundingMemberReservations)
+                .where(eq(foundingMemberReservations.id, reservation?.id ?? ""))
+                .limit(1);
+            expect(preservedClaim).toMatchObject({
+                status: "consumed",
+                userId: null,
+            });
+            await expect(
+                getFoundingMemberAvailability(100),
+            ).resolves.toMatchObject({
+                claimed: 1,
             });
         });
     },

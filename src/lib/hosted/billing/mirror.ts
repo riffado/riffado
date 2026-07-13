@@ -110,6 +110,7 @@ function normalize(sub: Stripe.Subscription): NormalizedSubscription {
  */
 export async function mirrorStripeSubscription(
     sub: Stripe.Subscription,
+    options?: { paymentConfirmed?: boolean },
 ): Promise<void> {
     const n = normalize(sub);
 
@@ -158,14 +159,7 @@ export async function mirrorStripeSubscription(
 
     await setUserPlan({ userId, plan: planEntry.plan });
 
-    // "trialing" grants Pro entitlements (see PRO_STATUSES) but no invoice
-    // has been paid yet -- only "active"/"past_due" mean an invoice actually
-    // went through (past_due is a lapsed renewal on a previously-active sub,
-    // so everPaidAt is already true there; the write is a no-op). Gating on
-    // this keeps `everPaidAt`/founding-member/the paid welcome email tied to
-    // real payment, so classifyGracePath doesn't grant a trial user the
-    // 30-day paid grace window if they later lapse.
-    const hasPaidInvoice = n.status === "active" || n.status === "past_due";
+    const hasPaidInvoice = options?.paymentConfirmed === true;
 
     if (planEntry.plan === "hosted_pro") {
         await clearAccountDeletion(userId);
@@ -190,7 +184,7 @@ export async function mirrorStripeSubscription(
                             releasedAt: new Date(),
                         });
                     }
-                    await mirrorStripeSubscription(updated);
+                    await mirrorStripeSubscription(updated, options);
                     return;
                 }
             }
@@ -205,6 +199,12 @@ export async function mirrorStripeSubscription(
             });
         }
     } else {
+        if (n.foundingReservationId && isTerminalSubscriptionStatus(n.status)) {
+            await releaseFoundingMemberReservation({
+                reservationId: n.foundingReservationId,
+                releasedAt: new Date(),
+            });
+        }
         await forfeitFoundingMember(userId);
         await scheduleDeletionForLapsedUser(userId);
     }
@@ -216,13 +216,22 @@ function isLiveSubscriptionStatus(status: string): boolean {
     );
 }
 
+function isTerminalSubscriptionStatus(status: string): boolean {
+    return (
+        status === "canceled" ||
+        status === "unpaid" ||
+        status === "incomplete_expired"
+    );
+}
+
 /** Webhook/reconcile entry: fetch the subscription by id, then mirror. */
 export async function mirrorSubscriptionById(
     subscriptionId: string,
+    options?: { paymentConfirmed?: boolean },
 ): Promise<void> {
     const stripe = getStripe();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
-    await mirrorStripeSubscription(sub);
+    await mirrorStripeSubscription(sub, options);
 }
 
 /** `checkout.session.completed` entry: resolve the subscription, then mirror. */
@@ -239,7 +248,11 @@ export async function mirrorCheckoutSession(
         );
         return;
     }
-    await mirrorSubscriptionById(subId);
+    await mirrorSubscriptionById(subId, {
+        paymentConfirmed:
+            session.payment_status === "paid" ||
+            session.payment_status === "no_payment_required",
+    });
 }
 
 async function moveSubscriptionToStandardMonthly(

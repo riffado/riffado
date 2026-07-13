@@ -855,9 +855,9 @@ export const foundingMemberReservations = pgTable(
         id: text("id")
             .primaryKey()
             .$defaultFn(() => nanoid()),
-        userId: text("user_id")
-            .notNull()
-            .references(() => users.id, { onDelete: "cascade" }),
+        userId: text("user_id").references(() => users.id, {
+            onDelete: "set null",
+        }),
         stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
         stripePriceId: text("stripe_price_id").notNull(),
         status: foundingMemberReservationStatusEnum("status")

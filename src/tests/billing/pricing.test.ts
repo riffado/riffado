@@ -144,14 +144,13 @@ describe("priceForCurrency / resolvePrice", () => {
     });
 
     it("exposes structured public pricing and real founding availability without price ids", () => {
-        expect(
-            billingPriceCatalog({
-                capacity: 100,
-                claimed: 12,
-                reserved: 0,
-                remaining: 88,
-            }),
-        ).toMatchObject({
+        const catalog = billingPriceCatalog({
+            capacity: 100,
+            claimed: 12,
+            reserved: 0,
+            remaining: 88,
+        });
+        expect(catalog).toMatchObject({
             monthly: {
                 founding: {
                     usd: {
@@ -177,6 +176,9 @@ describe("priceForCurrency / resolvePrice", () => {
                 },
             },
         });
+        expect(catalog.monthly.founding.usd).not.toHaveProperty("priceId");
+        expect(catalog.monthly.standard.eur).not.toHaveProperty("priceId");
+        expect(catalog.annual.usd).not.toHaveProperty("priceId");
     });
 });
 

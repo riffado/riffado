@@ -86,6 +86,10 @@ vi.mock("@/lib/env", () => ({
 
 import { mirrorStripeSubscription } from "@/lib/hosted/billing/mirror";
 
+function mirrorPaid(subscription: Stripe.Subscription) {
+    return mirrorStripeSubscription(subscription, { paymentConfirmed: true });
+}
+
 function stubUserRow(row: Record<string, unknown>) {
     dbMock.select.mockReturnValue({
         from: vi.fn().mockReturnValue({
@@ -159,7 +163,7 @@ describe("mirrorStripeSubscription", () => {
         });
         stubUserRow({ email: "u1@example.com", foundingMember: false });
 
-        await mirrorStripeSubscription(sub({ status: "active" }));
+        await mirrorPaid(sub({ status: "active" }));
 
         expect(queriesMock.markEverPaid).toHaveBeenCalledWith(
             expect.objectContaining({ userId: "u1" }),
@@ -196,7 +200,7 @@ describe("mirrorStripeSubscription", () => {
         pricingMock.isFoundingMonthlyPriceId.mockReturnValue(true);
         stubUserRow({ email: "u1@example.com", foundingMember: false });
 
-        await mirrorStripeSubscription(
+        await mirrorPaid(
             sub({
                 status: "active",
                 items: {
@@ -224,7 +228,7 @@ describe("mirrorStripeSubscription", () => {
             expect.objectContaining({ interval: "year" }),
         );
 
-        await mirrorStripeSubscription(
+        await mirrorPaid(
             sub({
                 status: "active",
                 metadata: { userId: "u1", foundingReservationId: "fmr_1" },
@@ -264,7 +268,7 @@ describe("mirrorStripeSubscription", () => {
         queriesMock.markEverPaid.mockResolvedValue(false);
         stubUserRow({ email: "u1@example.com", foundingMember: false });
 
-        await mirrorStripeSubscription(
+        await mirrorPaid(
             sub({
                 status: "active",
                 metadata: { userId: "u1", foundingReservationId: "fmr_1" },
@@ -303,7 +307,7 @@ describe("mirrorStripeSubscription", () => {
         pricingMock.isFoundingMonthlyPriceId.mockReturnValue(true);
         stubUserRow({ email: "u1@example.com", foundingMember: true });
 
-        await mirrorStripeSubscription(
+        await mirrorPaid(
             sub({
                 status: "active",
                 cancel_at_period_end: true,
@@ -382,7 +386,7 @@ describe("mirrorStripeSubscription", () => {
             }),
         );
 
-        await mirrorStripeSubscription(foundingSubscription);
+        await mirrorPaid(foundingSubscription);
 
         expect(
             stripeMock.getStripe().subscriptions.update,
@@ -399,6 +403,66 @@ describe("mirrorStripeSubscription", () => {
         expect(emailMock.sendWelcomeHostedProEmail).toHaveBeenCalledWith(
             expect.objectContaining({ amountValue: "9.00" }),
         );
+    });
+
+    it("does not consume a founding reservation before payment is confirmed", async () => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_pro",
+        });
+        pricingMock.isFoundingMonthlyPriceId.mockReturnValue(true);
+        stubUserRow({ email: "u1@example.com", foundingMember: false });
+
+        await mirrorStripeSubscription(
+            sub({
+                status: "active",
+                metadata: { userId: "u1", foundingReservationId: "fmr_1" },
+                items: {
+                    data: [
+                        {
+                            price: {
+                                id: "price_pro_month",
+                                unit_amount: 500,
+                                currency: "usd",
+                                recurring: {
+                                    interval_count: 1,
+                                    interval: "month",
+                                },
+                            },
+                        },
+                    ],
+                } as never,
+            }),
+        );
+
+        expect(
+            queriesMock.consumeFoundingMemberReservation,
+        ).not.toHaveBeenCalled();
+        expect(queriesMock.markEverPaid).not.toHaveBeenCalled();
+    });
+
+    it("releases a founding reservation after an unpaid subscription becomes terminal", async () => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_free",
+        });
+        stubUserRow({
+            email: "u1@example.com",
+            createdAt: new Date("2026-01-01T00:00:00Z"),
+            everPaidAt: null,
+        });
+
+        await mirrorStripeSubscription(
+            sub({
+                status: "incomplete_expired",
+                metadata: { userId: "u1", foundingReservationId: "fmr_1" },
+            }),
+        );
+
+        expect(
+            queriesMock.releaseFoundingMemberReservation,
+        ).toHaveBeenCalledWith({
+            reservationId: "fmr_1",
+            releasedAt: expect.any(Date),
+        });
     });
 
     it("schedules deletion and emails using the effective persisted date for a truly lapsed (canceled) subscription", async () => {

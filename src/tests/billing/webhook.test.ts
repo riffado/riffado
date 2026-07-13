@@ -84,7 +84,10 @@ describe("handleStripeWebhook", () => {
                 parent: { subscription_details: { subscription: "sub_5" } },
             }),
         );
-        expect(mirrorMock.mirrorSubscriptionById).toHaveBeenCalledWith("sub_5");
+        expect(mirrorMock.mirrorSubscriptionById).toHaveBeenCalledWith(
+            "sub_5",
+            { paymentConfirmed: true },
+        );
     });
 
     it("ignores unrelated event types", async () => {

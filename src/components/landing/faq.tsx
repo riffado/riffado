@@ -5,6 +5,8 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
+import { getFoundingMemberAvailability } from "@/db/queries/billing";
+import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
     type PublicPrice,
@@ -65,8 +67,11 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
     return amount ? `${symbol}${amount}${suffix}` : "";
 }
 
-function hostedCostAnswer(): string {
-    const catalog = billingPriceCatalog();
+async function hostedCostAnswer(): Promise<string> {
+    const availability = await getFoundingMemberAvailability(
+        env.BILLING_FOUNDING_MEMBER_CAPACITY,
+    );
+    const catalog = billingPriceCatalog(availability);
     const foundingParts = [
         catalog.monthly.founding.usd,
         catalog.monthly.founding.eur,
@@ -83,7 +88,10 @@ function hostedCostAnswer(): string {
             price ? [formatCatalogPrice(price, "/month standard")] : [],
         )
         .filter(Boolean);
-    const monthlyParts = [...foundingParts, ...standardParts];
+    const monthlyParts =
+        availability.remaining > 0 && foundingParts.length > 0
+            ? foundingParts
+            : standardParts;
     const annualParts = [catalog.annual.usd, catalog.annual.eur]
         .flatMap((price) => (price ? [formatCatalogPrice(price, "/year")] : []))
         .filter(Boolean);
@@ -96,7 +104,8 @@ function hostedCostAnswer(): string {
             ? ` Prefer to pay yearly? Annual billing is available at ${annualParts.join(" or ")}.`
             : "";
 
-    return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a 14-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, 15 hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
+    const includedHours = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
+    return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a ${env.BILLING_TRIAL_DAYS}-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, ${includedHours} hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
 }
 
 const GROUPS: FaqGroup[] = [
@@ -105,7 +114,7 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "What does hosted Riffado cost?",
-                a: hostedCostAnswer(),
+                a: "",
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
@@ -213,13 +222,12 @@ const GROUPS: FaqGroup[] = [
     },
 ];
 
-const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
-
-function faqJsonLd() {
+function faqJsonLd(groups: FaqGroup[]) {
+    const allItems = groups.flatMap((group) => group.items);
     return {
         "@context": "https://schema.org",
         "@type": "FAQPage",
-        mainEntity: ALL_ITEMS.map((item) => ({
+        mainEntity: allItems.map((item) => ({
             "@type": "Question",
             name: item.q,
             acceptedAnswer: {
@@ -230,7 +238,19 @@ function faqJsonLd() {
     };
 }
 
-export function FAQ() {
+export async function FAQ() {
+    const costAnswer = await hostedCostAnswer();
+    const groups = GROUPS.map((group, groupIndex) =>
+        groupIndex === 0
+            ? {
+                  ...group,
+                  items: group.items.map((item, itemIndex) =>
+                      itemIndex === 0 ? { ...item, a: costAnswer } : item,
+                  ),
+              }
+            : group,
+    );
+
     return (
         <section id="faq" className="py-24 md:py-32 border-t border-border/40">
             {/* Rich-result eligibility. Sourced from the same `GROUPS`
@@ -239,7 +259,7 @@ export function FAQ() {
                 type="application/ld+json"
                 // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD payload.
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(faqJsonLd()),
+                    __html: JSON.stringify(faqJsonLd(groups)),
                 }}
             />
 
@@ -257,7 +277,7 @@ export function FAQ() {
 
                     <div className="rounded-2xl border border-border/60 bg-card/50 px-6 md:px-8 py-2 md:py-3">
                         <Accordion type="single" collapsible className="w-full">
-                            {GROUPS.map((group, gi) => (
+                            {groups.map((group, gi) => (
                                 <div
                                     key={group.label}
                                     className={

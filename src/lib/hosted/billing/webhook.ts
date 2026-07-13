@@ -72,7 +72,11 @@ export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
             const subId = subscriptionIdFromInvoice(
                 event.data.object as Stripe.Invoice,
             );
-            if (subId) await mirrorSubscriptionById(subId);
+            if (subId) {
+                await mirrorSubscriptionById(subId, {
+                    paymentConfirmed: true,
+                });
+            }
             return;
         }
         case "invoice.payment_failed": {

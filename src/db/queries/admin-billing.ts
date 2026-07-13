@@ -67,12 +67,32 @@ export async function billingOverview(): Promise<BillingOverview> {
             ) as "inTrial",
             (select count(*)::int from users where account_deletion_scheduled_at is not null) as "inGrace",
             (select count(*)::int from users where founding_member = true) as "foundingMembers",
-            (select count(*)::int from users where founding_member_claimed_at is not null) as "foundingSlotsClaimed",
+            (
+                (select count(*)::int from founding_member_reservations where status = 'consumed')
+                +
+                (select count(*)::int
+                 from users u
+                 where (u.founding_member_claimed_at is not null or u.founding_member = true)
+                   and not exists (
+                       select 1 from founding_member_reservations consumed
+                       where consumed.user_id = u.id and consumed.status = 'consumed'
+                   ))
+            ) as "foundingSlotsClaimed",
             (select count(*)::int from founding_member_reservations where status = 'reserved') as "foundingSlotsReserved",
             greatest(
                 0,
                 ${env.BILLING_FOUNDING_MEMBER_CAPACITY}::int
-                - (select count(*)::int from users where founding_member_claimed_at is not null)
+                - (
+                    (select count(*)::int from founding_member_reservations where status = 'consumed')
+                    +
+                    (select count(*)::int
+                     from users u
+                     where (u.founding_member_claimed_at is not null or u.founding_member = true)
+                       and not exists (
+                           select 1 from founding_member_reservations consumed
+                           where consumed.user_id = u.id and consumed.status = 'consumed'
+                       ))
+                  )
                 - (select count(*)::int from founding_member_reservations where status = 'reserved')
             ) as "foundingSlotsRemaining",
             (select count(*)::int from subscriptions where status = 'active') as "activeSubscriptions",

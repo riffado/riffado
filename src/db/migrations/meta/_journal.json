@@ -239,6 +239,13 @@
       "when": 1783855760404,
       "tag": "0033_tough_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1783940484705,
+      "tag": "0034_little_loa",
+      "breakpoints": true
     }
   ]
 }

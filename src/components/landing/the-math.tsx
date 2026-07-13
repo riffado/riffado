@@ -1,3 +1,4 @@
+import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
     trimDisplayAmount,
@@ -13,7 +14,7 @@ import {
  *
  * The Hosted Pro row stays monthly-framed and derives its amount
  * from the first configured monthly catalog Price (USD preferred);
- * the per-hour figure is that amount divided by the 15 included hours.
+ * the per-hour figure uses the configured included transcription allowance.
  *
  * `perHour` is the price normalized to one hour of audio where a row
  * has a fixed minute allowance or published metered rate. Subscription
@@ -46,7 +47,7 @@ const SUBSCRIPTION_SERVICES = [
     },
 ];
 
-const HOSTED_PRO_INCLUDED_HOURS = 15;
+const HOSTED_PRO_INCLUDED_HOURS = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
 const HOSTED_PRO_CATALOG = billingPriceCatalog();
 const HOSTED_PRO_MONTHLY_PRICE =
     HOSTED_PRO_CATALOG.monthly.standard.usd ??
@@ -66,13 +67,14 @@ const RIFFADO_OPTIONS = [
         name: "Hosted Pro + Mynah",
         price: HOSTED_PRO_DISPLAY_PRICE,
         unit: HOSTED_PRO_MONTHLY_AMOUNT ? "/ month" : "",
-        scope: "15 hours of included cloud transcription + 50 GB storage",
-        perHour: HOSTED_PRO_MONTHLY_AMOUNT
-            ? `${HOSTED_PRO_CURRENCY_SYMBOL}${(
-                  Number.parseFloat(HOSTED_PRO_MONTHLY_AMOUNT) /
-                      HOSTED_PRO_INCLUDED_HOURS
-              ).toFixed(2)} / included hr`
-            : "—",
+        scope: `${HOSTED_PRO_INCLUDED_HOURS} hours of included cloud transcription + 50 GB storage`,
+        perHour:
+            HOSTED_PRO_MONTHLY_AMOUNT && HOSTED_PRO_INCLUDED_HOURS > 0
+                ? `${HOSTED_PRO_CURRENCY_SYMBOL}${(
+                      Number.parseFloat(HOSTED_PRO_MONTHLY_AMOUNT) /
+                          HOSTED_PRO_INCLUDED_HOURS
+                  ).toFixed(2)} / included hr`
+                : "—",
     },
     {
         name: "Riffado in your browser",
@@ -100,7 +102,8 @@ export function TheMath() {
                             How transcription pricing works
                         </p>
                         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4 text-balance">
-                            Hosted Pro includes 15 hours of transcription.
+                            Hosted Pro includes {HOSTED_PRO_INCLUDED_HOURS}{" "}
+                            hours of transcription.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
                             {HOSTED_PRO_MONTHLY_AMOUNT
@@ -130,8 +133,9 @@ export function TheMath() {
                         Published pricing as of May 2026. Plans, minute
                         ceilings, and trademarks belong to their respective
                         owners; shown for descriptive context, not comparison.
-                        Hosted Pro includes 15 hours of Mynah transcription per
-                        month; Riffado itself is free to self-host.
+                        Hosted Pro includes {HOSTED_PRO_INCLUDED_HOURS} hours of
+                        Mynah transcription per month; Riffado itself is free to
+                        self-host.
                     </p>
                 </div>
             </div>

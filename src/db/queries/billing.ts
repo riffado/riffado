@@ -227,7 +227,7 @@ export interface FoundingMemberAvailabilityRow {
 
 export interface FoundingMemberReservationRow {
     id: string;
-    userId: string;
+    userId: string | null;
     stripeCheckoutSessionId: string | null;
     stripePriceId: string;
     status: "reserved" | "consumed" | "released" | "expired";
@@ -245,10 +245,21 @@ export async function getFoundingMemberAvailability(
 ): Promise<FoundingMemberAvailabilityRow> {
     const result = await db.execute<{ claimed: number; reserved: number }>(sql`
         select
-            (select count(*)::int
-             from ${users}
-             where ${users.foundingMemberClaimedAt} is not null
-                or ${users.foundingMember} = true) as claimed,
+            (
+                (select count(*)::int
+                 from ${foundingMemberReservations}
+                 where ${foundingMemberReservations.status} = 'consumed')
+                +
+                (select count(*)::int
+                 from ${users} u
+                 where (u.founding_member_claimed_at is not null or u.founding_member = true)
+                   and not exists (
+                       select 1
+                       from ${foundingMemberReservations} consumed
+                       where consumed.user_id = u.id
+                         and consumed.status = 'consumed'
+                   ))
+            ) as claimed,
             (select count(*)::int
              from ${foundingMemberReservations}
              where ${foundingMemberReservations.status} = 'reserved') as reserved
@@ -325,10 +336,21 @@ export async function createFoundingMemberReservation(input: {
             reserved: number;
         }>(sql`
             select
-                (select count(*)::int
-                 from ${users}
-                 where ${users.foundingMemberClaimedAt} is not null
-                    or ${users.foundingMember} = true) as claimed,
+                (
+                    (select count(*)::int
+                     from ${foundingMemberReservations}
+                     where ${foundingMemberReservations.status} = 'consumed')
+                    +
+                    (select count(*)::int
+                     from ${users} u
+                     where (u.founding_member_claimed_at is not null or u.founding_member = true)
+                       and not exists (
+                           select 1
+                           from ${foundingMemberReservations} consumed
+                           where consumed.user_id = u.id
+                             and consumed.status = 'consumed'
+                       ))
+                ) as claimed,
                 (select count(*)::int
                  from ${foundingMemberReservations}
                  where ${foundingMemberReservations.status} = 'reserved') as reserved

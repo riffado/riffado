@@ -59,7 +59,6 @@ Do this once per mode (test, then live). The mirror only runs when the webhook i
 2. **Webhook endpoint.** Add an endpoint at `https://<host>/api/stripe/webhook` and enable **exactly** these events — the dispatcher in `webhook.ts` handles these and ignores the rest:
    - `checkout.session.completed`
    - `checkout.session.expired`
-   - `checkout.session.expired`
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
