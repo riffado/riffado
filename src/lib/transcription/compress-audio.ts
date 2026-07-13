@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
+import { env } from "@/lib/env";
 
-const DEFAULT_MAX_BYTES = 24 * 1024 * 1024;
-const DEFAULT_BITRATE_KBPS = 12;
 const MIN_BITRATE_KBPS = 6;
 const WHISPER_HARD_LIMIT_BYTES = 25 * 1024 * 1024;
 
@@ -38,9 +37,8 @@ export async function maybeCompressForWhisper(
     contentType: string,
     opts: CompressOptions = {},
 ): Promise<CompressResult> {
-    const maxBytes = opts.maxBytes ?? envMaxBytes() ?? DEFAULT_MAX_BYTES;
-    const startBitrate =
-        opts.bitrateKbps ?? envBitrateKbps() ?? DEFAULT_BITRATE_KBPS;
+    const maxBytes = opts.maxBytes ?? env.WHISPER_MAX_BYTES;
+    const startBitrate = opts.bitrateKbps ?? env.WHISPER_COMPRESS_BITRATE_KBPS;
 
     if (audioBuffer.length <= maxBytes) {
         return { buffer: audioBuffer, contentType, compressed: false };
@@ -82,20 +80,6 @@ export async function maybeCompressForWhisper(
 
 function formatMib(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
-}
-
-function envMaxBytes(): number | undefined {
-    return parsePositiveInt(process.env.WHISPER_MAX_BYTES);
-}
-
-function envBitrateKbps(): number | undefined {
-    return parsePositiveInt(process.env.WHISPER_COMPRESS_BITRATE_KBPS);
-}
-
-function parsePositiveInt(raw: string | undefined): number | undefined {
-    if (!raw) return undefined;
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function ffmpegToOpus(input: Buffer, bitrateKbps: number): Promise<Buffer> {

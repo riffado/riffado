@@ -15,7 +15,15 @@
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/env", () => ({
+    env: {
+        WHISPER_MAX_BYTES: 24 * 1024 * 1024,
+        WHISPER_COMPRESS_BITRATE_KBPS: 12,
+    },
+}));
+
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "sample.mp3");

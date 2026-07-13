@@ -13,6 +13,7 @@ import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
+import { env } from "@/lib/env";
 import {
     isMynahConfigured,
     transcribeViaMynah,
@@ -442,7 +443,7 @@ export async function transcribeRecording(
                                 responseFormat,
                                 language: defaultLanguage,
                             }),
-                            { timeout: whisperRequestTimeoutMs() },
+                            { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
                         );
                     const parsed = parseTranscriptionResponse(
                         transcription,
@@ -667,15 +668,4 @@ export async function transcribeRecording(
 
 function isMynahBudgetExhausted(error: unknown): boolean {
     return error instanceof Error && error.name === "MynahBudgetExhaustedError";
-}
-
-const DEFAULT_WHISPER_REQUEST_TIMEOUT_MS = 60 * 60 * 1000;
-
-function whisperRequestTimeoutMs(): number {
-    const raw = process.env.WHISPER_REQUEST_TIMEOUT_MS;
-    if (!raw) return DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
-    const parsed = Number.parseInt(raw, 10);
-    return Number.isFinite(parsed) && parsed > 0
-        ? parsed
-        : DEFAULT_WHISPER_REQUEST_TIMEOUT_MS;
 }

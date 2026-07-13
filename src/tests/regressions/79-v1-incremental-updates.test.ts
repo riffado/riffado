@@ -9,6 +9,9 @@ const openAiMocks = vi.hoisted(() => ({
 // path under test) don't trip DATABASE_URL/ENCRYPTION_KEY runtime checks.
 const mockEnv = vi.hoisted(() => ({
     WEBSHARE_API_KEY: undefined as string | undefined,
+    WHISPER_MAX_BYTES: 24 * 1024 * 1024,
+    WHISPER_COMPRESS_BITRATE_KBPS: 12,
+    WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000,
 }));
 vi.mock("@/lib/env", () => ({ env: mockEnv }));
 

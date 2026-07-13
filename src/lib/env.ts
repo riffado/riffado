@@ -91,6 +91,33 @@ const baseEnvSchema = z.object({
         .transform((val) => (val ? Number(val) : 10))
         .pipe(z.number().int().positive().max(600)),
 
+    /** Compress OpenAI-style transcription inputs above this byte threshold. */
+    WHISPER_MAX_BYTES: z
+        .string()
+        .regex(/^\d+$/, "WHISPER_MAX_BYTES must be a positive integer")
+        .optional()
+        .transform((val) => (val ? Number(val) : 24 * 1024 * 1024))
+        .pipe(z.number().int().positive()),
+
+    /** Starting mono Opus bitrate for oversized transcription inputs. */
+    WHISPER_COMPRESS_BITRATE_KBPS: z
+        .string()
+        .regex(
+            /^\d+$/,
+            "WHISPER_COMPRESS_BITRATE_KBPS must be a positive integer",
+        )
+        .optional()
+        .transform((val) => (val ? Number(val) : 12))
+        .pipe(z.number().int().positive()),
+
+    /** OpenAI-style audio transcription request timeout in milliseconds. */
+    WHISPER_REQUEST_TIMEOUT_MS: z
+        .string()
+        .regex(/^\d+$/, "WHISPER_REQUEST_TIMEOUT_MS must be a positive integer")
+        .optional()
+        .transform((val) => (val ? Number(val) : 60 * 60 * 1000))
+        .pipe(z.number().int().positive()),
+
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z
         .string()
@@ -659,6 +686,10 @@ function validateEnv(): Env {
             PLAUD_PROXY_SCOPE: process.env.PLAUD_PROXY_SCOPE,
             PLAUD_SYNC_RATE_LIMIT_PER_MINUTE:
                 process.env.PLAUD_SYNC_RATE_LIMIT_PER_MINUTE,
+            WHISPER_MAX_BYTES: process.env.WHISPER_MAX_BYTES,
+            WHISPER_COMPRESS_BITRATE_KBPS:
+                process.env.WHISPER_COMPRESS_BITRATE_KBPS,
+            WHISPER_REQUEST_TIMEOUT_MS: process.env.WHISPER_REQUEST_TIMEOUT_MS,
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,

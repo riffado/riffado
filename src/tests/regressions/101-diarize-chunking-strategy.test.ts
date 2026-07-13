@@ -142,6 +142,14 @@ vi.mock("@/lib/entitlements", () => ({
     isHostedLockedOut: vi.fn().mockResolvedValue(false),
 }));
 
+vi.mock("@/lib/env", () => ({
+    env: {
+        WHISPER_MAX_BYTES: 24 * 1024 * 1024,
+        WHISPER_COMPRESS_BITRATE_KBPS: 12,
+        WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000,
+    },
+}));
+
 vi.mock("@/lib/hosted/transcription/mynah", () => ({
     isMynahConfigured: vi.fn().mockReturnValue(false),
     transcribeViaMynah: vi.fn(),
