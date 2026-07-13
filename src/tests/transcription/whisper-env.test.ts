@@ -41,6 +41,7 @@ describe("Whisper environment configuration", () => {
 
     it.each([
         ["WHISPER_MAX_BYTES", "0"],
+        ["WHISPER_MAX_BYTES", "26214401"],
         ["WHISPER_COMPRESS_BITRATE_KBPS", "invalid"],
         ["WHISPER_REQUEST_TIMEOUT_MS", "-1"],
     ])("rejects invalid %s values", (field, value) => {

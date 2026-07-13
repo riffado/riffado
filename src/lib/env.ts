@@ -97,7 +97,13 @@ const baseEnvSchema = z.object({
         .regex(/^\d+$/, "WHISPER_MAX_BYTES must be a positive integer")
         .optional()
         .transform((val) => (val ? Number(val) : 24 * 1024 * 1024))
-        .pipe(z.number().int().positive()),
+        .pipe(
+            z
+                .number()
+                .int()
+                .positive()
+                .max(25 * 1024 * 1024),
+        ),
 
     /** Starting mono Opus bitrate for oversized transcription inputs. */
     WHISPER_COMPRESS_BITRATE_KBPS: z
