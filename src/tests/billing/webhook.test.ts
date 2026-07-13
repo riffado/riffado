@@ -81,12 +81,27 @@ describe("handleStripeWebhook", () => {
         await handleStripeWebhook(
             event("invoice.paid", {
                 id: "in_1",
+                amount_paid: 500,
                 parent: { subscription_details: { subscription: "sub_5" } },
             }),
         );
         expect(mirrorMock.mirrorSubscriptionById).toHaveBeenCalledWith(
             "sub_5",
             { paymentConfirmed: true },
+        );
+    });
+
+    it("does not confirm payment for a zero-amount paid invoice", async () => {
+        await handleStripeWebhook(
+            event("invoice.paid", {
+                id: "in_zero",
+                amount_paid: 0,
+                parent: { subscription_details: { subscription: "sub_6" } },
+            }),
+        );
+        expect(mirrorMock.mirrorSubscriptionById).toHaveBeenCalledWith(
+            "sub_6",
+            { paymentConfirmed: false },
         );
     });
 

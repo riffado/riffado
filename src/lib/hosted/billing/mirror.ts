@@ -33,6 +33,10 @@ import {
 } from "./pricing";
 import { getStripe } from "./stripe-client";
 
+interface MirrorOptions {
+    paymentConfirmed?: boolean;
+}
+
 interface NormalizedSubscription {
     id: string;
     userId: string | null;
@@ -110,7 +114,7 @@ function normalize(sub: Stripe.Subscription): NormalizedSubscription {
  */
 export async function mirrorStripeSubscription(
     sub: Stripe.Subscription,
-    options?: { paymentConfirmed?: boolean },
+    options?: MirrorOptions,
 ): Promise<void> {
     const n = normalize(sub);
 
@@ -227,11 +231,14 @@ function isTerminalSubscriptionStatus(status: string): boolean {
 /** Webhook/reconcile entry: fetch the subscription by id, then mirror. */
 export async function mirrorSubscriptionById(
     subscriptionId: string,
-    options?: { paymentConfirmed?: boolean },
+    options?: MirrorOptions,
 ): Promise<void> {
     const stripe = getStripe();
     const sub = await stripe.subscriptions.retrieve(subscriptionId);
-    await mirrorStripeSubscription(sub, options);
+    const paymentConfirmed =
+        options?.paymentConfirmed ??
+        (await latestInvoiceHasConfirmedPayment(stripe, sub));
+    await mirrorStripeSubscription(sub, { paymentConfirmed });
 }
 
 /** `checkout.session.completed` entry: resolve the subscription, then mirror. */
@@ -249,10 +256,21 @@ export async function mirrorCheckoutSession(
         return;
     }
     await mirrorSubscriptionById(subId, {
-        paymentConfirmed:
-            session.payment_status === "paid" ||
-            session.payment_status === "no_payment_required",
+        paymentConfirmed: session.payment_status === "paid",
     });
+}
+
+async function latestInvoiceHasConfirmedPayment(
+    stripe: Stripe,
+    sub: Stripe.Subscription,
+): Promise<boolean> {
+    const latestInvoice = sub.latest_invoice;
+    if (!latestInvoice) return false;
+    const invoice =
+        typeof latestInvoice === "string"
+            ? await stripe.invoices.retrieve(latestInvoice)
+            : latestInvoice;
+    return invoice.amount_paid > 0;
 }
 
 async function moveSubscriptionToStandardMonthly(

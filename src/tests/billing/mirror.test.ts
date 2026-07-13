@@ -42,7 +42,11 @@ const {
                 retrieve: vi.fn().mockResolvedValue({ deleted: true }),
             },
             subscriptions: {
+                retrieve: vi.fn(),
                 update: vi.fn().mockResolvedValue({}),
+            },
+            invoices: {
+                retrieve: vi.fn(),
             },
         }),
     },
@@ -84,7 +88,11 @@ vi.mock("@/lib/env", () => ({
     },
 }));
 
-import { mirrorStripeSubscription } from "@/lib/hosted/billing/mirror";
+import {
+    mirrorCheckoutSession,
+    mirrorStripeSubscription,
+    mirrorSubscriptionById,
+} from "@/lib/hosted/billing/mirror";
 
 function mirrorPaid(subscription: Stripe.Subscription) {
     return mirrorStripeSubscription(subscription, { paymentConfirmed: true });
@@ -171,6 +179,71 @@ describe("mirrorStripeSubscription", () => {
         expect(emailMock.sendWelcomeHostedProEmail).toHaveBeenCalledWith(
             expect.objectContaining({ interval: "month" }),
         );
+    });
+
+    it("recovers confirmed payment state from the latest invoice during reconciliation", async () => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_pro",
+        });
+        stubUserRow({ email: "u1@example.com", foundingMember: false });
+        stripeMock
+            .getStripe()
+            .subscriptions.retrieve.mockResolvedValueOnce(
+                sub({ status: "active", latest_invoice: "in_paid" }),
+            );
+        stripeMock
+            .getStripe()
+            .invoices.retrieve.mockResolvedValueOnce({ amount_paid: 500 });
+
+        await mirrorSubscriptionById("sub_1");
+
+        expect(stripeMock.getStripe().invoices.retrieve).toHaveBeenCalledWith(
+            "in_paid",
+        );
+        expect(queriesMock.markEverPaid).toHaveBeenCalledWith(
+            expect.objectContaining({ userId: "u1" }),
+        );
+    });
+
+    it("does not confirm payment when Checkout requires no payment", async () => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_pro",
+        });
+        stubUserRow({ email: "u1@example.com", foundingMember: false });
+        stripeMock
+            .getStripe()
+            .subscriptions.retrieve.mockResolvedValueOnce(
+                sub({ status: "active" }),
+            );
+
+        await mirrorCheckoutSession({
+            id: "cs_zero",
+            subscription: "sub_1",
+            payment_status: "no_payment_required",
+        } as Stripe.Checkout.Session);
+
+        expect(queriesMock.markEverPaid).not.toHaveBeenCalled();
+        expect(stripeMock.getStripe().invoices.retrieve).not.toHaveBeenCalled();
+    });
+
+    it("does not treat a zero-amount latest invoice as confirmed payment", async () => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_pro",
+        });
+        stubUserRow({ email: "u1@example.com", foundingMember: false });
+        stripeMock
+            .getStripe()
+            .subscriptions.retrieve.mockResolvedValueOnce(
+                sub({ status: "active", latest_invoice: "in_zero" }),
+            );
+        stripeMock
+            .getStripe()
+            .invoices.retrieve.mockResolvedValueOnce({ amount_paid: 0 });
+
+        await mirrorSubscriptionById("sub_1");
+
+        expect(queriesMock.markEverPaid).not.toHaveBeenCalled();
+        expect(emailMock.sendWelcomeHostedProEmail).not.toHaveBeenCalled();
     });
 
     it("mirrors but does not mutate plan or run side effects for a live status with an unrecognized price", async () => {
