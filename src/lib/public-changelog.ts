@@ -82,6 +82,52 @@ export type PublicChangelogRelease = {
  */
 export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
     {
+        version: "0.6.0",
+        date: "2026-07-13",
+        items: [
+            {
+                tag: "new",
+                title: "Choose Hosted Pro or keep self-hosting free",
+                body: "Hosted Pro is now available with monthly or annual billing, a 14-day trial, 50 GB of encrypted storage, 15 hours of Mynah cloud transcription each month, and background sync while your browser is closed. The first 100 monthly subscribers can claim the founding price shown at checkout. Self-hosting remains free with the same open-source code.",
+            },
+            {
+                tag: "new",
+                title: "Take your complete library with you",
+                body: "Create one backup archive containing every recording, transcript, and AI summary. Keep a complete portable copy of your library instead of exporting files one at a time.",
+            },
+            {
+                tag: "new",
+                title: "Transcribe privately in your browser",
+                body: "Run Whisper on your own computer and save the finished transcript directly to Riffado. No API key or separate AI account is required.",
+            },
+            {
+                tag: "new",
+                title: "Use Google Gemini for transcription",
+                body: "Gemini is now available alongside OpenAI, Groq, local models, and browser-based Whisper. Add your Gemini key in Settings and choose it for supported recordings.",
+            },
+            {
+                tag: "improved",
+                title: "Transcribe longer recordings",
+                body: "Large recordings are automatically compressed for compatible cloud transcription providers, helping meeting-length audio fit provider upload limits without manual conversion.",
+            },
+            {
+                tag: "fixed",
+                title: "Get the full story from long meetings",
+                body: "Summaries now use the complete transcript instead of silently stopping after the beginning. Decisions and action items near the end of a meeting are no longer left out.",
+            },
+            {
+                tag: "fixed",
+                title: "Reconnect Plaud without starting over",
+                body: "When a Plaud connection expires, Riffado now guides you through reconnecting without deleting the connection or your existing recordings. Manual setup also rejects short-lived tokens that would stop working within a day.",
+            },
+            {
+                tag: "improved",
+                title: "Choose from more transcription languages",
+                body: "The language picker now includes 18 more European and Asian languages, improving explicit language selection for short, noisy, or easily confused recordings.",
+            },
+        ],
+    },
+    {
         // Standalone marketing-event entry, not tied to a code release.
         // The `version` field stays for the maintainer cross-reference
         // pattern but is not shown; the rebrand is dated, not versioned.
