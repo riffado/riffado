@@ -118,7 +118,27 @@ function updateChangelogForRelease(version: string): void {
 		console.error("Error: CHANGELOG.md has no [Unreleased] section.");
 		process.exit(1);
 	}
-	writeFileSync("CHANGELOG.md", content.replace("## [Unreleased]", `## [${version}] - ${date}`));
+
+	const compareLinkPattern =
+		/^\[unreleased\]: (https:\/\/github\.com\/riffado\/riffado\/compare\/)(v\d+\.\d+\.\d+)\.\.\.HEAD$/m;
+	const compareLink = content.match(compareLinkPattern);
+	if (!compareLink) {
+		console.error(
+			"Error: CHANGELOG.md has no valid [unreleased] comparison link.",
+		);
+		process.exit(1);
+	}
+
+	const [, compareBase, previousTag] = compareLink;
+	const nextTag = `v${version}`;
+	const links = [
+		`[unreleased]: ${compareBase}${nextTag}...HEAD`,
+		`[${version}]: ${compareBase}${previousTag}...${nextTag}`,
+	].join("\n");
+	const released = content
+		.replace("## [Unreleased]", `## [${version}] - ${date}`)
+		.replace(compareLinkPattern, links);
+	writeFileSync("CHANGELOG.md", released);
 }
 
 function addUnreleasedSection(): void {
