@@ -53,6 +53,8 @@ type FaqGroup = {
     items: FaqItem[];
 };
 
+const INCLUDED_TRANSCRIPTION_HOURS = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
+
 /**
  * Price copy is derived from the configured billing prices; the
  * annual sentence only appears when an annual plan is actually
@@ -104,8 +106,7 @@ async function hostedCostAnswer(): Promise<string> {
             ? ` Prefer to pay yearly? Annual billing is available at ${annualParts.join(" or ")}.`
             : "";
 
-    const includedHours = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
-    return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a ${env.BILLING_TRIAL_DAYS}-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, ${includedHours} hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
+    return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a ${env.BILLING_TRIAL_DAYS}-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, ${INCLUDED_TRANSCRIPTION_HOURS} hours of cloud transcription per month, unlimited devices, priority sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
 }
 
 const GROUPS: FaqGroup[] = [
@@ -118,7 +119,7 @@ const GROUPS: FaqGroup[] = [
             },
             {
                 q: "Do I need to pay for an AI provider to try this?",
-                a: "No. Riffado transcribes right in your browser by default using Whisper, with no API keys, extra accounts, or per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. Hosted Pro also includes 15 hours per month of cloud transcription on our keys, so you don't have to bring your own. Browser-based Whisper stays free forever, hosted or self-hosted.",
+                a: `No. Riffado transcribes right in your browser by default using Whisper, with no API keys, extra accounts, or per-minute cost. If you want faster or higher-quality transcripts later, plug in OpenAI or Groq, or run a local model with Ollama. Hosted Pro also includes ${INCLUDED_TRANSCRIPTION_HOURS} hours per month of cloud transcription on our keys, so you don't have to bring your own. Browser-based Whisper stays free forever, hosted or self-hosted.`,
             },
             {
                 q: "Which voice recorders does Riffado work with?",
@@ -157,15 +158,15 @@ const GROUPS: FaqGroup[] = [
         items: [
             {
                 q: "Which AI providers can I use?",
-                a: "Hosted Pro includes Mynah for 15 hours of cloud transcription every month. You can also connect OpenAI or Groq for cloud transcription. Use Ollama or LM Studio if you want a model running entirely on your own machine, so nothing leaves your laptop. Browser-based Whisper works if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works, including OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.",
+                a: `Hosted Pro includes Mynah for ${INCLUDED_TRANSCRIPTION_HOURS} hours of cloud transcription every month. You can also connect OpenAI or Groq for cloud transcription. Use Ollama or LM Studio if you want a model running entirely on your own machine, so nothing leaves your laptop. Browser-based Whisper works if you don't want to configure anything at all. Pick per recording; change your mind any time. For summaries, any OpenAI-compatible endpoint works, including OpenAI, Anthropic via OpenRouter, Groq, Together, Azure, and others.`,
                 body: (
                     <>
                         <p>
                             <strong className="text-foreground font-medium">
                                 Hosted Pro includes Mynah
                             </strong>{" "}
-                            for 15 hours of cloud transcription every month. You
-                            can also connect{" "}
+                            for {INCLUDED_TRANSCRIPTION_HOURS} hours of cloud
+                            transcription every month. You can also connect{" "}
                             <strong className="text-foreground font-medium">
                                 OpenAI or Groq
                             </strong>{" "}
