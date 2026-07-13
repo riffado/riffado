@@ -714,9 +714,56 @@ export async function listRecordingStoragePaths(
     return rows.map((r) => r.storagePath);
 }
 
-/** Hard-delete a user. Cascades to all FK-dependent rows. */
+/** Hard-delete a user while preserving any lifetime founding-capacity claim. */
 export async function deleteUser(userId: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, userId));
+    await db.transaction(async (tx) => {
+        await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended('billing_founding_members', 0))`,
+        );
+
+        const [user] = await tx
+            .select({
+                foundingMember: users.foundingMember,
+                foundingMemberClaimedAt: users.foundingMemberClaimedAt,
+                everPaidAt: users.everPaidAt,
+            })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+        if (
+            user &&
+            (user.foundingMember || user.foundingMemberClaimedAt !== null)
+        ) {
+            const [consumedClaim] = await tx
+                .select({ id: foundingMemberReservations.id })
+                .from(foundingMemberReservations)
+                .where(
+                    and(
+                        eq(foundingMemberReservations.userId, userId),
+                        eq(foundingMemberReservations.status, "consumed"),
+                    ),
+                )
+                .limit(1);
+            if (!consumedClaim) {
+                const claimedAt =
+                    user.foundingMemberClaimedAt ??
+                    user.everPaidAt ??
+                    new Date();
+                await tx.insert(foundingMemberReservations).values({
+                    userId,
+                    stripePriceId: "legacy-founding-claim",
+                    status: "consumed",
+                    reservedAt: claimedAt,
+                    expiresAt: claimedAt,
+                    consumedAt: claimedAt,
+                    createdAt: claimedAt,
+                    updatedAt: claimedAt,
+                });
+            }
+        }
+
+        await tx.delete(users).where(eq(users.id, userId));
+    });
 }
 
 /**

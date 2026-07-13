@@ -42,6 +42,7 @@ vi.mock("@/db", () => ({ db: dbProxy }));
 import {
     consumeFoundingMemberReservation,
     createFoundingMemberReservation,
+    deleteUser,
     forfeitFoundingMember,
     getFoundingMemberAvailability,
 } from "@/db/queries/billing";
@@ -158,6 +159,22 @@ describeWithDatabase(
             expect(legacyFounder).toEqual({
                 foundingMember: false,
                 foundingMemberClaimedAt: legacyPaidAt,
+            });
+            await expect(
+                getFoundingMemberAvailability(1),
+            ).resolves.toMatchObject({ claimed: 1, remaining: 0 });
+
+            await deleteUser("legacy-founder");
+
+            const [preservedClaim] = await database.db
+                .select()
+                .from(foundingMemberReservations)
+                .where(eq(foundingMemberReservations.status, "consumed"))
+                .limit(1);
+            expect(preservedClaim).toMatchObject({
+                status: "consumed",
+                stripePriceId: "legacy-founding-claim",
+                userId: null,
             });
             await expect(
                 getFoundingMemberAvailability(1),
