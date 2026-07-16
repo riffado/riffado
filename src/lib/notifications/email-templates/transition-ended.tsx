@@ -15,10 +15,9 @@ interface Props {
     selfHostUrl: string;
 }
 
-// DRAFT COPY: review before sending. Sent when the free Pro window has
-// closed and the account is now read-only. No deletion clock for the
-// grandfathered cohort: data stays put indefinitely until they subscribe,
-// export, or self-host.
+// Sent when the free Pro window has closed and the account is now read-only.
+// No deletion clock for the grandfathered cohort: data stays put indefinitely
+// until they subscribe, export, or self-host.
 export function TransitionEndedEmail({
     amountValue,
     amountCurrency,

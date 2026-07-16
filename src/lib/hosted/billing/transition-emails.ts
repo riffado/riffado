@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
+import { getFoundingMemberAvailability } from "@/db/queries/billing";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import {
@@ -7,7 +8,11 @@ import {
     sendTransitionReminderEmail,
     sendTransitionStartEmail,
 } from "@/lib/notifications/email";
-import { displayAmountForCurrency, resolveCurrency } from "./pricing";
+import {
+    displayAmountForCurrency,
+    displayStandardAmountForCurrency,
+    resolveCurrency,
+} from "./pricing";
 
 const BATCH_LIMIT = 200;
 const REMINDER_DAYS_OUT = 3;
@@ -55,7 +60,9 @@ export interface TransitionEmailResult {
  * launch. Dedup is handled by `claimEmailSend` (once-only per kind), so
  * re-runs across ticks are safe.
  */
-export async function processTransitionEmails(): Promise<TransitionEmailResult> {
+export async function processTransitionEmails(
+    options: { sendStart?: boolean } = {},
+): Promise<TransitionEmailResult> {
     let start = 0;
     let reminder = 0;
     let ended = 0;
@@ -71,9 +78,18 @@ export async function processTransitionEmails(): Promise<TransitionEmailResult> 
     if (now < launch) return { start, reminder, ended, errors };
 
     // Grandfathered users have no chosen currency yet, so display the
-    // default-currency price in the migration emails.
-    const currency = resolveCurrency(null, "month");
-    const amountValue = displayAmountForCurrency(currency);
+    // default-currency price currently available to a new monthly subscriber.
+    // Open Checkout reservations count against remaining capacity, avoiding an
+    // email promise that Checkout cannot honor by the time the user arrives.
+    const foundingAvailability = await getFoundingMemberAvailability(
+        env.BILLING_FOUNDING_MEMBER_CAPACITY,
+    );
+    const foundingOfferAvailable = foundingAvailability.remaining > 0;
+    const monthlyKind = foundingOfferAvailable ? "founding" : "standard";
+    const currency = resolveCurrency(null, "month", monthlyKind);
+    const amountValue = foundingOfferAvailable
+        ? displayAmountForCurrency(currency)
+        : displayStandardAmountForCurrency(currency);
     const amountCurrency = currency.toUpperCase();
     const billingUrl = `${base}/settings#billing`;
     const exportUrl = `${base}/settings#export`;
@@ -137,17 +153,21 @@ export async function processTransitionEmails(): Promise<TransitionEmailResult> 
             // Window still open: the start email is once-only and fires on
             // the first in-window tick; the reminder is a separate key that
             // only sends inside the final stretch.
-            const startSent = await sendTransitionStartEmail({
-                userId: row.id,
-                email: row.email,
-                transitionEndsAt: row.transitionUntil,
-                amountValue,
-                amountCurrency,
-                billingUrl,
-                exportUrl,
-                selfHostUrl: SELF_HOST_URL,
-            });
-            if (startSent) start += 1;
+            if (options.sendStart !== false) {
+                const startSent = await sendTransitionStartEmail({
+                    userId: row.id,
+                    email: row.email,
+                    transitionEndsAt: row.transitionUntil,
+                    amountValue,
+                    amountCurrency,
+                    foundingOfferAvailable,
+                    foundingCapacity: foundingAvailability.capacity,
+                    billingUrl,
+                    exportUrl,
+                    selfHostUrl: SELF_HOST_URL,
+                });
+                if (startSent) start += 1;
+            }
 
             if (msLeft <= REMINDER_DAYS_OUT * DAY_MS) {
                 const daysLeft = Math.max(1, Math.ceil(msLeft / DAY_MS));
@@ -158,6 +178,8 @@ export async function processTransitionEmails(): Promise<TransitionEmailResult> 
                     transitionEndsAt: row.transitionUntil,
                     amountValue,
                     amountCurrency,
+                    foundingOfferAvailable,
+                    foundingCapacity: foundingAvailability.capacity,
                     billingUrl,
                     exportUrl,
                     selfHostUrl: SELF_HOST_URL,

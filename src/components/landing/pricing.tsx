@@ -61,6 +61,7 @@ import {
 type Tier = {
     name: string;
     price: string;
+    compareAtPrice?: string;
     priceSuffix: string;
     tagline: string;
     pill: { label: string; tone: "muted" | "primary" } | null;
@@ -94,6 +95,15 @@ async function buildTiers(): Promise<{
     const headlinePrice = primaryMonthly
         ? formatCatalogPrice(primaryMonthly, "")
         : null;
+    const comparisonMonthly = primaryMonthly
+        ? (catalog.monthly.standard[primaryMonthly.currency] ??
+          catalog.monthly.standard.usd ??
+          catalog.monthly.standard.eur)
+        : null;
+    const compareAtPrice =
+        availability.remaining > 0 && comparisonMonthly
+            ? formatCatalogPrice(comparisonMonthly, "")
+            : null;
     const foundingMonthlyParts = [
         catalog.monthly.founding.usd,
         catalog.monthly.founding.eur,
@@ -150,6 +160,7 @@ async function buildTiers(): Promise<{
             {
                 name: "Hosted Pro",
                 price: headlinePrice ?? "Unavailable",
+                compareAtPrice: compareAtPrice || undefined,
                 priceSuffix: headlinePrice ? "/ month" : "",
                 tagline: "Hosted, with the rough edges paid for.",
                 pill: { label: "14-day free trial", tone: "primary" },
@@ -242,6 +253,11 @@ function TierCard({ tier }: { tier: Tier }) {
                     <span className="text-4xl md:text-5xl font-semibold tracking-tight tabular-nums leading-none">
                         {tier.price}
                     </span>
+                    {tier.compareAtPrice ? (
+                        <span className="text-xl text-muted-foreground/70 line-through tabular-nums">
+                            {tier.compareAtPrice}
+                        </span>
+                    ) : null}
                     <span className="text-sm text-muted-foreground tabular-nums">
                         {tier.priceSuffix}
                     </span>

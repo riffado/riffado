@@ -71,7 +71,12 @@ export async function tick(): Promise<void> {
         });
 
         await runPhase("transition-emails", async () => {
-            const transition = await processTransitionEmails();
+            // Launch notices are sent manually with the resumable operator
+            // script after the paid smoke test. The worker owns only the
+            // time-driven reminder and read-only notices.
+            const transition = await processTransitionEmails({
+                sendStart: false,
+            });
             if (
                 transition.start > 0 ||
                 transition.reminder > 0 ||
@@ -119,8 +124,8 @@ export async function tick(): Promise<void> {
  *  - Closes due Mynah cycles
  *  - Detects expired trials with no card -> demotes + schedules deletion
  *  - Processes accounts whose grace window has elapsed -> hard delete
- *  - Drives the grandfathered-cohort transition emails (start / reminder
- *    / ended) once the configured launch date has arrived
+ *  - Drives the grandfathered-cohort reminder / ended emails once the
+ *    configured launch date has arrived (launch notices use the operator script)
  *
  * Every sixth tick (~30 minutes) additionally runs subscription
  * reconciliation against Stripe to catch drift from missed webhooks.

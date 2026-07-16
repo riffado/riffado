@@ -15,9 +15,9 @@ interface BillingState {
     subscription: { id: string } | null;
 }
 
-type BannerMode =
+export type BannerMode =
     | {
-          kind: "trial";
+          kind: "trial" | "transition";
           daysLeft: number | null;
           transitionUntil: string | null;
           foundingOfferAvailable: boolean;
@@ -32,7 +32,10 @@ function daysUntil(iso: string): number {
     );
 }
 
-function resolveMode(body: BillingState): BannerMode | null {
+/** Resolve the hosted billing notice from the server billing snapshot. */
+export function resolveBillingBannerMode(
+    body: BillingState,
+): BannerMode | null {
     if (!body.enabled || body.plan === "self_host") return null;
 
     // Grace: account scheduled for deletion. Highest urgency.
@@ -44,10 +47,23 @@ function resolveMode(body: BillingState): BannerMode | null {
         };
     }
 
-    // Locked: lapsed hosted_free with no deletion scheduled (e.g. a
-    // grandfathered account whose transition window expired). Read-only
-    // until they subscribe.
-    if (body.plan === "hosted_free") return { kind: "locked" };
+    if (body.plan === "hosted_free") {
+        // The database keeps grandfathered users on hosted_free while their
+        // transition window grants effective Pro entitlements. Treat that as
+        // a free transition, not a lockout.
+        if (
+            body.planTransitionUntil &&
+            new Date(body.planTransitionUntil).getTime() > Date.now()
+        ) {
+            return {
+                kind: "transition",
+                daysLeft: daysUntil(body.planTransitionUntil),
+                transitionUntil: body.planTransitionUntil,
+                foundingOfferAvailable: body.foundingOfferAvailable === true,
+            };
+        }
+        return { kind: "locked" };
+    }
 
     // Trial nudge: on Pro entitlements via the trial window but no card
     // on file yet.
@@ -80,14 +96,16 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
         if (!isHosted) return;
         fetch("/api/billing/me")
             .then((r) => r.json())
-            .then((body: BillingState) => setMode(resolveMode(body)))
+            .then((body: BillingState) =>
+                setMode(resolveBillingBannerMode(body)),
+            )
             .catch(() => {
                 // Banner is a nice-to-have; ignore failures.
             });
     }, [isHosted]);
 
     const dismissKey =
-        mode?.kind === "trial"
+        mode?.kind === "trial" || mode?.kind === "transition"
             ? `${DISMISS_KEY}:${mode.transitionUntil ?? "unknown"}`
             : DISMISS_KEY;
 
@@ -111,7 +129,7 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
 
     if (!mode) return null;
 
-    if (mode.kind === "trial") {
+    if (mode.kind === "trial" || mode.kind === "transition") {
         // Last 3 days: force the banner to stay visible regardless of an
         // earlier dismissal, since a card-add nudge right before the
         // trial ends is the whole point. The dismiss control is hidden
@@ -129,7 +147,11 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                         <>
                             <span className="font-medium">
                                 {mode.daysLeft} day
-                                {mode.daysLeft !== 1 && "s"} left in your trial.
+                                {mode.daysLeft !== 1 && "s"} left in your{" "}
+                                {mode.kind === "trial"
+                                    ? "trial"
+                                    : "free Hosted Pro window"}
+                                .
                             </span>{" "}
                         </>
                     ) : null}
@@ -152,14 +174,14 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                     onClick={goToBilling}
                     className="shrink-0"
                 >
-                    Add card
+                    {mode.kind === "trial" ? "Add card" : "See plans"}
                 </Button>
                 {!forcedVisible && (
                     <button
                         type="button"
                         onClick={dismiss}
                         className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label="Dismiss trial banner"
+                        aria-label={`Dismiss ${mode.kind === "trial" ? "trial" : "Hosted Pro transition"} banner`}
                     >
                         <X className="size-4" />
                     </button>
@@ -180,7 +202,7 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                         ? mode.path === "trial"
                             ? "Your trial ended."
                             : "Your subscription ended."
-                        : "Your subscription has ended."}
+                        : "Your free Hosted Pro window has ended."}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
                     {isGrace

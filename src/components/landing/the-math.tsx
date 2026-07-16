@@ -1,3 +1,4 @@
+import { getFoundingMemberAvailability } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
@@ -48,70 +49,75 @@ const SUBSCRIPTION_SERVICES = [
 ];
 
 const HOSTED_PRO_INCLUDED_HOURS = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
-const HOSTED_PRO_CATALOG = billingPriceCatalog();
-const HOSTED_PRO_MONTHLY_PRICE =
-    HOSTED_PRO_CATALOG.monthly.standard.usd ??
-    HOSTED_PRO_CATALOG.monthly.standard.eur ??
-    HOSTED_PRO_CATALOG.monthly.founding.usd ??
-    HOSTED_PRO_CATALOG.monthly.founding.eur;
-const HOSTED_PRO_MONTHLY_AMOUNT =
-    HOSTED_PRO_MONTHLY_PRICE?.displayAmount ?? null;
-const HOSTED_PRO_CURRENCY_SYMBOL =
-    HOSTED_PRO_MONTHLY_PRICE?.currency === "eur" ? "€" : "$";
-const HOSTED_PRO_DISPLAY_PRICE = HOSTED_PRO_MONTHLY_AMOUNT
-    ? `${HOSTED_PRO_CURRENCY_SYMBOL}${trimDisplayAmount(HOSTED_PRO_MONTHLY_AMOUNT)}`
-    : "Unavailable";
 
-const RIFFADO_OPTIONS = [
-    {
-        name: "Hosted Pro + Mynah",
-        price: HOSTED_PRO_DISPLAY_PRICE,
-        unit: HOSTED_PRO_MONTHLY_AMOUNT ? "/ month" : "",
-        scope: `${HOSTED_PRO_INCLUDED_HOURS} hours of included cloud transcription + 50 GB storage`,
-        perHour:
-            HOSTED_PRO_MONTHLY_AMOUNT && HOSTED_PRO_INCLUDED_HOURS > 0
-                ? `${HOSTED_PRO_CURRENCY_SYMBOL}${(
-                      Number.parseFloat(HOSTED_PRO_MONTHLY_AMOUNT) /
-                          HOSTED_PRO_INCLUDED_HOURS
-                  ).toFixed(2)} / included hr`
-                : "—",
-    },
-    {
-        name: "Riffado in your browser",
-        price: "$0.00",
-        unit: "free",
-        scope: "Whisper via Transformers.js, no key required",
-        perHour: "$0.00 / hr",
-    },
-    {
-        name: "Bring your own AI provider",
-        price: "At cost",
-        unit: "no markup",
-        scope: "OpenAI, Groq, Ollama, LM Studio, or another compatible provider",
-        perHour: "provider rate",
-    },
-];
+export async function TheMath() {
+    const availability = await getFoundingMemberAvailability(
+        env.BILLING_FOUNDING_MEMBER_CAPACITY,
+    );
+    const catalog = billingPriceCatalog(availability);
+    const foundingPrice =
+        catalog.monthly.founding.usd ?? catalog.monthly.founding.eur;
+    const standardPrice =
+        catalog.monthly.standard.usd ?? catalog.monthly.standard.eur;
+    const foundingOfferActive =
+        availability.remaining > 0 && foundingPrice !== null;
+    const monthlyPrice = foundingOfferActive ? foundingPrice : standardPrice;
+    const monthlyAmount = monthlyPrice?.displayAmount ?? null;
+    const currencySymbol = monthlyPrice?.currency === "eur" ? "€" : "$";
+    const displayPrice = monthlyAmount
+        ? `${currencySymbol}${trimDisplayAmount(monthlyAmount)}`
+        : "Unavailable";
+    const riffadoOptions: Row[] = [
+        {
+            name: "Hosted Pro + Mynah",
+            notice: foundingOfferActive
+                ? `Limited founding offer · ${availability.remaining} spot${availability.remaining === 1 ? "" : "s"} left`
+                : undefined,
+            price: displayPrice,
+            unit: monthlyAmount ? "/ month" : "",
+            scope: `${HOSTED_PRO_INCLUDED_HOURS} hours of included cloud transcription + 50 GB storage`,
+            perHour:
+                monthlyAmount && HOSTED_PRO_INCLUDED_HOURS > 0
+                    ? `${currencySymbol}${(
+                          Number.parseFloat(monthlyAmount) /
+                              HOSTED_PRO_INCLUDED_HOURS
+                      ).toFixed(2)} / included hr`
+                    : "—",
+        },
+        {
+            name: "Riffado in your browser",
+            price: "$0.00",
+            unit: "free",
+            scope: "Whisper via Transformers.js, no key required",
+            perHour: "$0.00 / hr",
+        },
+        {
+            name: "Bring your own AI provider",
+            price: "At cost",
+            unit: "no markup",
+            scope: "OpenAI, Groq, Ollama, LM Studio, or another compatible provider",
+            perHour: "provider rate",
+        },
+    ];
 
-export function TheMath() {
     return (
         <section className="pt-40 md:pt-56 lg:pt-72 pb-24 border-y border-border/40 bg-secondary/10">
             <div className="container mx-auto px-4">
                 <div className="mx-auto max-w-5xl">
                     <div className="max-w-2xl">
                         <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider mb-4">
-                            How transcription pricing works
+                            What your monthly price includes
                         </p>
                         <h2 className="text-3xl md:text-4xl font-semibold tracking-tight mb-4 text-balance">
-                            Hosted Pro includes {HOSTED_PRO_INCLUDED_HOURS}{" "}
-                            hours of transcription.
+                            {HOSTED_PRO_INCLUDED_HOURS} hours of transcription.
+                            No separate AI bill.
                         </h2>
                         <p className="text-muted-foreground text-lg leading-relaxed text-pretty">
-                            {HOSTED_PRO_MONTHLY_AMOUNT
-                                ? `Riffado Hosted is normally ${HOSTED_PRO_DISPLAY_PRICE}/month with Mynah transcription included for everyday use. Check the pricing section for any available founding offer. `
-                                : "Hosted billing is not configured on this instance. "}
-                            Need more, or want a different model? Bring your own
-                            provider and pay them directly at their published
-                            rate.
+                            Hosted Pro includes Mynah cloud transcription for
+                            everyday use. You can also transcribe free in your
+                            browser, or connect OpenAI, Groq, Ollama, or another
+                            provider. Riffado adds no markup when you bring your
+                            own.
                         </p>
                     </div>
 
@@ -123,7 +129,7 @@ export function TheMath() {
                         />
                         <PriceTable
                             label="With Riffado"
-                            rows={RIFFADO_OPTIONS}
+                            rows={riffadoOptions}
                             tone="primary"
                             highlightFirst
                         />
@@ -145,6 +151,7 @@ export function TheMath() {
 
 type Row = {
     name: string;
+    notice?: string;
     price: string;
     unit: string;
     scope: string;
@@ -201,6 +208,11 @@ function PriceTable({
                             }`}
                         >
                             <div className="min-w-0">
+                                {row.notice ? (
+                                    <div className="mb-1 text-xs font-medium text-primary">
+                                        {row.notice}
+                                    </div>
+                                ) : null}
                                 <div className="text-sm font-medium text-foreground mb-1 truncate">
                                     {row.name}
                                 </div>

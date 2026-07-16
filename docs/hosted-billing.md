@@ -10,7 +10,7 @@ Billing runs inside the Next.js process — no separate worker binary. A backgro
 2. **Expired trials** — demotes `hosted_pro` users whose `planTransitionUntil` has passed and who have no active subscription to `hosted_free`, schedules account deletion (7-day grace).
 3. **Due deletions** — hard-deletes users whose `accountDeletionScheduledAt` has passed. R2 objects cleaned up best-effort, then `DELETE FROM users` cascades all dependent rows.
 4. **Grace reminders** — sends email reminders at T-3 (trial) or T-7 (paid) and T-1 (last day) before scheduled deletion.
-5. **Transition emails** — for the grandfathered pre-launch cohort (`hosted_free` with `plan_transition_until` set and no deletion clock), sends the start / reminder / ended sequence across the 30-day migration window.
+5. **Transition emails** — for the grandfathered pre-launch cohort (`hosted_free` with `plan_transition_until` set and no deletion clock), sends the reminder / ended sequence across the 30-day migration window. The launch-day notice is sent manually after the production smoke test with `scripts/send-hosted-pro-launch-email.ts`.
 6. **Stripe reconcile** (every 6th tick, ~30 min) — re-fetches non-terminal Stripe subscriptions that haven't been mirrored recently and re-mirrors local state.
 
 The worker starts automatically via `instrumentation.ts` when `BILLING_ENABLED` is true.
@@ -71,6 +71,15 @@ Do this once per mode (test, then live). The mirror only runs when the webhook i
 3. **VAT rate (EU).** If you charge EU VAT, create a Tax Rate (`stripe tax_rates create`) with `inclusive=true` and your rate (e.g. Polish 23% under the home-country/no-OSS model, valid below the EUR 10k/yr cross-border threshold). Put its id (`txr_...`) in `STRIPE_TAX_RATE_ID_EUR`. Checkout applies it to EUR subscriptions via `subscription_data.default_tax_rates`, so every renewal invoice carries the VAT line. USD sales get no rate (non-EU export). Cross the 10k threshold and you must move to destination VAT + OSS.
 4. **Customer Portal.** Create a portal configuration with: update payment method, invoice history, cancel at period end, and customer email/address update. Disable subscription updates, price switching, quantity changes, promotion-code changes, and plan switching. Put its id (`bpc_...`) in `STRIPE_PORTAL_CONFIGURATION_ID` so the portal renders exactly this feature set regardless of the account default.
 5. **Backfill, then enable.** Set `BILLING_LAUNCH_DATE`, run `scripts/billing-backfill.ts --launch=<date>` to grandfather existing accounts, then flip `BILLING_ENABLED=true`.
+6. **Send the launch notice after the paid smoke test.** Preview the eligible grandfathered cohort, send one test message, then run the resumable bulk send:
+
+   ```bash
+   bun scripts/send-hosted-pro-launch-email.ts
+   bun scripts/send-hosted-pro-launch-email.ts --only-email=operator@example.com --send
+   bun scripts/send-hosted-pro-launch-email.ts --send
+   ```
+
+   The script refuses to send before `BILLING_LAUNCH_DATE` or while billing is disabled. It uses the same `transition_start` once-only key as the billing worker, so reruns skip users whose launch notice was already sent.
 
 ## Common operator tasks
 
@@ -122,6 +131,9 @@ Event key formats:
 - `grace_started:<deletionAt ISO>` — once per deletion schedule
 - `grace_reminder:<deletionAt ISO>` — once per deletion schedule
 - `grace_last_day:<deletionAt ISO>` — once per deletion schedule
+- `transition_start` — Hosted Pro launch notice for the grandfathered cohort
+- `transition_reminder` — final transition-window reminder
+- `transition_ended` — grandfathered account entered read-only mode
 
 ### Force Stripe reconcile
 

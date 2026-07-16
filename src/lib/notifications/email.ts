@@ -571,6 +571,8 @@ export async function sendTransitionStartEmail(input: {
     transitionEndsAt: Date;
     amountValue: string;
     amountCurrency: string;
+    foundingOfferAvailable: boolean;
+    foundingCapacity: number;
     billingUrl: string;
     exportUrl: string;
     selfHostUrl: string;
@@ -583,6 +585,8 @@ export async function sendTransitionStartEmail(input: {
                     transitionEndsAt: input.transitionEndsAt,
                     amountValue: input.amountValue,
                     amountCurrency: input.amountCurrency,
+                    foundingOfferAvailable: input.foundingOfferAvailable,
+                    foundingCapacity: input.foundingCapacity,
                     billingUrl: input.billingUrl,
                     exportUrl: input.exportUrl,
                     selfHostUrl: input.selfHostUrl,
@@ -591,7 +595,7 @@ export async function sendTransitionStartEmail(input: {
             );
             return {
                 to: input.email,
-                subject: "Riffado Hosted is now a paid product",
+                subject: "Riffado Hosted Pro is live",
                 html,
             };
         },
@@ -609,6 +613,8 @@ export async function sendTransitionReminderEmail(input: {
     transitionEndsAt: Date;
     amountValue: string;
     amountCurrency: string;
+    foundingOfferAvailable: boolean;
+    foundingCapacity: number;
     billingUrl: string;
     exportUrl: string;
     selfHostUrl: string;
@@ -622,6 +628,8 @@ export async function sendTransitionReminderEmail(input: {
                     transitionEndsAt: input.transitionEndsAt,
                     amountValue: input.amountValue,
                     amountCurrency: input.amountCurrency,
+                    foundingOfferAvailable: input.foundingOfferAvailable,
+                    foundingCapacity: input.foundingCapacity,
                     billingUrl: input.billingUrl,
                     exportUrl: input.exportUrl,
                     selfHostUrl: input.selfHostUrl,

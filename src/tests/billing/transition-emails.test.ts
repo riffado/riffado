@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock, emailMock, envMock } = vi.hoisted(() => ({
+const { dbMock, emailMock, envMock, foundingMock } = vi.hoisted(() => ({
     dbMock: { select: vi.fn() },
+    foundingMock: { getFoundingMemberAvailability: vi.fn() },
     emailMock: {
         sendTransitionStartEmail: vi.fn(),
         sendTransitionReminderEmail: vi.fn(),
@@ -13,12 +14,22 @@ const { dbMock, emailMock, envMock } = vi.hoisted(() => ({
         BILLING_DEFAULT_CURRENCY: "usd" as "usd" | "eur",
         BILLING_PRICE_USD: "5.00",
         BILLING_PRICE_EUR: "5.00",
+        BILLING_STANDARD_PRICE_USD: "9.00",
+        BILLING_STANDARD_PRICE_EUR: "9.00",
+        BILLING_FOUNDING_MEMBER_CAPACITY: 100,
         STRIPE_PRICE_ID_USD: "price_usd" as string | undefined,
         STRIPE_PRICE_ID_EUR: "price_eur" as string | undefined,
+        STRIPE_STANDARD_PRICE_ID_USD: "price_standard_usd" as
+            | string
+            | undefined,
+        STRIPE_STANDARD_PRICE_ID_EUR: "price_standard_eur" as
+            | string
+            | undefined,
     },
 }));
 
 vi.mock("@/db", () => ({ db: dbMock }));
+vi.mock("@/db/queries/billing", () => foundingMock);
 vi.mock("@/db/schema", () => ({
     users: {
         id: "id",
@@ -79,6 +90,14 @@ describe("processTransitionEmails", () => {
         envMock.BILLING_DEFAULT_CURRENCY = "usd";
         envMock.STRIPE_PRICE_ID_USD = "price_usd";
         envMock.STRIPE_PRICE_ID_EUR = "price_eur";
+        envMock.STRIPE_STANDARD_PRICE_ID_USD = "price_standard_usd";
+        envMock.STRIPE_STANDARD_PRICE_ID_EUR = "price_standard_eur";
+        foundingMock.getFoundingMemberAvailability.mockResolvedValue({
+            capacity: 100,
+            claimed: 0,
+            reserved: 0,
+            remaining: 100,
+        });
         emailMock.sendTransitionStartEmail.mockResolvedValue(true);
         emailMock.sendTransitionReminderEmail.mockResolvedValue(true);
         emailMock.sendTransitionEndedEmail.mockResolvedValue(true);
@@ -140,10 +159,27 @@ describe("processTransitionEmails", () => {
                 email: "u1@example.com",
                 amountValue: "5.00",
                 amountCurrency: "USD",
+                foundingOfferAvailable: true,
+                foundingCapacity: 100,
             }),
         );
         expect(emailMock.sendTransitionReminderEmail).not.toHaveBeenCalled();
         expect(emailMock.sendTransitionEndedEmail).not.toHaveBeenCalled();
+    });
+
+    it("can leave launch notices to the manual sender while still processing the cohort", async () => {
+        queueCohort([
+            {
+                id: "u-manual",
+                email: "manual@example.com",
+                transitionUntil: new Date(NOW + 20 * DAY),
+            },
+        ]);
+
+        const result = await processTransitionEmails({ sendStart: false });
+
+        expect(result.start).toBe(0);
+        expect(emailMock.sendTransitionStartEmail).not.toHaveBeenCalled();
     });
 
     it("uses a configured monthly currency when the default is unavailable", async () => {
@@ -162,6 +198,33 @@ describe("processTransitionEmails", () => {
             expect.objectContaining({
                 amountValue: "5.00",
                 amountCurrency: "EUR",
+            }),
+        );
+    });
+
+    it("uses standard pricing when founding capacity is gone", async () => {
+        foundingMock.getFoundingMemberAvailability.mockResolvedValue({
+            capacity: 100,
+            claimed: 100,
+            reserved: 0,
+            remaining: 0,
+        });
+        queueCohort([
+            {
+                id: "u-standard",
+                email: "standard@example.com",
+                transitionUntil: new Date(NOW + 20 * DAY),
+            },
+        ]);
+
+        await processTransitionEmails();
+
+        expect(emailMock.sendTransitionStartEmail).toHaveBeenCalledWith(
+            expect.objectContaining({
+                amountValue: "9.00",
+                amountCurrency: "USD",
+                foundingOfferAvailable: false,
+                foundingCapacity: 100,
             }),
         );
     });

@@ -90,7 +90,9 @@ describe("billing worker tick", () => {
         expect(lapseMock.processExpiredTrials).toHaveBeenCalled();
         expect(deletionMock.processDueAccountDeletions).toHaveBeenCalled();
         expect(remindersMock.processGraceReminders).toHaveBeenCalled();
-        expect(transitionMock.processTransitionEmails).toHaveBeenCalled();
+        expect(transitionMock.processTransitionEmails).toHaveBeenCalledWith({
+            sendStart: false,
+        });
         expect(
             foundingReservationsMock.reconcileExpiredFoundingReservations,
         ).toHaveBeenCalled();
@@ -110,7 +112,9 @@ describe("billing worker tick", () => {
         expect(cycleCloseMock.closeDueCycles).toHaveBeenCalled();
         expect(lapseMock.processExpiredTrials).toHaveBeenCalled();
         expect(remindersMock.processGraceReminders).toHaveBeenCalled();
-        expect(transitionMock.processTransitionEmails).toHaveBeenCalled();
+        expect(transitionMock.processTransitionEmails).toHaveBeenCalledWith({
+            sendStart: false,
+        });
         expect(
             foundingReservationsMock.reconcileExpiredFoundingReservations,
         ).toHaveBeenCalled();

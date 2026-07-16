@@ -87,8 +87,8 @@ export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
         items: [
             {
                 tag: "new",
-                title: "Choose Hosted Pro or keep self-hosting free",
-                body: "Hosted Pro is now available with monthly or annual billing, a 14-day trial, 50 GB of encrypted storage, 15 hours of Mynah cloud transcription each month, and background sync while your browser is closed. The first 100 monthly subscribers can claim the founding price shown at checkout. Self-hosting remains free with the same open-source code.",
+                title: "Hosted Pro is live",
+                body: "Choose the setup that works for you: let us run Riffado with Hosted Pro, or keep self-hosting the same open-source code for free. Hosted Pro includes a 14-day trial, 50 GB of encrypted storage, 15 hours of Mynah transcription each month, unlimited devices, and background sync. The first 100 paid monthly members can secure the founding price shown at checkout for as long as their subscription remains active.",
             },
             {
                 tag: "new",

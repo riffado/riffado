@@ -12,6 +12,9 @@ interface Props {
     amountValue: string;
     /** ISO currency code, e.g. "EUR". */
     amountCurrency: string;
+    /** Whether a founding monthly spot is currently available. */
+    foundingOfferAvailable: boolean;
+    foundingCapacity: number;
     /** Settings -> Billing deep link (add a card). */
     billingUrl: string;
     /** Settings -> Export deep link. */
@@ -20,21 +23,23 @@ interface Props {
     selfHostUrl: string;
 }
 
-// DRAFT COPY: review before sending. Sent ~3 days before the free Pro
-// window closes. States the fork plainly: subscribe, self-host, or go
-// read-only. No deletion threat; grandfathered data is never deleted.
+// Sent ~3 days before the free Pro window closes. States the fork plainly:
+// subscribe, self-host, or go read-only. Founding pricing is only shown while
+// DB-backed capacity remains. Grandfathered data is never deleted.
 export function TransitionReminderEmail({
     daysLeft,
     transitionEndsAt,
     amountValue,
     amountCurrency,
+    foundingOfferAvailable,
+    foundingCapacity,
     billingUrl,
     exportUrl,
     selfHostUrl,
 }: Props) {
     return (
         <EmailLayout
-            previewText={`${daysLeft} day${daysLeft === 1 ? "" : "s"} of free Hosted Pro left. Add a card to keep sync and transcription.`}
+            previewText={`${daysLeft} day${daysLeft === 1 ? "" : "s"} of free Hosted Pro left. Choose a plan to keep sync and transcription.`}
             footerLink={{ href: billingUrl, label: "Manage billing" }}
         >
             <Heading style={emailStyles.h1}>
@@ -44,10 +49,22 @@ export function TransitionReminderEmail({
             <Text style={emailStyles.text}>
                 Your free hosted window closes on{" "}
                 <strong>{formatEmailDate(transitionEndsAt)}</strong>. To keep
-                background sync, new transcriptions, and uploads running, add a
-                card and lock founding-member pricing at {amountValue}{" "}
-                {amountCurrency}/month while your subscription stays active.
+                background sync, new transcriptions, and uploads running, choose
+                a plan before then.
             </Text>
+            {foundingOfferAvailable ? (
+                <Text style={emailStyles.text}>
+                    Founding monthly spots are still available to the first{" "}
+                    {foundingCapacity} paid monthly members at {amountValue}{" "}
+                    {amountCurrency}/month. Once claimed, that price stays
+                    locked while the subscription remains active.
+                </Text>
+            ) : (
+                <Text style={emailStyles.text}>
+                    Monthly Hosted Pro is currently {amountValue}{" "}
+                    {amountCurrency}/month.
+                </Text>
+            )}
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
                     Subscribe
