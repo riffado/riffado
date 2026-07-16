@@ -48,7 +48,7 @@ const COLUMNS: FooterColumn[] = [
             { label: "Features", href: "/#features" },
             { label: "Pricing", href: "/#pricing" },
             { label: "Self-host", href: "/#deploy" },
-            { label: "For Professionals", href: "/#for-professionals" },
+            { label: "For Professionals", href: "/for-professionals" },
             { label: "Changelog", href: "/changelog" },
             {
                 label: "Roadmap",
@@ -163,6 +163,12 @@ export function LandingFooter() {
                             <div className="mt-4 max-w-md">
                                 <NewsletterForm source="landing" />
                             </div>
+                            <Link
+                                href="/updates"
+                                className="mt-3 inline-block text-sm text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                What you&apos;ll get →
+                            </Link>
                         </div>
                     </div>
 

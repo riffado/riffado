@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing-footer";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "OpenPlaud is now Riffado | Read the rebrand note",
     description:
         "Same team. Same code. New name. Here's why we renamed and what doesn't change for you.",
-};
+    path: "/rebrand",
+});
 
 /**
  * Public rebrand explainer.

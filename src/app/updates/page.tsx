@@ -4,12 +4,14 @@ import Link from "next/link";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingFooter } from "@/components/landing-footer";
 import { NewsletterForm } from "@/components/marketing/newsletter-form";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "Riffado product updates",
     description:
         "Occasional emails about new features, releases, and improvements to Riffado. A few times a year at most.",
-};
+    path: "/updates",
+});
 
 export default function UpdatesPage() {
     return (

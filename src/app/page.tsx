@@ -6,19 +6,22 @@ import { Features } from "@/components/landing/features";
 import { FinalCTA } from "@/components/landing/final-cta";
 import { ForProfessionals } from "@/components/landing/for-professionals";
 import { Hero } from "@/components/landing/hero";
+import { HostedProAnnouncementBar } from "@/components/landing/hosted-pro-announcement-bar";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { Pricing } from "@/components/landing/pricing";
 import { TheMath } from "@/components/landing/the-math";
 import { LandingFooter } from "@/components/landing-footer";
-import { RebrandAnnouncementBar } from "@/components/rebrand-announcement-bar";
 import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "Riffado | Open-source AI transcription for voice recorders",
     description:
         "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family: Note, Note Pro, and NotePin.",
-};
+    path: "/",
+    ogImage: "/og-home.png",
+});
 
 export default async function HomePage() {
     const session = await getSession();
@@ -36,10 +39,7 @@ export default async function HomePage() {
 
     return (
         <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
-            {/* Above LandingNav -- deliberately not part of the sticky
-                header so the bar scrolls away after a single read. See
-                `rebrand-announcement-bar.tsx` for dismissal + expiration. */}
-            <RebrandAnnouncementBar />
+            <HostedProAnnouncementBar />
             <LandingNav />
             <main className="flex-1">
                 <Hero />

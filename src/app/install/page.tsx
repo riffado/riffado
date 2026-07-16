@@ -6,6 +6,7 @@ import { LogoWordmark } from "@/components/icons/logo";
 import { LandingFooter } from "@/components/landing-footer";
 import { env } from "@/lib/env";
 import { INSTALL_ONELINER, pinnedInstallCommand } from "@/lib/install-commands";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 import { APP_VERSION_TAG } from "@/lib/version";
 
 /**
@@ -27,11 +28,12 @@ import { APP_VERSION_TAG } from "@/lib/version";
  * below always matches the running build.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "Install Riffado | Self-host in one command",
     description:
         "Self-host Riffado with a single curl command. Docker + Compose v2 required. AGPL-3.0, no telemetry, no license server.",
-};
+    path: "/install",
+});
 
 const ONE_LINER = INSTALL_ONELINER;
 const PINNED_LINER = pinnedInstallCommand(APP_VERSION_TAG);

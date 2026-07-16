@@ -9,6 +9,7 @@ import {
     RECIPIENT_CATEGORIES,
     SUPERVISORY_AUTHORITY,
 } from "@/lib/legal/constants";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 
 /*
  * Privacy policy for the HOSTED service only. The `(legal)` layout 404s
@@ -27,10 +28,11 @@ import {
  * `@/lib/legal/constants`.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "Privacy Policy | Riffado",
     description: "How the hosted Riffado service handles your personal data.",
-};
+    path: "/privacy",
+});
 
 export default function PrivacyPage() {
     return (

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { RybbitAnalytics } from "@/components/rybbit-analytics";
@@ -27,9 +27,43 @@ export const metadata: Metadata = {
     // (see `src/lib/env.ts`); the fallback keeps the build green and
     // self-host deployments override it at runtime via env.
     metadataBase: new URL(env.APP_URL ?? "https://riffado.com"),
-    title: "Riffado - Professional Audio Workstation",
+    title: {
+        default: "Riffado — Open-source AI transcription for voice recorders",
+        template: "%s · Riffado",
+    },
     description:
-        "Professional audio workstation for Plaud devices with AI-powered transcription",
+        "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want. Currently supports the Plaud Note family: Note, Note Pro, and NotePin.",
+    applicationName: "Riffado",
+    manifest: "/manifest.webmanifest",
+    openGraph: {
+        type: "website",
+        siteName: "Riffado",
+        title: "Riffado — Open-source AI transcription for voice recorders",
+        description:
+            "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
+        images: [{ url: "/og-home.png", width: 1200, height: 630 }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        site: "@riffadohq",
+        creator: "@riffadohq",
+        title: "Riffado — Open-source AI transcription for voice recorders",
+        description:
+            "Open-source transcription for the voice recorder you already own. Choose your AI, own your transcripts, deploy where you want.",
+        images: ["/og-home.png"],
+    },
+    appleWebApp: {
+        capable: true,
+        title: "Riffado",
+        statusBarStyle: "black-translucent",
+    },
+};
+
+export const viewport: Viewport = {
+    themeColor: [
+        { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+        { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    ],
 };
 
 export default function RootLayout({

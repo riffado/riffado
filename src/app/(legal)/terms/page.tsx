@@ -8,6 +8,7 @@ import {
     LEGAL_ENTITY,
     MIN_AGE,
 } from "@/lib/legal/constants";
+import { marketingMetadata } from "@/lib/seo/marketing-metadata";
 
 /*
  * Terms of Service for the HOSTED service only. The `(legal)` layout
@@ -27,11 +28,12 @@ import {
  * facts come from `@/lib/legal/constants`.
  */
 
-export const metadata: Metadata = {
+export const metadata: Metadata = marketingMetadata({
     title: "Terms of Service | Riffado",
     description:
         "Terms governing your use of the hosted Riffado service at riffado.com.",
-};
+    path: "/terms",
+});
 
 export default function TermsPage() {
     return (

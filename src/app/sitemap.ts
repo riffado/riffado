@@ -18,6 +18,8 @@ const STATIC_ROUTES: {
     { path: "/", priority: 1.0, changeFrequency: "daily" },
     { path: "/changelog", priority: 0.8, changeFrequency: "daily" },
     { path: "/install", priority: 0.7, changeFrequency: "weekly" },
+    { path: "/for-professionals", priority: 0.7, changeFrequency: "monthly" },
+    { path: "/updates", priority: 0.5, changeFrequency: "monthly" },
     { path: "/rebrand", priority: 0.5, changeFrequency: "yearly" },
     { path: "/privacy", priority: 0.3, changeFrequency: "yearly" },
     { path: "/terms", priority: 0.3, changeFrequency: "yearly" },
