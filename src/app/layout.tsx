@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppProgress } from "@/components/app-progress";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { RybbitAnalytics } from "@/components/rybbit-analytics";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -76,36 +77,38 @@ export default function RootLayout({
             <body
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
             >
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    {/*
-                      Tooltip provider wraps the app so any descendant
-                      `<Tooltip>` works without a local provider. 200ms
-                      delay is the shadcn default-ish: short enough to
-                      feel responsive, long enough to avoid firing on
-                      incidental mouseovers.
-                    */}
-                    <TooltipProvider delayDuration={200}>
+                <AppProgress>
+                    <ThemeProvider
+                        attribute="class"
+                        defaultTheme="system"
+                        enableSystem
+                        disableTransitionOnChange
+                    >
                         {/*
-                          App-wide imperative confirm dialog. Any
-                          client component can `useConfirm()` to get
-                          a Promise-returning function for destructive
-                          flows (delete recording, delete webhook,
-                          delete API key, delete custom prompt, etc.).
-                          One instance, one dialog node, consistent
-                          look + pending-state handling.
+                          Tooltip provider wraps the app so any descendant
+                          `<Tooltip>` works without a local provider. 200ms
+                          delay is the shadcn default-ish: short enough to
+                          feel responsive, long enough to avoid firing on
+                          incidental mouseovers.
                         */}
-                        <ConfirmDialogProvider>
-                            {children}
-                            <Toaster />
-                        </ConfirmDialogProvider>
-                    </TooltipProvider>
-                </ThemeProvider>
-                <RybbitAnalytics />
+                        <TooltipProvider delayDuration={200}>
+                            {/*
+                              App-wide imperative confirm dialog. Any
+                              client component can `useConfirm()` to get
+                              a Promise-returning function for destructive
+                              flows (delete recording, delete webhook,
+                              delete API key, delete custom prompt, etc.).
+                              One instance, one dialog node, consistent
+                              look + pending-state handling.
+                            */}
+                            <ConfirmDialogProvider>
+                                {children}
+                                <Toaster />
+                            </ConfirmDialogProvider>
+                        </TooltipProvider>
+                    </ThemeProvider>
+                    <RybbitAnalytics />
+                </AppProgress>
             </body>
         </html>
     );

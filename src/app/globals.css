@@ -330,12 +330,20 @@
      * marketing/long-form pages. Nested containers still auto-hide.
      */
     html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 4rem;
         scrollbar-color: color-mix(
                 in oklch,
                 var(--muted-foreground) 40%,
                 transparent
             )
             transparent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html {
+            scroll-behavior: auto;
+        }
     }
 
     html::-webkit-scrollbar-thumb {
