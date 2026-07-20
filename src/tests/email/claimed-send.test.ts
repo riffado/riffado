@@ -6,7 +6,9 @@ const { emailLogMock, renderMock, smtpMock, nodemailerMock } = vi.hoisted(
             claimEmailSend: vi.fn(),
             releaseEmailSend: vi.fn(),
         },
-        renderMock: { render: vi.fn().mockResolvedValue("<html></html>") },
+        renderMock: {
+            renderEmailHtml: vi.fn().mockResolvedValue("<html></html>"),
+        },
         smtpMock: { isSmtpConfigured: vi.fn().mockReturnValue(false) },
         nodemailerMock: {
             sendMail: vi.fn().mockResolvedValue({ messageId: "m1" }),
@@ -15,7 +17,7 @@ const { emailLogMock, renderMock, smtpMock, nodemailerMock } = vi.hoisted(
 );
 
 vi.mock("@/db/queries/email-log", () => emailLogMock);
-vi.mock("@react-email/render", () => renderMock);
+vi.mock("@/lib/notifications/render-email", () => renderMock);
 vi.mock("@/lib/smtp", () => smtpMock);
 vi.mock("@/lib/env", () => ({
     env: {
@@ -38,7 +40,7 @@ import { sendWelcomeHostedProEmail } from "@/lib/notifications/email";
 describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        renderMock.render.mockResolvedValue("<html></html>");
+        renderMock.renderEmailHtml.mockResolvedValue("<html></html>");
     });
 
     const input = {
@@ -74,7 +76,9 @@ describe("sendClaimedEmail (via sendWelcomeHostedProEmail)", () => {
 
     it("releases the claim and rethrows when rendering the template throws", async () => {
         emailLogMock.claimEmailSend.mockResolvedValue(true);
-        renderMock.render.mockRejectedValue(new Error("render exploded"));
+        renderMock.renderEmailHtml.mockRejectedValue(
+            new Error("render exploded"),
+        );
 
         await expect(sendWelcomeHostedProEmail(input)).rejects.toThrow(
             "render exploded",

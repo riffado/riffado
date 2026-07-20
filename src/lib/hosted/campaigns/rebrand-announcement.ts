@@ -1,9 +1,9 @@
-import { render } from "@react-email/render";
 import React from "react";
 import { hostedUserAudience } from "@/lib/email/audience/hosted-users";
 import type { CampaignDefinition, Recipient } from "@/lib/email/types";
 import { env } from "@/lib/env";
 import { RebrandAnnouncementEmail } from "@/lib/notifications/email-templates/rebrand-announcement-email";
+import { renderEmailHtml } from "@/lib/notifications/render-email";
 
 export const REBRAND_CAMPAIGN_SLUG = "rebrand-openplaud-to-riffado-2026-06";
 
@@ -39,14 +39,13 @@ export function buildRebrandCampaign(): CampaignDefinition {
                     "rebrand-announcement: unsubscribeUrl is null for announcement-class campaign",
                 );
             }
-            const html = await render(
+            const html = await renderEmailHtml(
                 React.createElement(RebrandAnnouncementEmail, {
                     recipientName: deriveRecipientName(recipient),
                     rebrandUrl,
                     loginUrl,
                     unsubscribeUrl,
                 }),
-                { pretty: false },
             );
             return { html };
         },

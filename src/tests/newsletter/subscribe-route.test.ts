@@ -16,14 +16,16 @@ const { queriesMock, transportMock, tokenMock, rateLimitMock, renderMock } =
                 .fn()
                 .mockResolvedValue({ allowed: true }),
         },
-        renderMock: { render: vi.fn().mockResolvedValue("<html></html>") },
+        renderMock: {
+            renderEmailHtml: vi.fn().mockResolvedValue("<html></html>"),
+        },
     }));
 
 vi.mock("@/db/queries/newsletter-subscriptions", () => queriesMock);
 vi.mock("@/lib/email/transport", () => transportMock);
 vi.mock("@/lib/email/unsubscribe-token", () => tokenMock);
 vi.mock("@/lib/rate-limit", () => rateLimitMock);
-vi.mock("@react-email/render", () => renderMock);
+vi.mock("@/lib/notifications/render-email", () => renderMock);
 vi.mock("@/lib/env", () => ({ env: { APP_URL: "https://riffado.com" } }));
 vi.mock("@/lib/notifications/email-templates/newsletter-confirm-email", () => ({
     NewsletterConfirmEmail: () => null,
