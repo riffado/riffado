@@ -70,6 +70,15 @@ export async function tick(): Promise<void> {
             }
         });
 
+        await runPhase("founding-reservations", async () => {
+            const reservations = await reconcileExpiredFoundingReservations();
+            if (reservations.inspected > 0 || reservations.errors > 0) {
+                console.log(
+                    `[billing-worker] founding-reservations inspected=${reservations.inspected} expired=${reservations.expired} completed=${reservations.completed} errors=${reservations.errors}`,
+                );
+            }
+        });
+
         await runPhase("transition-emails", async () => {
             // Launch notices are sent manually with the resumable operator
             // script after the paid smoke test. The worker owns only the
@@ -85,15 +94,6 @@ export async function tick(): Promise<void> {
             ) {
                 console.log(
                     `[billing-worker] transition-emails start=${transition.start} reminder=${transition.reminder} ended=${transition.ended} errors=${transition.errors}`,
-                );
-            }
-        });
-
-        await runPhase("founding-reservations", async () => {
-            const reservations = await reconcileExpiredFoundingReservations();
-            if (reservations.inspected > 0 || reservations.errors > 0) {
-                console.log(
-                    `[billing-worker] founding-reservations inspected=${reservations.inspected} expired=${reservations.expired} completed=${reservations.completed} errors=${reservations.errors}`,
                 );
             }
         });

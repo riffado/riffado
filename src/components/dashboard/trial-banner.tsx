@@ -165,7 +165,7 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
                             active.
                         </>
                     ) : (
-                        "Add a card and choose a plan to keep Hosted Pro active after your trial."
+                        `Add a card and choose a plan to keep Hosted Pro active after your ${mode.kind === "trial" ? "trial" : "free Hosted Pro window"}.`
                     )}
                 </p>
                 <Button

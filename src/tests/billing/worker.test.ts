@@ -98,6 +98,17 @@ describe("billing worker tick", () => {
         ).toHaveBeenCalled();
     });
 
+    it("reconciles expired founding reservations before deriving transition email pricing", async () => {
+        await tick();
+
+        expect(
+            foundingReservationsMock.reconcileExpiredFoundingReservations.mock
+                .invocationCallOrder[0],
+        ).toBeLessThan(
+            transitionMock.processTransitionEmails.mock.invocationCallOrder[0],
+        );
+    });
+
     it("a middle phase throwing does not block the later phases either", async () => {
         deletionMock.processDueAccountDeletions.mockRejectedValue(
             new Error("storage provider down"),
