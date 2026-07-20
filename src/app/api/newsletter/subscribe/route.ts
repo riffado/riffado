@@ -1,4 +1,3 @@
-import { render } from "@react-email/render";
 import { type NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { z } from "zod";
@@ -12,6 +11,7 @@ import {
 import { signUnsubscribeToken } from "@/lib/email/unsubscribe-token";
 import { env } from "@/lib/env";
 import { NewsletterConfirmEmail } from "@/lib/notifications/email-templates/newsletter-confirm-email";
+import { renderEmailHtml } from "@/lib/notifications/render-email";
 import { consumeRateLimitBucket, getClientIp } from "@/lib/rate-limit";
 
 const subscribeSchema = z.object({
@@ -108,9 +108,8 @@ async function sendConfirmation(
     const token = signUnsubscribeToken("subscriber", subscriberId);
     const confirmUrl = `${base}/api/newsletter/confirm?s=${encodeURIComponent(subscriberId)}&t=${encodeURIComponent(token)}`;
 
-    const html = await render(
+    const html = await renderEmailHtml(
         React.createElement(NewsletterConfirmEmail, { confirmUrl }),
-        { pretty: false },
     );
     const text = `Confirm your Riffado newsletter subscription by visiting:\n\n${confirmUrl}\n\nIf you didn't sign up, ignore this email -- without confirmation we'll never email this address again.`;
 
