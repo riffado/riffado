@@ -99,7 +99,7 @@ jobs:
             printf '%s\n' "$BODY"
             printf '\n---\n\n'
             printf 'Full changelog: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' "$REPO" "$TAG"
-            printf 'Install: see `docker-compose.yml` and `env.example` attached below, or follow [README \xe2\x86\x92 Quick Start](https://github.com/%s#-quick-start).\n' "$REPO"
+            printf 'Install: see `docker-compose.yml` and `env.example` attached below, or follow [README \xe2\x86\x92 Quick Start](https://github.com/%s#quick-start).\n' "$REPO"
           } > /tmp/release-body.md
           # Output name uses an underscore so `${{ steps.notes.outputs.body_path }}`
           # is parsed as a property access rather than `body - path`.
