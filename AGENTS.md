@@ -185,6 +185,10 @@ Entries go under `## [Unreleased]`. Subsections:
 
 Agents do not cut releases — that's a maintainer action. The procedure (tag, push, workflows, draft review) lives in [BRANCHING.md](BRANCHING.md).
 
+## Private operations repository
+
+Hosted production runbooks live in the private `riffado/ops` repository, not in this public repository. This pointer documents only its existence; do not copy private operational content, production identifiers, customer data, preflight evidence, or incident details into public files, issues, commits, or logs. Secrets belong in the deployment secret manager even when working in the private repository. If a hosted operations task requires that repository and access is unavailable, stop and ask the maintainer.
+
 ## Don't break existing deployments
 
 Riffado ships in **two production modes from the same codebase**:
