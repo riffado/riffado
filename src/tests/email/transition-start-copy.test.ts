@@ -73,4 +73,21 @@ describe("TransitionStartEmail", () => {
         );
         expect(text).toContain("grace period");
     });
+
+    it("states the founding-capacity qualifier in the top summary too, not only in the full account section", async () => {
+        const text = await render(
+            React.createElement(TransitionStartEmail, {
+                ...baseProps,
+                foundingOfferAvailable: true,
+            }),
+            { plainText: true },
+        );
+        const inShortSection = text.split("In short")[1]?.split("---")[0] ?? "";
+        // A skimmer who only reads the top summary must not be able to read
+        // it as a guaranteed founding price -- the first-paid/first-served
+        // capacity limit has to be there, not only in the fuller section
+        // below that a skimmer may never reach.
+        expect(inShortSection).toContain("first 100 paid monthly members");
+        expect(inShortSection).toContain("first-paid, first-served");
+    });
 });

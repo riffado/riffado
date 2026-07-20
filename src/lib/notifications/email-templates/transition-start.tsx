@@ -1,8 +1,37 @@
-import { Button, Heading, Hr, Section, Text } from "@react-email/components";
+import {
+    Button,
+    Column,
+    Heading,
+    Hr,
+    Row,
+    Section,
+    Text,
+} from "@react-email/components";
+import type { ReactNode } from "react";
 import { EmailLayout } from "./_layout";
 import { formatEmailDate } from "./format-date";
 import { formatEmailPrice } from "./format-price";
 import { emailStyles } from "./styles";
+
+/**
+ * Bulletproof hanging-indent bullet (table row, not CSS text-indent --
+ * see `emailStyles.bulletGlyphColumn`). `margin` defaults to the
+ * between-items gap; pass "0 0 16px 0" for the last bullet in a list.
+ */
+function Bullet({
+    children,
+    margin = "0 0 8px 0",
+}: {
+    children: ReactNode;
+    margin?: string;
+}) {
+    return (
+        <Row style={{ margin }}>
+            <Column style={emailStyles.bulletGlyphColumn}>&bull;</Column>
+            <Column style={emailStyles.bulletTextColumn}>{children}</Column>
+        </Row>
+    );
+}
 
 interface Props {
     /** End of the free Pro window (when the account goes read-only). */
@@ -49,35 +78,36 @@ export function TransitionStartEmail({
             <Heading style={emailStyles.h1}>Hosted Pro is here.</Heading>
 
             <Text style={emailStyles.eyebrow}>In short</Text>
-            <Text style={emailStyles.bullet}>
-                &bull; You keep full free access until{" "}
-                <strong>{deadline}</strong>. Nothing changes today.
-            </Text>
+            <Bullet>
+                You keep full free access until <strong>{deadline}</strong>.
+                Nothing changes today.
+            </Bullet>
             {foundingOfferAvailable ? (
-                <Text style={emailStyles.bullet}>
-                    &bull; After that, Hosted Pro is{" "}
+                <Bullet>
+                    After that, Hosted Pro is{" "}
                     <strong>
                         {formatEmailPrice(amountValue, amountCurrency)}
-                    </strong>{" "}
-                    if you subscribe before then, locked in for as long as you
-                    stay subscribed.
-                </Text>
+                    </strong>
+                    , locked in for as long as you stay subscribed, for the
+                    first {foundingCapacity} paid monthly members (first-paid,
+                    first-served).
+                </Bullet>
             ) : (
-                <Text style={emailStyles.bullet}>
-                    &bull; After that, Hosted Pro is{" "}
+                <Bullet>
+                    After that, Hosted Pro is{" "}
                     <strong>
                         {formatEmailPrice(amountValue, amountCurrency)}
                     </strong>
                     .
-                </Text>
+                </Bullet>
             )}
-            <Text style={emailStyles.bullet}>
-                &bull; If you don't act, your account goes read-only. Nothing
-                gets deleted.
-            </Text>
-            <Text style={{ ...emailStyles.bullet, margin: "0" }}>
-                &bull; Self-hosting stays free forever. That's not changing.
-            </Text>
+            <Bullet>
+                If you don't act, your account goes read-only. Nothing gets
+                deleted.
+            </Bullet>
+            <Bullet margin="0">
+                Self-hosting stays free forever. That's not changing.
+            </Bullet>
             <Hr style={{ ...emailStyles.divider, margin: "20px 0 24px 0" }} />
 
             <Text style={emailStyles.text}>
@@ -129,32 +159,31 @@ export function TransitionStartEmail({
                 What this means for your account
             </Heading>
 
-            <Text style={emailStyles.bullet}>
-                &bull; Your access stays free until <strong>{deadline}</strong>.
-            </Text>
+            <Bullet>
+                Your access stays free until <strong>{deadline}</strong>.
+            </Bullet>
             {foundingOfferAvailable ? (
-                <Text style={emailStyles.bullet}>
-                    &bull; As an early user, you can lock in the founding price
-                    of{" "}
+                <Bullet>
+                    As an early user, you can lock in the founding price of{" "}
                     <strong>
                         {formatEmailPrice(amountValue, amountCurrency)}
                     </strong>
                     , limited to the first {foundingCapacity} paid monthly
                     members, first-paid, first-served.
-                </Text>
+                </Bullet>
             ) : (
-                <Text style={emailStyles.bullet}>
-                    &bull; Monthly Hosted Pro is available for{" "}
+                <Bullet>
+                    Monthly Hosted Pro is available for{" "}
                     <strong>
                         {formatEmailPrice(amountValue, amountCurrency)}
                     </strong>
                     .
-                </Text>
+                </Bullet>
             )}
-            <Text style={{ ...emailStyles.bullet, margin: "0 0 16px 0" }}>
-                &bull; You can cancel anytime. Canceling starts a grace period,
-                so nothing is lost immediately even then.
-            </Text>
+            <Bullet margin="0 0 16px 0">
+                You can cancel anytime. Canceling starts a grace period, so
+                nothing is lost immediately even then.
+            </Bullet>
 
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>

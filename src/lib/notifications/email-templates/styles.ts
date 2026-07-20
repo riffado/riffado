@@ -167,20 +167,28 @@ export const emailStyles = {
     },
 
     /**
-     * Hanging-indent bullet line. The glyph sits in the negative-indent
-     * zone so a wrapped second line aligns under the text instead of
-     * falling back to the left margin, where it reads like a new,
-     * unrelated paragraph. Prefix content with "&bull; "; override
-     * `margin` per line's position in a list (tighter between lines,
-     * normal after the last one).
+     * Bulletproof hanging-indent bullet, as a two-column table row
+     * rather than CSS `text-indent`. Negative `text-indent` is
+     * unreliable in desktop Outlook (Word rendering engine) -- a
+     * wrapped second line can fall back to the left margin there and
+     * read like a new, unrelated paragraph. A small table (`Row`/
+     * `Column` from @react-email/components) is the standard bulletproof
+     * pattern instead: the glyph gets its own narrow column, so wrapped
+     * text in the text column stays aligned under itself in every
+     * client, including Outlook. Pair with a local `<Bullet>` wrapper
+     * component; don't reach for these two styles raw.
      */
-    bullet: {
+    bulletGlyphColumn: {
+        width: "18px",
+        verticalAlign: "top" as const,
         color: brandColors.foreground,
         fontSize: "16px",
         lineHeight: "1.6",
-        paddingLeft: "18px",
-        textIndent: "-18px",
-        margin: "0 0 8px 0",
+    },
+    bulletTextColumn: {
+        color: brandColors.foreground,
+        fontSize: "16px",
+        lineHeight: "1.6",
     },
 
     /**
