@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { getFoundingMemberAvailability } from "@/db/queries/billing";
+import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
@@ -15,19 +15,12 @@ function formatMonthlyPrice(price: PublicPrice): string | null {
 }
 
 /** Public launch notice. It disappears automatically when founding capacity is gone. */
-export async function HostedProAnnouncementBar() {
-    if (!env.BILLING_ENABLED) return null;
-
-    const availability = await getFoundingMemberAvailability(
-        env.BILLING_FOUNDING_MEMBER_CAPACITY,
-    ).catch((error: unknown) => {
-        console.error(
-            "[landing] founding availability unavailable; hiding announcement",
-            error,
-        );
-        return null;
-    });
-    if (!availability || availability.remaining <= 0) return null;
+export function HostedProAnnouncementBar({
+    availability,
+}: {
+    availability: FoundingMemberAvailabilityRow;
+}) {
+    if (!env.BILLING_ENABLED || availability.remaining <= 0) return null;
 
     const catalog = billingPriceCatalog(availability);
     const prices = [

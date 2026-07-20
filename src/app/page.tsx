@@ -11,6 +11,7 @@ import { LandingNav } from "@/components/landing/landing-nav";
 import { Pricing } from "@/components/landing/pricing";
 import { TheMath } from "@/components/landing/the-math";
 import { LandingFooter } from "@/components/landing-footer";
+import { getFoundingMemberAvailability } from "@/db/queries/billing";
 import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import { marketingMetadata } from "@/lib/seo/marketing-metadata";
@@ -37,13 +38,17 @@ export default async function HomePage() {
         redirect("/login");
     }
 
+    const foundingAvailability = await getFoundingMemberAvailability(
+        env.BILLING_FOUNDING_MEMBER_CAPACITY,
+    );
+
     return (
         <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
-            <HostedProAnnouncementBar />
+            <HostedProAnnouncementBar availability={foundingAvailability} />
             <LandingNav />
             <main className="flex-1">
                 <Hero />
-                <TheMath />
+                <TheMath availability={foundingAvailability} />
                 <Features />
                 {/* TODO: bring back a testimonials slot once we have
                     Riffado-specific quotes. The previous RedditQuotes
@@ -51,9 +56,9 @@ export default async function HomePage() {
                     quotes and was removed for commercial-disparagement
                     risk. Do not reinstate without legal review. */}
                 <ForProfessionals />
-                <Pricing />
+                <Pricing availability={foundingAvailability} />
                 <Deploy />
-                <FAQ />
+                <FAQ availability={foundingAvailability} />
                 <FinalCTA />
             </main>
             <LandingFooter />

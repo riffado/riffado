@@ -1,8 +1,7 @@
 import { Check } from "lucide-react";
 import Link from "next/link";
 import { MetalButton } from "@/components/metal-button";
-import { getFoundingMemberAvailability } from "@/db/queries/billing";
-import { env } from "@/lib/env";
+import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import {
     billingPriceCatalog,
     type PublicPrice,
@@ -80,13 +79,10 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
     return amount ? `${symbol}${amount}${suffix}` : "";
 }
 
-async function buildTiers(): Promise<{
+function buildTiers(availability: FoundingMemberAvailabilityRow): {
     tiers: Tier[];
     headlinePrice: string | null;
-}> {
-    const availability = await getFoundingMemberAvailability(
-        env.BILLING_FOUNDING_MEMBER_CAPACITY,
-    );
+} {
     const catalog = billingPriceCatalog(availability);
     const primaryMonthly =
         availability.remaining > 0
@@ -182,8 +178,12 @@ async function buildTiers(): Promise<{
     };
 }
 
-export async function Pricing() {
-    const { tiers, headlinePrice } = await buildTiers();
+export function Pricing({
+    availability,
+}: {
+    availability: FoundingMemberAvailabilityRow;
+}) {
+    const { tiers, headlinePrice } = buildTiers(availability);
     return (
         <section id="pricing" className="py-24 md:py-32">
             <div className="container mx-auto px-4">

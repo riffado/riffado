@@ -1,4 +1,4 @@
-import { getFoundingMemberAvailability } from "@/db/queries/billing";
+import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
@@ -50,10 +50,11 @@ const SUBSCRIPTION_SERVICES = [
 
 const HOSTED_PRO_INCLUDED_HOURS = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
 
-export async function TheMath() {
-    const availability = await getFoundingMemberAvailability(
-        env.BILLING_FOUNDING_MEMBER_CAPACITY,
-    );
+export function TheMath({
+    availability,
+}: {
+    availability: FoundingMemberAvailabilityRow;
+}) {
     const catalog = billingPriceCatalog(availability);
     const foundingPrice =
         catalog.monthly.founding.usd ?? catalog.monthly.founding.eur;

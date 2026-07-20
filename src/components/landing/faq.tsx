@@ -5,7 +5,7 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion";
-import { getFoundingMemberAvailability } from "@/db/queries/billing";
+import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
     billingPriceCatalog,
@@ -69,10 +69,7 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
     return amount ? `${symbol}${amount}${suffix}` : "";
 }
 
-async function hostedCostAnswer(): Promise<string> {
-    const availability = await getFoundingMemberAvailability(
-        env.BILLING_FOUNDING_MEMBER_CAPACITY,
-    );
+function hostedCostAnswer(availability: FoundingMemberAvailabilityRow): string {
     const catalog = billingPriceCatalog(availability);
     const foundingParts = [
         catalog.monthly.founding.usd,
@@ -239,8 +236,12 @@ function faqJsonLd(groups: FaqGroup[]) {
     };
 }
 
-export async function FAQ() {
-    const costAnswer = await hostedCostAnswer();
+export function FAQ({
+    availability,
+}: {
+    availability: FoundingMemberAvailabilityRow;
+}) {
+    const costAnswer = hostedCostAnswer(availability);
     const groups = GROUPS.map((group, groupIndex) =>
         groupIndex === 0
             ? {
