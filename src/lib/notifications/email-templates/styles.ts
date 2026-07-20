@@ -165,6 +165,39 @@ export const emailStyles = {
         border: "none",
         margin: "24px 0",
     },
+
+    /**
+     * Hanging-indent bullet line. The glyph sits in the negative-indent
+     * zone so a wrapped second line aligns under the text instead of
+     * falling back to the left margin, where it reads like a new,
+     * unrelated paragraph. Prefix content with "&bull; "; override
+     * `margin` per line's position in a list (tighter between lines,
+     * normal after the last one).
+     */
+    bullet: {
+        color: brandColors.foreground,
+        fontSize: "16px",
+        lineHeight: "1.6",
+        paddingLeft: "18px",
+        textIndent: "-18px",
+        margin: "0 0 8px 0",
+    },
+
+    /**
+     * Mono uppercase section eyebrow, matching the site's landing-page
+     * section markers ("PRICING", "FAQ"). Text only, no fill or border
+     * -- pair with `divider` for section separation instead of a card.
+     */
+    eyebrow: {
+        fontSize: "11px",
+        fontWeight: 600,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase" as const,
+        fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        color: brandColors.mutedForeground,
+        margin: "0 0 14px 0",
+    },
 };
 
 export const mobileStyles = {

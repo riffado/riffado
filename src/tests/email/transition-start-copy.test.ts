@@ -25,8 +25,8 @@ describe("TransitionStartEmail", () => {
         expect(text).toContain("first 100 paid monthly members");
         expect(text).toContain("first-paid, first-served");
         expect(text).toContain("Claim founding price");
-        expect(text).toContain("your Hosted account becomes read-only");
-        expect(text).toContain("Nothing will be deleted");
+        expect(text).toContain("your account becomes read-only");
+        expect(text).toContain("Nothing gets deleted");
         expect(text).not.toContain("Add a card before then");
         expect(text).toContain(
             "https://github.com/riffado/riffado#quick-start",
@@ -45,5 +45,57 @@ describe("TransitionStartEmail", () => {
         expect(text).toContain("Monthly Hosted Pro is available for $9");
         expect(text).toContain("Choose a plan");
         expect(text).not.toContain("first 100 paid monthly members");
+    });
+
+    it("explains why hosted is now paid, not just what changed", async () => {
+        const text = await render(
+            React.createElement(TransitionStartEmail, {
+                ...baseProps,
+                foundingOfferAvailable: true,
+            }),
+            { plainText: true },
+        );
+        expect(text).toContain("real infrastructure");
+        expect(text).toContain("no lock-in");
+        expect(text).toContain("Self-host and Hosted Pro are the same project");
+    });
+
+    it("gives account-critical facts their own scannable section", async () => {
+        const text = await render(
+            React.createElement(TransitionStartEmail, {
+                ...baseProps,
+                foundingOfferAvailable: true,
+            }),
+            { plainText: true },
+        );
+        expect(text.toLowerCase()).toContain(
+            "what this means for your account",
+        );
+        expect(text).toContain("grace period");
+    });
+
+    it("omits the sponsorship paragraph when no sponsorUrl is provided", async () => {
+        const text = await render(
+            React.createElement(TransitionStartEmail, {
+                ...baseProps,
+                foundingOfferAvailable: true,
+            }),
+            { plainText: true },
+        );
+        expect(text).not.toContain("sponsor Riffado directly");
+    });
+
+    it("includes the sponsorship paragraph when sponsorUrl is provided", async () => {
+        const text = await render(
+            React.createElement(TransitionStartEmail, {
+                ...baseProps,
+                foundingOfferAvailable: true,
+                sponsorUrl: "https://github.com/sponsors/riffado",
+            }),
+            { plainText: true },
+        );
+        expect(text).toContain("sponsor Riffado directly");
+        expect(text).toContain("https://github.com/sponsors/riffado");
+        expect(text).toContain("never required");
     });
 });

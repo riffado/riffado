@@ -1,4 +1,4 @@
-import { Button, Heading, Section, Text } from "@react-email/components";
+import { Button, Heading, Hr, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
 import { formatEmailDate } from "./format-date";
 import { formatEmailPrice } from "./format-price";
@@ -20,12 +20,23 @@ interface Props {
     exportUrl: string;
     /** Self-host docs / repo link. */
     selfHostUrl: string;
+    /**
+     * Sponsorship destination (GitHub Sponsors / Open Collective). Omit
+     * until a real one exists -- the paragraph only renders when this is
+     * set, so turning sponsorship on later is a one-line change here,
+     * not a copy rewrite.
+     */
+    sponsorUrl?: string;
 }
 
-// Sent to grandfathered hosted users on launch day. Tone: respectful, no
-// surprise; the 30-day window is the grace. Positioning rules: name the
-// currently available price plainly, self-host is the free path, and never
-// imply founding capacity is guaranteed until the transition deadline.
+// Sent once to the grandfathered pre-launch cohort, replacing the earlier
+// purely transactional version of this email. Tone: personal, honest about
+// why hosted is now paid, and explicit that self-host stays a fully equal
+// path, not a downgrade. The account-specific facts (deadline, price,
+// read-only consequence, "nothing deleted") stay in their own clearly
+// separated section rather than dissolving into the narrative -- this is
+// a notice of an account change as much as it is a story, and readers
+// need to be able to find the mechanics without reading the whole letter.
 export function TransitionStartEmail({
     transitionEndsAt,
     amountValue,
@@ -35,39 +46,124 @@ export function TransitionStartEmail({
     billingUrl,
     exportUrl,
     selfHostUrl,
+    sponsorUrl,
 }: Props) {
+    const deadline = formatEmailDate(transitionEndsAt);
     return (
         <EmailLayout
-            previewText={`Hosted Pro is live. You keep full access free until ${formatEmailDate(transitionEndsAt)}.`}
+            previewText={`Hosted Pro is live. The essentials are at the top; the story's below. Nothing changes until ${deadline}.`}
             footerLink={{ href: billingUrl, label: "Manage billing" }}
         >
-            <Heading style={emailStyles.h1}>Hosted Pro is live.</Heading>
-            <Text style={emailStyles.text}>
-                Until now, you've used Riffado on our hosted servers for free.
-                Hosted is now becoming a paid product. Nothing changes
-                immediately: you keep full Hosted Pro access free until{" "}
-                <strong>{formatEmailDate(transitionEndsAt)}</strong>.
+            <Heading style={emailStyles.h1}>Hosted Pro is here.</Heading>
+
+            <Text style={emailStyles.eyebrow}>In short</Text>
+            <Text style={emailStyles.bullet}>
+                &bull; You keep full free access until{" "}
+                <strong>{deadline}</strong>. Nothing changes today.
             </Text>
             {foundingOfferAvailable ? (
-                <Text style={emailStyles.text}>
-                    The first {foundingCapacity} paid monthly members can
-                    subscribe for the founding price of{" "}
-                    {formatEmailPrice(amountValue, amountCurrency)}. That price
-                    stays locked for as long as the subscription remains active.
-                    Founding spots are available on a first-paid, first-served
-                    basis.
+                <Text style={emailStyles.bullet}>
+                    &bull; After that, Hosted Pro is{" "}
+                    <strong>
+                        {formatEmailPrice(amountValue, amountCurrency)}
+                    </strong>{" "}
+                    if you subscribe before then, locked in for as long as you
+                    stay subscribed.
                 </Text>
             ) : (
-                <Text style={emailStyles.text}>
-                    Monthly Hosted Pro is available for{" "}
-                    {formatEmailPrice(amountValue, amountCurrency)}.
+                <Text style={emailStyles.bullet}>
+                    &bull; After that, Hosted Pro is{" "}
+                    <strong>
+                        {formatEmailPrice(amountValue, amountCurrency)}
+                    </strong>
+                    .
                 </Text>
             )}
-            <Text style={emailStyles.text}>
-                Hosted Pro includes 50 GB storage, 15 hours of Mynah
-                transcription per month, unlimited devices, and background sync
-                that keeps pulling recordings even when your browser is closed.
+            <Text style={emailStyles.bullet}>
+                &bull; If you don't act, your account goes read-only. Nothing
+                gets deleted.
             </Text>
+            <Text style={{ ...emailStyles.bullet, margin: "0" }}>
+                &bull; Self-hosting stays free forever. That's not changing.
+            </Text>
+            <Hr style={{ ...emailStyles.divider, margin: "20px 0 24px 0" }} />
+
+            <Text style={emailStyles.text}>
+                Here's the story behind that, if you want it.
+            </Text>
+
+            <Text style={emailStyles.text}>
+                Riffado started as a simple idea: your recordings and
+                transcripts should belong to you, and you should choose which AI
+                touches them. That part worked. But hosted Riffado runs on real
+                infrastructure: servers, storage for your audio, and the compute
+                behind Mynah, the transcription service included with Hosted
+                Pro. Free hosting was the right call for an early cohort helping
+                us find the rough edges. Thank you for that. It's not something
+                we can run forever on goodwill, so Hosted Pro is now a paid
+                plan.
+            </Text>
+
+            <Text style={emailStyles.text}>
+                A subscription is the most honest way to fund this: no ads, no
+                selling your data, no lock-in. And because Riffado is one AGPL
+                codebase, everything a Hosted Pro subscription funds ships to
+                self-hosters too. Paying for Hosted Pro pays for the project,
+                not just your own account.
+            </Text>
+
+            <Text style={emailStyles.text}>
+                That also means self-hosting isn't going anywhere. The source
+                stays AGPL-3.0, and the exact code running Hosted is the code
+                you can{" "}
+                <a href={selfHostUrl} style={emailStyles.link}>
+                    run yourself
+                </a>
+                : your machine, your storage, free forever. Self-host and Hosted
+                Pro are the same project, run two different ways.
+            </Text>
+
+            <Text style={emailStyles.text}>
+                Hosted Pro includes 50 GB of storage, 15 hours of Mynah
+                transcription every month, unlimited devices, and background
+                sync that keeps pulling recordings even when your browser is
+                closed. Bring your own AI key if you'd rather (OpenAI, Groq,
+                anything compatible); Riffado adds no markup when you do.
+            </Text>
+
+            <Hr style={emailStyles.divider} />
+
+            <Heading style={emailStyles.h2}>
+                What this means for your account
+            </Heading>
+
+            <Text style={emailStyles.bullet}>
+                &bull; Your access stays free until <strong>{deadline}</strong>.
+            </Text>
+            {foundingOfferAvailable ? (
+                <Text style={emailStyles.bullet}>
+                    &bull; As an early user, you can lock in the founding price
+                    of{" "}
+                    <strong>
+                        {formatEmailPrice(amountValue, amountCurrency)}
+                    </strong>
+                    , limited to the first {foundingCapacity} paid monthly
+                    members, first-paid, first-served.
+                </Text>
+            ) : (
+                <Text style={emailStyles.bullet}>
+                    &bull; Monthly Hosted Pro is available for{" "}
+                    <strong>
+                        {formatEmailPrice(amountValue, amountCurrency)}
+                    </strong>
+                    .
+                </Text>
+            )}
+            <Text style={{ ...emailStyles.bullet, margin: "0 0 16px 0" }}>
+                &bull; You can cancel anytime. Canceling starts a grace period,
+                so nothing is lost immediately even then.
+            </Text>
+
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
                     {foundingOfferAvailable
@@ -75,31 +171,35 @@ export function TransitionStartEmail({
                         : "Choose a plan"}
                 </Button>
             </Section>
+
             <Text style={emailStyles.text}>
-                If you don't choose a plan before{" "}
-                {formatEmailDate(transitionEndsAt)}, your Hosted account becomes
-                read-only. Nothing will be deleted: existing recordings remain
-                playable and exportable, while sync, uploads, and new
-                transcriptions pause.
-            </Text>
-            <Text style={emailStyles.text}>
-                Prefer not to subscribe? That's fine. Riffado is open source,
-                and you can{" "}
-                <a href={selfHostUrl} style={emailStyles.link}>
-                    self-host for free
-                </a>{" "}
-                and keep everything. Or{" "}
+                If you don't choose a plan by {deadline}, your account becomes
+                read-only. Nothing gets deleted: every recording, transcript,
+                and summary stays playable and exportable. Sync, uploads, and
+                new transcriptions pause until you subscribe,{" "}
                 <a href={exportUrl} style={emailStyles.link}>
-                    export your data
-                </a>{" "}
-                anytime. Your recordings, transcripts, and summaries are yours
-                either way.
+                    export
+                </a>
+                , or self-host.
             </Text>
+
+            {sponsorUrl ? (
+                <Text style={emailStyles.text}>
+                    Hosted Pro pays for running the service you use. If you want
+                    to back the broader project beyond your own subscription,
+                    you can{" "}
+                    <a href={sponsorUrl} style={emailStyles.link}>
+                        sponsor Riffado directly
+                    </a>
+                    . That's separate from any subscription and never required.
+                </Text>
+            ) : null}
+
             <Text style={emailStyles.text}>
-                Questions, or something looks off? Reply to this email. It comes
-                straight to me.
+                Questions, or something looks off? Reply. It comes straight to
+                me, and I read this inbox.
                 <br />
-                &mdash; Kacper, building Riffado
+                Kacper, building Riffado
             </Text>
         </EmailLayout>
     );
