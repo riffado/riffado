@@ -605,7 +605,7 @@ export async function sendTransitionStartEmail(input: {
             );
             return {
                 to: input.email,
-                subject: "Riffado Hosted Pro is live",
+                subject: "Why Riffado Hosted Pro is happening",
                 html,
             };
         },

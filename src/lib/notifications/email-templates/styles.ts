@@ -165,6 +165,47 @@ export const emailStyles = {
         border: "none",
         margin: "24px 0",
     },
+
+    /**
+     * Bulletproof hanging-indent bullet, as a two-column table row
+     * rather than CSS `text-indent`. Negative `text-indent` is
+     * unreliable in desktop Outlook (Word rendering engine) -- a
+     * wrapped second line can fall back to the left margin there and
+     * read like a new, unrelated paragraph. A small table (`Row`/
+     * `Column` from @react-email/components) is the standard bulletproof
+     * pattern instead: the glyph gets its own narrow column, so wrapped
+     * text in the text column stays aligned under itself in every
+     * client, including Outlook. Pair with a local `<Bullet>` wrapper
+     * component; don't reach for these two styles raw.
+     */
+    bulletGlyphColumn: {
+        width: "18px",
+        verticalAlign: "top" as const,
+        color: brandColors.foreground,
+        fontSize: "16px",
+        lineHeight: "1.6",
+    },
+    bulletTextColumn: {
+        color: brandColors.foreground,
+        fontSize: "16px",
+        lineHeight: "1.6",
+    },
+
+    /**
+     * Mono uppercase section eyebrow, matching the site's landing-page
+     * section markers ("PRICING", "FAQ"). Text only, no fill or border
+     * -- pair with `divider` for section separation instead of a card.
+     */
+    eyebrow: {
+        fontSize: "11px",
+        fontWeight: 600,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase" as const,
+        fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        color: brandColors.mutedForeground,
+        margin: "0 0 14px 0",
+    },
 };
 
 export const mobileStyles = {
