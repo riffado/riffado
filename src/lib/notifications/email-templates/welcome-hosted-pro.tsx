@@ -88,7 +88,7 @@ export function WelcomeHostedProEmail({
                 if anything's off or you have a question. It reaches me
                 directly.
                 <br />
-                &mdash; Kacper, building Riffado
+                Kacper, building Riffado
             </Text>
         </EmailLayout>
     );

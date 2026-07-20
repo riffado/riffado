@@ -99,7 +99,7 @@ export function TransitionStartEmail({
                 Questions, or something looks off? Reply to this email. It comes
                 straight to me.
                 <br />
-                &mdash; Kacper, building Riffado
+                Kacper, building Riffado
             </Text>
         </EmailLayout>
     );

@@ -74,7 +74,7 @@ export function RebrandAnnouncementEmail({
             <Text style={emailStyles.text}>
                 If anything broke for you, hit reply. I read this inbox.
                 <br />
-                &mdash; Kacper, from Riffado
+                Kacper, from Riffado
             </Text>
 
             <Text style={emailStyles.text}>

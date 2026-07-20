@@ -60,7 +60,7 @@ export function GraceStartedEmail({
                 Questions, or something looks off? Reply to this email. I read
                 every one.
                 <br />
-                &mdash; Kacper, Riffado
+                Kacper, Riffado
             </Text>
         </EmailLayout>
     );

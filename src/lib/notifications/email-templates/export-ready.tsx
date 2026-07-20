@@ -14,7 +14,7 @@ export function ExportReadyEmail({ downloadUrl }: Props) {
         >
             <Heading style={emailStyles.h1}>Your export is ready</Heading>
             <Text style={emailStyles.text}>
-                We finished building your full data archive — every
+                We finished building your full data archive: every
                 recording&apos;s audio, transcript, and AI summary, zipped up
                 and ready to download.
             </Text>
