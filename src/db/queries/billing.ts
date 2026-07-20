@@ -1004,17 +1004,45 @@ export async function getUserActivitySummary(
  * time (earliest = #1). Returns null if the user never claimed
  * founding pricing. Used to show a concrete "you're founding member
  * #N" instead of only the abstract cohort size.
+ *
+ * Ranks over the same permanent claimed cohort `getFoundingMemberAvailability`
+ * counts, not just live `users` rows: `deleteUser` preserves a `consumed`
+ * reservation (with `userId` set to null via the FK's `onDelete: set null`)
+ * for any founding member it deletes, so an earlier founder who later
+ * deletes their account still occupies -- and must still count toward --
+ * a permanent slot. Ranking off `users` alone would skip them and hand a
+ * later founder a rank that understates how many people actually claimed
+ * before them.
  */
 export async function getFoundingMemberOrdinal(
     userId: string,
 ): Promise<number | null> {
     const result = await db.execute<{ rank: number }>(sql`
         select rank from (
-            select id, row_number() over (order by founding_member_claimed_at asc) as rank
-            from ${users}
-            where founding_member_claimed_at is not null
+            select
+                row_number() over (order by claimed_at asc) as rank,
+                user_id
+            from (
+                select
+                    ${foundingMemberReservations.consumedAt} as claimed_at,
+                    ${foundingMemberReservations.userId} as user_id
+                from ${foundingMemberReservations}
+                where ${foundingMemberReservations.status} = 'consumed'
+                union all
+                select
+                    u.founding_member_claimed_at as claimed_at,
+                    u.id as user_id
+                from ${users} u
+                where u.founding_member_claimed_at is not null
+                  and not exists (
+                      select 1
+                      from ${foundingMemberReservations} r
+                      where r.user_id = u.id
+                        and r.status = 'consumed'
+                  )
+            ) claims
         ) ranked
-        where ranked.id = ${userId}
+        where ranked.user_id = ${userId}
     `);
     const rows = Array.isArray(result)
         ? result

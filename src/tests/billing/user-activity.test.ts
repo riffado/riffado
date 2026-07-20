@@ -14,7 +14,11 @@ vi.mock("@/db/schema", () => ({
     users: {
         id: "id",
     },
-    foundingMemberReservations: {},
+    foundingMemberReservations: {
+        userId: "user_id",
+        status: "status",
+        consumedAt: "consumed_at",
+    },
 }));
 
 import {
@@ -67,6 +71,7 @@ describe("getFoundingMemberOrdinal", () => {
         dbMock.execute.mockResolvedValueOnce([{ rank: 47 }]);
 
         await expect(getFoundingMemberOrdinal("u1")).resolves.toBe(47);
+        expect(dbMock.execute).toHaveBeenCalledTimes(1);
     });
 
     it("returns null for a user who never claimed founding pricing", async () => {

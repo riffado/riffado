@@ -45,6 +45,7 @@ import {
     deleteUser,
     forfeitFoundingMember,
     getFoundingMemberAvailability,
+    getFoundingMemberOrdinal,
 } from "@/db/queries/billing";
 
 const testDatabaseUrl = getTestDatabaseUrl();
@@ -261,6 +262,48 @@ describeWithDatabase(
             ).resolves.toMatchObject({
                 claimed: 1,
             });
+        });
+
+        it("keeps a later founder's rank stable after an earlier founder's account is deleted", async () => {
+            if (!database) throw new Error("test database was not initialized");
+
+            await database.db.insert(users).values([
+                {
+                    id: "founder-early",
+                    email: "founder-early@example.test",
+                    foundingMember: true,
+                    foundingMemberClaimedAt: new Date(
+                        "2026-06-01T00:00:00.000Z",
+                    ),
+                },
+                {
+                    id: "founder-late",
+                    email: "founder-late@example.test",
+                    foundingMember: true,
+                    foundingMemberClaimedAt: new Date(
+                        "2026-06-15T00:00:00.000Z",
+                    ),
+                },
+            ]);
+
+            await expect(
+                getFoundingMemberOrdinal("founder-early"),
+            ).resolves.toBe(1);
+            await expect(
+                getFoundingMemberOrdinal("founder-late"),
+            ).resolves.toBe(2);
+
+            // Deleting the earlier founder removes their `users` row, but
+            // `deleteUser` preserves a `consumed` reservation for their
+            // claim. The later founder must still rank #2, not #1.
+            await deleteUser("founder-early");
+
+            await expect(
+                getFoundingMemberOrdinal("founder-late"),
+            ).resolves.toBe(2);
+            await expect(
+                getFoundingMemberOrdinal("founder-early"),
+            ).resolves.toBeNull();
         });
     },
 );
