@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- The standalone Docker image built by this release crashed on startup for every deployment, self-host and hosted alike (`TypeError: ... is not a function` from `src/instrumentation.ts`). Next.js's output tracer externalized `@react-email/render`'s `prettier` dependency into a build directory this project's `Dockerfile` didn't copy into the image, breaking every worker that sends email. Replaced `@react-email/render` with a small helper built directly on `react-dom/server`, removing the dependency from the runtime image entirely.
+
 ## [0.6.0] - 2026-07-20
 
 ### Breaking Changes
