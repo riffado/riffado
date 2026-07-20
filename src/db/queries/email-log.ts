@@ -28,12 +28,6 @@ export async function claimEmailSend(input: {
     return inserted.length > 0;
 }
 
-/**
- * Undo a `claimEmailSend` claim. Callers use this when the send itself
- * fails after a successful claim (transient SMTP error, render
- * exception) so a future retry can claim and send again instead of
- * the once-only email being permanently dropped.
- */
 /** Check whether a once-only email key is already claimed for a user. */
 export async function hasEmailSend(input: {
     userId: string;
@@ -52,6 +46,12 @@ export async function hasEmailSend(input: {
     return rows.length > 0;
 }
 
+/**
+ * Undo a `claimEmailSend` claim. Callers use this when the send itself
+ * fails after a successful claim (transient SMTP error, render
+ * exception) so a future retry can claim and send again instead of
+ * the once-only email being permanently dropped.
+ */
 export async function releaseEmailSend(input: {
     userId: string;
     kind: string;
