@@ -61,12 +61,14 @@ export function WelcomeHostedProEmail({
                     Pro entitlements are live:
                 </Text>
             )}
-            <Text style={emailStyles.text}>50 GB storage</Text>
-            <Text style={emailStyles.text}>
-                15 hours of Mynah transcription, refreshed every 30 days
+            <Text style={{ ...emailStyles.text, margin: "0 0 6px 0" }}>
+                &bull; 50 GB storage
             </Text>
-            <Text style={emailStyles.text}>
-                Unlimited devices, background sync
+            <Text style={{ ...emailStyles.text, margin: "0 0 6px 0" }}>
+                &bull; 15 hours of Mynah transcription, refreshed every 30 days
+            </Text>
+            <Text style={{ ...emailStyles.text, margin: "0 0 16px 0" }}>
+                &bull; Unlimited devices, background sync
             </Text>
             {isFoundingMonthly ? (
                 <Text style={emailStyles.text}>
