@@ -22,6 +22,18 @@ export function NewsletterConfirmEmail({
                     Confirm subscription
                 </Button>
             </Section>
+            <Text style={emailStyles.text}>
+                If the button doesn't work, paste this URL into your browser:
+            </Text>
+            <Text
+                style={{
+                    ...emailStyles.text,
+                    wordBreak: "break-all",
+                    fontSize: "13px",
+                }}
+            >
+                {confirmUrl}
+            </Text>
         </EmailLayout>
     );
 }
