@@ -586,8 +586,6 @@ export async function sendTransitionStartEmail(input: {
     billingUrl: string;
     exportUrl: string;
     selfHostUrl: string;
-    /** Sponsorship destination. Omit until a real one exists. */
-    sponsorUrl?: string;
 }): Promise<boolean> {
     return sendClaimedEmail(
         { userId: input.userId, kind: "transition_start" },
@@ -602,7 +600,6 @@ export async function sendTransitionStartEmail(input: {
                     billingUrl: input.billingUrl,
                     exportUrl: input.exportUrl,
                     selfHostUrl: input.selfHostUrl,
-                    sponsorUrl: input.sponsorUrl,
                 }),
                 { pretty: false },
             );

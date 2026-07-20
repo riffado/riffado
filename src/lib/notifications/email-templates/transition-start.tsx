@@ -20,13 +20,6 @@ interface Props {
     exportUrl: string;
     /** Self-host docs / repo link. */
     selfHostUrl: string;
-    /**
-     * Sponsorship destination (GitHub Sponsors / Open Collective). Omit
-     * until a real one exists -- the paragraph only renders when this is
-     * set, so turning sponsorship on later is a one-line change here,
-     * not a copy rewrite.
-     */
-    sponsorUrl?: string;
 }
 
 // Sent once to the grandfathered pre-launch cohort, replacing the earlier
@@ -46,7 +39,6 @@ export function TransitionStartEmail({
     billingUrl,
     exportUrl,
     selfHostUrl,
-    sponsorUrl,
 }: Props) {
     const deadline = formatEmailDate(transitionEndsAt);
     return (
@@ -182,18 +174,6 @@ export function TransitionStartEmail({
                 </a>
                 , or self-host.
             </Text>
-
-            {sponsorUrl ? (
-                <Text style={emailStyles.text}>
-                    Hosted Pro pays for running the service you use. If you want
-                    to back the broader project beyond your own subscription,
-                    you can{" "}
-                    <a href={sponsorUrl} style={emailStyles.link}>
-                        sponsor Riffado directly
-                    </a>
-                    . That's separate from any subscription and never required.
-                </Text>
-            ) : null}
 
             <Text style={emailStyles.text}>
                 Questions, or something looks off? Reply. It comes straight to

@@ -73,29 +73,4 @@ describe("TransitionStartEmail", () => {
         );
         expect(text).toContain("grace period");
     });
-
-    it("omits the sponsorship paragraph when no sponsorUrl is provided", async () => {
-        const text = await render(
-            React.createElement(TransitionStartEmail, {
-                ...baseProps,
-                foundingOfferAvailable: true,
-            }),
-            { plainText: true },
-        );
-        expect(text).not.toContain("sponsor Riffado directly");
-    });
-
-    it("includes the sponsorship paragraph when sponsorUrl is provided", async () => {
-        const text = await render(
-            React.createElement(TransitionStartEmail, {
-                ...baseProps,
-                foundingOfferAvailable: true,
-                sponsorUrl: "https://github.com/sponsors/riffado",
-            }),
-            { plainText: true },
-        );
-        expect(text).toContain("sponsor Riffado directly");
-        expect(text).toContain("https://github.com/sponsors/riffado");
-        expect(text).toContain("never required");
-    });
 });
