@@ -269,6 +269,39 @@ describe("issue #70: IS_HOSTED env contract", () => {
         }
     });
 
+    it("refuses hosted billing on a self-host instance", async () => {
+        const originalEnv = { ...process.env };
+
+        try {
+            process.env = {
+                ...originalEnv,
+                APP_URL: "http://localhost:3000",
+                BETTER_AUTH_SECRET: "better-auth-secret-with-32-chars",
+                BILLING_ENABLED: "true",
+                DATABASE_URL:
+                    "postgresql://user:password@localhost:5432/riffado",
+                ENCRYPTION_KEY:
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                IS_HOSTED: "false",
+                MYNAH_BASE_URL: "https://mynah.example.com",
+                MYNAH_SERVICE_TOKEN: "secret",
+                STRIPE_PRICE_ID_USD: "price_usd",
+                STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
+                STRIPE_SECRET_KEY: "sk_test_123",
+                STRIPE_WEBHOOK_SECRET: "whsec_123",
+            } as NodeJS.ProcessEnv;
+            delete process.env.NEXT_PHASE;
+            vi.resetModules();
+
+            await expect(import("@/lib/env")).rejects.toThrow(
+                "BILLING_ENABLED=true requires IS_HOSTED=true",
+            );
+        } finally {
+            process.env = originalEnv;
+            vi.resetModules();
+        }
+    });
+
     it("requires trusted proxy IP headers when hosted mode serves runtime requests", async () => {
         const originalEnv = { ...process.env };
         const runtimeEnv = {

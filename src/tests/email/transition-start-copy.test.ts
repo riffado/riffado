@@ -10,46 +10,38 @@ const baseProps = {
     foundingCapacity: 100,
     billingUrl: "https://riffado.com/settings#billing",
     exportUrl: "https://riffado.com/settings#export",
-    selfHostUrl: "https://github.com/riffado/riffado#self-hosting",
+    selfHostUrl: "https://github.com/riffado/riffado#quick-start",
 };
-
-function visibleText(html: string): string {
-    return html
-        .replace(/<!--.*?-->/g, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ");
-}
 
 describe("TransitionStartEmail", () => {
     it("states the capacity rule without guaranteeing a founding spot", async () => {
-        const html = await render(
+        const text = await render(
             React.createElement(TransitionStartEmail, {
                 ...baseProps,
                 foundingOfferAvailable: true,
             }),
-            { pretty: false },
+            { plainText: true },
         );
-
-        const text = visibleText(html);
         expect(text).toContain("first 100 paid monthly members");
         expect(text).toContain("first-paid, first-served");
         expect(text).toContain("See billing options");
         expect(text).toContain("your Hosted account becomes read-only");
         expect(text).toContain("Nothing will be deleted");
         expect(text).not.toContain("Add a card before then");
+        expect(text).toContain(
+            "https://github.com/riffado/riffado#quick-start",
+        );
     });
 
     it("shows standard pricing after founding capacity is gone", async () => {
-        const html = await render(
+        const text = await render(
             React.createElement(TransitionStartEmail, {
                 ...baseProps,
                 amountValue: "9.00",
                 foundingOfferAvailable: false,
             }),
-            { pretty: false },
+            { plainText: true },
         );
-
-        const text = visibleText(html);
         expect(text).toContain("Monthly Hosted Pro is available for 9.00");
         expect(text).not.toContain("first 100 paid monthly members");
     });

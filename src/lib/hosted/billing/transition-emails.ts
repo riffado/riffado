@@ -17,7 +17,7 @@ import {
 const BATCH_LIMIT = 200;
 const REMINDER_DAYS_OUT = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SELF_HOST_URL = "https://github.com/riffado/riffado#self-hosting";
+const SELF_HOST_URL = "https://github.com/riffado/riffado#quick-start";
 
 // Cursor into the cohort, ordered by `users.id`. Without this, a cohort
 // larger than BATCH_LIMIT would have the same first-200 rows re-selected

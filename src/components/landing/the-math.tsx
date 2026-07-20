@@ -34,17 +34,17 @@ const SUBSCRIPTION_SERVICES = [
     },
     {
         name: "Otter Business",
-        price: "$20",
+        price: "$30",
         unit: "/ user / month",
         scope: "6,000 transcription minutes",
-        perHour: "$0.20 / hr",
+        perHour: "$0.30 / hr",
     },
     {
-        name: "Rev AI Pro",
+        name: "Rev Essentials",
         price: "$29.99",
-        unit: "/ month",
-        scope: "1,200 transcription minutes",
-        perHour: "$1.50 / hr",
+        unit: "/ seat / month",
+        scope: "5,000 transcription minutes",
+        perHour: "$0.36 / hr",
     },
 ];
 
@@ -136,7 +136,7 @@ export async function TheMath() {
                     </div>
 
                     <p className="mt-6 text-xs text-muted-foreground/80 leading-relaxed text-pretty max-w-2xl">
-                        Published pricing as of May 2026. Plans, minute
+                        Published monthly pricing as of July 2026. Plans, minute
                         ceilings, and trademarks belong to their respective
                         owners; shown for descriptive context, not comparison.
                         Hosted Pro includes {HOSTED_PRO_INCLUDED_HOURS} hours of

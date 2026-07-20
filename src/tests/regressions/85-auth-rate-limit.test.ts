@@ -2,14 +2,14 @@
  * Regression coverage for issue #85: better-auth's email/password endpoints
  * were entirely un-throttled. `enforceAuthRateLimit` wraps the
  * `/api/auth/[...all]` POST handler and enforces per-IP (and, for the
- * SMTP-triggering `/forget-password` path, per-email) limits using the
+ * SMTP-triggering `/request-password-reset` path, per-email) limits using the
  * project's DB-backed bucket store.
  *
  * Pinned behaviours:
  *   1. Unknown auth paths pass through untouched (return null).
  *   2. A known path under its IP limit passes through.
  *   3. An exceeded IP limit returns 429 with a Retry-After header.
- *   4. `/forget-password` applies a per-email bucket so a single victim
+ *   4. `/request-password-reset` applies a per-email bucket so a single victim
  *      can't be targeted from rotating IPs, and reading the email does NOT
  *      consume the request body (better-auth must still parse it).
  */
@@ -80,6 +80,24 @@ describe("enforceAuthRateLimit", () => {
         );
     });
 
+    it.each([
+        "//sign-in//email",
+        "/sign-in%2Femail",
+        "/sign-in%5Cemail",
+    ])("normalizes auth path variant %s into the protected bucket", async (path) => {
+        (consumeRateLimitBucket as Mock).mockResolvedValue(allowed());
+
+        const result = await enforceAuthRateLimit(
+            authRequest(path, { email: "a@b.com", password: "x" }),
+        );
+
+        expect(result).toBeNull();
+        expect(consumeRateLimitBucket).toHaveBeenCalledWith(
+            "auth:ip:/sign-in/email:198.51.100.1",
+            expect.objectContaining({ limit: 10 }),
+        );
+    });
+
     it("returns 429 with Retry-After when the IP limit is exceeded", async () => {
         (consumeRateLimitBucket as Mock).mockResolvedValue(blocked());
         const result = await enforceAuthRateLimit(
@@ -104,7 +122,7 @@ describe("enforceAuthRateLimit", () => {
     it("skips the per-IP bucket when the client IP is unknown (no cross-user lockout)", async () => {
         // Proxy-header trust off: every client resolves to "unknown". A shared
         // low-limit IP bucket would let one actor lock everyone out, so the IP
-        // dimension fails open. forget-password still gets its per-email cap.
+        // dimension fails open. request-password-reset still gets its per-email cap.
         clientIp.value = "unknown";
         (consumeRateLimitBucket as Mock).mockResolvedValue(allowed());
 
@@ -115,23 +133,23 @@ describe("enforceAuthRateLimit", () => {
         expect(consumeRateLimitBucket).not.toHaveBeenCalled();
 
         const forget = await enforceAuthRateLimit(
-            authRequest("/forget-password", { email: "a@b.com" }),
+            authRequest("/request-password-reset", { email: "a@b.com" }),
         );
         expect(forget).toBeNull();
         // only the email bucket runs, never an `auth:ip:...:unknown` bucket
         expect(consumeRateLimitBucket).toHaveBeenCalledTimes(1);
         expect(consumeRateLimitBucket).toHaveBeenCalledWith(
-            "auth:email:/forget-password:a@b.com",
+            "auth:email:/request-password-reset:a@b.com",
             expect.objectContaining({ limit: 3 }),
         );
     });
 
-    it("applies a per-email bucket on forget-password without consuming the body", async () => {
+    it("applies a per-email bucket on request-password-reset without consuming the body", async () => {
         (consumeRateLimitBucket as Mock)
             .mockResolvedValueOnce(allowed()) // IP bucket
             .mockResolvedValueOnce(blocked()); // email bucket
 
-        const request = authRequest("/forget-password", {
+        const request = authRequest("/request-password-reset", {
             email: "Victim@Example.com",
         });
         const result = await enforceAuthRateLimit(request);
@@ -139,7 +157,7 @@ describe("enforceAuthRateLimit", () => {
         expect(result?.status).toBe(429);
         // email is lowercased into the bucket key
         expect(consumeRateLimitBucket).toHaveBeenLastCalledWith(
-            "auth:email:/forget-password:victim@example.com",
+            "auth:email:/request-password-reset:victim@example.com",
             expect.objectContaining({ limit: 3 }),
         );
         // body must still be readable by better-auth downstream

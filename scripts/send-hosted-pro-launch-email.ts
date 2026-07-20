@@ -27,7 +27,7 @@ import {
 import { sendTransitionStartEmail } from "@/lib/notifications/email";
 
 const EMAIL_KIND = "transition_start";
-const SELF_HOST_URL = "https://github.com/riffado/riffado#self-hosting";
+const SELF_HOST_URL = "https://github.com/riffado/riffado#quick-start";
 
 interface CliOptions {
     send: boolean;

@@ -19,6 +19,7 @@ import {
     resolveStandardMonthlyPriceForCurrency,
 } from "./pricing";
 import { getStripe } from "./stripe-client";
+import { prepareCustomerTaxIdentity, type VerifiedBusiness } from "./vat-id";
 
 export class CheckoutPreconditionError extends Error {
     constructor(
@@ -88,10 +89,8 @@ export interface StartCheckoutInput {
     country?: string | null;
     /** Billing interval selected for Checkout. Defaults to monthly. */
     interval?: BillingInterval;
-    /** Where Stripe returns the user after a completed checkout. */
-    redirectUrl: string;
-    /** Where Stripe returns the user if they abandon checkout. */
-    cancelUrl?: string;
+    /** Optional verified EU business identity for reverse-charge treatment. */
+    business?: VerifiedBusiness;
     /** Required: EU consumer-law waiver timestamp captured at submit. */
     withdrawalWaiverAcceptedAt: Date;
     /**
@@ -149,11 +148,6 @@ export async function startSubscriptionCheckout(
 
     const stripe = getStripe();
 
-    // VAT line on invoices for EU/EEA (EUR) sales only. USD sales are
-    // non-EU export of services, outside EU VAT scope -- no rate applied.
-    const taxRateId =
-        price.currency === "eur" ? env.STRIPE_TAX_RATE_ID_EUR : undefined;
-
     const metadata = checkoutMetadata({
         userId: input.userId,
         reservation,
@@ -166,15 +160,21 @@ export async function startSubscriptionCheckout(
             email: input.userEmail,
             name: input.userName ?? null,
         });
+        await prepareCustomerTaxIdentity({
+            stripeCustomerId,
+            business: input.business,
+        });
+        const returnUrl = hostedBillingReturnUrl();
         session = await stripe.checkout.sessions.create(
             {
                 mode: "subscription",
                 customer: stripeCustomerId,
                 line_items: [{ price: price.priceId, quantity: 1 }],
-                success_url: input.redirectUrl,
-                cancel_url: input.cancelUrl ?? input.redirectUrl,
+                success_url: returnUrl,
+                cancel_url: returnUrl,
                 client_reference_id: input.userId,
                 billing_address_collection: "required",
+                automatic_tax: { enabled: true },
                 ...(reservation
                     ? {
                           expires_at: Math.floor(
@@ -192,8 +192,6 @@ export async function startSubscriptionCheckout(
                         withdrawalWaiverAcceptedAt:
                             input.withdrawalWaiverAcceptedAt.toISOString(),
                     },
-                    // Applied to every renewal invoice, not just the first.
-                    ...(taxRateId ? { default_tax_rates: [taxRateId] } : {}),
                 },
                 metadata,
             },
@@ -317,7 +315,6 @@ export async function cancelSubscription(userId: string): Promise<void> {
  */
 export async function createBillingPortalSession(input: {
     userId: string;
-    returnUrl: string;
 }): Promise<string> {
     if (!env.STRIPE_PORTAL_CONFIGURATION_ID) {
         throw new CheckoutPreconditionError(
@@ -336,10 +333,28 @@ export async function createBillingPortalSession(input: {
     const stripe = getStripe();
     const session = await stripe.billingPortal.sessions.create({
         customer: customer.stripeCustomerId,
-        return_url: input.returnUrl,
+        return_url: hostedBillingReturnUrl(),
         configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
     });
     return session.url;
+}
+
+export async function cancelSubscriptionImmediatelyForDeletion(
+    userId: string,
+): Promise<void> {
+    const localSubscription = await getSubscriptionByUserId(userId);
+    if (!localSubscription || isTerminalStatus(localSubscription.status)) {
+        return;
+    }
+
+    const stripe = getStripe();
+    const current = await stripe.subscriptions.retrieve(localSubscription.id);
+    if (isTerminalStatus(current.status)) return;
+
+    const canceled = await stripe.subscriptions.cancel(localSubscription.id);
+    if (!isTerminalStatus(canceled.status)) {
+        throw new Error("Stripe did not confirm subscription cancellation");
+    }
 }
 
 async function resolveCheckoutPrice(input: {
@@ -424,6 +439,21 @@ function isLiveStatus(status: string): boolean {
     return (
         status === "active" || status === "trialing" || status === "past_due"
     );
+}
+
+function isTerminalStatus(status: string): boolean {
+    return (
+        status === "canceled" ||
+        status === "unpaid" ||
+        status === "incomplete_expired"
+    );
+}
+
+function hostedBillingReturnUrl(): string {
+    if (!env.APP_URL) {
+        throw new Error("APP_URL is required for hosted billing");
+    }
+    return new URL("/settings#billing", env.APP_URL).toString();
 }
 
 /** Legacy re-export for older tests/call sites; founding pricing is capacity-based. */

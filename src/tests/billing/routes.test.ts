@@ -26,6 +26,7 @@ const { envMock, checkoutMock, stripeClientMock, sessionMock } = vi.hoisted(
             startSubscriptionCheckout: vi.fn(),
             reactivateSubscriptionIfStillInPeriod: vi.fn(),
             cancelSubscription: vi.fn(),
+            cancelSubscriptionImmediatelyForDeletion: vi.fn(),
             createBillingPortalSession: vi.fn(),
             CheckoutPreconditionError: class CheckoutPreconditionError extends Error {
                 code: string;
@@ -75,6 +76,7 @@ import {
     scheduleAccountDeletion,
 } from "@/db/queries/billing";
 import { getEntitlements } from "@/lib/entitlements";
+import { VatIdVerificationError } from "@/lib/hosted/billing/vat-id";
 
 function makeRequest(body: unknown) {
     return new Request("https://example.com/api/billing/checkout", {
@@ -97,24 +99,36 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
             }),
         );
         expect(res.status).toBe(404);
     });
 
-    it("returns 400 when withdrawalWaiver is missing/false", async () => {
+    it("keeps hosted Checkout hidden on self-host instances", async () => {
+        envMock.IS_HOSTED = false;
+
         const res = await checkoutRoute(
-            makeRequest({ redirectUrl: "https://app/redirect" }),
+            makeRequest({ withdrawalWaiver: true }),
         );
+
+        expect(res.status).toBe(404);
+        expect(checkoutMock.startSubscriptionCheckout).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when withdrawalWaiver is missing/false", async () => {
+        const res = await checkoutRoute(makeRequest({}));
         expect(res.status).toBe(400);
     });
 
-    it("returns 400 when redirectUrl is not a URL", async () => {
+    it("rejects caller-controlled return URLs", async () => {
         const res = await checkoutRoute(
-            makeRequest({ withdrawalWaiver: true, redirectUrl: "not a url" }),
+            makeRequest({
+                withdrawalWaiver: true,
+                redirectUrl: "https://attacker.example",
+            }),
         );
         expect(res.status).toBe(400);
+        expect(checkoutMock.startSubscriptionCheckout).not.toHaveBeenCalled();
     });
 
     it("forwards the Stripe checkout URL when checkout succeeds", async () => {
@@ -125,7 +139,6 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
             }),
         );
         expect(res.status).toBe(200);
@@ -144,7 +157,6 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
                 interval: "year",
             }),
         );
@@ -158,12 +170,33 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
                 interval: "week",
             }),
         );
         expect(res.status).toBe(400);
         expect(checkoutMock.startSubscriptionCheckout).not.toHaveBeenCalled();
+    });
+
+    it("forwards business identity and returns a controlled VAT verification error", async () => {
+        checkoutMock.startSubscriptionCheckout.mockRejectedValue(
+            new VatIdVerificationError(
+                "VAT ID verification is pending",
+                "vat_id_pending",
+            ),
+        );
+        const business = { name: "Example GmbH", vatId: "DE123456789" };
+
+        const res = await checkoutRoute(
+            makeRequest({
+                withdrawalWaiver: true,
+                business,
+            }),
+        );
+
+        expect(res.status).toBe(409);
+        expect(checkoutMock.startSubscriptionCheckout).toHaveBeenCalledWith(
+            expect.objectContaining({ business }),
+        );
     });
 
     it("returns a controlled non-500 response when annual checkout is unavailable", async () => {
@@ -176,7 +209,6 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
                 interval: "year",
             }),
         );
@@ -196,7 +228,6 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
             }),
         );
         expect(res.status).toBe(200);
@@ -217,7 +248,6 @@ describe("POST /api/billing/checkout", () => {
         const res = await checkoutRoute(
             makeRequest({
                 withdrawalWaiver: true,
-                redirectUrl: "https://app/redirect",
             }),
         );
         expect(res.status).toBe(409);
@@ -268,6 +298,21 @@ describe("POST /api/billing/portal", () => {
         stripeClientMock.isStripeConfigured.mockReturnValue(true);
     });
 
+    it("rejects caller-controlled return URLs", async () => {
+        const res = await portalRoute(
+            new Request("https://example.com/api/billing/portal", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    returnUrl: "https://attacker.example",
+                }),
+            }),
+        );
+
+        expect(res.status).toBe(400);
+        expect(checkoutMock.createBillingPortalSession).not.toHaveBeenCalled();
+    });
+
     it("returns 503 when the safe Portal configuration is missing", async () => {
         checkoutMock.createBillingPortalSession.mockRejectedValue(
             new checkoutMock.CheckoutPreconditionError(
@@ -279,10 +324,6 @@ describe("POST /api/billing/portal", () => {
         const res = await portalRoute(
             new Request("https://example.com/api/billing/portal", {
                 method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                    returnUrl: "https://example.com/settings#billing",
-                }),
             }),
         );
 
@@ -295,6 +336,10 @@ describe("POST /api/billing/delete-now", () => {
         vi.clearAllMocks();
         envMock.IS_HOSTED = true;
         envMock.BILLING_ENABLED = true;
+        stripeClientMock.isStripeConfigured.mockReturnValue(true);
+        checkoutMock.cancelSubscriptionImmediatelyForDeletion.mockResolvedValue(
+            undefined,
+        );
     });
 
     it("returns 404 when billing is off", async () => {
@@ -307,34 +352,41 @@ describe("POST /api/billing/delete-now", () => {
         expect(res.status).toBe(404);
     });
 
-    it("returns 409 and does not schedule deletion when the account is not already in a grace period", async () => {
-        (getUserBillingState as ReturnType<typeof vi.fn>).mockResolvedValue({
-            plan: "hosted_pro",
-            accountDeletionScheduledAt: null,
-        });
+    it("cancels Stripe before scheduling immediate deletion", async () => {
         const res = await deleteNowRoute(
             new Request("https://example.com/api/billing/delete-now", {
                 method: "POST",
             }),
         );
-        expect(res.status).toBe(409);
-        expect(scheduleAccountDeletion).not.toHaveBeenCalled();
-    });
 
-    it("schedules immediate deletion when the account is already in a grace period", async () => {
-        (getUserBillingState as ReturnType<typeof vi.fn>).mockResolvedValue({
-            plan: "hosted_free",
-            accountDeletionScheduledAt: new Date("2026-08-01T00:00:00Z"),
-        });
-        const res = await deleteNowRoute(
-            new Request("https://example.com/api/billing/delete-now", {
-                method: "POST",
-            }),
-        );
         expect(res.status).toBe(200);
+        expect(
+            checkoutMock.cancelSubscriptionImmediatelyForDeletion,
+        ).toHaveBeenCalledWith("u1");
         expect(scheduleAccountDeletion).toHaveBeenCalledWith(
             expect.objectContaining({ userId: "u1", force: true }),
         );
+        expect(
+            checkoutMock.cancelSubscriptionImmediatelyForDeletion.mock
+                .invocationCallOrder[0],
+        ).toBeLessThan(
+            vi.mocked(scheduleAccountDeletion).mock.invocationCallOrder[0],
+        );
+    });
+
+    it("preserves the account when Stripe cancellation fails", async () => {
+        checkoutMock.cancelSubscriptionImmediatelyForDeletion.mockRejectedValue(
+            new Error("Stripe unavailable"),
+        );
+
+        const res = await deleteNowRoute(
+            new Request("https://example.com/api/billing/delete-now", {
+                method: "POST",
+            }),
+        );
+
+        expect(res.status).toBe(500);
+        expect(scheduleAccountDeletion).not.toHaveBeenCalled();
     });
 });
 

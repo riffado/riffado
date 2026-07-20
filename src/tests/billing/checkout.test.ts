@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queriesMock, stripeMock, pricingMock, mirrorMock, envMock } =
+const { queriesMock, stripeMock, pricingMock, mirrorMock, vatMock, envMock } =
     vi.hoisted(() => ({
         queriesMock: {
             attachFoundingMemberReservationToCheckoutSession: vi.fn(),
@@ -15,6 +15,7 @@ const { queriesMock, stripeMock, pricingMock, mirrorMock, envMock } =
         stripeMock: {
             checkout: { sessions: { create: vi.fn(), expire: vi.fn() } },
             customers: { create: vi.fn() },
+            subscriptions: { retrieve: vi.fn(), cancel: vi.fn() },
             billingPortal: { sessions: { create: vi.fn() } },
         },
         pricingMock: {
@@ -25,8 +26,9 @@ const { queriesMock, stripeMock, pricingMock, mirrorMock, envMock } =
                 .mockReturnValue({ priceId: "price_standard" }),
         },
         mirrorMock: { mirrorStripeSubscription: vi.fn() },
+        vatMock: { prepareCustomerTaxIdentity: vi.fn() },
         envMock: {
-            STRIPE_TAX_RATE_ID_EUR: undefined as string | undefined,
+            APP_URL: "https://app.example",
             STRIPE_PORTAL_CONFIGURATION_ID: undefined as string | undefined,
             BILLING_FOUNDING_MEMBER_CAPACITY: 100,
         },
@@ -37,12 +39,14 @@ vi.mock("@/db/schema", () => ({}));
 vi.mock("@/db/queries/billing", () => queriesMock);
 vi.mock("@/lib/hosted/billing/pricing", () => pricingMock);
 vi.mock("@/lib/hosted/billing/mirror", () => mirrorMock);
+vi.mock("@/lib/hosted/billing/vat-id", () => vatMock);
 vi.mock("@/lib/hosted/billing/stripe-client", () => ({
     getStripe: () => stripeMock,
 }));
 vi.mock("@/lib/env", () => ({ env: envMock }));
 
 import {
+    cancelSubscriptionImmediatelyForDeletion,
     createBillingPortalSession,
     getOrCreateStripeCustomer,
     startSubscriptionCheckout,
@@ -52,17 +56,14 @@ const baseInput = {
     userId: "user_1",
     userEmail: "u@example.com",
     userName: "U",
-    redirectUrl: "https://app.example/settings#billing",
     withdrawalWaiverAcceptedAt: new Date("2026-07-01T00:00:00.000Z"),
     idempotencyKey: "checkout:user_1:nonce",
 };
 
-/** Extract the subscription_data passed to checkout.sessions.create. */
-function subscriptionDataFromLastCall() {
+function checkoutParamsFromLastCall(): Record<string, unknown> {
     const [params] =
         stripeMock.checkout.sessions.create.mock.calls.at(-1) ?? [];
-    return (params as { subscription_data: Record<string, unknown> })
-        .subscription_data;
+    return params as Record<string, unknown>;
 }
 
 describe("getOrCreateStripeCustomer", () => {
@@ -121,6 +122,52 @@ describe("getOrCreateStripeCustomer", () => {
     });
 });
 
+describe("cancelSubscriptionImmediatelyForDeletion", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("does nothing when the user has no Stripe subscription", async () => {
+        queriesMock.getSubscriptionByUserId.mockResolvedValue(null);
+
+        await cancelSubscriptionImmediatelyForDeletion("user_1");
+
+        expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
+        expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    });
+
+    it("cancels a live subscription immediately", async () => {
+        queriesMock.getSubscriptionByUserId.mockResolvedValue({
+            id: "sub_1",
+            status: "active",
+        });
+        stripeMock.subscriptions.retrieve.mockResolvedValue({
+            id: "sub_1",
+            status: "active",
+        });
+        stripeMock.subscriptions.cancel.mockResolvedValue({
+            id: "sub_1",
+            status: "canceled",
+        });
+
+        await cancelSubscriptionImmediatelyForDeletion("user_1");
+
+        expect(stripeMock.subscriptions.cancel).toHaveBeenCalledWith("sub_1");
+    });
+
+    it("does not cancel an already terminal subscription", async () => {
+        queriesMock.getSubscriptionByUserId.mockResolvedValue({
+            id: "sub_1",
+            status: "canceled",
+        });
+
+        await cancelSubscriptionImmediatelyForDeletion("user_1");
+
+        expect(stripeMock.subscriptions.retrieve).not.toHaveBeenCalled();
+        expect(stripeMock.subscriptions.cancel).not.toHaveBeenCalled();
+    });
+});
+
 describe("createBillingPortalSession", () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -137,7 +184,6 @@ describe("createBillingPortalSession", () => {
         await expect(
             createBillingPortalSession({
                 userId: "user_1",
-                returnUrl: "https://app.example/settings#billing",
             }),
         ).rejects.toMatchObject({ code: "missing_portal_configuration" });
         expect(stripeMock.billingPortal.sessions.create).not.toHaveBeenCalled();
@@ -149,7 +195,6 @@ describe("createBillingPortalSession", () => {
         await expect(
             createBillingPortalSession({
                 userId: "user_1",
-                returnUrl: "https://app.example/settings#billing",
             }),
         ).resolves.toBe("https://billing.stripe.com/session/test");
         expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
@@ -160,10 +205,9 @@ describe("createBillingPortalSession", () => {
     });
 });
 
-describe("startSubscriptionCheckout tax rates", () => {
+describe("startSubscriptionCheckout", () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        envMock.STRIPE_TAX_RATE_ID_EUR = undefined;
         queriesMock.getSubscriptionByUserId.mockResolvedValue(null);
         queriesMock.getFoundingMemberAvailability.mockResolvedValue({
             capacity: 100,
@@ -378,8 +422,7 @@ describe("startSubscriptionCheckout tax rates", () => {
         expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
     });
 
-    it("applies the EUR VAT rate to EUR subscriptions when configured", async () => {
-        envMock.STRIPE_TAX_RATE_ID_EUR = "txr_vat";
+    it("uses server-owned return URLs and Stripe Automatic Tax", async () => {
         pricingMock.resolvePrice.mockReturnValue({
             currency: "eur",
             priceId: "price_eur",
@@ -387,36 +430,38 @@ describe("startSubscriptionCheckout tax rates", () => {
 
         await startSubscriptionCheckout({ ...baseInput, country: "DE" });
 
-        expect(subscriptionDataFromLastCall().default_tax_rates).toEqual([
-            "txr_vat",
-        ]);
-    });
-
-    it("never applies a tax rate to USD subscriptions", async () => {
-        envMock.STRIPE_TAX_RATE_ID_EUR = "txr_vat";
-        pricingMock.resolvePrice.mockReturnValue({
-            currency: "usd",
-            priceId: "price_usd",
+        expect(checkoutParamsFromLastCall()).toMatchObject({
+            success_url: "https://app.example/settings#billing",
+            cancel_url: "https://app.example/settings#billing",
+            automatic_tax: { enabled: true },
+            billing_address_collection: "required",
         });
-
-        await startSubscriptionCheckout({ ...baseInput, country: "US" });
-
-        expect(
-            subscriptionDataFromLastCall().default_tax_rates,
-        ).toBeUndefined();
+        const subscriptionData = checkoutParamsFromLastCall()
+            .subscription_data as Record<string, unknown>;
+        expect(subscriptionData.default_tax_rates).toBeUndefined();
     });
 
-    it("omits the tax rate for EUR when none is configured", async () => {
-        envMock.STRIPE_TAX_RATE_ID_EUR = undefined;
+    it("prepares a verified business identity before creating Checkout", async () => {
         pricingMock.resolvePrice.mockReturnValue({
             currency: "eur",
             priceId: "price_eur",
         });
+        const business = { name: "Example GmbH", vatId: "DE123456789" };
 
-        await startSubscriptionCheckout({ ...baseInput, country: "FR" });
+        await startSubscriptionCheckout({
+            ...baseInput,
+            country: "DE",
+            business,
+        });
 
+        expect(vatMock.prepareCustomerTaxIdentity).toHaveBeenCalledWith({
+            stripeCustomerId: "cus_1",
+            business,
+        });
         expect(
-            subscriptionDataFromLastCall().default_tax_rates,
-        ).toBeUndefined();
+            vatMock.prepareCustomerTaxIdentity.mock.invocationCallOrder[0],
+        ).toBeLessThan(
+            stripeMock.checkout.sessions.create.mock.invocationCallOrder[0],
+        );
     });
 });

@@ -13,7 +13,7 @@ interface ResetPasswordFormProps {
     /**
      * Reset token from the email link. better-auth's GET `/reset-password/:token`
      * endpoint validates the verification token, then redirects the browser to
-     * the `callbackURL` we passed via `forgetPassword({ redirectTo })` with
+     * the `callbackURL` passed via `requestPasswordReset({ redirectTo })` with
      * either `?token=VALID_TOKEN` (success) or `?error=INVALID_TOKEN` (expired
      * or already-consumed). See better-auth `requestPasswordReset` source.
      */

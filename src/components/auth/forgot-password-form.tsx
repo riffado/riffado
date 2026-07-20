@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { forgetPassword } from "@/lib/auth-client";
+import { requestPasswordReset } from "@/lib/auth-client";
 
 interface ForgotPasswordFormProps {
     /**
@@ -37,7 +37,7 @@ export function ForgotPasswordForm({
             // We intentionally don't surface the better-auth response: we
             // always show the same success message so this endpoint can't
             // be used to enumerate which emails have accounts.
-            const result = await forgetPassword({
+            const result = await requestPasswordReset({
                 email,
                 redirectTo: "/reset-password",
             });

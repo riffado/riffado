@@ -161,6 +161,7 @@ describe("processTransitionEmails", () => {
                 amountCurrency: "USD",
                 foundingOfferAvailable: true,
                 foundingCapacity: 100,
+                selfHostUrl: "https://github.com/riffado/riffado#quick-start",
             }),
         );
         expect(emailMock.sendTransitionReminderEmail).not.toHaveBeenCalled();

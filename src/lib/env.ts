@@ -347,18 +347,6 @@ const baseEnvSchema = z.object({
         ),
 
     /**
-     * Stripe Tax Rate id (txr_...) applied to EUR (EU/EEA) subscriptions so
-     * invoices show the VAT line. Should be an inclusive rate matching the
-     * EUR Price's inclusive tax_behavior (e.g. Polish 23% under the home-
-     * country / no-OSS model). Unset means no VAT line on invoices. Never
-     * applied to USD sales (non-EU export, outside EU VAT scope).
-     */
-    STRIPE_TAX_RATE_ID_EUR: z
-        .string()
-        .optional()
-        .transform((val) => (val === "" ? undefined : val)),
-
-    /**
      * Stripe Customer Portal configuration id (bpc_...). Optional -- when
      * unset the portal falls back to the account's default configuration.
      * Set it to pin the exact features (update card, invoices, cancel at
@@ -370,11 +358,10 @@ const baseEnvSchema = z.object({
         .transform((val) => (val === "" ? undefined : val)),
 
     /**
-     * Request header carrying the buyer's ISO-3166-1 alpha-2 country, used
-     * to pick checkout currency (EU/EEA -> EUR, else default). Set this to
-     * whatever the hosted load balancer / CDN injects. Checked before the
-     * built-in `x-vercel-ip-country` / `cf-ipcountry` fallbacks. Header name
-     * is matched case-insensitively; unset just uses those fallbacks.
+     * Trusted edge header carrying the buyer's ISO-3166-1 alpha-2 country,
+     * used only to pick presentment currency (EU/EEA -> EUR, else default).
+     * The edge must strip client-supplied values before injecting it. When
+     * unset, checkout uses BILLING_DEFAULT_CURRENCY.
      */
     GEO_COUNTRY_HEADER: z
         .string()
@@ -726,7 +713,6 @@ function validateEnv(): Env {
             STRIPE_PRICE_ID_EUR_ANNUAL: process.env.STRIPE_PRICE_ID_EUR_ANNUAL,
             STRIPE_LEGACY_PRO_PRICE_IDS:
                 process.env.STRIPE_LEGACY_PRO_PRICE_IDS,
-            STRIPE_TAX_RATE_ID_EUR: process.env.STRIPE_TAX_RATE_ID_EUR,
             STRIPE_PORTAL_CONFIGURATION_ID:
                 process.env.STRIPE_PORTAL_CONFIGURATION_ID,
             BILLING_ENABLED: process.env.BILLING_ENABLED,

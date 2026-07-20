@@ -14,6 +14,7 @@ import { useConfirm } from "@/components/confirm-dialog";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatBytes } from "@/lib/format-bytes";
 import { cn } from "@/lib/utils";
@@ -214,6 +215,9 @@ export function BillingSection() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [waiver, setWaiver] = useState(false);
+    const [buyingAsBusiness, setBuyingAsBusiness] = useState(false);
+    const [businessName, setBusinessName] = useState("");
+    const [businessVatId, setBusinessVatId] = useState("");
     const [interval, setInterval] = useState<BillingInterval>("month");
     const [submitting, setSubmitting] = useState(false);
     const [portalLoading, setPortalLoading] = useState(false);
@@ -249,8 +253,15 @@ export function BillingSection() {
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({
                     withdrawalWaiver: true,
-                    redirectUrl: `${window.location.origin}/settings#billing`,
                     interval: checkoutInterval,
+                    ...(buyingAsBusiness
+                        ? {
+                              business: {
+                                  name: businessName.trim(),
+                                  vatId: businessVatId.trim(),
+                              },
+                          }
+                        : {}),
                 }),
             });
             if (!res.ok) {
@@ -272,7 +283,7 @@ export function BillingSection() {
             }
             throw new Error("Unexpected checkout response");
         },
-        [load],
+        [buyingAsBusiness, businessName, businessVatId, load],
     );
 
     const handleSubscribe = useCallback(
@@ -281,6 +292,13 @@ export function BillingSection() {
                 toast.error(
                     "Please confirm the consumer-law waiver to continue.",
                 );
+                return;
+            }
+            if (
+                buyingAsBusiness &&
+                (!businessName.trim() || !businessVatId.trim())
+            ) {
+                toast.error("Enter your business name and EU VAT ID.");
                 return;
             }
             setSubmitting(true);
@@ -294,7 +312,7 @@ export function BillingSection() {
                 setSubmitting(false);
             }
         },
-        [waiver, startCheckout],
+        [waiver, buyingAsBusiness, businessName, businessVatId, startCheckout],
     );
 
     const handleResume = useCallback(async () => {
@@ -323,10 +341,6 @@ export function BillingSection() {
         try {
             const res = await fetch("/api/billing/portal", {
                 method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                    returnUrl: `${window.location.origin}/settings#billing`,
-                }),
             });
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
@@ -348,7 +362,7 @@ export function BillingSection() {
         void confirm({
             title: "Delete your account now?",
             description:
-                "All your recordings, transcripts, and summaries will be permanently removed. This cannot be undone. If you want a copy, export your data first.",
+                "Your subscription will end immediately without a prorated refund. All recordings, transcripts, and summaries will then be permanently removed. This cannot be undone. Export your data first if you want a copy.",
             confirmLabel: "Delete everything",
             pendingLabel: "Deleting…",
             destructive: true,
@@ -729,6 +743,69 @@ export function BillingSection() {
                                 </li>
                                 <li>Unlimited devices, background sync</li>
                             </ul>
+                            <div className="space-y-3 rounded-md border p-3">
+                                <div className="flex items-start gap-2">
+                                    <input
+                                        id="business-purchase"
+                                        type="checkbox"
+                                        checked={buyingAsBusiness}
+                                        onChange={(event) =>
+                                            setBuyingAsBusiness(
+                                                event.target.checked,
+                                            )
+                                        }
+                                        className="mt-0.5 size-4 rounded border-input"
+                                    />
+                                    <Label
+                                        htmlFor="business-purchase"
+                                        className="text-sm"
+                                    >
+                                        Buying as an EU business
+                                    </Label>
+                                </div>
+                                {buyingAsBusiness && (
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="business-name">
+                                                Legal business name
+                                            </Label>
+                                            <Input
+                                                id="business-name"
+                                                value={businessName}
+                                                onChange={(event) =>
+                                                    setBusinessName(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                autoComplete="organization"
+                                                maxLength={200}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="business-vat-id">
+                                                EU VAT ID
+                                            </Label>
+                                            <Input
+                                                id="business-vat-id"
+                                                value={businessVatId}
+                                                onChange={(event) =>
+                                                    setBusinessVatId(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                autoComplete="off"
+                                                placeholder="DE123456789"
+                                                maxLength={32}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground sm:col-span-2">
+                                            Stripe verifies the VAT ID before
+                                            checkout. Eligible cross-border EU
+                                            purchases use reverse charge.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                             <div className="flex items-start gap-2">
                                 <input
                                     id="waiver"
@@ -838,6 +915,27 @@ export function BillingSection() {
                         </div>
                     </SettingsCard>
                 )}
+
+                <SettingsCard title="Delete account">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="max-w-xl">
+                            <p className="text-sm text-muted-foreground">
+                                Export your data first. Deletion ends any active
+                                subscription immediately without a prorated
+                                refund, then permanently removes your account
+                                and its data.
+                            </p>
+                        </div>
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleDeleteNow}
+                            disabled={submitting}
+                        >
+                            Delete account
+                        </Button>
+                    </div>
+                </SettingsCard>
             </div>
         </div>
     );

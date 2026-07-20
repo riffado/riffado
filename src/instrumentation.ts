@@ -37,7 +37,7 @@ export async function register() {
     // at startup so a self-host operator knows credential-stuffing protection
     // on those routes is inactive until they front the app with a proxy that
     // sets X-Forwarded-For (or cf-connecting-ip / x-real-ip) and set
-    // RATE_LIMIT_TRUST_PROXY_HEADERS=true. (/forget-password keeps its
+    // RATE_LIMIT_TRUST_PROXY_HEADERS=true. (/request-password-reset keeps its
     // IP-independent per-email cap regardless.)
     if (!env.IS_HOSTED && env.RATE_LIMIT_TRUST_PROXY_HEADERS !== true) {
         console.warn(

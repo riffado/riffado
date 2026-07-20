@@ -9,10 +9,7 @@ import {
 } from "@/lib/hosted/billing/checkout";
 import { isStripeConfigured } from "@/lib/hosted/billing/stripe-client";
 
-const bodySchema = z.object({
-    /** Where Stripe returns the user after they close the portal. */
-    returnUrl: z.string().url(),
-});
+const bodySchema = z.object({}).strict();
 
 /**
  * Create a Stripe Billing Portal session and return its URL. The user
@@ -32,7 +29,7 @@ export const POST = apiHandler(async (request) => {
     }
 
     const session = await requireApiSession(request);
-    const raw = await request.json().catch(() => null);
+    const raw = await request.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
         throw new AppError(
@@ -46,7 +43,6 @@ export const POST = apiHandler(async (request) => {
     try {
         const url = await createBillingPortalSession({
             userId: session.user.id,
-            returnUrl: parsed.data.returnUrl,
         });
         return NextResponse.json({ url });
     } catch (error) {

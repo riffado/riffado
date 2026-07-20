@@ -6,6 +6,14 @@ allowBuilds:
   protobufjs: true
   sharp: true
 
+overrides:
+  '@protobufjs/utf8': 1.1.1
+  defu: 6.1.5
+  js-yaml: 4.3.0
+  postcss: 8.5.10
+  rollup: 4.59.0
+  vite: 7.3.5
+
 minimumReleaseAgeExclude:
   - '@aws-sdk/checksums@3.1000.16'
   - '@aws-sdk/client-s3@3.1083.0'
