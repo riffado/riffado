@@ -249,9 +249,15 @@ export async function sendWelcomeHostedProEmail(input: {
     dashboardUrl: string;
     settingsUrl: string;
     foundingMember: boolean;
+    /** 1-indexed founding-member rank. Omit/null when not resolvable. */
+    foundingRank?: number | null;
+    foundingCapacity?: number;
     amountValue: string;
     amountCurrency: string;
     interval: "month" | "year";
+    /** Recordings synced before this upgrade, for personalized copy. */
+    recordingCount?: number;
+    totalDurationMs?: number;
 }): Promise<boolean> {
     return sendClaimedEmail(
         { userId: input.userId, kind: "welcome_hosted_pro" },
@@ -261,9 +267,13 @@ export async function sendWelcomeHostedProEmail(input: {
                     dashboardUrl: input.dashboardUrl,
                     settingsUrl: input.settingsUrl,
                     foundingMember: input.foundingMember,
+                    foundingRank: input.foundingRank ?? null,
+                    foundingCapacity: input.foundingCapacity ?? 0,
                     amountValue: input.amountValue,
                     amountCurrency: input.amountCurrency,
                     interval: input.interval,
+                    recordingCount: input.recordingCount ?? 0,
+                    totalDurationMs: input.totalDurationMs ?? 0,
                 }),
                 { pretty: false },
             );
@@ -438,8 +448,8 @@ export async function sendGraceStartedEmail(input: {
                 to: input.email,
                 subject:
                     input.gracePath === "trial"
-                        ? `Your Riffado trial ended — ${input.graceDays} days to export`
-                        : `Your Riffado subscription ended — ${input.graceDays} days to export`,
+                        ? `Your Riffado trial ended: ${input.graceDays} days to export`
+                        : `Your Riffado subscription ended: ${input.graceDays} days to export`,
                 html,
             };
         },
@@ -529,7 +539,7 @@ export async function sendGraceLastDayEmail(input: {
             return {
                 to: input.email,
                 subject:
-                    "Riffado: last chance to export — account deleted in 24h",
+                    "Riffado: last chance to export (account deleted in 24h)",
                 html,
             };
         },

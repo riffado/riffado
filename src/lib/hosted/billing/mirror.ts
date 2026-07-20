@@ -6,6 +6,8 @@ import {
     consumeFoundingMemberReservation,
     forfeitFoundingMember,
     getBillingCustomerByStripeId,
+    getFoundingMemberOrdinal,
+    getUserActivitySummary,
     markEverPaid,
     releaseFoundingMemberReservation,
     scheduleAccountDeletion,
@@ -363,6 +365,10 @@ async function sendActivationWelcome(
         .where(eq(users.id, userId))
         .limit(1);
     if (!row?.email) return;
+    const [foundingRank, activity] = await Promise.all([
+        row.foundingMember ? getFoundingMemberOrdinal(userId) : null,
+        getUserActivitySummary(userId),
+    ]);
     try {
         await sendWelcomeHostedProEmail({
             userId,
@@ -370,9 +376,13 @@ async function sendActivationWelcome(
             dashboardUrl: `${base}/dashboard`,
             settingsUrl: `${base}/settings#billing`,
             foundingMember: row.foundingMember,
+            foundingRank,
+            foundingCapacity: env.BILLING_FOUNDING_MEMBER_CAPACITY,
             amountValue: plan.amountValue,
             amountCurrency: plan.amountCurrency,
             interval: plan.interval,
+            recordingCount: activity.recordingCount,
+            totalDurationMs: activity.totalDurationMs,
         });
     } catch (error) {
         console.error(

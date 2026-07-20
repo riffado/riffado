@@ -1,6 +1,7 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
 import { formatEmailDate } from "./format-date";
+import { formatEmailPrice } from "./format-price";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -50,15 +51,16 @@ export function TransitionStartEmail({
             {foundingOfferAvailable ? (
                 <Text style={emailStyles.text}>
                     The first {foundingCapacity} paid monthly members can
-                    subscribe for the founding price of {amountValue}{" "}
-                    {amountCurrency}/month. That price stays locked for as long
-                    as the subscription remains active. Founding spots are
-                    available on a first-paid, first-served basis.
+                    subscribe for the founding price of{" "}
+                    {formatEmailPrice(amountValue, amountCurrency)}. That price
+                    stays locked for as long as the subscription remains active.
+                    Founding spots are available on a first-paid, first-served
+                    basis.
                 </Text>
             ) : (
                 <Text style={emailStyles.text}>
-                    Monthly Hosted Pro is available for {amountValue}{" "}
-                    {amountCurrency}/month.
+                    Monthly Hosted Pro is available for{" "}
+                    {formatEmailPrice(amountValue, amountCurrency)}.
                 </Text>
             )}
             <Text style={emailStyles.text}>
@@ -68,7 +70,9 @@ export function TransitionStartEmail({
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
-                    See billing options
+                    {foundingOfferAvailable
+                        ? "Claim founding price"
+                        : "Choose a plan"}
                 </Button>
             </Section>
             <Text style={emailStyles.text}>
@@ -90,6 +94,12 @@ export function TransitionStartEmail({
                 </a>{" "}
                 anytime. Your recordings, transcripts, and summaries are yours
                 either way.
+            </Text>
+            <Text style={emailStyles.text}>
+                Questions, or something looks off? Reply to this email. It comes
+                straight to me.
+                <br />
+                &mdash; Kacper, building Riffado
             </Text>
         </EmailLayout>
     );

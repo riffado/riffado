@@ -24,7 +24,7 @@ describe("TransitionStartEmail", () => {
         );
         expect(text).toContain("first 100 paid monthly members");
         expect(text).toContain("first-paid, first-served");
-        expect(text).toContain("See billing options");
+        expect(text).toContain("Claim founding price");
         expect(text).toContain("your Hosted account becomes read-only");
         expect(text).toContain("Nothing will be deleted");
         expect(text).not.toContain("Add a card before then");
@@ -42,7 +42,8 @@ describe("TransitionStartEmail", () => {
             }),
             { plainText: true },
         );
-        expect(text).toContain("Monthly Hosted Pro is available for 9.00");
+        expect(text).toContain("Monthly Hosted Pro is available for $9");
+        expect(text).toContain("Choose a plan");
         expect(text).not.toContain("first 100 paid monthly members");
     });
 });

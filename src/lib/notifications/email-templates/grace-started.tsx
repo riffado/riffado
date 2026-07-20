@@ -56,6 +56,12 @@ export function GraceStartedEmail({
                 </a>
                 . Everything resumes instantly, and nothing is lost.
             </Text>
+            <Text style={emailStyles.text}>
+                Questions, or something looks off? Reply to this email. I read
+                every one.
+                <br />
+                &mdash; Kacper, Riffado
+            </Text>
         </EmailLayout>
     );
 }

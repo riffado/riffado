@@ -1,6 +1,7 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
 import { formatEmailDate } from "./format-date";
+import { formatEmailPrice } from "./format-price";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -55,19 +56,22 @@ export function TransitionReminderEmail({
             {foundingOfferAvailable ? (
                 <Text style={emailStyles.text}>
                     Founding monthly spots are still available to the first{" "}
-                    {foundingCapacity} paid monthly members at {amountValue}{" "}
-                    {amountCurrency}/month. Once claimed, that price stays
-                    locked while the subscription remains active.
+                    {foundingCapacity} paid monthly members at{" "}
+                    {formatEmailPrice(amountValue, amountCurrency)}. Once
+                    claimed, that price stays locked while the subscription
+                    remains active.
                 </Text>
             ) : (
                 <Text style={emailStyles.text}>
-                    Monthly Hosted Pro is currently {amountValue}{" "}
-                    {amountCurrency}/month.
+                    Monthly Hosted Pro is currently{" "}
+                    {formatEmailPrice(amountValue, amountCurrency)}.
                 </Text>
             )}
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
-                    Subscribe
+                    {foundingOfferAvailable
+                        ? `Lock in ${formatEmailPrice(amountValue, amountCurrency)}`
+                        : "Subscribe"}
                 </Button>
             </Section>
             <Text style={emailStyles.text}>

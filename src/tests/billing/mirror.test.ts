@@ -14,6 +14,8 @@ const {
     queriesMock: {
         consumeFoundingMemberReservation: vi.fn(),
         getBillingCustomerByStripeId: vi.fn(),
+        getFoundingMemberOrdinal: vi.fn(),
+        getUserActivitySummary: vi.fn(),
         upsertSubscription: vi.fn(),
         setUserPlan: vi.fn(),
         markEverPaid: vi.fn(),
@@ -142,6 +144,11 @@ describe("mirrorStripeSubscription", () => {
         queriesMock.scheduleAccountDeletion.mockResolvedValue(
             new Date("2026-08-01T00:00:00Z"),
         );
+        queriesMock.getFoundingMemberOrdinal.mockResolvedValue(null);
+        queriesMock.getUserActivitySummary.mockResolvedValue({
+            recordingCount: 0,
+            totalDurationMs: 0,
+        });
     });
 
     it("does not mark everPaidAt/founding-member/welcome-email for a trialing subscription", async () => {

@@ -968,6 +968,61 @@ export async function getUserBillingState(
     return (rows[0] as UserBillingState | undefined) ?? null;
 }
 
+export interface UserActivitySummary {
+    recordingCount: number;
+    totalDurationMs: number;
+}
+
+/**
+ * Live (non-tombstoned) recording count + total duration for a user.
+ * Used to personalize lifecycle email copy (e.g. the welcome email)
+ * with what the user has actually done, not generic congratulations.
+ */
+export async function getUserActivitySummary(
+    userId: string,
+): Promise<UserActivitySummary> {
+    const rows = await db
+        .select({
+            recordingCount: sql<number>`count(*)::int`,
+            totalDurationMs: sql<number>`coalesce(sum(${recordings.duration}), 0)::bigint`,
+        })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, userId),
+                sql`${recordings.deletedAt} is null`,
+            ),
+        );
+    return {
+        recordingCount: Number(rows[0]?.recordingCount ?? 0),
+        totalDurationMs: Number(rows[0]?.totalDurationMs ?? 0),
+    };
+}
+
+/**
+ * 1-indexed rank among all claimed founding members, ordered by claim
+ * time (earliest = #1). Returns null if the user never claimed
+ * founding pricing. Used to show a concrete "you're founding member
+ * #N" instead of only the abstract cohort size.
+ */
+export async function getFoundingMemberOrdinal(
+    userId: string,
+): Promise<number | null> {
+    const result = await db.execute<{ rank: number }>(sql`
+        select rank from (
+            select id, row_number() over (order by founding_member_claimed_at asc) as rank
+            from ${users}
+            where founding_member_claimed_at is not null
+        ) ranked
+        where ranked.id = ${userId}
+    `);
+    const rows = Array.isArray(result)
+        ? result
+        : ((result as { rows: { rank: number }[] }).rows ?? []);
+    const rank = rows[0]?.rank;
+    return rank !== undefined ? Number(rank) : null;
+}
+
 /** Existence check for the `users` row referenced by FKs in billing tables. */
 export async function userExistsById(userId: string): Promise<boolean> {
     const rows = await db
