@@ -19,4 +19,11 @@ describe("formatEmailDate", () => {
         const d = new Date("2026-07-04T12:00:00Z");
         expect(formatEmailDate(d, { month: "short" })).toBe("Jul 4, 2026");
     });
+
+    it("includes a pinned UTC time for the last-day deletion notice", () => {
+        const d = new Date("2026-07-04T14:30:00Z");
+        expect(formatEmailDate(d, { month: "short", includeTime: true })).toBe(
+            "Jul 4, 2026, 2:30 PM UTC",
+        );
+    });
 });

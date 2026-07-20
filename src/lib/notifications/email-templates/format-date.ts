@@ -10,12 +10,20 @@
  */
 export function formatEmailDate(
     d: Date,
-    options?: { month?: "long" | "short" },
+    options?: { month?: "long" | "short"; includeTime?: boolean },
 ): string {
-    return d.toLocaleDateString("en-US", {
+    const datePart = d.toLocaleDateString("en-US", {
         year: "numeric",
         month: options?.month ?? "long",
         day: "numeric",
         timeZone: "UTC",
     });
+    if (!options?.includeTime) return datePart;
+    const timePart = d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: "UTC",
+        timeZoneName: "short",
+    });
+    return `${datePart}, ${timePart}`;
 }

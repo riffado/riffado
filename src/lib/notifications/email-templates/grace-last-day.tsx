@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailDate } from "./format-date";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -21,10 +22,13 @@ export function GraceLastDayEmail({
         >
             <Heading style={emailStyles.h1}>Last chance to export.</Heading>
             <Text style={emailStyles.text}>
-                Your Riffado account is scheduled for permanent deletion at{" "}
-                {deletionAt.toUTCString()}. That's under 24 hours from now.
-                Every recording, transcript, and summary will be removed and
-                cannot be recovered.
+                Your Riffado account is scheduled for permanent deletion on{" "}
+                {formatEmailDate(deletionAt, {
+                    month: "short",
+                    includeTime: true,
+                })}
+                . That's under 24 hours from now. Every recording, transcript,
+                and summary will be removed and cannot be recovered.
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={exportUrl}>

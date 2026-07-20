@@ -1,5 +1,6 @@
 import { Button, Heading, Section, Text } from "@react-email/components";
 import { EmailLayout } from "./_layout";
+import { formatEmailPrice } from "./format-price";
 import { emailStyles } from "./styles";
 
 interface Props {
@@ -41,7 +42,7 @@ export function TransitionEndedEmail({
             <Text style={emailStyles.text}>
                 Nothing will be deleted. Pick this back up whenever you're
                 ready. Subscribe and everything resumes instantly at{" "}
-                {amountValue} {amountCurrency}/month.
+                {formatEmailPrice(amountValue, amountCurrency)}.
             </Text>
             <Section style={emailStyles.buttonSection}>
                 <Button style={emailStyles.button} href={billingUrl}>
