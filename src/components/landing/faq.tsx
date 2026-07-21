@@ -8,8 +8,10 @@ import {
 import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
+    type BillingCurrency,
     billingPriceCatalog,
     type PublicPrice,
+    pickDisplayPrice,
     trimDisplayAmount,
 } from "@/lib/hosted/billing/pricing";
 
@@ -69,39 +71,26 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
     return amount ? `${symbol}${amount}${suffix}` : "";
 }
 
-function hostedCostAnswer(availability: FoundingMemberAvailabilityRow): string {
+function hostedCostAnswer(
+    availability: FoundingMemberAvailabilityRow,
+    currency: BillingCurrency,
+): string {
     const catalog = billingPriceCatalog(availability);
-    const foundingParts = [
-        catalog.monthly.founding.usd,
-        catalog.monthly.founding.eur,
-    ]
-        .flatMap((price) =>
-            price ? [formatCatalogPrice(price, "/month founding")] : [],
-        )
-        .filter(Boolean);
-    const standardParts = [
-        catalog.monthly.standard.usd,
-        catalog.monthly.standard.eur,
-    ]
-        .flatMap((price) =>
-            price ? [formatCatalogPrice(price, "/month standard")] : [],
-        )
-        .filter(Boolean);
-    const monthlyParts =
-        availability.remaining > 0 && foundingParts.length > 0
-            ? foundingParts
-            : standardParts;
-    const annualParts = [catalog.annual.usd, catalog.annual.eur]
-        .flatMap((price) => (price ? [formatCatalogPrice(price, "/year")] : []))
-        .filter(Boolean);
-    const monthlySentence =
-        monthlyParts.length > 0
-            ? `Hosted Pro costs ${monthlyParts.join(" or ")}.`
-            : "Hosted billing is not configured on this instance.";
-    const annualSentence =
-        annualParts.length > 0
-            ? ` Prefer to pay yearly? Annual billing is available at ${annualParts.join(" or ")}.`
-            : "";
+    const founding = pickDisplayPrice(catalog.monthly.founding, currency);
+    const standard = pickDisplayPrice(catalog.monthly.standard, currency);
+    const monthly =
+        availability.remaining > 0 && founding ? founding : standard;
+    const monthlySuffix =
+        availability.remaining > 0 && founding
+            ? "/month founding"
+            : "/month standard";
+    const annual = pickDisplayPrice(catalog.annual, currency);
+    const monthlySentence = monthly
+        ? `Hosted Pro costs ${formatCatalogPrice(monthly, monthlySuffix)}.`
+        : "Hosted billing is not configured on this instance.";
+    const annualSentence = annual
+        ? ` Prefer to pay yearly? Annual billing is available at ${formatCatalogPrice(annual, "/year")}.`
+        : "";
 
     return `${monthlySentence}${annualSentence} Stripe Checkout shows the final total and applicable tax before you pay. You start with a ${env.BILLING_TRIAL_DAYS}-day free trial, no card required, and the full Pro experience: 50 GB encrypted storage, ${INCLUDED_TRANSCRIPTION_HOURS} hours of cloud transcription per month, unlimited devices, background sync, email support. Off-site encrypted backups are coming soon. If you decide it's not for you, you walk away; if you want to keep it, you add a card. If you want Riffado free, self-host it: same code, your machine, AGPL-3.0, free forever.`;
 }
@@ -238,10 +227,12 @@ function faqJsonLd(groups: FaqGroup[]) {
 
 export function FAQ({
     availability,
+    currency,
 }: {
     availability: FoundingMemberAvailabilityRow;
+    currency: BillingCurrency;
 }) {
-    const costAnswer = hostedCostAnswer(availability);
+    const costAnswer = hostedCostAnswer(availability, currency);
     const groups = GROUPS.map((group, groupIndex) =>
         groupIndex === 0
             ? {

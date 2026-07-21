@@ -3,8 +3,10 @@ import Link from "next/link";
 import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
+    type BillingCurrency,
     billingPriceCatalog,
     type PublicPrice,
+    pickDisplayPrice,
     trimDisplayAmount,
 } from "@/lib/hosted/billing/pricing";
 
@@ -17,21 +19,17 @@ function formatMonthlyPrice(price: PublicPrice): string | null {
 /** Public launch notice. It disappears automatically when founding capacity is gone. */
 export function HostedProAnnouncementBar({
     availability,
+    currency,
 }: {
     availability: FoundingMemberAvailabilityRow;
+    currency: BillingCurrency;
 }) {
     if (!env.BILLING_ENABLED || availability.remaining <= 0) return null;
 
     const catalog = billingPriceCatalog(availability);
-    const prices = [
-        catalog.monthly.founding.usd,
-        catalog.monthly.founding.eur,
-    ].flatMap((price) => {
-        if (!price) return [];
-        const formatted = formatMonthlyPrice(price);
-        return formatted ? [formatted] : [];
-    });
-    if (prices.length === 0) return null;
+    const price = pickDisplayPrice(catalog.monthly.founding, currency);
+    const formattedPrice = price ? formatMonthlyPrice(price) : null;
+    if (!formattedPrice) return null;
 
     return (
         <section
@@ -43,7 +41,7 @@ export function HostedProAnnouncementBar({
                     <strong>Hosted Pro is live.</strong>{" "}
                     {availability.remaining} founding monthly spot
                     {availability.remaining === 1 ? "" : "s"} left at{" "}
-                    {prices.join(" or ")}.
+                    {formattedPrice}.
                 </span>
                 <Link
                     href="#pricing"

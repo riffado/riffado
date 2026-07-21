@@ -1,7 +1,9 @@
 import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
+    type BillingCurrency,
     billingPriceCatalog,
+    pickDisplayPrice,
     trimDisplayAmount,
 } from "@/lib/hosted/billing/pricing";
 
@@ -52,14 +54,14 @@ const HOSTED_PRO_INCLUDED_HOURS = env.BILLING_PRO_INCLUDED_SECONDS / 3600;
 
 export function TheMath({
     availability,
+    currency,
 }: {
     availability: FoundingMemberAvailabilityRow;
+    currency: BillingCurrency;
 }) {
     const catalog = billingPriceCatalog(availability);
-    const foundingPrice =
-        catalog.monthly.founding.usd ?? catalog.monthly.founding.eur;
-    const standardPrice =
-        catalog.monthly.standard.usd ?? catalog.monthly.standard.eur;
+    const foundingPrice = pickDisplayPrice(catalog.monthly.founding, currency);
+    const standardPrice = pickDisplayPrice(catalog.monthly.standard, currency);
     const foundingOfferActive =
         availability.remaining > 0 && foundingPrice !== null;
     const monthlyPrice = foundingOfferActive ? foundingPrice : standardPrice;

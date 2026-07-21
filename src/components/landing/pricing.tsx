@@ -3,8 +3,10 @@ import Link from "next/link";
 import { MetalButton } from "@/components/metal-button";
 import type { FoundingMemberAvailabilityRow } from "@/db/queries/billing";
 import {
+    type BillingCurrency,
     billingPriceCatalog,
     type PublicPrice,
+    pickDisplayPrice,
     trimDisplayAmount,
 } from "@/lib/hosted/billing/pricing";
 
@@ -79,59 +81,46 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
     return amount ? `${symbol}${amount}${suffix}` : "";
 }
 
-function buildTiers(availability: FoundingMemberAvailabilityRow): {
+function buildTiers(
+    availability: FoundingMemberAvailabilityRow,
+    currency: BillingCurrency,
+): {
     tiers: Tier[];
     headlinePrice: string | null;
 } {
     const catalog = billingPriceCatalog(availability);
     const primaryMonthly =
         availability.remaining > 0
-            ? (catalog.monthly.founding.usd ?? catalog.monthly.founding.eur)
-            : (catalog.monthly.standard.usd ?? catalog.monthly.standard.eur);
+            ? pickDisplayPrice(catalog.monthly.founding, currency)
+            : pickDisplayPrice(catalog.monthly.standard, currency);
     const headlinePrice = primaryMonthly
         ? formatCatalogPrice(primaryMonthly, "")
         : null;
-    const comparisonMonthly = primaryMonthly
-        ? (catalog.monthly.standard[primaryMonthly.currency] ??
-          catalog.monthly.standard.usd ??
-          catalog.monthly.standard.eur)
-        : null;
+    const comparisonMonthly = pickDisplayPrice(
+        catalog.monthly.standard,
+        primaryMonthly?.currency ?? currency,
+    );
     const compareAtPrice =
         availability.remaining > 0 && comparisonMonthly
             ? formatCatalogPrice(comparisonMonthly, "")
             : null;
-    const foundingMonthlyParts = [
-        catalog.monthly.founding.usd,
-        catalog.monthly.founding.eur,
-    ]
-        .flatMap((price) => (price ? [formatCatalogPrice(price, "/mo")] : []))
-        .filter(Boolean);
-    const standardMonthlyParts = [
-        catalog.monthly.standard.usd,
-        catalog.monthly.standard.eur,
-    ]
-        .flatMap((price) => (price ? [formatCatalogPrice(price, "/mo")] : []))
-        .filter(Boolean);
-    const annualParts = [catalog.annual.usd, catalog.annual.eur]
-        .flatMap((price) =>
-            price
-                ? [
-                      `${formatCatalogPrice(price, "/year")}${
-                          price.currency === "eur" ? " in the EU" : ""
-                      }`,
-                  ]
-                : [],
-        )
-        .filter(Boolean);
-    const annualNote =
-        annualParts.length > 0
-            ? ` Prefer to pay yearly? Annual billing is available at ${annualParts.join(" or ")}.`
-            : "";
+    const foundingMonthly = pickDisplayPrice(
+        catalog.monthly.founding,
+        currency,
+    );
+    const standardMonthly = pickDisplayPrice(
+        catalog.monthly.standard,
+        currency,
+    );
+    const annual = pickDisplayPrice(catalog.annual, currency);
+    const annualNote = annual
+        ? ` Prefer to pay yearly? Annual billing is available at ${formatCatalogPrice(annual, "/year")}.`
+        : "";
     const foundingNote =
-        foundingMonthlyParts.length > 0 && availability.remaining > 0
-            ? ` ${availability.remaining} founding monthly spot${availability.remaining === 1 ? "" : "s"} left. Subscribe monthly to claim ${foundingMonthlyParts.join(" or ")} until the first ${availability.capacity} paid monthly members are gone.`
-            : standardMonthlyParts.length > 0
-              ? ` The founding monthly spots are gone. New monthly subscriptions are ${standardMonthlyParts.join(" or ")}.`
+        foundingMonthly && availability.remaining > 0
+            ? ` ${availability.remaining} founding monthly spot${availability.remaining === 1 ? "" : "s"} left. Subscribe monthly to claim ${formatCatalogPrice(foundingMonthly, "/mo")} until the first ${availability.capacity} paid monthly members are gone.`
+            : standardMonthly
+              ? ` The founding monthly spots are gone. New monthly subscriptions are ${formatCatalogPrice(standardMonthly, "/mo")}.`
               : "";
 
     return {
@@ -180,10 +169,12 @@ function buildTiers(availability: FoundingMemberAvailabilityRow): {
 
 export function Pricing({
     availability,
+    currency,
 }: {
     availability: FoundingMemberAvailabilityRow;
+    currency: BillingCurrency;
 }) {
-    const { tiers, headlinePrice } = buildTiers(availability);
+    const { tiers, headlinePrice } = buildTiers(availability, currency);
     return (
         <section id="pricing" className="py-24 md:py-32">
             <div className="container mx-auto px-4">

@@ -9,7 +9,11 @@ import { requireApiSession } from "@/lib/auth-server";
 import { getEntitlements } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
-import { billingPriceCatalog } from "@/lib/hosted/billing/pricing";
+import {
+    billingPriceCatalog,
+    resolveCurrency,
+    resolveRequestCountry,
+} from "@/lib/hosted/billing/pricing";
 
 /**
  * Read the current user's billing snapshot: effective entitlements,
@@ -58,9 +62,15 @@ export const GET = apiHandler(async (request) => {
         env.BILLING_FOUNDING_MEMBER_CAPACITY,
     );
     const priceCatalog = billingPriceCatalog(foundingAvailability);
+    // Resolved the same way checkout resolves it, so the pre-purchase price
+    // estimate this user sees always matches what Stripe will actually
+    // charge them -- never show a currency the settings UI picked on its own.
+    const country = resolveRequestCountry((name) => request.headers.get(name));
+    const resolvedCurrency = resolveCurrency(country, "month", "founding");
 
     return NextResponse.json({
         enabled: true,
+        resolvedCurrency,
         plan: state.plan ?? "hosted_free",
         planTransitionUntil: state.planTransitionUntil?.toISOString() ?? null,
         foundingMember: state.foundingMember,

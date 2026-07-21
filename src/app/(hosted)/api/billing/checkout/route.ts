@@ -9,6 +9,7 @@ import {
     reactivateSubscriptionIfStillInPeriod,
     startSubscriptionCheckout,
 } from "@/lib/hosted/billing/checkout";
+import { resolveRequestCountry } from "@/lib/hosted/billing/pricing";
 import { isStripeConfigured } from "@/lib/hosted/billing/stripe-client";
 import { VatIdVerificationError } from "@/lib/hosted/billing/vat-id";
 
@@ -62,9 +63,7 @@ export const POST = apiHandler(async (request) => {
         );
     }
 
-    const country = env.GEO_COUNTRY_HEADER
-        ? request.headers.get(env.GEO_COUNTRY_HEADER)
-        : null;
+    const country = resolveRequestCountry((name) => request.headers.get(name));
     const waiverAt = new Date();
 
     try {
