@@ -296,6 +296,9 @@ export function isDemoRecordingId(id: string): boolean {
  *     prompts pollute screenshots).
  *   - listDensity: comfortable, dateTimeFormat: relative (the
  *     visually-richer defaults).
+ *   - onboardingCompleted: true (this route renders fixtures, not a
+ *     real account -- the mandatory onboarding dialog must never cover
+ *     the screenshot).
  */
 export const DEMO_INITIAL_SETTINGS: InitialSettings = {
     ...INITIAL_SETTINGS_DEFAULTS,
@@ -306,4 +309,5 @@ export const DEMO_INITIAL_SETTINGS: InitialSettings = {
     browserNotifications: false,
     listDensity: "comfortable",
     dateTimeFormat: "relative",
+    onboardingCompleted: true,
 };

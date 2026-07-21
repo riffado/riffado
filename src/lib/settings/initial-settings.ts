@@ -16,6 +16,14 @@ export interface InitialSettings {
     syncOnVisibilityChange: boolean;
     syncNotifications: boolean;
     browserNotifications: boolean;
+    /**
+     * True once the user has clicked through the onboarding dialog's
+     * "Get Started" step. Drives the mandatory onboarding gate in
+     * `Workstation` -- when false, the dialog auto-opens and can't be
+     * dismissed. See `onboarding-dialog.tsx` and `requireCompletedOnboarding`
+     * in `auth-server.ts`.
+     */
+    onboardingCompleted: boolean;
 }
 
 export const INITIAL_SETTINGS_DEFAULTS: InitialSettings = {
@@ -34,6 +42,7 @@ export const INITIAL_SETTINGS_DEFAULTS: InitialSettings = {
     syncOnVisibilityChange: true,
     syncNotifications: true,
     browserNotifications: true,
+    onboardingCompleted: false,
 };
 
 type Row = typeof userSettings.$inferSelect | undefined | null;
@@ -70,5 +79,8 @@ export function initialSettingsFromRow(row: Row): InitialSettings {
         browserNotifications:
             r?.browserNotifications ??
             INITIAL_SETTINGS_DEFAULTS.browserNotifications,
+        onboardingCompleted:
+            r?.onboardingCompleted ??
+            INITIAL_SETTINGS_DEFAULTS.onboardingCompleted,
     };
 }
