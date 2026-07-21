@@ -102,82 +102,92 @@ export default async function AdminEmailPage() {
                         </span>
                     ) : null}
                 </div>
-                <table className="w-full text-sm">
-                    <thead className="bg-muted/30 text-xs uppercase">
-                        <tr className="text-left">
-                            <th className="px-3 py-2">Slug</th>
-                            <th className="px-3 py-2">Subject</th>
-                            <th className="px-3 py-2">Kind</th>
-                            <th className="px-3 py-2 text-right">Sent</th>
-                            <th className="px-3 py-2 text-right">Failed</th>
-                            <th className="px-3 py-2 text-right">Skipped</th>
-                            <th className="px-3 py-2 text-right">Pending</th>
-                            <th className="px-3 py-2 text-right">Other</th>
-                            <th className="px-3 py-2 text-right">Attempted</th>
-                            <th className="px-3 py-2">Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {campaigns.length === 0 ? (
-                            <tr>
-                                <td
-                                    colSpan={10}
-                                    className="px-3 py-6 text-center text-muted-foreground"
-                                >
-                                    No campaigns sent yet.
-                                </td>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="bg-muted/30 text-xs uppercase">
+                            <tr className="text-left">
+                                <th className="px-3 py-2">Slug</th>
+                                <th className="px-3 py-2">Subject</th>
+                                <th className="px-3 py-2">Kind</th>
+                                <th className="px-3 py-2 text-right">Sent</th>
+                                <th className="px-3 py-2 text-right">Failed</th>
+                                <th className="px-3 py-2 text-right">
+                                    Skipped
+                                </th>
+                                <th className="px-3 py-2 text-right">
+                                    Pending
+                                </th>
+                                <th className="px-3 py-2 text-right">Other</th>
+                                <th className="px-3 py-2 text-right">
+                                    Attempted
+                                </th>
+                                <th className="px-3 py-2">Created</th>
                             </tr>
-                        ) : (
-                            campaigns.map((c) => (
-                                <tr key={c.id} className="border-t">
-                                    <td className="px-3 py-2 font-mono text-xs">
-                                        {c.slug}
-                                    </td>
-                                    <td className="px-3 py-2">{c.subject}</td>
-                                    <td className="px-3 py-2 text-muted-foreground">
-                                        {KIND_LABEL[c.kind]}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                        {formatNumber(c.sent)}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                        {c.failed > 0 ? (
-                                            <span className="text-red-600">
-                                                {formatNumber(c.failed)}
-                                            </span>
-                                        ) : (
-                                            "0"
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right text-muted-foreground">
-                                        {formatNumber(c.skipped)}
-                                    </td>
-                                    <td className="px-3 py-2 text-right text-muted-foreground">
-                                        {formatNumber(c.pending)}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                        {c.other > 0 ? (
-                                            <span
-                                                className="text-amber-600"
-                                                title="Deliveries with a status that didn't match sent/failed/skipped/pending -- investigate."
-                                            >
-                                                {formatNumber(c.other)}
-                                            </span>
-                                        ) : (
-                                            "0"
-                                        )}
-                                    </td>
-                                    <td className="px-3 py-2 text-right">
-                                        {formatNumber(c.attempted)}
-                                    </td>
-                                    <td className="px-3 py-2 text-muted-foreground">
-                                        {formatDate(c.createdAt)}
+                        </thead>
+                        <tbody>
+                            {campaigns.length === 0 ? (
+                                <tr>
+                                    <td
+                                        colSpan={10}
+                                        className="px-3 py-6 text-center text-muted-foreground"
+                                    >
+                                        No campaigns sent yet.
                                     </td>
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                            ) : (
+                                campaigns.map((c) => (
+                                    <tr key={c.id} className="border-t">
+                                        <td className="px-3 py-2 font-mono text-xs">
+                                            {c.slug}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            {c.subject}
+                                        </td>
+                                        <td className="px-3 py-2 text-muted-foreground">
+                                            {KIND_LABEL[c.kind]}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                            {formatNumber(c.sent)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                            {c.failed > 0 ? (
+                                                <span className="text-red-600">
+                                                    {formatNumber(c.failed)}
+                                                </span>
+                                            ) : (
+                                                "0"
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-muted-foreground">
+                                            {formatNumber(c.skipped)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right text-muted-foreground">
+                                            {formatNumber(c.pending)}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                            {c.other > 0 ? (
+                                                <span
+                                                    className="text-amber-600"
+                                                    title="Deliveries with a status that didn't match sent/failed/skipped/pending -- investigate."
+                                                >
+                                                    {formatNumber(c.other)}
+                                                </span>
+                                            ) : (
+                                                "0"
+                                            )}
+                                        </td>
+                                        <td className="px-3 py-2 text-right">
+                                            {formatNumber(c.attempted)}
+                                        </td>
+                                        <td className="px-3 py-2 text-muted-foreground">
+                                            {formatDate(c.createdAt)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
             <section className="border rounded-xl overflow-hidden">

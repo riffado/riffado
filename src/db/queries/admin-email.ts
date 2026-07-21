@@ -1,15 +1,31 @@
-import { count, desc, eq, sql } from "drizzle-orm";
+import { count, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
     type CampaignKind,
     normalizeCampaignKind,
 } from "@/db/queries/email-campaigns";
+import type { DeliveryStatus } from "@/db/queries/email-deliveries";
 import {
     emailCampaigns,
     emailDeliveries,
     emailSuppressions,
     newsletterSubscriptions,
 } from "@/db/schema";
+
+type SkippedStatus = Extract<DeliveryStatus, `skipped_${string}`>;
+
+/**
+ * Exhaustive by construction: `Record<SkippedStatus, true>` requires every
+ * member of the `skipped_*` union as a key, so adding a new skip reason to
+ * `DeliveryStatus` in `email-deliveries.ts` without adding it here is a
+ * type error, not a silent gap.
+ */
+const SKIPPED_STATUS_SET: Record<SkippedStatus, true> = {
+    skipped_no_consent: true,
+    skipped_suppressed: true,
+    skipped_invalid_email: true,
+};
+const SKIPPED_STATUSES = Object.keys(SKIPPED_STATUS_SET) as SkippedStatus[];
 
 export interface CampaignOverviewRow {
     id: string;
@@ -50,7 +66,13 @@ export async function listCampaignsOverview(
             attempted: count(emailDeliveries.id),
             sent: sql<number>`count(*) filter (where ${emailDeliveries.status} = 'sent')::int`,
             failed: sql<number>`count(*) filter (where ${emailDeliveries.status} = 'failed')::int`,
-            skipped: sql<number>`count(*) filter (where ${emailDeliveries.status} like 'skipped_%')::int`,
+            // Exact match against the known `skipped_*` literals, not a
+            // `LIKE 'skipped_%'` pattern -- in SQL LIKE, `_` is a
+            // single-character wildcard, so that pattern also matched
+            // unrelated strings like `skippedX...` and would have folded an
+            // unknown status into `skipped` instead of surfacing it via
+            // `other`.
+            skipped: sql<number>`count(*) filter (where ${inArray(emailDeliveries.status, SKIPPED_STATUSES)})::int`,
             pending: sql<number>`count(*) filter (where ${emailDeliveries.status} = 'pending')::int`,
         })
         .from(emailCampaigns)
