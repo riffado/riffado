@@ -1,16 +1,28 @@
 # Auto-Sync Documentation
 
-Riffado includes an intelligent auto-sync system that automatically syncs recordings from your Plaud device in the background. This feature works seamlessly in both self-hosted and cloud deployments.
+Riffado syncs recordings from your Plaud device through two independent mechanisms: a client-side poller that runs while a browser tab is open, and a server-side worker that runs regardless of whether anyone has the app open. Both call the same underlying sync routine (`syncRecordingsForUser` in `src/lib/sync/sync-recordings.ts`).
 
 ## How It Works
 
-### Smart Background Syncing
+### Server-side background worker
 
-The auto-sync system includes three key features:
+Started once per app process from `src/instrumentation.ts` (`startBackgroundSyncWorker`, `src/lib/sync/worker.ts`). On a tick (default every 5 minutes, configurable via `BACKGROUND_SYNC_INTERVAL_MS`):
 
-1. **Periodic Background Sync** - Automatically checks for new recordings at configurable intervals (default: 5 minutes)
-2. **Tab Visibility Detection** - When you return to the tab after being away, it syncs if more than half the interval has passed
-3. **Sync Throttling** - Prevents over-syncing by enforcing a minimum interval between syncs (default: 1 minute)
+1. Claims up to 20 users whose Plaud connection hasn't synced in the last 4 minutes (oldest-synced first, so a large user pool cycles through everyone across ticks instead of starving the same subset).
+2. On self-host, every user with a Plaud connection is eligible -- there's no plan/tier concept there. On hosted, only `hosted_pro` accounts are eligible; lapsed/free accounts are read-only and are skipped here (enforced again inside `syncRecordingsForUser` via `isHostedLockedOut`).
+3. Runs `syncRecordingsForUser` for each claimed user sequentially, so the same download/transcription pipeline the client-triggered sync uses applies.
+
+This is what makes an unattended `docker compose up` deployment (or a hosted Pro account with no browser open) keep pulling new recordings.
+
+### Client-side poller
+
+The `useAutoSync` hook (`src/hooks/use-auto-sync.ts`) additionally polls `POST /api/plaud/sync` from the browser while a tab is open:
+
+1. **Periodic Background Sync** - checks for new recordings at a configurable interval (default: 5 minutes)
+2. **Tab Visibility Detection** - when you return to the tab after being away, it syncs if more than half the interval has passed
+3. **Sync Throttling** - a minimum interval between syncs (default: 1 minute) prevents redundant calls
+
+This path exists for immediacy (the user sees new recordings the moment they open the app) and isn't a substitute for the server worker -- it's redundant with it by design; the server worker's 4-minute staleness check skips users a client tab just synced.
 
 ### User Experience
 
@@ -23,42 +35,33 @@ The auto-sync system includes three key features:
 
 ### Environment Variables
 
-For self-hosted deployments, you can customize sync behavior using environment variables:
+For self-hosted deployments, `.env.example` documents the server-side knobs:
 
 ```bash
-# Sync interval in milliseconds (default: 300000 = 5 minutes)
-NEXT_PUBLIC_SYNC_INTERVAL=300000
+# Master switch for the server-side background sync worker. Default true.
+# Set false to opt out entirely (e.g. sync only when the app is open, or
+# drive syncing yourself via cron hitting POST /api/plaud/sync).
+BACKGROUND_SYNC_ENABLED=true
 
-# Minimum time between syncs in milliseconds (default: 60000 = 1 minute)
-NEXT_PUBLIC_MIN_SYNC_INTERVAL=60000
+# Tick interval for the server-side background sync worker, in milliseconds.
+# Default 300000 (5 min). Range 60000..3600000. The worker also skips any
+# user synced in the last 4 minutes regardless of this value, so setting it
+# below 4 min has no effect beyond extra database queries.
+BACKGROUND_SYNC_INTERVAL_MS=300000
 
-# Whether to sync on app mount (default: true)
-NEXT_PUBLIC_SYNC_ON_MOUNT=true
-
-# Whether to sync when tab becomes visible (default: true)
-NEXT_PUBLIC_SYNC_ON_VISIBILITY=true
+# Per-user rate limit on POST /api/plaud/sync (requests per minute).
+# Default 10. Range 1..600.
+PLAUD_SYNC_RATE_LIMIT_PER_MINUTE=10
 ```
 
-### User Preferences
-
-Users can customize their sync settings via localStorage (future UI controls):
-
-```typescript
-import { setSyncInterval, setAutoSyncEnabled } from '@/lib/sync-config';
-
-// Set custom sync interval (in milliseconds)
-setSyncInterval(10 * 60 * 1000); // 10 minutes
-
-// Enable/disable auto-sync
-setAutoSyncEnabled(false);
-```
+The client-side poller's interval, minimum interval, sync-on-mount, and sync-on-visibility knobs are `useAutoSync` hook props, not environment variables -- there is currently no env-var override for them.
 
 ## Architecture
 
 ### Components
 
 1. **`useAutoSync` Hook** (`src/hooks/use-auto-sync.ts`)
-   - Core auto-sync logic
+   - Client-side auto-sync logic
    - Manages sync intervals, throttling, and visibility detection
    - Returns sync status and manual sync function
 
@@ -67,10 +70,10 @@ setAutoSyncEnabled(false);
    - Displays last sync time, next sync time, and sync results
    - Shows errors and new recording counts
 
-3. **Sync Configuration** (`src/lib/sync-config.ts`)
-   - Centralized configuration management
-   - Environment variable parsing
-   - LocalStorage persistence
+3. **Background sync worker** (`src/lib/sync/worker.ts`)
+   - Server-side polling independent of any browser tab
+   - Started from `src/instrumentation.ts` on process boot
+   - Configurable via `BACKGROUND_SYNC_INTERVAL_MS`
 
 ### Key Features
 
