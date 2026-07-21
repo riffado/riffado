@@ -98,11 +98,24 @@ const baseEnvSchema = z.object({
      * control Plaud API call timing themselves (cron hitting `POST
      * /api/plaud/sync`, per the issue's alternative ask). No effect on the
      * client-side `useAutoSync` polling, which is unaffected either way.
+     * Rejects anything other than "true"/"false"/unset so a typo (e.g.
+     * "flase") fails loudly instead of silently leaving sync enabled.
      */
     BACKGROUND_SYNC_ENABLED: z
         .string()
         .optional()
-        .transform((val) => val !== "false"),
+        .transform((val, ctx) => {
+            if (val === undefined || val === "") return true;
+            if (val === "true") return true;
+            if (val === "false") return false;
+
+            ctx.addIssue({
+                code: "custom",
+                message:
+                    'BACKGROUND_SYNC_ENABLED must be either "true" or "false"',
+            });
+            return z.NEVER;
+        }),
 
     /**
      * Tick interval (ms) for the server-side background sync worker, which
