@@ -12,7 +12,7 @@ const { envMock, checkoutMock, stripeClientMock, sessionMock } = vi.hoisted(
             STRIPE_STANDARD_PRICE_ID_USD: "price_usd_standard",
             STRIPE_STANDARD_PRICE_ID_EUR: "price_eur_standard",
             STRIPE_PRICE_ID_USD_ANNUAL: "price_usd_year",
-            STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year",
+            STRIPE_PRICE_ID_EUR_ANNUAL: "price_eur_year" as string | undefined,
             BILLING_PRICE_USD: "5.00",
             BILLING_PRICE_EUR: "5.00",
             BILLING_STANDARD_PRICE_USD: "9.00",
@@ -21,6 +21,7 @@ const { envMock, checkoutMock, stripeClientMock, sessionMock } = vi.hoisted(
             BILLING_PRICE_USD_ANNUAL: "50.00",
             BILLING_PRICE_EUR_ANNUAL: "50.00",
             BILLING_DEFAULT_CURRENCY: "usd" as "usd" | "eur",
+            GEO_COUNTRY_HEADER: undefined as string | undefined,
         },
         checkoutMock: {
             startSubscriptionCheckout: vi.fn(),
@@ -483,5 +484,57 @@ describe("GET /api/billing/me", () => {
         });
         expect(body.usage.storageBytes).toBe(1_000_000_000);
         expect(body.usage.monthlyMynahSecondsRemaining).toBe(40_000);
+    });
+
+    it("resolves monthly and annual currency independently per tier", async () => {
+        // Annual EUR isn't configured on this instance, but founding monthly
+        // EUR is -- a EUR-preferred buyer must see (and later be charged)
+        // EUR for the monthly tier and fall back to USD for annual, not the
+        // same currency reused across both tiers.
+        envMock.GEO_COUNTRY_HEADER = "x-geo-country";
+        envMock.STRIPE_PRICE_ID_EUR_ANNUAL = undefined;
+        (getUserBillingState as ReturnType<typeof vi.fn>).mockResolvedValue({
+            plan: "hosted_free",
+            planTransitionUntil: null,
+            monthlyMynahSecondsRemaining: 0,
+            monthlyMynahGrantResetAt: null,
+            foundingMember: false,
+            everPaidAt: null,
+            accountDeletionScheduledAt: null,
+            createdAt: new Date("2026-06-15T00:00:00Z"),
+        });
+        (getSubscriptionByUserId as ReturnType<typeof vi.fn>).mockResolvedValue(
+            null,
+        );
+        (getEntitlements as ReturnType<typeof vi.fn>).mockResolvedValue({
+            plan: "hosted_free",
+            maxStorageBytes: null,
+            maxDevices: null,
+            monthlyMynahSeconds: 0,
+        });
+        (getUserStorageBytes as ReturnType<typeof vi.fn>).mockResolvedValue(0);
+        (
+            getFoundingMemberAvailability as ReturnType<typeof vi.fn>
+        ).mockResolvedValue({
+            capacity: 100,
+            claimed: 0,
+            reserved: 0,
+            remaining: 100,
+        });
+
+        const res = await meRoute(
+            new Request("https://example.com/api/billing/me", {
+                headers: { "x-geo-country": "DE" },
+            }),
+        );
+        const body = await res.json();
+
+        expect(body.resolvedCurrency).toEqual({
+            monthly: "eur",
+            annual: "usd",
+        });
+
+        envMock.GEO_COUNTRY_HEADER = undefined;
+        envMock.STRIPE_PRICE_ID_EUR_ANNUAL = "price_eur_year";
     });
 });

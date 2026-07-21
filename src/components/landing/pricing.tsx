@@ -83,7 +83,8 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
 
 function buildTiers(
     availability: FoundingMemberAvailabilityRow,
-    currency: BillingCurrency,
+    monthlyCurrency: BillingCurrency,
+    annualCurrency: BillingCurrency,
 ): {
     tiers: Tier[];
     headlinePrice: string | null;
@@ -91,14 +92,14 @@ function buildTiers(
     const catalog = billingPriceCatalog(availability);
     const primaryMonthly =
         availability.remaining > 0
-            ? pickDisplayPrice(catalog.monthly.founding, currency)
-            : pickDisplayPrice(catalog.monthly.standard, currency);
+            ? pickDisplayPrice(catalog.monthly.founding, monthlyCurrency)
+            : pickDisplayPrice(catalog.monthly.standard, monthlyCurrency);
     const headlinePrice = primaryMonthly
         ? formatCatalogPrice(primaryMonthly, "")
         : null;
     const comparisonMonthly = pickDisplayPrice(
         catalog.monthly.standard,
-        primaryMonthly?.currency ?? currency,
+        primaryMonthly?.currency ?? monthlyCurrency,
     );
     const compareAtPrice =
         availability.remaining > 0 && comparisonMonthly
@@ -106,13 +107,13 @@ function buildTiers(
             : null;
     const foundingMonthly = pickDisplayPrice(
         catalog.monthly.founding,
-        currency,
+        monthlyCurrency,
     );
     const standardMonthly = pickDisplayPrice(
         catalog.monthly.standard,
-        currency,
+        monthlyCurrency,
     );
-    const annual = pickDisplayPrice(catalog.annual, currency);
+    const annual = pickDisplayPrice(catalog.annual, annualCurrency);
     const annualNote = annual
         ? ` Prefer to pay yearly? Annual billing is available at ${formatCatalogPrice(annual, "/year")}.`
         : "";
@@ -169,12 +170,18 @@ function buildTiers(
 
 export function Pricing({
     availability,
-    currency,
+    monthlyCurrency,
+    annualCurrency,
 }: {
     availability: FoundingMemberAvailabilityRow;
-    currency: BillingCurrency;
+    monthlyCurrency: BillingCurrency;
+    annualCurrency: BillingCurrency;
 }) {
-    const { tiers, headlinePrice } = buildTiers(availability, currency);
+    const { tiers, headlinePrice } = buildTiers(
+        availability,
+        monthlyCurrency,
+        annualCurrency,
+    );
     return (
         <section id="pricing" className="py-24 md:py-32">
             <div className="container mx-auto px-4">

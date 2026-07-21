@@ -33,8 +33,11 @@ type BillingInterval = "month" | "year";
 interface BillingState {
     enabled: boolean;
     /** Resolved the same way checkout resolves currency, so the pre-purchase
-     * estimate below always matches what Stripe will actually charge. */
-    resolvedCurrency?: "usd" | "eur";
+     * estimate below always matches what Stripe will actually charge.
+     * Resolved separately per tier -- monthly (founding or standard,
+     * whichever is currently active) and annual can have different
+     * configured currency availability. */
+    resolvedCurrency?: { monthly: "usd" | "eur"; annual: "usd" | "eur" };
     plan: "self_host" | "hosted_free" | "hosted_pro";
     planTransitionUntil: string | null;
     foundingMember: boolean;
@@ -555,7 +558,10 @@ export function BillingSection() {
                 ? "year"
                 : "month";
 
-    const preferredCurrency = state.resolvedCurrency ?? "usd";
+    const preferredCurrency =
+        (effectiveInterval === "year"
+            ? state.resolvedCurrency?.annual
+            : state.resolvedCurrency?.monthly) ?? "usd";
     const proPrice = formatProPrice(
         effectiveInterval === "year" ? state.pricing.annual : monthlyCatalog,
         effectiveInterval,

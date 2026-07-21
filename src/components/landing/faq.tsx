@@ -73,18 +73,25 @@ function formatCatalogPrice(price: PublicPrice, suffix: string): string {
 
 function hostedCostAnswer(
     availability: FoundingMemberAvailabilityRow,
-    currency: BillingCurrency,
+    monthlyCurrency: BillingCurrency,
+    annualCurrency: BillingCurrency,
 ): string {
     const catalog = billingPriceCatalog(availability);
-    const founding = pickDisplayPrice(catalog.monthly.founding, currency);
-    const standard = pickDisplayPrice(catalog.monthly.standard, currency);
+    const founding = pickDisplayPrice(
+        catalog.monthly.founding,
+        monthlyCurrency,
+    );
+    const standard = pickDisplayPrice(
+        catalog.monthly.standard,
+        monthlyCurrency,
+    );
     const monthly =
         availability.remaining > 0 && founding ? founding : standard;
     const monthlySuffix =
         availability.remaining > 0 && founding
             ? "/month founding"
             : "/month standard";
-    const annual = pickDisplayPrice(catalog.annual, currency);
+    const annual = pickDisplayPrice(catalog.annual, annualCurrency);
     const monthlySentence = monthly
         ? `Hosted Pro costs ${formatCatalogPrice(monthly, monthlySuffix)}.`
         : "Hosted billing is not configured on this instance.";
@@ -227,12 +234,18 @@ function faqJsonLd(groups: FaqGroup[]) {
 
 export function FAQ({
     availability,
-    currency,
+    monthlyCurrency,
+    annualCurrency,
 }: {
     availability: FoundingMemberAvailabilityRow;
-    currency: BillingCurrency;
+    monthlyCurrency: BillingCurrency;
+    annualCurrency: BillingCurrency;
 }) {
-    const costAnswer = hostedCostAnswer(availability, currency);
+    const costAnswer = hostedCostAnswer(
+        availability,
+        monthlyCurrency,
+        annualCurrency,
+    );
     const groups = GROUPS.map((group, groupIndex) =>
         groupIndex === 0
             ? {

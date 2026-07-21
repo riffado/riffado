@@ -65,8 +65,19 @@ export const GET = apiHandler(async (request) => {
     // Resolved the same way checkout resolves it, so the pre-purchase price
     // estimate this user sees always matches what Stripe will actually
     // charge them -- never show a currency the settings UI picked on its own.
+    //
+    // Resolved separately per tier: currency availability can differ
+    // between the founding/standard monthly price and the annual price
+    // (e.g. annual configured in USD only while founding monthly has both),
+    // so reusing one resolved value across tiers can disagree with what
+    // `startSubscriptionCheckout` actually resolves for that specific tier.
     const country = resolveRequestCountry((name) => request.headers.get(name));
-    const resolvedCurrency = resolveCurrency(country, "month", "founding");
+    const activeMonthlyKind =
+        foundingAvailability.remaining > 0 ? "founding" : "standard";
+    const resolvedCurrency = {
+        monthly: resolveCurrency(country, "month", activeMonthlyKind),
+        annual: resolveCurrency(country, "year", "standard"),
+    };
 
     return NextResponse.json({
         enabled: true,

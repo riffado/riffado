@@ -46,28 +46,41 @@ export default async function HomePage() {
     const foundingAvailability = await getFoundingMemberAvailability(
         env.BILLING_FOUNDING_MEMBER_CAPACITY,
     );
-    // Resolved once, the same way checkout resolves it, and passed down to
-    // every price-display section below. Stripe only ever charges a buyer
-    // one currency -- showing "$5 or €5" implies a choice that doesn't
-    // exist, and silently diverging from what checkout will actually charge
-    // is worse. If `GEO_COUNTRY_HEADER` isn't configured on this deployment,
-    // this (correctly) resolves to the same default currency checkout uses.
+    // Resolved once per tier, the same way checkout resolves it, and passed
+    // down to every price-display section below. Stripe only ever charges a
+    // buyer one currency -- showing "$5 or €5" implies a choice that
+    // doesn't exist, and silently diverging from what checkout will
+    // actually charge is worse. If `GEO_COUNTRY_HEADER` isn't configured on
+    // this deployment, this (correctly) resolves to the same default
+    // currency checkout uses.
+    //
+    // Resolved separately per tier: currency availability can differ
+    // between the founding/standard monthly price and the annual price, so
+    // reusing one resolved value across tiers can disagree with what
+    // `startSubscriptionCheckout` actually resolves for that specific tier.
     const requestHeaders = await headers();
     const country = resolveRequestCountry((name) => requestHeaders.get(name));
-    const currency = resolveCurrency(country, "month", "founding");
+    const activeMonthlyKind =
+        foundingAvailability.remaining > 0 ? "founding" : "standard";
+    const monthlyCurrency = resolveCurrency(
+        country,
+        "month",
+        activeMonthlyKind,
+    );
+    const annualCurrency = resolveCurrency(country, "year", "standard");
 
     return (
         <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/30 overflow-x-hidden">
             <HostedProAnnouncementBar
                 availability={foundingAvailability}
-                currency={currency}
+                currency={monthlyCurrency}
             />
             <LandingNav />
             <main className="flex-1">
                 <Hero />
                 <TheMath
                     availability={foundingAvailability}
-                    currency={currency}
+                    currency={monthlyCurrency}
                 />
                 <Features />
                 {/* TODO: bring back a testimonials slot once we have
@@ -78,10 +91,15 @@ export default async function HomePage() {
                 <ForProfessionals />
                 <Pricing
                     availability={foundingAvailability}
-                    currency={currency}
+                    monthlyCurrency={monthlyCurrency}
+                    annualCurrency={annualCurrency}
                 />
                 <Deploy />
-                <FAQ availability={foundingAvailability} currency={currency} />
+                <FAQ
+                    availability={foundingAvailability}
+                    monthlyCurrency={monthlyCurrency}
+                    annualCurrency={annualCurrency}
+                />
                 <FinalCTA />
             </main>
             <LandingFooter />
