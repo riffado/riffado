@@ -534,7 +534,7 @@ describe("startSubscriptionCheckout", () => {
             );
         });
 
-        it("refuses to touch a reservation whose Checkout Session is still open", async () => {
+        it("reopens the still-open prior Checkout Session instead of erroring", async () => {
             queriesMock.createFoundingMemberReservation.mockResolvedValue({
                 kind: "already_reserved",
                 existing: {
@@ -545,6 +545,36 @@ describe("startSubscriptionCheckout", () => {
             stripeMock.checkout.sessions.retrieve.mockResolvedValue({
                 id: "cs_open",
                 status: "open",
+                url: "https://checkout.stripe.com/cs_open",
+            });
+
+            const result = await startSubscriptionCheckout({
+                ...baseInput,
+                country: "US",
+            });
+
+            expect(result).toEqual({
+                checkoutUrl: "https://checkout.stripe.com/cs_open",
+                sessionId: "cs_open",
+            });
+            expect(
+                queriesMock.releaseFoundingMemberReservation,
+            ).not.toHaveBeenCalled();
+            expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+        });
+
+        it("still errors when the still-open prior session has no URL to reopen", async () => {
+            queriesMock.createFoundingMemberReservation.mockResolvedValue({
+                kind: "already_reserved",
+                existing: {
+                    id: "fmr_stale",
+                    stripeCheckoutSessionId: "cs_open",
+                },
+            });
+            stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+                id: "cs_open",
+                status: "open",
+                url: null,
             });
 
             await expect(

@@ -42,6 +42,23 @@ export class CheckoutPreconditionError extends Error {
 }
 
 /**
+ * Resuming an existing, still-open Checkout Session rather than blocking
+ * the user with an error. Carries the prior session's own URL/id so the
+ * caller can just send the user back into the same Checkout flow instead
+ * of surfacing "a checkout is already in progress".
+ */
+export class CheckoutInProgressError extends CheckoutPreconditionError {
+    constructor(
+        message: string,
+        readonly existingCheckoutUrl: string | null,
+        readonly existingSessionId: string,
+    ) {
+        super(message, "checkout_in_progress");
+        this.name = "CheckoutInProgressError";
+    }
+}
+
+/**
  * Idempotent Stripe customer create + local mapping insert.
  *
  * The DB check-then-create above isn't atomic: two concurrent checkout
@@ -141,11 +158,28 @@ export async function startSubscriptionCheckout(
     }
 
     const interval = input.interval ?? "month";
-    const { price, reservation } = await resolveCheckoutPrice({
-        userId: input.userId,
-        country: input.country,
-        interval,
-    });
+    let price: ReturnType<typeof resolvePrice>;
+    let reservation: FoundingMemberReservationRow | null;
+    try {
+        ({ price, reservation } = await resolveCheckoutPrice({
+            userId: input.userId,
+            country: input.country,
+            interval,
+        }));
+    } catch (error) {
+        if (error instanceof CheckoutInProgressError) {
+            // Reuse the still-open prior session instead of erroring: resume
+            // the same Checkout the user already started.
+            if (!error.existingCheckoutUrl) {
+                throw error;
+            }
+            return {
+                checkoutUrl: error.existingCheckoutUrl,
+                sessionId: error.existingSessionId,
+            };
+        }
+        throw error;
+    }
 
     const stripe = getStripe();
 
@@ -436,7 +470,8 @@ async function reserveFoundingSlot(input: {
         if (!sessionId) {
             // Not yet attached to a Checkout Session -- a concurrent request
             // for this same user is mid-flight right now (or crashed between
-            // insert and attach). Either way, do not race it.
+            // insert and attach). Either way, do not race it. There is no
+            // prior session URL to hand back here, so this is a genuine error.
             throw new CheckoutPreconditionError(
                 "A checkout for this account is already in progress",
                 "checkout_in_progress",
@@ -458,11 +493,13 @@ async function reserveFoundingSlot(input: {
         }
 
         if (priorSession.status !== "expired") {
-            // `open`, or any other non-terminal Stripe session status --
-            // treat as still in progress rather than guessing.
-            throw new CheckoutPreconditionError(
+            // `open`, or any other non-terminal Stripe session status -- the
+            // user already has a live Checkout Session. Send them back into
+            // that same session instead of blocking with an error.
+            throw new CheckoutInProgressError(
                 "A checkout for this account is already in progress",
-                "checkout_in_progress",
+                priorSession.url,
+                priorSession.id,
             );
         }
 
