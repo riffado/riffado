@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { RecordingWorkstation } from "@/components/recordings/recording-workstation";
 import { db } from "@/db";
 import { recordings, transcriptions, userSettings } from "@/db/schema";
-import { requireAuth } from "@/lib/auth-server";
+import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 
 interface RecordingDetailPageProps {
@@ -15,6 +15,7 @@ export default async function RecordingDetailPage({
 }: RecordingDetailPageProps) {
     // Check authentication server-side
     const session = await requireAuth();
+    await requireCompletedOnboarding(session);
     const { id } = await params;
 
     // Fetch recording from database

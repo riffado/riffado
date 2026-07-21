@@ -32,9 +32,18 @@ function OnboardingDialogContent({
     className,
     children,
     ref,
+    hideCloseButton = false,
     ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
     ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Content>>;
+    /**
+     * Hides the top-right close (X) button. Used for the mandatory,
+     * first-run onboarding flow -- combined with blocking Escape/
+     * outside-click in the caller, this makes the dialog non-dismissible
+     * until the user completes it. Defaults to `false` so every other
+     * (dismissible) usage is unaffected.
+     */
+    hideCloseButton?: boolean;
 }) {
     return (
         <OnboardingDialogPortal>
@@ -48,10 +57,12 @@ function OnboardingDialogContent({
                 {...props}
             >
                 {children}
-                <DialogPrimitive.Close className="group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none">
-                    <X className="size-4 opacity-60 transition-opacity group-hover:opacity-100" />
-                    <span className="sr-only">Close</span>
-                </DialogPrimitive.Close>
+                {!hideCloseButton && (
+                    <DialogPrimitive.Close className="group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none">
+                        <X className="size-4 opacity-60 transition-opacity group-hover:opacity-100" />
+                        <span className="sr-only">Close</span>
+                    </DialogPrimitive.Close>
+                )}
             </DialogPrimitive.Content>
         </OnboardingDialogPortal>
     );
