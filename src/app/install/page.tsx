@@ -28,6 +28,16 @@ import { APP_VERSION_TAG } from "@/lib/version";
  * below always matches the running build.
  */
 
+// force-dynamic: `env.IS_HOSTED` is the only condition this page branches
+// on, and it's read at runtime -- without this, Next.js sees no dynamic
+// API in use and statically prerenders the page during `next build`,
+// baking in whatever IS_HOSTED evaluated to in the *build* environment
+// (unset in this project's Dockerfile) rather than the real value the
+// deployed container is configured with. Confirmed live on riffado.com:
+// the self-host branch (plain `<Footer>`) was frozen into the cached
+// static output instead of the hosted `<LandingFooter>`.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = marketingMetadata({
     title: "Install Riffado | Self-host in one command",
     description:

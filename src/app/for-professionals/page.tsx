@@ -66,6 +66,17 @@ const INQUIRY_PROMPTS = [
  *   product, so self-host instances 404 this route.
  */
 
+// force-dynamic: `env.IS_HOSTED` is the only condition this page branches
+// on, and it's read at runtime -- without this, Next.js sees no dynamic
+// API in use and statically prerenders the page during `next build`,
+// baking in whatever IS_HOSTED evaluated to in the *build* environment
+// (unset in this project's Dockerfile) rather than the real value the
+// deployed container is configured with. Confirmed live on riffado.com:
+// this page was permanently 404ing even though IS_HOSTED=true at
+// runtime, because `notFound()` got frozen into the cached static
+// output at build time.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = marketingMetadata({
     title: "Riffado for Professionals | Transcription on hardware you control",
     description:
