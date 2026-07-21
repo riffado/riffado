@@ -164,6 +164,34 @@ export function resolveCurrency(
 }
 
 /**
+ * Resolve the monthly display currency in a way that's robust to a
+ * founding-capacity race between when this is called (a display snapshot)
+ * and the eventual checkout submission. Which monthly kind checkout
+ * actually charges (`founding` vs `standard`) is re-checked atomically at
+ * submission time and can differ from `activeMonthlyKind`'s snapshot if
+ * the last founding slot is claimed in between -- so prefer whichever
+ * currency is valid for BOTH kinds, which makes the resolved currency
+ * immune to that race entirely in the common case where an operator
+ * configures the same currencies for both. Only falls through to
+ * `activeMonthlyKind`'s own resolution when the operator has configured
+ * genuinely different currency availability between the two monthly
+ * kinds -- a narrow remaining case still caught by Stripe's hosted
+ * Checkout page, which always shows the final price and currency before
+ * any charge.
+ */
+export function resolveMonthlyDisplayCurrency(
+    country: string | null | undefined,
+    activeMonthlyKind: MonthlyPriceKind,
+): BillingCurrency {
+    const foundingCurrency = resolveCurrency(country, "month", "founding");
+    const standardCurrency = resolveCurrency(country, "month", "standard");
+    if (foundingCurrency === standardCurrency) return foundingCurrency;
+    return activeMonthlyKind === "founding"
+        ? foundingCurrency
+        : standardCurrency;
+}
+
+/**
  * Resolve the buyer's country from the configured trusted geo header, if
  * any (`GEO_COUNTRY_HEADER`; unset on instances that haven't wired up an
  * edge-injected country header, in which case currency always falls back

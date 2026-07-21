@@ -17,6 +17,7 @@ import { getSession } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import {
     resolveCurrency,
+    resolveMonthlyDisplayCurrency,
     resolveRequestCountry,
 } from "@/lib/hosted/billing/pricing";
 import { marketingMetadata } from "@/lib/seo/marketing-metadata";
@@ -58,13 +59,18 @@ export default async function HomePage() {
     // between the founding/standard monthly price and the annual price, so
     // reusing one resolved value across tiers can disagree with what
     // `startSubscriptionCheckout` actually resolves for that specific tier.
+    //
+    // The monthly currency goes through `resolveMonthlyDisplayCurrency`,
+    // not a plain `resolveCurrency` call keyed to this snapshot's founding
+    // vs standard kind: which kind checkout actually charges is re-checked
+    // atomically at submission time, so this snapshot can go stale if the
+    // last founding slot is claimed before the user checks out.
     const requestHeaders = await headers();
     const country = resolveRequestCountry((name) => requestHeaders.get(name));
     const activeMonthlyKind =
         foundingAvailability.remaining > 0 ? "founding" : "standard";
-    const monthlyCurrency = resolveCurrency(
+    const monthlyCurrency = resolveMonthlyDisplayCurrency(
         country,
-        "month",
         activeMonthlyKind,
     );
     const annualCurrency = resolveCurrency(country, "year", "standard");

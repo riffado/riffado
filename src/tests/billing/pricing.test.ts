@@ -32,6 +32,7 @@ import {
     isProPriceId,
     priceForCurrency,
     resolveCurrency,
+    resolveMonthlyDisplayCurrency,
     resolvePrice,
     supportedCurrencies,
 } from "@/lib/hosted/billing/pricing";
@@ -77,6 +78,34 @@ describe("resolveCurrency", () => {
         envMock.STRIPE_PRICE_ID_EUR_ANNUAL = undefined;
         expect(resolveCurrency("US", "year")).toBe("usd");
         expect(() => resolvePrice("US", "year")).toThrow("interval year");
+    });
+});
+
+describe("resolveMonthlyDisplayCurrency", () => {
+    beforeEach(() => {
+        envMock.STRIPE_PRICE_ID_USD = "price_usd_found";
+        envMock.STRIPE_PRICE_ID_EUR = "price_eur_found";
+        envMock.STRIPE_STANDARD_PRICE_ID_USD = "price_usd_standard";
+        envMock.STRIPE_STANDARD_PRICE_ID_EUR = "price_eur_standard";
+        envMock.BILLING_DEFAULT_CURRENCY = "usd";
+    });
+
+    it("is immune to a founding-capacity race when both kinds support the same currencies", () => {
+        // Founding and standard both support EUR here -- the resolved
+        // currency must not change depending on which kind checkout ends up
+        // atomically picking (e.g. the last founding slot being claimed
+        // between this snapshot and checkout submission).
+        expect(resolveMonthlyDisplayCurrency("DE", "founding")).toBe("eur");
+        expect(resolveMonthlyDisplayCurrency("DE", "standard")).toBe("eur");
+    });
+
+    it("falls through to the active kind only when the tiers genuinely diverge", () => {
+        // Standard has no EUR price configured on this instance -- founding
+        // and standard now resolve to different currencies for a EUR buyer,
+        // so the snapshot's active kind is the only signal left.
+        envMock.STRIPE_STANDARD_PRICE_ID_EUR = undefined;
+        expect(resolveMonthlyDisplayCurrency("DE", "founding")).toBe("eur");
+        expect(resolveMonthlyDisplayCurrency("DE", "standard")).toBe("usd");
     });
 });
 

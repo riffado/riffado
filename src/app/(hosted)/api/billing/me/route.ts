@@ -12,6 +12,7 @@ import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import {
     billingPriceCatalog,
     resolveCurrency,
+    resolveMonthlyDisplayCurrency,
     resolveRequestCountry,
 } from "@/lib/hosted/billing/pricing";
 
@@ -71,11 +72,17 @@ export const GET = apiHandler(async (request) => {
     // (e.g. annual configured in USD only while founding monthly has both),
     // so reusing one resolved value across tiers can disagree with what
     // `startSubscriptionCheckout` actually resolves for that specific tier.
+    //
+    // The monthly currency is resolved via `resolveMonthlyDisplayCurrency`,
+    // not a plain `resolveCurrency` call keyed to this snapshot's founding
+    // vs standard kind: which kind checkout actually charges is re-checked
+    // atomically at submission time, so a snapshot taken here can go stale
+    // if the last founding slot is claimed before the user checks out.
     const country = resolveRequestCountry((name) => request.headers.get(name));
     const activeMonthlyKind =
         foundingAvailability.remaining > 0 ? "founding" : "standard";
     const resolvedCurrency = {
-        monthly: resolveCurrency(country, "month", activeMonthlyKind),
+        monthly: resolveMonthlyDisplayCurrency(country, activeMonthlyKind),
         annual: resolveCurrency(country, "year", "standard"),
     };
 
