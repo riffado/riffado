@@ -109,10 +109,12 @@ describeWithDatabase(
             );
 
             const successfulUserIds = results.flatMap((result, index) =>
-                result ? [userIds[index]] : [],
+                result.kind === "reserved" ? [userIds[index]] : [],
             );
             expect(successfulUserIds).toHaveLength(3);
-            expect(results.filter((result) => result === null)).toHaveLength(1);
+            expect(
+                results.filter((result) => result.kind === "unavailable"),
+            ).toHaveLength(1);
 
             const persisted = await database.db
                 .select()
@@ -189,7 +191,7 @@ describeWithDatabase(
                     now: new Date("2026-07-01T00:00:00.000Z"),
                     expiresAt: new Date("2026-07-01T00:35:00.000Z"),
                 }),
-            ).resolves.toBeNull();
+            ).resolves.toEqual({ kind: "unavailable" });
         });
 
         it("consumes one reservation idempotently under concurrent payment events", async () => {
@@ -201,19 +203,21 @@ describeWithDatabase(
                 id: userId,
                 email: "consume-u1@example.test",
             });
-            const reservation = await createFoundingMemberReservation({
+            const result = await createFoundingMemberReservation({
                 userId,
                 capacity: 100,
                 stripePriceId: "price_found",
                 now: new Date("2026-07-01T00:00:00.000Z"),
                 expiresAt: new Date("2026-07-01T00:35:00.000Z"),
             });
-            expect(reservation).not.toBeNull();
+            expect(result.kind).toBe("reserved");
+            const reservationId =
+                result.kind === "reserved" ? result.reservation.id : null;
 
             const outcomes = await Promise.all(
                 Array.from({ length: 5 }, () =>
                     consumeFoundingMemberReservation({
-                        reservationId: reservation?.id ?? null,
+                        reservationId,
                         userId,
                         stripePriceId: "price_found",
                         paidAt,
@@ -226,7 +230,7 @@ describeWithDatabase(
             const [persistedReservation] = await database.db
                 .select()
                 .from(foundingMemberReservations)
-                .where(eq(foundingMemberReservations.id, reservation?.id ?? ""))
+                .where(eq(foundingMemberReservations.id, reservationId ?? ""))
                 .limit(1);
             expect(persistedReservation.status).toBe("consumed");
             expect(persistedReservation.consumedAt?.toISOString()).toBe(
@@ -251,7 +255,7 @@ describeWithDatabase(
             const [preservedClaim] = await database.db
                 .select()
                 .from(foundingMemberReservations)
-                .where(eq(foundingMemberReservations.id, reservation?.id ?? ""))
+                .where(eq(foundingMemberReservations.id, reservationId ?? ""))
                 .limit(1);
             expect(preservedClaim).toMatchObject({
                 status: "consumed",

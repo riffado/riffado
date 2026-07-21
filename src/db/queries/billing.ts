@@ -279,6 +279,27 @@ export async function getFoundingMemberAvailability(
 }
 
 /**
+ * Distinguishes the two reasons `createFoundingMemberReservation` can fail
+ * to hand out a fresh slot. Callers must not treat them the same:
+ * `unavailable` means "no founding price for this user, standard price is
+ * correct" (silent fallback is fine); `already_reserved` means this exact
+ * user already holds a `reserved` row (possibly backing a Checkout Session
+ * they already paid on, or one they abandoned) that the caller must
+ * resolve -- via Stripe -- before silently falling back to standard price,
+ * or a genuine payment can get bumped to standard post-hoc.
+ */
+export type CreateFoundingMemberReservationResult =
+    | { kind: "reserved"; reservation: FoundingMemberReservationRow }
+    | { kind: "unavailable" }
+    | {
+          kind: "already_reserved";
+          existing: {
+              id: string;
+              stripeCheckoutSessionId: string | null;
+          };
+      };
+
+/**
  * Atomically reserve one founding monthly slot before issuing a Stripe Checkout Session.
  * The reservation, not a later count, authorizes use of the founding Stripe Price.
  */
@@ -288,7 +309,7 @@ export async function createFoundingMemberReservation(input: {
     stripePriceId: string;
     now: Date;
     expiresAt: Date;
-}): Promise<FoundingMemberReservationRow | null> {
+}): Promise<CreateFoundingMemberReservationResult> {
     return db.transaction(async (tx) => {
         await tx.execute(
             sql`select pg_advisory_xact_lock(hashtextextended('billing_founding_members', 0))`,
@@ -317,10 +338,16 @@ export async function createFoundingMemberReservation(input: {
             .from(users)
             .where(eq(users.id, input.userId))
             .limit(1);
-        if (!user || user.foundingMemberClaimedAt !== null) return null;
+        if (!user || user.foundingMemberClaimedAt !== null) {
+            return { kind: "unavailable" };
+        }
 
         const [existingReservation] = await tx
-            .select({ id: foundingMemberReservations.id })
+            .select({
+                id: foundingMemberReservations.id,
+                stripeCheckoutSessionId:
+                    foundingMemberReservations.stripeCheckoutSessionId,
+            })
             .from(foundingMemberReservations)
             .where(
                 and(
@@ -329,7 +356,9 @@ export async function createFoundingMemberReservation(input: {
                 ),
             )
             .limit(1);
-        if (existingReservation) return null;
+        if (existingReservation) {
+            return { kind: "already_reserved", existing: existingReservation };
+        }
 
         const countResult = await tx.execute<{
             claimed: number;
@@ -364,7 +393,8 @@ export async function createFoundingMemberReservation(input: {
               ).rows ?? []);
         const claimed = Number(countRows[0]?.claimed ?? 0);
         const reserved = Number(countRows[0]?.reserved ?? 0);
-        if (claimed + reserved >= input.capacity) return null;
+        if (claimed + reserved >= input.capacity)
+            return { kind: "unavailable" };
 
         const [reservation] = await tx
             .insert(foundingMemberReservations)
@@ -377,9 +407,15 @@ export async function createFoundingMemberReservation(input: {
                 updatedAt: input.now,
             })
             .returning();
-        return (
-            (reservation as FoundingMemberReservationRow | undefined) ?? null
-        );
+        if (!reservation) {
+            throw new Error(
+                `Failed to insert founding reservation for user ${input.userId}`,
+            );
+        }
+        return {
+            kind: "reserved",
+            reservation: reservation as FoundingMemberReservationRow,
+        };
     });
 }
 

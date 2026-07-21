@@ -10,7 +10,7 @@ import {
     upsertBillingCustomer,
 } from "@/db/queries/billing";
 import { env } from "@/lib/env";
-import { mirrorStripeSubscription } from "./mirror";
+import { mirrorCheckoutSession, mirrorStripeSubscription } from "./mirror";
 import {
     type BillingCurrency,
     type BillingInterval,
@@ -33,7 +33,8 @@ export class CheckoutPreconditionError extends Error {
             | "missing_stripe_customer"
             | "missing_portal_configuration"
             | "reactivation_failed"
-            | "price_unavailable",
+            | "price_unavailable"
+            | "checkout_in_progress",
     ) {
         super(message);
         this.name = "CheckoutPreconditionError";
@@ -378,13 +379,9 @@ async function resolveCheckoutPrice(input: {
         "founding",
     );
     if (foundingPrice) {
-        const now = new Date();
-        const reservation = await createFoundingMemberReservation({
+        const reservation = await reserveFoundingSlot({
             userId: input.userId,
-            capacity: env.BILLING_FOUNDING_MEMBER_CAPACITY,
             stripePriceId: foundingPrice.priceId,
-            now,
-            expiresAt: new Date(now.getTime() + FOUNDING_CHECKOUT_TTL_MS),
         });
         if (reservation) return { price: foundingPrice, reservation };
     }
@@ -393,6 +390,90 @@ async function resolveCheckoutPrice(input: {
         price: resolveAvailablePrice(input.country, "month", "standard"),
         reservation: null,
     };
+}
+
+const MAX_FOUNDING_RESERVATION_ATTEMPTS = 2;
+
+/**
+ * Reserve a founding monthly slot for this user, resolving (via Stripe,
+ * not a timer) any reservation left over from a checkout attempt this
+ * same user already started. Returns `null` when no founding price is
+ * available for this user right now -- capacity exhausted or already
+ * permanently claimed -- which is the correct signal to silently fall
+ * back to standard pricing.
+ *
+ * Never silently releases a reservation without checking what actually
+ * happened to the Stripe Checkout Session it's attached to: releasing
+ * one that's still open risks a second concurrent checkout, and
+ * releasing one the user already paid on would bump a genuine founding
+ * payment to standard price once the (possibly delayed) webhook lands.
+ */
+async function reserveFoundingSlot(input: {
+    userId: string;
+    stripePriceId: string;
+}): Promise<FoundingMemberReservationRow | null> {
+    for (
+        let attempt = 0;
+        attempt < MAX_FOUNDING_RESERVATION_ATTEMPTS;
+        attempt += 1
+    ) {
+        const now = new Date();
+        const result = await createFoundingMemberReservation({
+            userId: input.userId,
+            capacity: env.BILLING_FOUNDING_MEMBER_CAPACITY,
+            stripePriceId: input.stripePriceId,
+            now,
+            expiresAt: new Date(now.getTime() + FOUNDING_CHECKOUT_TTL_MS),
+        });
+
+        if (result.kind === "reserved") return result.reservation;
+        if (result.kind === "unavailable") return null;
+
+        // result.kind === "already_reserved": this user already holds a
+        // `reserved` row. Find out what actually happened to it before
+        // touching it.
+        const sessionId = result.existing.stripeCheckoutSessionId;
+        if (!sessionId) {
+            // Not yet attached to a Checkout Session -- a concurrent request
+            // for this same user is mid-flight right now (or crashed between
+            // insert and attach). Either way, do not race it.
+            throw new CheckoutPreconditionError(
+                "A checkout for this account is already in progress",
+                "checkout_in_progress",
+            );
+        }
+
+        const stripe = getStripe();
+        const priorSession = await stripe.checkout.sessions.retrieve(sessionId);
+
+        if (priorSession.status === "complete") {
+            // Already paid; the webhook just hasn't landed yet. Mirror it
+            // now instead of releasing the reservation backing a real
+            // payment or starting a second checkout.
+            await mirrorCheckoutSession(priorSession);
+            throw new CheckoutPreconditionError(
+                "User already has a live subscription",
+                "already_subscribed",
+            );
+        }
+
+        if (priorSession.status !== "expired") {
+            // `open`, or any other non-terminal Stripe session status --
+            // treat as still in progress rather than guessing.
+            throw new CheckoutPreconditionError(
+                "A checkout for this account is already in progress",
+                "checkout_in_progress",
+            );
+        }
+
+        // Genuinely dead. Release it and retry once for a fresh reservation.
+        await releaseFoundingMemberReservation({
+            reservationId: result.existing.id,
+            releasedAt: now,
+        });
+    }
+
+    return null;
 }
 
 function resolveAvailablePrice(

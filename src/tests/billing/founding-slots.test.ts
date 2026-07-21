@@ -118,7 +118,28 @@ describe("founding monthly slot reservations", () => {
                 now: new Date("2026-07-01T00:00:00Z"),
                 expiresAt: new Date("2026-07-01T00:35:00Z"),
             }),
-        ).resolves.toBeNull();
+        ).resolves.toEqual({ kind: "unavailable" });
+
+        expect(txMock.insert).not.toHaveBeenCalled();
+    });
+
+    it("reports an existing reservation instead of silently falling back", async () => {
+        txMock.execute.mockResolvedValueOnce([]);
+        chainSelect([{ foundingMemberClaimedAt: null }]);
+        chainSelect([{ id: "fmr_stale", stripeCheckoutSessionId: "cs_stale" }]);
+
+        await expect(
+            createFoundingMemberReservation({
+                userId: "u1",
+                capacity: 100,
+                stripePriceId: "price_found",
+                now: new Date("2026-07-01T00:00:00Z"),
+                expiresAt: new Date("2026-07-01T00:35:00Z"),
+            }),
+        ).resolves.toEqual({
+            kind: "already_reserved",
+            existing: { id: "fmr_stale", stripeCheckoutSessionId: "cs_stale" },
+        });
 
         expect(txMock.insert).not.toHaveBeenCalled();
     });

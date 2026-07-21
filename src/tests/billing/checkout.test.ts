@@ -13,7 +13,13 @@ const { queriesMock, stripeMock, pricingMock, mirrorMock, vatMock, envMock } =
             upsertBillingCustomer: vi.fn(),
         },
         stripeMock: {
-            checkout: { sessions: { create: vi.fn(), expire: vi.fn() } },
+            checkout: {
+                sessions: {
+                    create: vi.fn(),
+                    expire: vi.fn(),
+                    retrieve: vi.fn(),
+                },
+            },
             customers: { create: vi.fn() },
             subscriptions: { retrieve: vi.fn(), cancel: vi.fn() },
             billingPortal: { sessions: { create: vi.fn() } },
@@ -25,7 +31,10 @@ const { queriesMock, stripeMock, pricingMock, mirrorMock, vatMock, envMock } =
                 .fn()
                 .mockReturnValue({ priceId: "price_standard" }),
         },
-        mirrorMock: { mirrorStripeSubscription: vi.fn() },
+        mirrorMock: {
+            mirrorStripeSubscription: vi.fn(),
+            mirrorCheckoutSession: vi.fn(),
+        },
         vatMock: { prepareCustomerTaxIdentity: vi.fn() },
         envMock: {
             APP_URL: "https://app.example",
@@ -216,8 +225,11 @@ describe("startSubscriptionCheckout", () => {
             remaining: 100,
         });
         queriesMock.createFoundingMemberReservation.mockResolvedValue({
-            id: "fmr_1",
-            expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            kind: "reserved",
+            reservation: {
+                id: "fmr_1",
+                expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            },
         });
         queriesMock.attachFoundingMemberReservationToCheckoutSession.mockResolvedValue(
             true,
@@ -255,8 +267,8 @@ describe("startSubscriptionCheckout", () => {
     it("attaches founding reservation metadata and Checkout expiration", async () => {
         const expiresAt = new Date("2026-07-01T00:35:00.000Z");
         queriesMock.createFoundingMemberReservation.mockResolvedValue({
-            id: "fmr_1",
-            expiresAt,
+            kind: "reserved",
+            reservation: { id: "fmr_1", expiresAt },
         });
         pricingMock.resolvePrice.mockReturnValue({
             currency: "usd",
@@ -306,8 +318,11 @@ describe("startSubscriptionCheckout", () => {
 
     it("releases a founding reservation when Stripe session creation fails", async () => {
         queriesMock.createFoundingMemberReservation.mockResolvedValue({
-            id: "fmr_1",
-            expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            kind: "reserved",
+            reservation: {
+                id: "fmr_1",
+                expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            },
         });
         pricingMock.resolvePrice.mockReturnValue({
             currency: "usd",
@@ -330,8 +345,11 @@ describe("startSubscriptionCheckout", () => {
 
     it("expires the Stripe Session if attaching the founding reservation fails", async () => {
         queriesMock.createFoundingMemberReservation.mockResolvedValue({
-            id: "fmr_1",
-            expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            kind: "reserved",
+            reservation: {
+                id: "fmr_1",
+                expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+            },
         });
         queriesMock.attachFoundingMemberReservationToCheckoutSession.mockResolvedValue(
             false,
@@ -351,7 +369,9 @@ describe("startSubscriptionCheckout", () => {
     });
 
     it("uses the standard monthly price when founding capacity is gone", async () => {
-        queriesMock.createFoundingMemberReservation.mockResolvedValue(null);
+        queriesMock.createFoundingMemberReservation.mockResolvedValue({
+            kind: "unavailable",
+        });
         pricingMock.resolvePrice
             .mockReturnValueOnce({ currency: "usd", priceId: "price_usd" })
             .mockReturnValueOnce({
@@ -463,5 +483,135 @@ describe("startSubscriptionCheckout", () => {
         ).toBeLessThan(
             stripeMock.checkout.sessions.create.mock.invocationCallOrder[0],
         );
+    });
+
+    describe("superseding a stale founding reservation", () => {
+        beforeEach(() => {
+            pricingMock.resolvePrice.mockReturnValue({
+                currency: "usd",
+                priceId: "price_usd",
+            });
+        });
+
+        it("releases an expired prior reservation and issues a fresh one", async () => {
+            queriesMock.createFoundingMemberReservation
+                .mockResolvedValueOnce({
+                    kind: "already_reserved",
+                    existing: {
+                        id: "fmr_stale",
+                        stripeCheckoutSessionId: "cs_stale",
+                    },
+                })
+                .mockResolvedValueOnce({
+                    kind: "reserved",
+                    reservation: {
+                        id: "fmr_fresh",
+                        expiresAt: new Date("2026-07-01T00:35:00.000Z"),
+                    },
+                });
+            stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+                id: "cs_stale",
+                status: "expired",
+            });
+
+            await startSubscriptionCheckout({ ...baseInput, country: "US" });
+
+            expect(stripeMock.checkout.sessions.retrieve).toHaveBeenCalledWith(
+                "cs_stale",
+            );
+            expect(
+                queriesMock.releaseFoundingMemberReservation,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ reservationId: "fmr_stale" }),
+            );
+            expect(
+                queriesMock.createFoundingMemberReservation,
+            ).toHaveBeenCalledTimes(2);
+            expect(
+                queriesMock.attachFoundingMemberReservationToCheckoutSession,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ reservationId: "fmr_fresh" }),
+            );
+        });
+
+        it("refuses to touch a reservation whose Checkout Session is still open", async () => {
+            queriesMock.createFoundingMemberReservation.mockResolvedValue({
+                kind: "already_reserved",
+                existing: {
+                    id: "fmr_stale",
+                    stripeCheckoutSessionId: "cs_open",
+                },
+            });
+            stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+                id: "cs_open",
+                status: "open",
+            });
+
+            await expect(
+                startSubscriptionCheckout({ ...baseInput, country: "US" }),
+            ).rejects.toMatchObject({ code: "checkout_in_progress" });
+
+            expect(
+                queriesMock.releaseFoundingMemberReservation,
+            ).not.toHaveBeenCalled();
+            expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+        });
+
+        it("mirrors an already-paid prior session instead of releasing it", async () => {
+            queriesMock.createFoundingMemberReservation.mockResolvedValue({
+                kind: "already_reserved",
+                existing: {
+                    id: "fmr_stale",
+                    stripeCheckoutSessionId: "cs_paid",
+                },
+            });
+            stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+                id: "cs_paid",
+                status: "complete",
+            });
+
+            await expect(
+                startSubscriptionCheckout({ ...baseInput, country: "US" }),
+            ).rejects.toMatchObject({ code: "already_subscribed" });
+
+            expect(mirrorMock.mirrorCheckoutSession).toHaveBeenCalledWith(
+                expect.objectContaining({ id: "cs_paid", status: "complete" }),
+            );
+            expect(
+                queriesMock.releaseFoundingMemberReservation,
+            ).not.toHaveBeenCalled();
+            expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
+        });
+
+        it("falls back to standard pricing when a retry after release still finds no capacity", async () => {
+            queriesMock.createFoundingMemberReservation
+                .mockResolvedValueOnce({
+                    kind: "already_reserved",
+                    existing: {
+                        id: "fmr_stale",
+                        stripeCheckoutSessionId: "cs_stale",
+                    },
+                })
+                .mockResolvedValueOnce({ kind: "unavailable" });
+            stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+                id: "cs_stale",
+                status: "expired",
+            });
+            pricingMock.resolvePrice
+                .mockReturnValueOnce({ currency: "usd", priceId: "price_usd" })
+                .mockReturnValueOnce({
+                    currency: "usd",
+                    priceId: "price_usd_standard",
+                });
+
+            await startSubscriptionCheckout({ ...baseInput, country: "US" });
+
+            expect(stripeMock.checkout.sessions.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    line_items: [{ price: "price_usd_standard", quantity: 1 }],
+                }),
+                expect.any(Object),
+            );
+        });
     });
 });
