@@ -258,7 +258,6 @@ export function PlaudAccountSection({
                         </p>
                         <PlaudConnectTabs
                             onConnected={() => fetchConnection()}
-                            variant="dialog"
                         />
                     </CardContent>
                 </Card>
@@ -347,10 +346,7 @@ export function PlaudAccountSection({
                         </DialogDescription>
                     </DialogHeader>
                     {switchDialogOpen && (
-                        <PlaudConnectTabs
-                            onConnected={handleSwitchSuccess}
-                            variant="dialog"
-                        />
+                        <PlaudConnectTabs onConnected={handleSwitchSuccess} />
                     )}
                 </DialogContent>
             </Dialog>
@@ -376,7 +372,6 @@ export function PlaudAccountSection({
                     {reconnectDialogOpen && (
                         <PlaudConnectTabs
                             onConnected={handleReconnectSuccess}
-                            variant="dialog"
                         />
                     )}
                 </DialogContent>

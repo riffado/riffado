@@ -84,7 +84,6 @@ export function PlaudReconnectBanner({
                     </DialogHeader>
                     {open && (
                         <PlaudConnectTabs
-                            variant="dialog"
                             onConnected={() => {
                                 setOpen(false);
                                 setDismissed(true);

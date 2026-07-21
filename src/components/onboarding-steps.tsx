@@ -119,10 +119,7 @@ export function OnboardingStepPlaud({
             ) : (
                 <Card className="gap-0 py-4">
                     <CardContent className="pt-6">
-                        <PlaudConnectTabs
-                            variant="dialog"
-                            onConnected={onConnected}
-                        />
+                        <PlaudConnectTabs onConnected={onConnected} />
                     </CardContent>
                 </Card>
             )}

@@ -57,13 +57,9 @@ function regionLabel(base: string): string {
 
 interface PlaudConnectTabsProps {
     onConnected: () => void;
-    variant?: "dialog" | "page";
 }
 
-export function PlaudConnectTabs({
-    onConnected,
-    variant = "dialog",
-}: PlaudConnectTabsProps) {
+export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
     const [hasConnector, setHasConnector] = useState<boolean>(false);
     useEffect(() => {
         let cancelled = false;
@@ -127,13 +123,11 @@ export function PlaudConnectTabs({
                 <EmailCodePane
                     onConnected={onConnected}
                     onSwitchToToken={() => setMode("token")}
-                    variant={variant}
                 />
             )}
             {mode === "token" && (
                 <PasteTokenPane
                     onConnected={onConnected}
-                    variant={variant}
                     onUseConnector={() => setMode("connector")}
                 />
             )}
@@ -279,14 +273,9 @@ function ConnectorPane({
 interface EmailCodePaneProps {
     onConnected: () => void;
     onSwitchToToken: () => void;
-    variant: "dialog" | "page";
 }
 
-function EmailCodePane({
-    onConnected,
-    onSwitchToToken,
-    variant: _variant,
-}: EmailCodePaneProps) {
+function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
     const [step, setStep] = useState<EmailStep>("email");
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
@@ -556,15 +545,10 @@ function ConsoleSnippet({
 
 interface PasteTokenPaneProps {
     onConnected: () => void;
-    variant: "dialog" | "page";
     onUseConnector: () => void;
 }
 
-function PasteTokenPane({
-    onConnected,
-    variant: _variant,
-    onUseConnector,
-}: PasteTokenPaneProps) {
+function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
     const [token, setToken] = useState("");
     const [serverKey, setServerKey] =
         useState<PlaudServerKey>(DEFAULT_SERVER_KEY);
