@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-21
+
 ### Fixed
 - New signups landed on `/dashboard` with onboarding effectively skipped: `userSettings.onboardingCompleted` was only ever set when manually retriggered from Settings, never on first run. The onboarding dialog now auto-opens on first paint when onboarding is incomplete and is non-dismissible until it's done ([#243](https://github.com/riffado/riffado/pull/243)).
 - Signup with email verification enforced (hosted + SMTP configured) redirected straight to `/onboarding`, which bounced the unauthenticated user to `/login` since no session exists until the verification link is clicked. Signup now shows an in-place "check your email" panel with a rate-limited resend action ([#244](https://github.com/riffado/riffado/pull/244)).
@@ -227,7 +229,8 @@
 - Environment variable validation
 - Path traversal protection
 
-[unreleased]: https://github.com/riffado/riffado/compare/v0.6.1...HEAD
+[unreleased]: https://github.com/riffado/riffado/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/riffado/riffado/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/riffado/riffado/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/riffado/riffado/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/riffado/riffado/releases/tag/v0.5.6
