@@ -20,6 +20,11 @@ import {
  *   with one victim's address burns sender quota and bounce-spams the
  *   victim, hurting the instance's mail reputation. Needs a per-EMAIL cap,
  *   not just per-IP, because a distributed attacker rotates IPs.
+ * - `/send-verification-email` (the signup check-your-email resend action)
+ *   is the same SMTP-burn vector as password reset -- the client-side 30s
+ *   cooldown in `RegisterForm` is UX only and trivially bypassed by
+ *   reloading or calling the endpoint directly, so it needs the same
+ *   per-IP + per-EMAIL server-side cap.
  * - `/sign-in/email` is credential-stuffing surface (per-IP).
  * - `/sign-up/email` is spam-account surface (per-IP).
  * - `/reset-password` consumes a reset token (per-IP).
@@ -44,6 +49,7 @@ const RULES: Record<string, AuthRateRule> = {
     "/sign-up/email": { ipLimit: 5 },
     "/request-password-reset": { ipLimit: 5, emailLimit: 3 },
     "/reset-password": { ipLimit: 5 },
+    "/send-verification-email": { ipLimit: 5, emailLimit: 3 },
 };
 
 function authPath(request: Request): string {

@@ -12,6 +12,9 @@
  *   4. `/request-password-reset` applies a per-email bucket so a single victim
  *      can't be targeted from rotating IPs, and reading the email does NOT
  *      consume the request body (better-auth must still parse it).
+ *   5. `/send-verification-email` gets the same per-email cap as
+ *      `/request-password-reset` -- it's the same SMTP-burn vector, and the
+ *      client-side resend cooldown in `RegisterForm` is UX only.
  */
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
@@ -140,6 +143,25 @@ describe("enforceAuthRateLimit", () => {
         expect(consumeRateLimitBucket).toHaveBeenCalledTimes(1);
         expect(consumeRateLimitBucket).toHaveBeenCalledWith(
             "auth:email:/request-password-reset:a@b.com",
+            expect.objectContaining({ limit: 3 }),
+        );
+    });
+
+    it("applies a per-email bucket on send-verification-email", async () => {
+        (consumeRateLimitBucket as Mock)
+            .mockResolvedValueOnce(allowed()) // IP bucket
+            .mockResolvedValueOnce(blocked()); // email bucket
+
+        const result = await enforceAuthRateLimit(
+            authRequest("/send-verification-email", {
+                email: "a@b.com",
+                callbackURL: "/onboarding",
+            }),
+        );
+
+        expect(result?.status).toBe(429);
+        expect(consumeRateLimitBucket).toHaveBeenLastCalledWith(
+            "auth:email:/send-verification-email:a@b.com",
             expect.objectContaining({ limit: 3 }),
         );
     });

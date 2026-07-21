@@ -16,6 +16,17 @@ import { cn } from "@/lib/utils";
 
 const TECHNICAL_CHANGELOG_URL = `${RIFFADO_REPO_URL}/blob/main/CHANGELOG.md`;
 
+// force-dynamic: `env.IS_HOSTED` is the only condition this page branches
+// on, and it's read at runtime -- without this, Next.js sees no dynamic
+// API in use and statically prerenders the page during `next build`,
+// baking in whatever IS_HOSTED evaluated to in the *build* environment
+// (unset in this project's Dockerfile) rather than the real value the
+// deployed container is configured with. Confirmed live on riffado.com:
+// this page was permanently redirecting to GitHub even though
+// IS_HOSTED=true at runtime, because the redirect got frozen into the
+// cached static output at build time.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = marketingMetadata({
     title: "What's new | Riffado",
     description:

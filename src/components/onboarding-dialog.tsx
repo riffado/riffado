@@ -32,12 +32,21 @@ interface OnboardingDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onComplete: () => void;
+    /**
+     * True when the user has not finished onboarding yet -- makes the
+     * dialog non-dismissible (no close button, Escape and outside-click
+     * are suppressed) so the flow can't be abandoned partway. False for
+     * the voluntary "Re-run Onboarding" re-entry from Settings, which
+     * stays dismissible like before.
+     */
+    mandatory?: boolean;
 }
 
 export function OnboardingDialog({
     open,
     onOpenChange,
     onComplete,
+    mandatory = false,
 }: OnboardingDialogProps) {
     const { refresh } = useRouter();
     const [step, setStep] = useState<OnboardingStep>("welcome");
@@ -113,7 +122,19 @@ export function OnboardingDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+            <DialogContent
+                className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-w-[600px]"
+                hideCloseButton={mandatory}
+                onEscapeKeyDown={(e) => {
+                    if (mandatory) e.preventDefault();
+                }}
+                onPointerDownOutside={(e) => {
+                    if (mandatory) e.preventDefault();
+                }}
+                onInteractOutside={(e) => {
+                    if (mandatory) e.preventDefault();
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-2xl" hidden>
                         Welcome to Riffado
