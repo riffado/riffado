@@ -205,14 +205,23 @@ export async function mirrorStripeSubscription(
             });
         }
     } else {
-        if (n.foundingReservationId && isTerminalSubscriptionStatus(n.status)) {
-            await releaseFoundingMemberReservation({
-                reservationId: n.foundingReservationId,
-                releasedAt: new Date(),
-            });
+        // Only react to a subscription that is genuinely done -- `incomplete`
+        // (set the instant a Checkout-mode subscription is created, before the
+        // buyer finishes or abandons payment) and `paused` are neither live nor
+        // terminal. Treating them like a real lapse would prematurely release
+        // the founding reservation, forfeit founding pricing, and schedule the
+        // account for deletion (with the "your account will be deleted" email)
+        // for someone who hasn't actually canceled anything.
+        if (isTerminalSubscriptionStatus(n.status)) {
+            if (n.foundingReservationId) {
+                await releaseFoundingMemberReservation({
+                    reservationId: n.foundingReservationId,
+                    releasedAt: new Date(),
+                });
+            }
+            await forfeitFoundingMember(userId);
+            await scheduleDeletionForLapsedUser(userId);
         }
-        await forfeitFoundingMember(userId);
-        await scheduleDeletionForLapsedUser(userId);
     }
 }
 

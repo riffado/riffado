@@ -569,4 +569,41 @@ describe("mirrorStripeSubscription", () => {
             }),
         );
     });
+
+    it.each([
+        "incomplete",
+        "paused",
+    ])("does not forfeit founding pricing, release the reservation, schedule deletion, or email on a transient non-terminal status (%s)", async (status) => {
+        plansMock.entitlementsForSubscription.mockReturnValue({
+            plan: "hosted_free",
+        });
+        // A subscription in this status is exactly what Stripe sets the
+        // instant a Checkout-mode subscription is created (before the
+        // buyer finishes or abandons payment) -- it is neither a live
+        // Pro status nor a genuine, terminal lapse.
+        stubUserRow({
+            email: "u1@example.com",
+            foundingMember: true,
+            createdAt: new Date("2026-01-01T00:00:00Z"),
+            everPaidAt: new Date("2026-01-05T00:00:00Z"),
+        });
+
+        await mirrorStripeSubscription(
+            sub({
+                status: status as Stripe.Subscription["status"],
+                metadata: { userId: "u1", foundingReservationId: "fmr_1" },
+            }),
+        );
+
+        expect(queriesMock.setUserPlan).toHaveBeenCalledWith({
+            userId: "u1",
+            plan: "hosted_free",
+        });
+        expect(
+            queriesMock.releaseFoundingMemberReservation,
+        ).not.toHaveBeenCalled();
+        expect(queriesMock.forfeitFoundingMember).not.toHaveBeenCalled();
+        expect(queriesMock.scheduleAccountDeletion).not.toHaveBeenCalled();
+        expect(emailMock.sendGraceStartedEmail).not.toHaveBeenCalled();
+    });
 });
