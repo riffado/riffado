@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- New signups landed on `/dashboard` with onboarding effectively skipped: `userSettings.onboardingCompleted` was only ever set when manually retriggered from Settings, never on first run. The onboarding dialog now auto-opens on first paint when onboarding is incomplete and is non-dismissible until it's done ([#243](https://github.com/riffado/riffado/pull/243)).
+- Signup with email verification enforced (hosted + SMTP configured) redirected straight to `/onboarding`, which bounced the unauthenticated user to `/login` since no session exists until the verification link is clicked. Signup now shows an in-place "check your email" panel with a rate-limited resend action ([#244](https://github.com/riffado/riffado/pull/244)).
+
 ## [0.6.1] - 2026-07-20
 
 ### Fixed
