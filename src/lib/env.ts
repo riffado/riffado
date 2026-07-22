@@ -193,16 +193,13 @@ const baseEnvSchema = z.object({
 
     /**
      * PostHog analytics (hosted-only, hard-gated on IS_HOSTED regardless of
-     * whether these are set -- self-host never sends events to Riffado's
-     * PostHog project). POSTHOG_KEY is the project token; POSTHOG_HOST is
-     * the ingest host (e.g. https://eu.i.posthog.com) used both by the
-     * server-side client and as the /psthg same-origin proxy destination
-     * (src/lib/posthog/proxy.ts, route handlers under src/app/psthg/ --
-     * resolved per-request at runtime, not baked in at build time).
-     * Inert unless POSTHOG_KEY is set.
+     * whether this is set -- self-host never sends events to Riffado's
+     * PostHog project). The project token; ingest host is hardcoded to the
+     * EU cluster in src/lib/posthog-server.ts and src/lib/posthog/proxy.ts
+     * -- Riffado only ever uses PostHog EU, so there's no second region to
+     * make configurable. Inert unless this is set.
      */
     POSTHOG_KEY: z.string().optional(),
-    POSTHOG_HOST: z.string().url("POSTHOG_HOST must be a valid URL").optional(),
 
     SMTP_FROM: z
         .string()
@@ -757,7 +754,6 @@ function validateEnv(): Env {
             RYBBIT_SITE_ID: process.env.RYBBIT_SITE_ID,
             RYBBIT_HOST: process.env.RYBBIT_HOST,
             POSTHOG_KEY: process.env.POSTHOG_KEY,
-            POSTHOG_HOST: process.env.POSTHOG_HOST,
             SMTP_USER: process.env.SMTP_USER,
             SMTP_PASSWORD: process.env.SMTP_PASSWORD,
             SMTP_FROM: process.env.SMTP_FROM,

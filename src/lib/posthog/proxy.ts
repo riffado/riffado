@@ -6,12 +6,14 @@ import { env } from "@/lib/env";
  * in `posthog-init.tsx`). Mirrors `src/lib/rybbit/proxy.ts`'s pattern:
  * a route handler, not a `next.config.ts` static rewrite, specifically
  * because rewrites are resolved once at `next build` time and baked into
- * the shared standalone image -- they can't gate on `IS_HOSTED` or read
- * `POSTHOG_HOST` at container runtime. A route handler runs per-request,
- * so both the hosted gate and the destination host are always current.
+ * the shared standalone image -- they can't gate on `IS_HOSTED` at
+ * container runtime. A route handler runs per-request, so the hosted
+ * gate is always current.
  */
 
-const DEFAULT_POSTHOG_HOST = "https://eu.i.posthog.com";
+/** Riffado only ever uses PostHog EU -- no second region to make configurable. */
+const POSTHOG_HOST = "https://eu.i.posthog.com";
+const POSTHOG_ASSETS_HOST = "https://eu-assets.i.posthog.com";
 
 function gated(): { ok: false; res: NextResponse } | { ok: true } {
     if (!env.IS_HOSTED || !env.POSTHOG_KEY) {
@@ -24,12 +26,9 @@ function gated(): { ok: false; res: NextResponse } | { ok: true } {
 }
 
 function upstreamUrl(path: string, assets: boolean): string {
-    const host = (env.POSTHOG_HOST ?? DEFAULT_POSTHOG_HOST).replace(/\/$/, "");
-    const base = assets
-        ? host.replace(".i.posthog.com", "-assets.i.posthog.com")
-        : host;
+    const host = assets ? POSTHOG_ASSETS_HOST : POSTHOG_HOST;
     const suffix = path.startsWith("/") ? path : `/${path}`;
-    return `${base}${suffix}`;
+    return `${host}${suffix}`;
 }
 
 /**

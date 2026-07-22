@@ -1,6 +1,9 @@
 import { PostHog } from "posthog-node";
 import { env } from "@/lib/env";
 
+/** Riffado only ever uses PostHog EU -- no second region to make configurable. */
+const POSTHOG_HOST = "https://eu.i.posthog.com";
+
 /**
  * Server-side PostHog client. Hard-gated on `IS_HOSTED` -- self-host
  * deployments never construct a client, even if `POSTHOG_KEY` happens
@@ -14,7 +17,7 @@ export function getPostHogClient(): PostHog | null {
 
     if (!posthogClient) {
         posthogClient = new PostHog(env.POSTHOG_KEY, {
-            host: env.POSTHOG_HOST ?? "https://eu.i.posthog.com",
+            host: POSTHOG_HOST,
             flushAt: 1,
             flushInterval: 0,
         });
