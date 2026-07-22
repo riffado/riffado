@@ -58,12 +58,12 @@ export async function billingOverview(): Promise<BillingOverview> {
             (select count(*)::int from users where plan = 'hosted_pro') as "proPlan",
             (select count(*)::int from users where plan = 'hosted_free') as "freePlan",
             (select count(*)::int from users
-             where plan = 'hosted_free'
+             where coalesce(plan, 'hosted_free') = 'hosted_free'
                and plan_transition_until is not null
                and plan_transition_until > now()
             ) as "freePlanInTransition",
             (select count(*)::int from users
-             where plan = 'hosted_free'
+             where coalesce(plan, 'hosted_free') = 'hosted_free'
                and (plan_transition_until is null or plan_transition_until <= now())
             ) as "freePlanLockedOut",
             (select count(*)::int from users
