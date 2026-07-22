@@ -82,6 +82,75 @@ export type PublicChangelogRelease = {
  */
 export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
     {
+        version: "0.6.2",
+        date: "2026-07-21",
+        items: [
+            {
+                tag: "fixed",
+                title: "New accounts now actually see onboarding",
+                body: "Onboarding could be silently skipped on first login. It now opens automatically and walks you through setup before you land on the dashboard.",
+            },
+            {
+                tag: "improved",
+                title: "A clearer next step after signup when email verification is on",
+                body: 'You get an in-place "check your email" screen with a resend button, instead of bouncing back to the sign-in page.',
+            },
+        ],
+    },
+    {
+        // v0.6.1 was a same-day Docker hotfix with no user-visible change; folded into this entry.
+        version: "0.6.0",
+        date: "2026-07-20",
+        items: [
+            {
+                tag: "news",
+                title: "Hosted Pro is live",
+                body: "A managed plan for people who'd rather not run their own server: 50 GB of encrypted storage, 15 hours of included Mynah transcription every month, unlimited devices, and background sync. The first 100 people who subscribe monthly lock in founding-member pricing for as long as they stay subscribed.",
+                link: { href: "/#pricing", label: "See Hosted Pro pricing" },
+            },
+            {
+                tag: "new",
+                title: "Back up everything in one archive",
+                body: "Settings → Export & Backup now builds a complete archive of every recording's audio, transcript, and summary, so you always have a way out with everything intact.",
+            },
+            {
+                tag: "new",
+                title: "Google Gemini as a transcription provider",
+                body: "Add a Gemini API key in Settings → Providers alongside OpenAI, Groq, and the rest.",
+            },
+            {
+                tag: "new",
+                title: "18 more transcription languages",
+                body: "Added coverage across Central and Eastern Europe, the Nordics, the Middle East, South Asia, and Southeast Asia.",
+            },
+            {
+                tag: "improved",
+                title: "Large recordings transcribe more reliably",
+                body: "Oversized audio is now compressed automatically instead of failing outright.",
+            },
+            {
+                tag: "improved",
+                title: "Browser transcription is more accurate",
+                body: "Audio is properly resampled before Whisper processes it in your browser.",
+            },
+            {
+                tag: "fixed",
+                title: "Long recordings get complete summaries again",
+                body: "Summaries previously cut off after about 8,000 characters of transcript. The full transcript is used now.",
+            },
+            {
+                tag: "fixed",
+                title: "GPT-5 and o-series models work for summaries",
+                body: "Fixed a request format mismatch that broke summary generation on newer OpenAI models.",
+            },
+            {
+                tag: "fixed",
+                title: "Reconnecting your Plaud account no longer risks your recordings",
+                body: "A stale or invalid token now offers a safe reconnect path that keeps your existing connection and recordings in place.",
+            },
+        ],
+    },
+    {
         // Standalone marketing-event entry, not tied to a code release.
         // The `version` field stays for the maintainer cross-reference
         // pattern but is not shown; the rebrand is dated, not versioned.
