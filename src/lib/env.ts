@@ -196,8 +196,10 @@ const baseEnvSchema = z.object({
      * whether these are set -- self-host never sends events to Riffado's
      * PostHog project). POSTHOG_KEY is the project token; POSTHOG_HOST is
      * the ingest host (e.g. https://eu.i.posthog.com) used both by the
-     * server-side client and as the /psthg proxy destination in
-     * next.config.ts. Inert unless POSTHOG_KEY is set.
+     * server-side client and as the /psthg same-origin proxy destination
+     * (src/lib/posthog/proxy.ts, route handlers under src/app/psthg/ --
+     * resolved per-request at runtime, not baked in at build time).
+     * Inert unless POSTHOG_KEY is set.
      */
     POSTHOG_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url("POSTHOG_HOST must be a valid URL").optional(),

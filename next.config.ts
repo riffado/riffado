@@ -1,19 +1,6 @@
 import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 
-/**
- * PostHog reverse-proxy destination. Read directly from `process.env`
- * (not `@/lib/env`) because this file is evaluated during `next build`
- * as well as at runtime, and `@/lib/env` throws on missing
- * runtime-only vars during the build phase. Defaults to the EU
- * ingest cluster, matching the hardcoded value this replaces.
- */
-const posthogHost = process.env.POSTHOG_HOST ?? "https://eu.i.posthog.com";
-const posthogAssetsHost = posthogHost.replace(
-    ".i.posthog.com",
-    "-assets.i.posthog.com",
-);
-
 const nextConfig: NextConfig = {
     output: "standalone",
     // Client source maps are only ever generated when the build is going
@@ -22,22 +9,13 @@ const nextConfig: NextConfig = {
     // never emits `.js.map` files at all, so there's nothing a self-host
     // build could accidentally ship publicly-servable.
     productionBrowserSourceMaps: Boolean(process.env.POSTHOG_CLI_API_KEY),
-    async rewrites() {
-        return [
-            {
-                source: "/psthg/static/:path*",
-                destination: `${posthogAssetsHost}/static/:path*`,
-            },
-            {
-                source: "/psthg/array/:path*",
-                destination: `${posthogAssetsHost}/array/:path*`,
-            },
-            {
-                source: "/psthg/:path*",
-                destination: `${posthogHost}/:path*`,
-            },
-        ];
-    },
+    // The PostHog same-origin proxy (`/psthg/*`) used to live here as a
+    // static rewrite, but `rewrites()` is resolved once at `next build`
+    // time and baked into the shared standalone image -- it can't gate on
+    // `IS_HOSTED` or read `POSTHOG_HOST` at container runtime (both
+    // deployment-time-only vars). Moved to route handlers under
+    // `src/app/psthg/` (see `src/lib/posthog/proxy.ts`), which run
+    // per-request and read live env, same pattern as the Rybbit proxy.
     skipTrailingSlashRedirect: true,
     // `scripts/install.sh` is read from disk at request time by the
     // /install.sh routes; declare it so the standalone tracer ships it.
