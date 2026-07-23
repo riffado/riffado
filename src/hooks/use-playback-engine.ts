@@ -107,17 +107,28 @@ export function usePlaybackEngine({
             isSeekingRef.current = false;
             setCurrentTime(audio.currentTime);
         };
+        // Derive isPlaying from the element's own events rather than optimistically
+        // toggling it on click — this keeps the rAF playhead loop below in exact
+        // sync with whether audio is actually advancing (e.g. if play() rejects,
+        // or the OS pauses us, isPlaying still reflects reality).
+        const handlePlay = () => setIsPlaying(true);
+        const handlePause = () => setIsPlaying(false);
 
         if (audio.src !== `/api/recordings/${recordingId}/audio`) {
             audio.src = `/api/recordings/${recordingId}/audio`;
             audio.load();
         }
 
+        // timeupdate is kept as a coarse fallback (it still fires in background
+        // tabs, where requestAnimationFrame is throttled); the rAF loop below
+        // does the smooth 60fps work while the tab is visible and playing.
         audio.addEventListener("timeupdate", updateTime);
         audio.addEventListener("loadedmetadata", updateDuration);
         audio.addEventListener("durationchange", updateDuration);
         audio.addEventListener("ended", handleEnded);
         audio.addEventListener("seeked", handleSeeked);
+        audio.addEventListener("play", handlePlay);
+        audio.addEventListener("pause", handlePause);
 
         if (audio.duration && !Number.isNaN(audio.duration)) {
             setDuration(audio.duration);
@@ -129,22 +140,46 @@ export function usePlaybackEngine({
             audio.removeEventListener("durationchange", updateDuration);
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("seeked", handleSeeked);
+            audio.removeEventListener("play", handlePlay);
+            audio.removeEventListener("pause", handlePause);
         };
     }, [recording, autoPlayNext, onEnded]);
 
+    // Smooth playhead. The HTMLMediaElement `timeupdate` event only fires about
+    // 4x/second, so a playhead/slider driven by it visibly stutters and lags the
+    // audio — it never lands "in line" with where the sound actually is. While
+    // playing, sample audio.currentTime once per animation frame (~60fps) so the
+    // waveform playhead glides exactly with playback. The loop only runs while
+    // playing, so it costs nothing when paused.
+    useEffect(() => {
+        if (!isPlaying) return;
+        const audio = audioRef.current;
+        if (!audio) return;
+        let raf = 0;
+        const tick = () => {
+            if (!isSeekingRef.current) setCurrentTime(audio.currentTime);
+            raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+    }, [isPlaying]);
+
     const togglePlayPause = useCallback(() => {
-        if (!audioRef.current) return;
-        if (isPlaying) {
-            audioRef.current.pause();
-        } else {
-            audioRef.current.playbackRate = playbackSpeed;
-            audioRef.current.play().catch((error) => {
+        const audio = audioRef.current;
+        if (!audio) return;
+        // Use the element's own paused flag as the source of truth and let the
+        // play/pause listeners flip isPlaying — no optimistic toggle that can
+        // desync from reality (e.g. when play() rejects on a stale src).
+        if (audio.paused) {
+            audio.playbackRate = playbackSpeed;
+            audio.play().catch((error) => {
                 console.error("Error playing audio:", error);
                 toast.error("Failed to play audio");
             });
+        } else {
+            audio.pause();
         }
-        setIsPlaying(!isPlaying);
-    }, [isPlaying, playbackSpeed]);
+    }, [playbackSpeed]);
 
     /**
      * Seek to a ratio in [0, 1] of the audio's duration. Used by both
