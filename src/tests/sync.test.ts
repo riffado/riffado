@@ -109,6 +109,9 @@ describe("Sync", () => {
             ];
 
             const mockPlaudClient = {
+                listFiletags: vi
+                    .fn()
+                    .mockResolvedValue({ status: 0, data_filetag_list: [] }),
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: mockPlaudRecordings,
                 }),
@@ -145,6 +148,12 @@ describe("Sync", () => {
                                     { email: "test@example.com" },
                                 ]),
                         }),
+                    }),
+                })
+                // filetag mirror load (sync-filetags): awaited at .where()
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockResolvedValue([]),
                     }),
                 })
                 .mockReturnValueOnce({
@@ -195,6 +204,9 @@ describe("Sync", () => {
             ];
 
             const mockPlaudClient = {
+                listFiletags: vi
+                    .fn()
+                    .mockResolvedValue({ status: 0, data_filetag_list: [] }),
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: mockPlaudRecordings,
                 }),
@@ -231,6 +243,12 @@ describe("Sync", () => {
                                     { email: "test@example.com" },
                                 ]),
                         }),
+                    }),
+                })
+                // filetag mirror load (sync-filetags): awaited at .where()
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockResolvedValue([]),
                     }),
                 })
                 .mockReturnValueOnce({

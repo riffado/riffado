@@ -253,6 +253,39 @@ export const plaudDevices = pgTable(
     }),
 );
 
+// Plaud directories ("filetags"): flat, single-level folders. NULL
+// plaudTagId marks a local-only directory (no Plaud counterpart).
+export const plaudFiletags = pgTable(
+    "plaud_filetags",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        plaudTagId: varchar("plaud_tag_id", { length: 255 }),
+        // Encrypted at rest, same convention as recordings.filename.
+        name: text("name").notNull(),
+        // Canonical Plaud icon name (legacy codepoints are normalized at
+        // persist time), so the official app renders the same icon.
+        icon: varchar("icon", { length: 64 })
+            .notNull()
+            .default("iconfont_folder_foler_1"),
+        color: varchar("color", { length: 9 }).notNull().default("#191919"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        // Postgres allows multiple NULL plaudTagId rows per user, which is
+        // exactly what local-only directories need.
+        userPlaudTagUnique: unique(
+            "plaud_filetags_user_id_plaud_tag_id_unique",
+        ).on(table.userId, table.plaudTagId),
+        userIdIdx: index("plaud_filetags_user_id_idx").on(table.userId),
+    }),
+);
+
 // Recordings
 export const recordings = pgTable(
     "recordings",
@@ -297,6 +330,9 @@ export const recordings = pgTable(
         // from storage at delete time; this row is retained only as a marker
         // keyed by plaudFileId. See issue #56.
         deletedAt: timestamp("deleted_at"),
+        filetagId: text("filetag_id").references(() => plaudFiletags.id, {
+            onDelete: "set null",
+        }),
         createdAt: timestamp("created_at").notNull().defaultNow(),
         updatedAt: timestamp("updated_at").notNull().defaultNow(),
     },
@@ -315,6 +351,11 @@ export const recordings = pgTable(
         userPlaudFileUnique: unique(
             "recordings_user_id_plaud_file_id_unique",
         ).on(table.userId, table.plaudFileId),
+        // Directory filter + per-directory counts on the dashboard.
+        userFiletagIdx: index("recordings_user_id_filetag_id_idx").on(
+            table.userId,
+            table.filetagId,
+        ),
     }),
 );
 

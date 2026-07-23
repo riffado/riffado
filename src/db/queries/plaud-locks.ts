@@ -29,3 +29,22 @@ export async function acquirePlaudConnectLock(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${`plaud_connect:${userId}`}, 0))`,
     );
 }
+
+/**
+ * Serialises concurrent filetag writes for a user so the duplicate-name
+ * check-then-insert in the filetag routes cannot race with itself.
+ * Directory names are encrypted with a random IV, so a unique index on
+ * the name is impossible and the check is read-before-write by nature.
+ *
+ * Namespaced separately from `plaud_connect:` to avoid cross-purpose
+ * deadlocks. Never hold this lock across an HTTP call to Plaud — it is
+ * meant for local-only (DB-only) write paths.
+ */
+export async function acquireFiletagWriteLock(
+    tx: DbTransaction,
+    userId: string,
+): Promise<void> {
+    await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`filetag_write:${userId}`}, 0))`,
+    );
+}

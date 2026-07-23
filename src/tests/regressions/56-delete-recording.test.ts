@@ -149,6 +149,7 @@ describe("Issue #56 — delete recording tombstone", () => {
         deleteFile: Mock;
     };
     let plaudClientMock: {
+        listFiletags: Mock;
         getRecordings: Mock;
         downloadRecording: Mock;
     };
@@ -163,6 +164,9 @@ describe("Issue #56 — delete recording tombstone", () => {
         storageMock.deleteFile.mockClear();
 
         plaudClientMock = {
+            listFiletags: vi
+                .fn()
+                .mockResolvedValue({ status: 0, data_filetag_list: [] }),
             getRecordings: vi.fn().mockResolvedValue({
                 data_file_list: [mockPlaudRecording],
             }),
@@ -196,6 +200,7 @@ describe("Issue #56 — delete recording tombstone", () => {
             [mockConnection], // load Plaud connection
             [{ id: "settings-1" }], // user settings
             [{ email: "test@example.com" }], // user email lookup
+            [], // filetag mirror load (sync-filetags)
             [tombstoned], // existingRecording lookup in processRecording
         ]);
 
@@ -226,6 +231,7 @@ describe("Issue #56 — delete recording tombstone", () => {
             [mockConnection],
             [{ id: "settings-1" }],
             [{ email: "test@example.com" }],
+            [], // filetag mirror load (sync-filetags)
             [existing],
             // uniqueStorageKey lookup — empty so the candidate name is unique.
             [],

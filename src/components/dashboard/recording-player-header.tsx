@@ -5,12 +5,16 @@ import { CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDuration } from "@/lib/format-duration";
+import { getFiletagIcon } from "@/lib/plaud/filetag-icons";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 interface Props {
     recording: Recording;
     /** Resolved playback duration in seconds (0 when not yet loaded). */
     duration: number;
+    /** Directory the recording belongs to, resolved by the Workstation. */
+    filetag?: Filetag | null;
     scrubberStyle: "waveform" | "slider";
     waveformStatus: "idle" | "ready" | "decoding" | "skipped" | "error";
     onDecodeWaveform: () => void;
@@ -29,6 +33,7 @@ interface Props {
 export function RecordingPlayerHeader({
     recording,
     duration,
+    filetag,
     scrubberStyle,
     waveformStatus,
     onDecodeWaveform,
@@ -38,6 +43,7 @@ export function RecordingPlayerHeader({
         formatDuration(duration || recording.duration / 1000),
         formatBytes(recording.filesize),
     ];
+    const FiletagIcon = filetag ? getFiletagIcon(filetag.icon) : null;
 
     return (
         <CardHeader className="gap-1">
@@ -55,6 +61,20 @@ export function RecordingPlayerHeader({
                         <span>{part}</span>
                     </span>
                 ))}
+                {filetag && FiletagIcon && (
+                    <span className="inline-flex items-center gap-2">
+                        <span aria-hidden="true" className="opacity-40">
+                            ·
+                        </span>
+                        <span
+                            className="inline-flex max-w-40 items-center gap-1 rounded-full border px-2 py-0.5"
+                            style={{ color: filetag.color }}
+                        >
+                            <FiletagIcon className="size-3 shrink-0" />
+                            <span className="truncate">{filetag.name}</span>
+                        </span>
+                    </span>
+                )}
                 {scrubberStyle === "waveform" &&
                     waveformStatus === "decoding" && (
                         <span className="inline-flex items-center gap-1">
