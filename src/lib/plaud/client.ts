@@ -189,8 +189,27 @@ export class PlaudClient {
         }
     }
 
+    /**
+     * Fetch the device list. Validates the response shape before returning:
+     * a 200 with a non-zero `status` (or missing/malformed `data_devices`) is
+     * a business-level Plaud error, not a schema `PlaudDeviceListResponse`
+     * guarantees -- callers that iterate `data_devices` without this check
+     * crash on an undefined array (issue #231). Surfaces as a typed,
+     * actionable `PLAUD_API_ERROR` instead.
+     */
     async listDevices(): Promise<PlaudDeviceListResponse> {
-        return this.request<PlaudDeviceListResponse>("/device/list");
+        const body =
+            await this.request<PlaudDeviceListResponse>("/device/list");
+        if (body?.status !== 0 || !Array.isArray(body.data_devices)) {
+            throw new AppError(
+                ErrorCode.PLAUD_API_ERROR,
+                body?.msg ||
+                    "Plaud returned an invalid device list response. Reconnect your Plaud account and try again.",
+                400,
+                { plaudStatus: body?.status },
+            );
+        }
+        return body;
     }
 
     async getRecordings(

@@ -236,7 +236,11 @@ describe("PlaudClient", () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 json: () =>
-                    Promise.resolve({ code: 0, msg: "success", data: {} }),
+                    Promise.resolve({
+                        status: 0,
+                        msg: "success",
+                        data_devices: [],
+                    }),
             });
 
             const result = await client.testConnection();

@@ -82,6 +82,22 @@ export type PublicChangelogRelease = {
  */
 export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
     {
+        // Not tied to a cut app version yet -- the connector-side fixes
+        // (riffado/connector v0.2.1-v0.2.3) already shipped independently;
+        // this entry surfaces them to hosted users ahead of the next
+        // riffado/riffado release. Replace `version` with the real one once
+        // 0.6.3's successor actually ships.
+        version: "unreleased",
+        date: "2026-07-23",
+        items: [
+            {
+                tag: "fixed",
+                title: "Signing in to Plaud through the browser extension actually works now",
+                body: "The Connect-with-Plaud button could get stuck or fail to detect a completed sign-in. Fixed — Google, Apple, and email sign-in through the extension now reliably connects your account.",
+            },
+        ],
+    },
+    {
         version: "0.6.2",
         date: "2026-07-21",
         items: [
