@@ -226,7 +226,51 @@ export interface TranscribeResult {
     detectedLanguage?: string | null;
 }
 
+/**
+ * Per-recording in-flight tracker. Two paths can race to transcribe the
+ * same recording at the same moment:
+ *
+ *   1. The manual `POST /api/recordings/[id]/transcribe` route fires on
+ *      every Retry click; an impatient user clicking twice fans out two
+ *      concurrent provider calls.
+ *   2. The post-sync auto-transcribe path (`queueTranscriptions`) for new
+ *      recordings can land mid-Retry-click.
+ *
+ * Both pay the full provider latency (a 90-min recording through a
+ * diarize+ASR proxy can take ~9 min), and the later call serializes
+ * behind any backend lock. On a provider with a hard request timeout
+ * (OpenAI SDK defaults to 10 min) the queued call can blow past the
+ * cliff and fail even though the first call would have succeeded.
+ *
+ * The tracker collapses concurrent calls for the same recording into a
+ * single shared promise, mirroring the `inFlightSyncs` pattern in
+ * `sync-recordings.ts`. The first caller wins; subsequent callers share
+ * its result (and its `force`/`providerId`/`model` decisions). This is
+ * deliberate: if a caller wants a *different* run after the in-flight
+ * one completes, they call again — the map will be empty by then.
+ */
+const inFlightTranscriptions = new Map<string, Promise<TranscribeResult>>();
+
 export async function transcribeRecording(
+    userId: string,
+    recordingId: string,
+    opts: TranscribeOptions = {},
+): Promise<TranscribeResult> {
+    const key = `${userId}:${recordingId}`;
+    const inFlight = inFlightTranscriptions.get(key);
+    if (inFlight) {
+        return inFlight;
+    }
+    const work = transcribeRecordingInner(userId, recordingId, opts);
+    inFlightTranscriptions.set(key, work);
+    try {
+        return await work;
+    } finally {
+        inFlightTranscriptions.delete(key);
+    }
+}
+
+async function transcribeRecordingInner(
     userId: string,
     recordingId: string,
     opts: TranscribeOptions = {},
