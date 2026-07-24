@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-07-24
+
 ### Fixed
 - `PlaudClient.listDevices()` now validates the Plaud API response shape (`status === 0` and `data_devices` an array) before returning it, instead of trusting a malformed `200` response. A workspace-token mint failure followed by a business-error device-list response crashed the whole Plaud connect flow with an unhandled `TypeError` on `undefined.data_devices`, surfacing as a generic "unexpected error" instead of an actionable message ([#231](https://github.com/riffado/riffado/issues/231)).
 - The companion [riffado/connector](https://github.com/riffado/connector) browser extension had several bugs preventing most "Continue with Plaud" attempts from completing: the plaud.ai tab could close before login finished (v0.2.1), a coincidental non-token localStorage value could be captured as if it were the access token (v0.2.2), and — the actual root cause underneath both — the entire `localStorage`-scanning capture strategy could never reliably find a real token, because Plaud authenticates with an `HttpOnly` session cookie no page JavaScript can read. v0.2.3 replaces it with `chrome.cookies`-based capture, the correct API for reading an `HttpOnly` cookie. See the [connector changelog](https://github.com/riffado/connector/blob/main/CHANGELOG.md) for the full trail.
@@ -239,7 +241,8 @@
 - Environment variable validation
 - Path traversal protection
 
-[unreleased]: https://github.com/riffado/riffado/compare/v0.6.3...HEAD
+[unreleased]: https://github.com/riffado/riffado/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/riffado/riffado/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/riffado/riffado/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/riffado/riffado/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/riffado/riffado/compare/v0.6.0...v0.6.1
