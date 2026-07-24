@@ -112,28 +112,45 @@ export function RichMarkdown({
     const flushList = () => {
         if (list) {
             const key = `l${b++}`;
-            const items = list.items.map((it, idx) => (
-                <li
-                    // biome-ignore lint/suspicious/noArrayIndexKey: parsed output is rebuilt from scratch on every render and never reordered
-                    key={`${key}-${idx}`}
-                    className="leading-relaxed flex gap-2 items-start"
-                >
-                    {it.check !== undefined && (
+            const ordered = list.ordered;
+            const items = list.items.map((it, idx) => {
+                // An ordered list keeps its native list-decimal marker, so it must NOT
+                // become a flex row and must not get a bullet injected - either would
+                // suppress the number. Only unordered rows use the flex + marker layout.
+                const marker =
+                    it.check !== undefined ? (
                         <input
                             type="checkbox"
                             checked={it.check}
                             readOnly
                             className="mt-1.5 shrink-0 accent-accent-cyan"
                         />
-                    )}
-                    {it.check === undefined && (
+                    ) : ordered ? null : (
                         <span className="mt-1.5 size-1.5 rounded-full bg-accent-cyan shrink-0" />
-                    )}
-                    <span>{renderInline(it.text, `${key}-${idx}`)}</span>
-                </li>
-            ));
+                    );
+                return (
+                    <li
+                        // biome-ignore lint/suspicious/noArrayIndexKey: parsed output is rebuilt from scratch on every render and never reordered
+                        key={`${key}-${idx}`}
+                        className={
+                            marker
+                                ? "leading-relaxed flex gap-2 items-start"
+                                : "leading-relaxed"
+                        }
+                    >
+                        {marker}
+                        {marker ? (
+                            <span>
+                                {renderInline(it.text, `${key}-${idx}`)}
+                            </span>
+                        ) : (
+                            renderInline(it.text, `${key}-${idx}`)
+                        )}
+                    </li>
+                );
+            });
             blocks.push(
-                list.ordered ? (
+                ordered ? (
                     <ol key={key} className="my-2 space-y-1 list-decimal pl-5">
                         {items}
                     </ol>
