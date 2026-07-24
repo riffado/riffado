@@ -1,6 +1,14 @@
 "use client";
 
-import type { JSX, ReactNode } from "react";
+import {
+    type JSX,
+    type ReactNode,
+    useCallback,
+    useMemo,
+    useState,
+} from "react";
+import { Input } from "@/components/ui/input";
+import type { SpeakerNameMap } from "@/types/speaker";
 
 function isSafeImageSrc(src: string): boolean {
     return src.startsWith("/api/plaud-assets/") || src.startsWith("https://");
@@ -331,6 +339,31 @@ const SPEAKER_COLORS = [
     "text-sky-400",
 ];
 
+const MAX_SPEAKER_NAME_LENGTH = 200;
+
+interface SpeakerTurn {
+    speaker: string | null;
+    text: string;
+}
+
+function parseSpeakerTurns(text: string): SpeakerTurn[] {
+    const lines = text
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+    const turns: SpeakerTurn[] = [];
+    for (const line of lines) {
+        const m = line.match(SPEAKER_RE);
+        if (m) turns.push({ speaker: m[1], text: m[2] });
+        else if (turns.length && turns[turns.length - 1].speaker === null)
+            turns[turns.length - 1].text += ` ${line}`;
+        else turns.push({ speaker: null, text: line });
+    }
+    return turns;
+}
+
 /**
  * Render a diarized transcript as one block per speaker turn, colouring
  * each speaker label consistently in order of first appearance.
@@ -339,29 +372,50 @@ const SPEAKER_COLORS = [
  * one turn per line. A line with no recognised label is appended to the
  * preceding unlabelled turn. When no line carries a label at all (a plain
  * Whisper transcript, for example) the whole text is rendered as
- * pre-wrapped plain text, which is the previous behaviour.
+ * pre-wrapped plain text.
+ *
+ * `speakerNames` swaps the raw diarization label for a human name at
+ * render time. The transcript text is never rewritten, so the label stays
+ * the stable key, and colours are assigned from that raw label so a
+ * speaker's colour survives a rename.
+ *
+ * Supplying `onRenameSpeaker` turns each label into a click-to-edit chip:
+ * Enter saves, Escape cancels, and saving an empty value clears the name.
+ * Without it the labels render read-only.
  */
 export function SpeakerTranscript({
     text,
     className,
+    speakerNames,
+    onRenameSpeaker,
 }: {
     text: string;
     className?: string;
+    speakerNames?: SpeakerNameMap;
+    onRenameSpeaker?: (speakerLabel: string, displayName: string) => void;
 }): JSX.Element {
-    const lines = text
-        .replace(/\r\n/g, "\n")
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
+    const [editingTurn, setEditingTurn] = useState<number | null>(null);
+    const [draft, setDraft] = useState("");
 
-    const turns: { speaker: string | null; text: string }[] = [];
-    for (const line of lines) {
-        const m = line.match(SPEAKER_RE);
-        if (m) turns.push({ speaker: m[1], text: m[2] });
-        else if (turns.length && turns[turns.length - 1].speaker === null)
-            turns[turns.length - 1].text += ` ${line}`;
-        else turns.push({ speaker: null, text: line });
-    }
+    const turns = useMemo(() => parseSpeakerTurns(text), [text]);
+
+    const colorByLabel = useMemo(() => {
+        const colors: Record<string, string> = {};
+        let assigned = 0;
+        for (const turn of turns) {
+            if (!turn.speaker || colors[turn.speaker]) continue;
+            colors[turn.speaker] =
+                SPEAKER_COLORS[assigned++ % SPEAKER_COLORS.length];
+        }
+        return colors;
+    }, [turns]);
+
+    // Stable identity so React only re-attaches (and re-focuses) the ref
+    // when the input actually mounts, not on every keystroke.
+    const focusOnMount = useCallback((el: HTMLInputElement | null) => {
+        el?.focus();
+        el?.select();
+    }, []);
 
     const hasSpeakers = turns.some((t) => t.speaker !== null);
     if (!hasSpeakers) {
@@ -374,31 +428,101 @@ export function SpeakerTranscript({
         );
     }
 
-    const order: string[] = [];
-    const colorFor = (speaker: string) => {
-        let idx = order.indexOf(speaker);
-        if (idx === -1) {
-            order.push(speaker);
-            idx = order.length - 1;
-        }
-        return SPEAKER_COLORS[idx % SPEAKER_COLORS.length];
+    const editable = typeof onRenameSpeaker === "function";
+
+    const startEditing = (index: number, label: string) => {
+        setDraft(speakerNames?.[label]?.displayName ?? "");
+        setEditingTurn(index);
+    };
+
+    const commit = (label: string) => {
+        setEditingTurn(null);
+        onRenameSpeaker?.(label, draft);
     };
 
     return (
         <div className={`space-y-3 ${className ?? ""}`}>
-            {turns.map((t, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: turns are reparsed from the transcript on every render and never reordered
-                <div key={`turn-${i}`} className="leading-relaxed">
-                    {t.speaker && (
-                        <span
-                            className={`font-semibold ${colorFor(t.speaker)} mr-2`}
-                        >
-                            {t.speaker}:
-                        </span>
-                    )}
-                    <span>{t.text}</span>
-                </div>
-            ))}
+            {turns.map((t, i) => {
+                const label = t.speaker;
+                if (!label) {
+                    return (
+                        // biome-ignore lint/suspicious/noArrayIndexKey: turns are reparsed from the transcript on every render and never reordered
+                        <div key={`turn-${i}`} className="leading-relaxed">
+                            <span>{t.text}</span>
+                        </div>
+                    );
+                }
+
+                const stored = speakerNames?.[label];
+                const isAuto = stored?.source === "auto";
+                const shown = stored?.displayName ?? label;
+                const color = colorByLabel[label] ?? SPEAKER_COLORS[0];
+                const confidence =
+                    isAuto && typeof stored?.confidence === "number"
+                        ? ` ${Math.round(stored.confidence * 100)}% match.`
+                        : "";
+
+                return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: turns are reparsed from the transcript on every render and never reordered
+                    <div key={`turn-${i}`} className="leading-relaxed">
+                        {editingTurn === i ? (
+                            <Input
+                                ref={focusOnMount}
+                                value={draft}
+                                placeholder={label}
+                                maxLength={MAX_SPEAKER_NAME_LENGTH}
+                                aria-label={`Name for ${label}`}
+                                className="mr-2 inline-flex h-6 w-44 px-2 py-0 text-sm md:text-sm"
+                                onChange={(e) => setDraft(e.target.value)}
+                                onBlur={() => setEditingTurn(null)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        commit(label);
+                                    } else if (e.key === "Escape") {
+                                        e.preventDefault();
+                                        setEditingTurn(null);
+                                    }
+                                }}
+                            />
+                        ) : (
+                            <span
+                                className={`mr-2 inline-flex items-baseline gap-1 ${color}`}
+                            >
+                                {editable ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => startEditing(i, label)}
+                                        title={`${label}.${confidence} Click to rename.`}
+                                        className={`cursor-pointer rounded font-semibold hover:underline focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none ${color} ${
+                                            isAuto ? "opacity-80" : ""
+                                        }`}
+                                    >
+                                        {shown}:
+                                    </button>
+                                ) : (
+                                    <span
+                                        className={`font-semibold ${color} ${
+                                            isAuto ? "opacity-80" : ""
+                                        }`}
+                                    >
+                                        {shown}:
+                                    </span>
+                                )}
+                                {isAuto && (
+                                    <span
+                                        title={`Matched by voice.${confidence}`}
+                                        className="text-[10px] tracking-wide text-muted-foreground uppercase"
+                                    >
+                                        auto
+                                    </span>
+                                )}
+                            </span>
+                        )}
+                        <span>{t.text}</span>
+                    </div>
+                );
+            })}
         </div>
     );
 }

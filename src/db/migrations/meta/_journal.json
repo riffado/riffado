@@ -267,6 +267,13 @@
       "when": 1785230494218,
       "tag": "0037_thankful_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788268316571,
+      "tag": "0038_outstanding_archangel",
+      "breakpoints": true
     }
   ]
 }
