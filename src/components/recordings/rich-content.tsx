@@ -39,7 +39,14 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         else if (m[9]) nodes.push(<em key={k}>{m[10]}</em>);
         else if (m[11]) {
             const href = m[13];
-            const safe = href.startsWith("https://") || href.startsWith("/");
+            // Same-origin paths and https only. A leading "//" (or "/\") is
+            // protocol-relative and resolves to an EXTERNAL host, so it must not
+            // pass the "/" check.
+            const safe =
+                href.startsWith("https://") ||
+                (href.startsWith("/") &&
+                    !href.startsWith("//") &&
+                    !href.startsWith("/\\"));
             nodes.push(
                 safe ? (
                     <a
@@ -308,7 +315,12 @@ export function RichMarkdown({
     return <div className={className}>{blocks}</div>;
 }
 
-const SPEAKER_RE = /^(Speaker\s+\w+|[A-Z][\w .'-]{0,40}):\s*(.*)$/;
+// Only the diarization label formats this app actually emits — `SPEAKER_00`
+// (WhisperX), `Speaker 1` (Plaud), and the `UNKNOWN` fallback. A generic
+// `Capitalized:` pattern would misread an ordinary transcript line such as
+// `Question: ...` or `Action item: ...` as a speaker turn and wrongly switch a
+// non-diarized transcript out of its plain-text fallback.
+const SPEAKER_RE = /^(SPEAKER_\w+|Speaker\s+\w+|UNKNOWN):\s*(.*)$/;
 
 const SPEAKER_COLORS = [
     "text-accent-cyan",
