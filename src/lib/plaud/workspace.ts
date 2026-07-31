@@ -13,7 +13,9 @@ function safePlaudUrl(apiBase: string, path: string): URL {
     if (
         parsed.protocol !== "https:" ||
         (parsed.hostname !== "plaud.ai" &&
-            !parsed.hostname.endsWith(".plaud.ai"))
+            !parsed.hostname.endsWith(".plaud.ai") &&
+            parsed.hostname !== "plaud.cn" &&
+            !parsed.hostname.endsWith(".plaud.cn"))
     ) {
         throw new AppError(
             ErrorCode.PLAUD_INVALID_API_BASE,

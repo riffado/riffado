@@ -86,6 +86,8 @@ describe("shouldProxyPlaud", () => {
         expect(shouldProxyPlaud("https://api-apse1.plaud.ai/foo")).toBe(true);
         expect(shouldProxyPlaud("https://resource.plaud.ai/foo")).toBe(true);
         expect(shouldProxyPlaud("https://plaud.ai/")).toBe(true);
+        expect(shouldProxyPlaud("https://api.plaud.cn/foo")).toBe(true);
+        expect(shouldProxyPlaud("https://plaud.cn/")).toBe(true);
     });
 
     it("rejects non-Plaud, http, and malformed URLs", () => {
@@ -93,6 +95,7 @@ describe("shouldProxyPlaud", () => {
         expect(shouldProxyPlaud("https://plaud.ai.evil.com/")).toBe(false);
         expect(shouldProxyPlaud("http://api.plaud.ai/")).toBe(false);
         expect(shouldProxyPlaud("not-a-url")).toBe(false);
+        expect(shouldProxyPlaud("https://plaud.cn.evil.com/")).toBe(false);
     });
 
     it("skips resource.plaud.ai when PLAUD_PROXY_SCOPE=api-only", () => {
