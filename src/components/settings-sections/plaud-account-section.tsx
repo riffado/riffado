@@ -42,6 +42,7 @@ function regionLabel(
     if (server === "global") return "Global";
     if (server === "eu") return "EU (Frankfurt)";
     if (server === "apse1") return "Asia Pacific (Singapore)";
+    if (server === "cn") return "China Mainland";
     return server;
 }
 

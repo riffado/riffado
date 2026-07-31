@@ -316,6 +316,9 @@ describe("PlaudClient", () => {
             expect(serverKeyFromApiBase("https://api-apse1.plaud.ai")).toBe(
                 "apse1",
             );
+            // Resolving to 'cn' (not 'custom') is what makes the settings
+            // page render a readable region label instead of the raw base URL.
+            expect(serverKeyFromApiBase("https://api.plaud.cn")).toBe("cn");
         });
 
         it("should return 'custom' for unknown URLs", () => {
