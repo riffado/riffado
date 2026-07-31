@@ -204,3 +204,29 @@ export function getSummaryPromptById(
     const custom = config.customPrompts.find((p) => p.id === id);
     return custom?.prompt || null;
 }
+
+/**
+ * Validate an untrusted `summaryPrompt` payload before it's encrypted and
+ * stored. Only shape is checked (strings where expected, array of
+ * well-formed custom-prompt entries) -- this is user-owned settings data,
+ * not a cross-user boundary, but a malformed value would otherwise be
+ * silently encrypted and only surface as a broken dropdown or a crash in
+ * `getAllSummaryPrompts` on the next read.
+ */
+export function isValidSummaryPromptConfig(
+    value: unknown,
+): value is SummaryPromptConfiguration {
+    if (typeof value !== "object" || value === null) return false;
+    const config = value as Record<string, unknown>;
+    if (typeof config.selectedPrompt !== "string") return false;
+    if (!Array.isArray(config.customPrompts)) return false;
+    return config.customPrompts.every(
+        (p) =>
+            typeof p === "object" &&
+            p !== null &&
+            typeof (p as Record<string, unknown>).id === "string" &&
+            typeof (p as Record<string, unknown>).name === "string" &&
+            typeof (p as Record<string, unknown>).prompt === "string" &&
+            typeof (p as Record<string, unknown>).createdAt === "string",
+    );
+}

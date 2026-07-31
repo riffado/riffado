@@ -176,6 +176,21 @@ const baseEnvSchema = z.object({
         .transform((val) => (val ? Number(val) : 60 * 60 * 1000))
         .pipe(z.number().int().positive()),
 
+    // Per-user hourly cap on auto-generated summaries (post-transcription
+    // path only -- the manual "Generate summary" button is not throttled).
+    // Defaults to 60/hour. Caps the cost blast radius if a misconfigured
+    // sync replays N recordings or an upstream provider keeps a quota
+    // alive but degraded. Range 1..600.
+    AUTO_SUMMARY_RATE_LIMIT_PER_HOUR: z
+        .string()
+        .regex(
+            /^\d+$/,
+            "AUTO_SUMMARY_RATE_LIMIT_PER_HOUR must be a positive integer",
+        )
+        .optional()
+        .transform((val) => (val ? Number(val) : 60))
+        .pipe(z.number().int().positive().max(600)),
+
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z
         .string()
@@ -748,6 +763,8 @@ function validateEnv(): Env {
             WHISPER_COMPRESS_BITRATE_KBPS:
                 process.env.WHISPER_COMPRESS_BITRATE_KBPS,
             WHISPER_REQUEST_TIMEOUT_MS: process.env.WHISPER_REQUEST_TIMEOUT_MS,
+            AUTO_SUMMARY_RATE_LIMIT_PER_HOUR:
+                process.env.AUTO_SUMMARY_RATE_LIMIT_PER_HOUR,
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,

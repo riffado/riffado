@@ -138,23 +138,148 @@ describe("transcribeViaMynah", () => {
         expect(fetchSpy).not.toHaveBeenCalled();
     });
 
-    it("refunds the reservation when Mynah returns an error", async () => {
+    it("refunds the reservation and gives up after exhausting retries on a persistent transient error", async () => {
+        vi.useFakeTimers();
+        try {
+            reserveMock.mockResolvedValue({
+                userId: "u1",
+                seconds: 65,
+                reserved: true,
+            });
+            const fetchSpy = vi
+                .fn()
+                .mockResolvedValue(
+                    new Response("upstream down", { status: 502 }),
+                );
+            vi.stubGlobal("fetch", fetchSpy);
+
+            const result = transcribeViaMynah(input);
+            const assertion = expect(result).rejects.toThrow(/502/);
+            await vi.runAllTimersAsync();
+            await assertion;
+
+            // Initial attempt + 2 retries (MAX_RETRIES).
+            expect(fetchSpy).toHaveBeenCalledTimes(3);
+            expect(releaseMock).toHaveBeenCalledOnce();
+            expect(commitMock).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("does not retry a non-transient (4xx) error", async () => {
         reserveMock.mockResolvedValue({
             userId: "u1",
             seconds: 65,
             reserved: true,
         });
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValue(
-                    new Response("upstream down", { status: 502 }),
-                ),
-        );
+        const fetchSpy = vi
+            .fn()
+            .mockResolvedValue(new Response("bad request", { status: 400 }));
+        vi.stubGlobal("fetch", fetchSpy);
 
-        await expect(transcribeViaMynah(input)).rejects.toThrow(/502/);
+        await expect(transcribeViaMynah(input)).rejects.toThrow(/400/);
+        expect(fetchSpy).toHaveBeenCalledOnce();
         expect(releaseMock).toHaveBeenCalledOnce();
-        expect(commitMock).not.toHaveBeenCalled();
+    });
+
+    it("retries a transient (524) gateway timeout and succeeds", async () => {
+        vi.useFakeTimers();
+        try {
+            reserveMock.mockResolvedValue({
+                userId: "u1",
+                seconds: 65,
+                reserved: true,
+            });
+            const fetchSpy = vi
+                .fn()
+                .mockResolvedValueOnce(
+                    new Response("gateway timeout", { status: 524 }),
+                )
+                .mockResolvedValueOnce(
+                    new Response(
+                        JSON.stringify({ text: "hi", language: "en" }),
+                        { status: 200 },
+                    ),
+                );
+            vi.stubGlobal("fetch", fetchSpy);
+
+            const result = transcribeViaMynah(input);
+            await vi.runAllTimersAsync();
+            await expect(result).resolves.toEqual({
+                text: "hi",
+                detectedLanguage: "en",
+            });
+
+            expect(fetchSpy).toHaveBeenCalledTimes(2);
+            expect(commitMock).toHaveBeenCalledOnce();
+            expect(releaseMock).not.toHaveBeenCalled();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("reuses the same idempotency key across every retry attempt of one logical request", async () => {
+        vi.useFakeTimers();
+        try {
+            reserveMock.mockResolvedValue({
+                userId: "u1",
+                seconds: 65,
+                reserved: true,
+            });
+            const fetchSpy = vi
+                .fn()
+                .mockResolvedValueOnce(
+                    new Response("bad gateway", { status: 502 }),
+                )
+                .mockResolvedValueOnce(
+                    new Response(
+                        JSON.stringify({ text: "hi", language: "en" }),
+                        { status: 200 },
+                    ),
+                );
+            vi.stubGlobal("fetch", fetchSpy);
+
+            const result = transcribeViaMynah(input);
+            await vi.runAllTimersAsync();
+            await expect(result).resolves.toEqual({
+                text: "hi",
+                detectedLanguage: "en",
+            });
+
+            expect(fetchSpy).toHaveBeenCalledTimes(2);
+            const [, firstInit] = fetchSpy.mock.calls[0];
+            const [, secondInit] = fetchSpy.mock.calls[1];
+            const firstKey = firstInit.headers["idempotency-key"];
+            const secondKey = secondInit.headers["idempotency-key"];
+            expect(firstKey).toBeTruthy();
+            expect(secondKey).toBe(firstKey);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("uses a fresh idempotency key for a separate transcription call", async () => {
+        reserveMock.mockResolvedValue({
+            userId: "u1",
+            seconds: 65,
+            reserved: true,
+        });
+        const fetchSpy = vi.fn().mockImplementation(
+            async () =>
+                new Response(JSON.stringify({ text: "hi", language: "en" }), {
+                    status: 200,
+                }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await transcribeViaMynah(input);
+        await transcribeViaMynah(input);
+
+        const [, firstInit] = fetchSpy.mock.calls[0];
+        const [, secondInit] = fetchSpy.mock.calls[1];
+        expect(secondInit.headers["idempotency-key"]).not.toBe(
+            firstInit.headers["idempotency-key"],
+        );
     });
 });

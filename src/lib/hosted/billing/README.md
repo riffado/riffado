@@ -32,11 +32,10 @@ Pro-granting status defensively, but in practice a live subscription means paid.
    creates two Sessions. That's harmless: only the Session the browser
    navigates to can be completed, and the other expires unused (no double
    charge).
-2. **Webhook delivery claim** — `stripe_webhook_events(event_id)`,
-   `claimWebhookDelivery()`. First-write-wins on `event.id`; duplicate Stripe
-   deliveries are acked without re-running side effects. The claim row is
-   written BEFORE processing, so a transient handler failure is not retried on
-   redelivery (see below).
+2. **Webhook inbox** — `stripe_webhook_events(event_id)` stores every verified
+   Stripe event as `pending` before the route acknowledges it. A worker claims
+   rows as `processing`, then marks them `completed` or retries failures with
+   exponential backoff. The unique event id makes Stripe redelivery safe.
 3. `mirror.ts` is idempotent by construction — re-mirroring the same
    subscription (webhook redelivery, reconcile tick) converges to the same
    local state, and the welcome/grace emails dedup once-only at `email_log`.
@@ -89,25 +88,26 @@ Successful payment consumes the reservation from subscription metadata and stamp
 clears only `users.founding_member`, so the active price is forfeited without
 reopening capacity.
 
-## Webhook claim blocks transient-failure retries
+## Durable webhook inbox
 
-`claimWebhookDelivery` writes the `stripe_webhook_events` row BEFORE downstream
-processing runs — that is how duplicate deliveries are suppressed. Trade-off: if
-`mirror*` throws transiently, Stripe's redelivery of the same `event.id` hits
-the claim row and is acked without re-running the work.
+After signature verification, the route inserts the event payload as `pending`
+and returns 200 only after that insert succeeds. The billing worker claims due
+rows with `FOR UPDATE SKIP LOCKED`, marks them `processing`, and guards every
+completion/failure write with a per-claim token. A crashed process loses its
+15-minute lease; another process can claim it without accepting a late write
+from the original worker.
 
-Posture: **fail loud, operator replays manually.**
+Failures retry with exponential backoff (one minute through one hour) for five
+attempts. A terminal failure remains as `failed`, with its error and attempts
+preserved. An elevated admin can POST `{ eventId, reason }` to
+`/api/admin/actions/replay-stripe-webhook` to requeue only a failed event; this
+resets its attempts without deleting its durable or audit row. Replaying an
+already-pending, processing, or completed event is a logged no-op.
 
-1. Sentry / log alert fires on `[stripe-webhook] handler threw for ...`.
-2. Operator opens the Stripe dashboard → Developers → Events, finds the event,
-   and resends it.
-3. The duplicate-claim short-circuit fires. To force re-processing, delete the
-   row first: `DELETE FROM stripe_webhook_events WHERE event_id = '<id>';` then
-   resend the event.
-
-Because `mirror.ts` is idempotent, the safest recovery is usually the
-`reconcile` tick (below) rather than a manual replay — it re-fetches live state
-from Stripe and re-mirrors.
+Reconciliation remains the drift safety net, and is still the preferred repair
+for subscription state that can be reconstructed from Stripe. The inbox also
+preserves event-specific work such as payment-failure and analytics side effects
+that reconciliation cannot reproduce.
 
 ## Reconcile
 
@@ -120,9 +120,9 @@ state to Stripe's without depending on webhook delivery.
 
 `src/app/api/stripe/webhook/route.ts` verifies the signature with
 `constructEventAsync(rawBody, sig, STRIPE_WEBHOOK_SECRET)` (SubtleCrypto; works
-in both Node and Edge), then dispatches the verified event. It always 200s after
-a valid signature so Stripe stops retrying; handler errors are logged, not
-surfaced. Guards: `env.IS_HOSTED` (404 on self-host) and configured keys (503).
+in both Node and Edge), then writes the verified event to the inbox. It returns
+200 only after durable storage succeeds; a persistence failure returns 500 so
+Stripe retries. Guards: `env.IS_HOSTED` (404 on self-host) and configured keys (503).
 The hostname gate allows `/api/stripe/*` on both the customer host and the admin
 host (`ADMIN_HOST_SHARED_PREFIXES`).
 
@@ -154,5 +154,6 @@ through to the subscription metadata and mirrored back onto the local row.
   `cancelSubscription`, `createBillingPortalSession`, `getOrCreateStripeCustomer`.
 - `mirror.ts` — `mirrorStripeSubscription`, `mirrorSubscriptionById`,
   `mirrorCheckoutSession`.
-- `webhook.ts` — dispatch: claim idempotency, delegate to mirror, expire founding reservations, payment-failed email.
+- `webhook.ts` — dispatches a claimed inbox event to mirror, reservation expiry, and payment-failed email.
+- `webhook-inbox.ts` — claims, retries, and completes the durable Stripe event inbox.
 - `reconcile.ts` — periodic drift correction against live Stripe state.

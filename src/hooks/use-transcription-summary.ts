@@ -2,6 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    getAllSummaryPrompts,
+    getDefaultSummaryPromptConfig,
+    type SummaryPromptConfiguration,
+} from "@/lib/ai/summary-presets";
+
+export interface SummaryPromptOption {
+    id: string;
+    name: string;
+    isPreset: boolean;
+}
 
 export interface SummaryData {
     summary: string | null;
@@ -9,6 +20,14 @@ export interface SummaryData {
     actionItems: string[] | null;
     provider?: string;
     model?: string;
+    /** Prompt id actually used server-side. Only present on POST responses. */
+    promptId?: string;
+    /**
+     * True when the requested prompt id couldn't be resolved (e.g. a
+     * custom prompt deleted from another tab) and the server fell back
+     * to the default prompt instead. Only present on POST responses.
+     */
+    promptFallback?: boolean;
 }
 
 interface UseTranscriptionSummaryOptions {
@@ -40,12 +59,59 @@ export function useTranscriptionSummary({
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
     const [isSummarizing, setIsSummarizing] = useState(false);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
-    const [summaryPreset, setSummaryPreset] = useState("general");
+    const [summaryPreset, setSummaryPresetState] = useState("general");
+    // Set the moment the caller (the per-recording dropdown) makes an
+    // explicit choice. Guards the settings-fetch effect below from
+    // clobbering that choice if the fetch resolves afterwards -- without
+    // this, picking a prompt right after the page loads could get silently
+    // reverted back to the saved default a moment later.
+    const userSelectedPresetRef = useRef(false);
+    const setSummaryPreset = useCallback((preset: string) => {
+        userSelectedPresetRef.current = true;
+        setSummaryPresetState(preset);
+    }, []);
+    const [summaryPromptOptions, setSummaryPromptOptions] = useState<
+        SummaryPromptOption[]
+    >(() =>
+        getAllSummaryPrompts(getDefaultSummaryPromptConfig()).map((p) => ({
+            id: p.id,
+            name: p.name,
+            isPreset: p.isPreset,
+        })),
+    );
 
     // Re-fetch trigger separate from the URL/id key so callers can
     // bump it imperatively (e.g. right after a re-transcribe finishes,
     // before the new text has propagated through props).
     const [summaryFetchKey, setSummaryFetchKey] = useState(0);
+
+    // Load the user's saved default prompt + custom prompts once so the
+    // per-recording dropdown initializes to the actual default (not a
+    // hardcoded "general") and lists custom prompts alongside presets.
+    useEffect(() => {
+        const controller = new AbortController();
+        fetch("/api/settings/user", { signal: controller.signal })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                const config = data?.summaryPrompt as
+                    | SummaryPromptConfiguration
+                    | null
+                    | undefined;
+                if (!config) return;
+                if (config.selectedPrompt && !userSelectedPresetRef.current) {
+                    setSummaryPresetState(config.selectedPrompt);
+                }
+                setSummaryPromptOptions(
+                    getAllSummaryPrompts(config).map((p) => ({
+                        id: p.id,
+                        name: p.name,
+                        isPreset: p.isPreset,
+                    })),
+                );
+            })
+            .catch(() => {});
+        return () => controller.abort();
+    }, []);
 
     // Detect when transcription text actually changes -> invalidate
     // the cached summary so the next fetch lands fresh. We compare
@@ -97,7 +163,13 @@ export function useTranscriptionSummary({
             if (response.ok) {
                 const data = (await response.json()) as SummaryData;
                 setSummaryData(data);
-                toast.success("Summary generated");
+                if (data.promptFallback) {
+                    toast.warning(
+                        "Selected summary prompt is no longer available -- used your default prompt instead.",
+                    );
+                } else {
+                    toast.success("Summary generated");
+                }
             } else {
                 const error = await response.json().catch(() => ({}));
                 toast.error(error.error || "Summary generation failed");
@@ -150,6 +222,7 @@ export function useTranscriptionSummary({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
+        summaryPromptOptions,
         handleSummarize,
         handleDeleteSummary,
         refetchSummary,

@@ -8,6 +8,7 @@ const {
     transitionMock,
     foundingReservationsMock,
     reconcileMock,
+    webhookInboxMock,
 } = vi.hoisted(() => ({
     cycleCloseMock: { closeDueCycles: vi.fn() },
     lapseMock: { processExpiredTrials: vi.fn() },
@@ -16,6 +17,7 @@ const {
     transitionMock: { processTransitionEmails: vi.fn() },
     foundingReservationsMock: { reconcileExpiredFoundingReservations: vi.fn() },
     reconcileMock: { reconcileStaleSubscriptions: vi.fn() },
+    webhookInboxMock: { processStripeWebhookInbox: vi.fn() },
 }));
 
 vi.mock("@/lib/hosted/billing/cycle-close", () => cycleCloseMock);
@@ -28,6 +30,7 @@ vi.mock(
     () => foundingReservationsMock,
 );
 vi.mock("@/lib/hosted/billing/reconcile", () => reconcileMock);
+vi.mock("@/lib/hosted/billing/webhook-inbox", () => webhookInboxMock);
 vi.mock("@/lib/env", () => ({
     env: { IS_HOSTED: true, BILLING_ENABLED: true },
 }));
@@ -67,6 +70,12 @@ function zeroResults() {
     reconcileMock.reconcileStaleSubscriptions.mockResolvedValue({
         inspected: 0,
         errors: 0,
+    });
+    webhookInboxMock.processStripeWebhookInbox.mockResolvedValue({
+        claimed: 0,
+        completed: 0,
+        retried: 0,
+        failed: 0,
     });
 }
 

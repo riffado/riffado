@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- Custom summary prompts are now reachable from Settings → Summary: create, edit, view, and delete custom prompts, and select one as the default alongside the built-in presets. The per-recording summary dropdown also lists custom prompts and now initializes to the saved default instead of always defaulting to "General Summary" ([#199](https://github.com/riffado/riffado/issues/199)).
+
+### Fixed
+- Changing the default summary prompt in Settings → Summary wiped any custom summary prompts on every save, since the request always sent `customPrompts: []` instead of the current list ([#199](https://github.com/riffado/riffado/issues/199)).
+
+### Changed
+- Migration `0036_wide_raider` upgrades `stripe_webhook_events` to a durable Stripe event inbox. Inert on self-host unless hosted billing is configured.
+
 ## [0.6.4] - 2026-07-24
 
 ### Fixed

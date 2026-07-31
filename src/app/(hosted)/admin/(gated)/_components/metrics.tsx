@@ -138,9 +138,29 @@ export function formatHours(ms: number): string {
     return `${Math.round(hours).toLocaleString("en-US")}h`;
 }
 
+/**
+ * Coerce a `Date | null | undefined` prop to a real `Date` instance,
+ * returning `null` if it isn't one (or isn't a valid one).
+ *
+ * These admin pages source their timestamps from raw `db.execute(sql\`...\`)`
+ * queries (see `src/db/queries/admin-billing.ts`), where the `Date` return
+ * type is a compile-time annotation only -- it isn't enforced at runtime.
+ * A value that reaches here as an ISO string (or otherwise non-Date) used
+ * to crash `formatDate`/`formatRelative` with "x.getTime is not a
+ * function", taking down the whole page (e.g. /admin/billing). Same guard
+ * `compactAgo` in `src/components/sync-button.tsx` already uses for this
+ * exact failure mode.
+ */
+function toValidDate(d: Date | null | undefined): Date | null {
+    if (!d) return null;
+    const date = d instanceof Date ? d : new Date(d);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function formatDate(d: Date | null | undefined): string {
-    if (!d) return "—";
-    return d.toLocaleString("en-US", {
+    const date = toValidDate(d);
+    if (!date) return "—";
+    return date.toLocaleString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -150,8 +170,9 @@ export function formatDate(d: Date | null | undefined): string {
 }
 
 export function formatRelative(d: Date | null | undefined): string {
-    if (!d) return "never";
-    const diffMs = Date.now() - d.getTime();
+    const date = toValidDate(d);
+    if (!date) return "never";
+    const diffMs = Date.now() - date.getTime();
     const sec = Math.floor(diffMs / 1000);
     if (sec < 60) return `${sec}s ago`;
     const min = Math.floor(sec / 60);

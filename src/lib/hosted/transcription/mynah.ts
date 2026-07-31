@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { env } from "@/lib/env";
 import {
     commitMynahReservation,
@@ -32,6 +33,21 @@ export interface MynahTranscribeInput {
     language?: string;
 }
 
+// Mirrors `PlaudClient`'s retry pattern (src/lib/plaud/client.ts) -- a
+// transient gateway failure (Cloudflare 524 timeout, 502/503 during a
+// deploy) shouldn't fail the whole transcription and burn the user's turn
+// when a short retry would likely succeed.
+const MAX_RETRIES = 2;
+const INITIAL_RETRY_DELAY_MS = 1000;
+
+function isTransientStatus(status: number): boolean {
+    return status === 502 || status === 503 || status === 504 || status === 524;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * True when `value` is an absolute http(s) URL Mynah can fetch on its own.
  * S3-style storage yields absolute presigned URLs; local storage yields a
@@ -44,6 +60,92 @@ function isFetchableUrl(value: string): boolean {
         return protocol === "http:" || protocol === "https:";
     } catch {
         return false;
+    }
+}
+
+interface PostTranscriptionRequestInput {
+    mynahBaseUrl: string;
+    mynahServiceToken: string;
+    userId: string;
+    url: string;
+    language?: string;
+}
+
+/**
+ * POST the transcription request to Mynah, retrying transient gateway
+ * failures (502/503/504/524) with exponential backoff before giving up.
+ * Non-transient failures (4xx, or 5xx after retries are exhausted) throw
+ * a status-only `Error` -- the upstream body can contain internal Mynah
+ * diagnostics, so the detail is logged server-side only, not propagated
+ * to the client.
+ *
+ * A 502/503/504/524 is ambiguous: the gateway timing out doesn't tell us
+ * whether Mynah ever started (or finished) the work, so a naive retry can
+ * duplicate billed transcription work server-side while we only keep one
+ * local result/reservation. Every attempt for one logical request
+ * (initial + retries) carries the same `idempotency-key` header so Mynah
+ * can de-duplicate on its side; this is a client-side mitigation only --
+ * it's a no-op unless Mynah's API honors the header, which this repo
+ * can't verify (Mynah runs as a separate service, see AGENTS.md).
+ */
+async function postTranscriptionRequest(
+    input: PostTranscriptionRequestInput,
+): Promise<{ text?: string; language?: string | null }> {
+    const { mynahBaseUrl, mynahServiceToken, userId, url, language } = input;
+    const idempotencyKey = randomUUID();
+    let attempt = 0;
+    for (;;) {
+        const res = await fetch(`${mynahBaseUrl}/v1/audio/transcriptions`, {
+            method: "POST",
+            headers: {
+                authorization: `Bearer ${mynahServiceToken}`,
+                "content-type": "application/json",
+                "x-riffado-user-id": userId,
+                "idempotency-key": idempotencyKey,
+            },
+            body: JSON.stringify({
+                url,
+                response_format: "verbose_json",
+                ...(language ? { language } : {}),
+            }),
+        });
+
+        if (res.ok) {
+            return (await res.json()) as {
+                text?: string;
+                language?: string | null;
+            };
+        }
+
+        if (isTransientStatus(res.status) && attempt < MAX_RETRIES) {
+            await res.text().catch(() => "");
+            const delay = INITIAL_RETRY_DELAY_MS * 2 ** attempt;
+            attempt += 1;
+            console.warn(
+                `[mynah] transcription request failed (${res.status}) for user ${userId}, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`,
+            );
+            await sleep(delay);
+            continue;
+        }
+
+        // The upstream body can contain internal Mynah diagnostics; this
+        // error's message propagates all the way to the client via
+        // transcribeRecording's catch block (result.error -> AppError
+        // message -> JSON response), so log the detail server-side only
+        // and throw a status-only message.
+        const detail = await res.text().catch(() => "");
+        console.error(
+            `[mynah] transcription request failed (${res.status}) for user ${userId}: ${detail.slice(0, 2000)}`,
+        );
+        const upstreamError = new Error(
+            `Mynah transcription failed (${res.status})`,
+        );
+        captureServerException(upstreamError, {
+            source: "mynah",
+            distinctId: userId,
+            status: res.status,
+        });
+        throw upstreamError;
     }
 }
 
@@ -99,45 +201,13 @@ export async function transcribeViaMynah(
             throw configError;
         }
 
-        const res = await fetch(`${mynahBaseUrl}/v1/audio/transcriptions`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${mynahServiceToken}`,
-                "content-type": "application/json",
-                "x-riffado-user-id": input.userId,
-            },
-            body: JSON.stringify({
-                url,
-                response_format: "verbose_json",
-                ...(input.language ? { language: input.language } : {}),
-            }),
+        const body = await postTranscriptionRequest({
+            mynahBaseUrl,
+            mynahServiceToken,
+            userId: input.userId,
+            url,
+            language: input.language,
         });
-
-        if (!res.ok) {
-            // The upstream body can contain internal Mynah diagnostics; this
-            // error's message propagates all the way to the client via
-            // transcribeRecording's catch block (result.error -> AppError
-            // message -> JSON response), so log the detail server-side only
-            // and throw a status-only message.
-            const detail = await res.text().catch(() => "");
-            console.error(
-                `[mynah] transcription request failed (${res.status}) for user ${input.userId}: ${detail.slice(0, 2000)}`,
-            );
-            const upstreamError = new Error(
-                `Mynah transcription failed (${res.status})`,
-            );
-            captureServerException(upstreamError, {
-                source: "mynah",
-                distinctId: input.userId,
-                status: res.status,
-            });
-            throw upstreamError;
-        }
-
-        const body = (await res.json()) as {
-            text?: string;
-            language?: string | null;
-        };
 
         commitMynahReservation(reservation);
         return {
