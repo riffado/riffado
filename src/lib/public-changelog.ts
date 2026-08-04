@@ -95,6 +95,11 @@ export const PUBLIC_CHANGELOG: PublicChangelogRelease[] = [
                 title: "Signing in to Plaud through the browser extension actually works now",
                 body: "The Connect-with-Plaud button could get stuck or fail to detect a completed sign-in. Fixed — Google, Apple, and email sign-in through the extension now reliably connects your account.",
             },
+            {
+                tag: "fixed",
+                title: "Subscription status could get out of sync after a billing change",
+                body: "A timing issue with how we process billing updates could occasionally leave your account showing the wrong plan status after subscribing or changing plans. Fixed.",
+            },
         ],
     },
     {

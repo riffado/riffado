@@ -4,6 +4,7 @@ import {
     adminActionLog,
     plaudConnections,
     recordings,
+    stripeWebhookEvents,
     users,
 } from "@/db/schema";
 import { AppError, ErrorCode } from "@/lib/errors";
@@ -365,6 +366,70 @@ export async function extendTransitionWindow(
             planTransitionUntil: newUntil,
             extendedFrom: u.planTransitionUntil,
         };
+    });
+}
+
+/** Requeue a terminal Stripe event without deleting the durable inbox row. */
+export async function replayStripeWebhookEvent(
+    ctx: ActionContext,
+    eventId: string,
+): Promise<{ ok: true; requeued: boolean }> {
+    assertReason(ctx.reason);
+    return db.transaction(async (tx) => {
+        const [event] = await tx
+            .select({
+                eventId: stripeWebhookEvents.eventId,
+                status: stripeWebhookEvents.status,
+                attempts: stripeWebhookEvents.attempts,
+                lastError: stripeWebhookEvents.lastError,
+            })
+            .from(stripeWebhookEvents)
+            .where(eq(stripeWebhookEvents.eventId, eventId))
+            .for("update")
+            .limit(1);
+        if (!event) {
+            throw new AppError(
+                ErrorCode.NOT_FOUND,
+                "Stripe webhook event not found",
+                404,
+            );
+        }
+        if (event.status !== "failed") {
+            await writeActionLog(tx, {
+                ctx,
+                action: "replay_stripe_webhook_noop",
+                targetUserId: null,
+                targetResourceId: eventId,
+                before: { status: event.status, attempts: event.attempts },
+                after: { status: event.status, attempts: event.attempts },
+            });
+            return { ok: true, requeued: false };
+        }
+        await tx
+            .update(stripeWebhookEvents)
+            .set({
+                status: "pending",
+                attempts: 0,
+                claimToken: null,
+                startedAt: null,
+                nextAttemptAt: new Date(),
+                failedAt: null,
+                updatedAt: new Date(),
+            })
+            .where(eq(stripeWebhookEvents.eventId, eventId));
+        await writeActionLog(tx, {
+            ctx,
+            action: "replay_stripe_webhook",
+            targetUserId: null,
+            targetResourceId: eventId,
+            before: {
+                status: event.status,
+                attempts: event.attempts,
+                lastError: event.lastError,
+            },
+            after: { status: "pending", attempts: 0 },
+        });
+        return { ok: true, requeued: true };
     });
 }
 

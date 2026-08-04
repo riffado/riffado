@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db";
 import {
-    claimWebhookDelivery,
     expireFoundingMemberReservationByCheckoutSession,
     getBillingCustomerByStripeId,
 } from "@/db/queries/billing";
@@ -26,23 +25,11 @@ function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
 }
 
 /**
- * Idempotent Stripe webhook dispatch. The caller (route) is responsible
- * for signature verification; this consumes the already-verified event.
- * Duplicate deliveries are skipped at the DB claim on `event.id`.
+ * Dispatches one event claimed from the durable Stripe inbox. The receiver
+ * verifies and persists events; the worker owns retries and idempotency.
  */
 export async function handleStripeWebhook(event: Stripe.Event): Promise<void> {
-    const claim = await claimWebhookDelivery({
-        eventId: event.id,
-        type: event.type,
-    });
-    if (!claim) {
-        console.log(
-            `[stripe-webhook] duplicate delivery for ${event.id}; acknowledging`,
-        );
-        return;
-    }
-
-    console.log(`[stripe-webhook] received ${event.type} id=${event.id}`);
+    console.log(`[stripe-webhook] processing ${event.type} id=${event.id}`);
 
     switch (event.type) {
         case "checkout.session.completed": {
@@ -144,21 +131,12 @@ async function handleInvoicePaymentFailed(
     const base = env.APP_URL?.replace(/\/$/, "");
     if (!base) return;
 
-    try {
-        await sendPaymentFailedEmail({
-            userId,
-            email: row.email,
-            paymentId: invoice.id ?? `invoice:${subId}`,
-            billingUrl: `${base}/settings#billing`,
-            nextRetryAt: unixToDate(invoice.next_payment_attempt),
-            accessUntil: unixToDate(
-                sub.items.data[0]?.current_period_end ?? null,
-            ),
-        });
-    } catch (error) {
-        console.error(
-            `[stripe-webhook] payment-failed email failed for user ${userId}:`,
-            error,
-        );
-    }
+    await sendPaymentFailedEmail({
+        userId,
+        email: row.email,
+        paymentId: invoice.id ?? `invoice:${subId}`,
+        billingUrl: `${base}/settings#billing`,
+        nextRetryAt: unixToDate(invoice.next_payment_attempt),
+        accessUntil: unixToDate(sub.items.data[0]?.current_period_end ?? null),
+    });
 }

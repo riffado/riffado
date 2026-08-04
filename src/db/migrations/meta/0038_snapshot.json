@@ -1,6 +1,6 @@
 {
-  "id": "fefc5511-d9ed-47a3-b6ba-ea18202650da",
-  "prevId": "caf9f869-84c0-4517-8d5a-68e5748776d6",
+  "id": "01ce2cec-3032-43c6-8422-2ed97e49cb79",
+  "prevId": "eff627c9-f994-4dcd-8768-6902228b4d3c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1889,6 +1889,110 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.plaud_filetags": {
+      "name": "plaud_filetags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plaud_tag_id": {
+          "name": "plaud_tag_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "icon": {
+          "name": "icon",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'iconfont_folder_foler_1'"
+        },
+        "color": {
+          "name": "color",
+          "type": "varchar(9)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'#191919'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "plaud_filetags_user_id_idx": {
+          "name": "plaud_filetags_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "plaud_filetags_user_id_users_id_fk": {
+          "name": "plaud_filetags_user_id_users_id_fk",
+          "tableFrom": "plaud_filetags",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "plaud_filetags_user_id_plaud_tag_id_unique": {
+          "name": "plaud_filetags_user_id_plaud_tag_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "user_id",
+            "plaud_tag_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.recordings": {
       "name": "recordings",
       "schema": "",
@@ -2014,6 +2118,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "filetag_id": {
+          "name": "filetag_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -2080,6 +2190,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "recordings_user_id_filetag_id_idx": {
+          "name": "recordings_user_id_filetag_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "filetag_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2094,6 +2225,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "recordings_filetag_id_plaud_filetags_id_fk": {
+          "name": "recordings_filetag_id_plaud_filetags_id_fk",
+          "tableFrom": "recordings",
+          "tableTo": "plaud_filetags",
+          "columnsFrom": [
+            "filetag_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2680,6 +2824,19 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "auto_summarize": {
+          "name": "auto_summarize",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "auto_summarize_preset": {
+          "name": "auto_summarize_preset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "auto_sync_enabled": {
           "name": "auto_sync_enabled",

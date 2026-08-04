@@ -1,6 +1,6 @@
 {
     "name": "riffado",
-    "version": "0.6.3",
+    "version": "0.6.4",
     "description": "Self-hosted AI transcription interface for Plaud Note devices",
     "author": "Riffado Contributors",
     "license": "AGPL-3.0",

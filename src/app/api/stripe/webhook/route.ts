@@ -1,19 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { enqueueStripeWebhookEvent } from "@/db/queries/billing";
 import { env } from "@/lib/env";
 import {
     getStripe,
     isStripeConfigured,
 } from "@/lib/hosted/billing/stripe-client";
-import { handleStripeWebhook } from "@/lib/hosted/billing/webhook";
-import { captureServerException } from "@/lib/posthog-server";
 
 /**
  * Stripe webhook receiver. Verifies the signature against
- * `STRIPE_WEBHOOK_SECRET`, then dispatches the verified event. Always
- * 200s after a successful signature check so Stripe stops retrying;
- * handler errors are logged, not surfaced (Stripe would otherwise hammer
- * the endpoint). 404 on self-host, 503 if unconfigured.
+ * `STRIPE_WEBHOOK_SECRET`, then durably queues the verified event. It only
+ * acknowledges after persistence; the billing worker processes the inbox.
+ * 404 on self-host, 503 if unconfigured.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!env.IS_HOSTED) {
@@ -57,19 +55,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         );
     }
 
-    try {
-        await handleStripeWebhook(event);
-    } catch (error) {
-        console.error(
-            `[stripe-webhook] handler threw for ${event.type} id=${event.id}`,
-            error,
-        );
-        captureServerException(error, {
-            source: "stripe-webhook",
-            eventType: event.type,
-            eventId: event.id,
-        });
-    }
+    const queued = await enqueueStripeWebhookEvent({
+        eventId: event.id,
+        type: event.type,
+        eventCreatedAt: new Date(event.created * 1000),
+        payload: event.data.object as unknown as Record<string, unknown>,
+    });
 
-    return NextResponse.json({ received: true });
+    return NextResponse.json({ received: true, queued });
 }

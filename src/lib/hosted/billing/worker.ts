@@ -7,6 +7,7 @@ import { processGraceReminders } from "./grace-reminders";
 import { processExpiredTrials } from "./lapse";
 import { reconcileStaleSubscriptions } from "./reconcile";
 import { processTransitionEmails } from "./transition-emails";
+import { processStripeWebhookInbox } from "./webhook-inbox";
 
 const TICK_MS = 5 * 60 * 1000;
 const RECONCILE_EVERY_N_TICKS = 6;
@@ -37,6 +38,15 @@ export async function tick(): Promise<void> {
     if (running) return;
     running = true;
     try {
+        await runPhase("webhook-inbox", async () => {
+            const inbox = await processStripeWebhookInbox();
+            if (inbox.claimed > 0 || inbox.retried > 0 || inbox.failed > 0) {
+                console.log(
+                    `[billing-worker] webhook-inbox claimed=${inbox.claimed} completed=${inbox.completed} retried=${inbox.retried} failed=${inbox.failed}`,
+                );
+            }
+        });
+
         await runPhase("cycle-close", async () => {
             const closed = await closeDueCycles();
             if (closed > 0) {
@@ -126,6 +136,7 @@ export async function tick(): Promise<void> {
  * (subsequent calls return immediately).
  *
  * Each tick (every 5 minutes):
+ *  - Claims and processes durably stored Stripe webhook events
  *  - Closes due Mynah cycles
  *  - Detects expired trials with no card -> demotes + schedules deletion
  *  - Processes accounts whose grace window has elapsed -> hard delete

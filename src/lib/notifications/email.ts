@@ -280,8 +280,9 @@ export async function sendWelcomeHostedProEmail(input: {
 }
 
 /**
- * Payment-failed nudge. Per-failure, not once-only: kind is namespaced
- * with the payment id so each failed payment can send exactly once.
+ * Payment-failed nudge. The webhook inbox owns delivery retries, so this
+ * deliberately does not pre-claim an email-log row that a crashed worker
+ * could strand before SMTP accepts the message.
  */
 export async function sendPaymentFailedEmail(input: {
     userId: string;
@@ -290,24 +291,19 @@ export async function sendPaymentFailedEmail(input: {
     billingUrl: string;
     nextRetryAt: Date | null;
     accessUntil: Date | null;
-}): Promise<boolean> {
-    return sendClaimedEmail(
-        { userId: input.userId, kind: `payment_failed:${input.paymentId}` },
-        async () => {
-            const html = await renderEmailHtml(
-                React.createElement(PaymentFailedEmail, {
-                    billingUrl: input.billingUrl,
-                    nextRetryAt: input.nextRetryAt,
-                    accessUntil: input.accessUntil,
-                }),
-            );
-            return {
-                to: input.email,
-                subject: "Riffado: payment failed",
-                html,
-            };
-        },
+}): Promise<void> {
+    const html = await renderEmailHtml(
+        React.createElement(PaymentFailedEmail, {
+            billingUrl: input.billingUrl,
+            nextRetryAt: input.nextRetryAt,
+            accessUntil: input.accessUntil,
+        }),
     );
+    await sendEmailWithError({
+        to: input.email,
+        subject: "Riffado: payment failed",
+        html,
+    });
 }
 
 /**

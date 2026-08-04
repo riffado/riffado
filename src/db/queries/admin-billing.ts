@@ -109,8 +109,8 @@ export async function billingOverview(): Promise<BillingOverview> {
             (select count(*)::int from subscriptions where status = 'active') as "activeSubscriptions",
             (select count(*)::int from subscriptions where status = 'past_due') as "pastDueSubscriptions",
             (select count(*)::int from subscriptions where status in ${LIVE_STATUS_SQL} and canceled_at is not null) as "cancelPendingSubscriptions",
-            (select count(*)::int from subscriptions where status in ${LIVE_STATUS_SQL} and lower(interval) like '%month%') as "monthlySubscriptions",
-            (select count(*)::int from subscriptions where status in ${LIVE_STATUS_SQL} and lower(interval) like '%year%') as "annualSubscriptions",
+            (select count(*)::int from subscriptions where status in ${LIVE_STATUS_SQL} and lower("interval") like '%month%') as "monthlySubscriptions",
+            (select count(*)::int from subscriptions where status in ${LIVE_STATUS_SQL} and lower("interval") like '%year%') as "annualSubscriptions",
             (select count(*)::int from users where ever_paid_at >= now() - interval '30 days') as "firstPaymentsLast30Days"
     `);
 

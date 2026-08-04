@@ -23,7 +23,6 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
-import { SUMMARY_PRESETS } from "@/lib/ai/summary-presets";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -94,6 +93,7 @@ export function TranscriptionPanel({
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
+        summaryPromptOptions,
         handleSummarize,
         handleDeleteSummary,
     } = useTranscriptionSummary({
@@ -248,7 +248,7 @@ export function TranscriptionPanel({
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {Object.values(SUMMARY_PRESETS).map(
+                                            {summaryPromptOptions.map(
                                                 (preset) => (
                                                     <SelectItem
                                                         key={preset.id}

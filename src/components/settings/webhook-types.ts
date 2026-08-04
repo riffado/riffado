@@ -35,6 +35,8 @@ export const DEFAULT_WEBHOOK_EVENTS = [
     "recording.deleted",
     "transcription.completed",
     "transcription.failed",
+    "summary.completed",
+    "summary.failed",
 ];
 
 export function formatWebhookDate(value: string | null): string {

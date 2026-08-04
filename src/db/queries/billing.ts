@@ -75,6 +75,37 @@ export interface SubscriptionUpsertInput {
     metadata: unknown;
 }
 
+/**
+ * Thrown by `upsertSubscription` when the row being written would violate
+ * `subscriptions_user_id_active_unique` -- i.e. the user already has a
+ * *different* subscription id in a live status. This happens when Stripe
+ * webhooks for two subscriptions on the same customer arrive out of order
+ * (the old one hasn't been mirrored as canceled/superseded yet). Callers
+ * should re-mirror `conflictingSubscriptionId` from Stripe (the source of
+ * truth) and retry.
+ */
+export class SubscriptionUserConflictError extends Error {
+    constructor(
+        readonly userId: string,
+        readonly conflictingSubscriptionId: string,
+    ) {
+        super(
+            `User ${userId} already has a live subscription (${conflictingSubscriptionId}) distinct from the one being mirrored`,
+        );
+        this.name = "SubscriptionUserConflictError";
+    }
+}
+
+function isUniqueViolationOn(error: unknown, constraintName: string): boolean {
+    return (
+        typeof error === "object" &&
+        error !== null &&
+        (error as { code?: string }).code === "23505" &&
+        (error as { constraint_name?: string }).constraint_name ===
+            constraintName
+    );
+}
+
 export async function upsertSubscription(
     input: SubscriptionUpsertInput,
 ): Promise<void> {
@@ -108,10 +139,49 @@ export async function upsertSubscription(
           }
         : { ...baseValues, updatedAt: new Date() };
 
-    await db.insert(subscriptions).values(insertValues).onConflictDoUpdate({
-        target: subscriptions.id,
-        set: updateValues,
-    });
+    const doUpsert = () =>
+        db.insert(subscriptions).values(insertValues).onConflictDoUpdate({
+            target: subscriptions.id,
+            set: updateValues,
+        });
+
+    // Bounded retry loop, not a single retry: a *genuine* conflict (a
+    // different subscription is still live) throws immediately below --
+    // no amount of looping fixes that, it needs `SubscriptionUserConflictError`
+    // recovery from the caller. The loop exists only for the self-resolving
+    // race (the blocking row clears between our failed insert and the
+    // lookup): under concurrent webhook delivery that race can in
+    // principle repeat, and a *second* unresolved unique violation must
+    // not escape as the raw driver error -- which embeds the full
+    // parameterized SQL statement (Stripe customer id, price id, amount)
+    // and would leak into error tracking as an unhandled failure.
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            await doUpsert();
+            return;
+        } catch (error) {
+            if (
+                !isUniqueViolationOn(
+                    error,
+                    "subscriptions_user_id_active_unique",
+                )
+            ) {
+                throw error;
+            }
+            const other = await getSubscriptionByUserId(input.userId);
+            if (other && other.id !== input.id) {
+                throw new SubscriptionUserConflictError(input.userId, other.id);
+            }
+            if (attempt === MAX_ATTEMPTS) {
+                throw new Error(
+                    `Failed to upsert subscription ${input.id} for user ${input.userId}: unique-constraint race did not resolve after ${MAX_ATTEMPTS} attempts`,
+                );
+            }
+            // Conflicting row is gone -- the index isn't violated anymore.
+            // Loop and retry rather than re-throwing.
+        }
+    }
 }
 
 export interface SubscriptionRow {
@@ -954,20 +1024,232 @@ export async function listSubscriptionsForReconcile(input: {
     }));
 }
 
-/** First-write-wins claim on a Stripe webhook event. Null = duplicate. */
-export async function claimWebhookDelivery(input: {
+export type StripeWebhookEventStatus =
+    | "pending"
+    | "processing"
+    | "completed"
+    | "failed";
+
+export interface ClaimedStripeWebhookEvent {
     eventId: string;
     type: string;
-}): Promise<{ eventId: string } | null> {
+    eventCreatedAt: Date;
+    payload: Record<string, unknown>;
+    attempts: number;
+    claimToken: string;
+}
+
+/**
+ * Durably records a verified Stripe event. The unique event id makes Stripe
+ * redelivery safe without conflating receipt with successful processing.
+ */
+export async function enqueueStripeWebhookEvent(input: {
+    eventId: string;
+    type: string;
+    eventCreatedAt: Date;
+    payload: Record<string, unknown>;
+}): Promise<boolean> {
     const inserted = await db
         .insert(stripeWebhookEvents)
         .values({
             eventId: input.eventId,
             type: input.type,
+            eventCreatedAt: input.eventCreatedAt,
+            payload: input.payload,
+            status: "pending",
         })
         .onConflictDoNothing({ target: stripeWebhookEvents.eventId })
         .returning({ eventId: stripeWebhookEvents.eventId });
-    return inserted[0] ?? null;
+    return inserted.length > 0;
+}
+
+/**
+ * Atomically claims due inbox rows. Processing claims expire so a process
+ * crash cannot strand an event forever; claim-token-scoped completion writes
+ * prevent a stale worker from overwriting the newer claimant's result.
+ */
+export async function claimDueStripeWebhookEvents(input: {
+    limit: number;
+    processingLeaseMs: number;
+}): Promise<ClaimedStripeWebhookEvent[]> {
+    const now = new Date();
+    const leaseExpiresAt = new Date(now.getTime() + input.processingLeaseMs);
+    const nowIso = now.toISOString();
+    const claimed = await db.execute<{
+        event_id: string;
+        type: string;
+        event_created_at: Date;
+        payload: Record<string, unknown>;
+        attempts: number;
+        claim_token: string;
+    }>(sql`
+        update ${stripeWebhookEvents}
+        set
+            status = 'processing',
+            claim_token = gen_random_uuid()::text,
+            started_at = ${nowIso}::timestamp,
+            next_attempt_at = ${leaseExpiresAt.toISOString()}::timestamp,
+            updated_at = ${nowIso}::timestamp
+        where event_id in (
+            select event_id
+            from ${stripeWebhookEvents}
+            where (
+                (status = 'pending' and next_attempt_at <= ${nowIso}::timestamp)
+                or (status = 'processing' and next_attempt_at <= ${nowIso}::timestamp)
+            )
+            order by next_attempt_at asc, created_at asc
+            limit ${input.limit}
+            for update skip locked
+        )
+        returning event_id, type, event_created_at, payload, attempts, claim_token
+    `);
+    const rows = Array.isArray(claimed)
+        ? claimed
+        : ((claimed as { rows: typeof claimed }).rows ?? []);
+    return rows.map((row) => ({
+        eventId: row.event_id,
+        type: row.type,
+        eventCreatedAt: row.event_created_at,
+        payload: row.payload,
+        attempts: row.attempts,
+        claimToken: row.claim_token,
+    }));
+}
+
+/** Serializes event side effects across workers for one Stripe event id. */
+export async function withStripeWebhookEventLock<T>(
+    eventId: string,
+    run: () => Promise<T>,
+): Promise<T> {
+    return db.transaction(async (tx) => {
+        await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${eventId}, 0))`,
+        );
+        return run();
+    });
+}
+
+/** Extends a live claim so long-running handlers are not reclaimed mid-flight. */
+export async function renewStripeWebhookEventClaim(input: {
+    eventId: string;
+    claimToken: string;
+    processingLeaseMs: number;
+}): Promise<boolean> {
+    const now = new Date();
+    const rows = await db
+        .update(stripeWebhookEvents)
+        .set({
+            nextAttemptAt: new Date(now.getTime() + input.processingLeaseMs),
+            updatedAt: now,
+        })
+        .where(
+            and(
+                eq(stripeWebhookEvents.eventId, input.eventId),
+                eq(stripeWebhookEvents.status, "processing"),
+                eq(stripeWebhookEvents.claimToken, input.claimToken),
+            ),
+        )
+        .returning({ eventId: stripeWebhookEvents.eventId });
+    return rows.length > 0;
+}
+
+/** Completes an event while its event-scoped advisory lock is held. */
+export async function completeStripeWebhookEventUnderLock(
+    eventId: string,
+): Promise<boolean> {
+    const rows = await db
+        .update(stripeWebhookEvents)
+        .set({
+            status: "completed",
+            completedAt: new Date(),
+            claimToken: null,
+            startedAt: null,
+            lastError: null,
+            updatedAt: new Date(),
+        })
+        .where(
+            and(
+                eq(stripeWebhookEvents.eventId, eventId),
+                eq(stripeWebhookEvents.status, "processing"),
+            ),
+        )
+        .returning({ eventId: stripeWebhookEvents.eventId });
+    return rows.length > 0;
+}
+
+export async function completeStripeWebhookEvent(input: {
+    eventId: string;
+    claimToken: string;
+}): Promise<boolean> {
+    const rows = await db
+        .update(stripeWebhookEvents)
+        .set({
+            status: "completed",
+            completedAt: new Date(),
+            claimToken: null,
+            startedAt: null,
+            lastError: null,
+            updatedAt: new Date(),
+        })
+        .where(
+            and(
+                eq(stripeWebhookEvents.eventId, input.eventId),
+                eq(stripeWebhookEvents.status, "processing"),
+                eq(stripeWebhookEvents.claimToken, input.claimToken),
+            ),
+        )
+        .returning({ eventId: stripeWebhookEvents.eventId });
+    return rows.length > 0;
+}
+
+/** Records a failed attempt and schedules exponential retry or terminal failure. */
+export async function failStripeWebhookEvent(input: {
+    eventId: string;
+    claimToken: string;
+    errorMessage: string;
+    maxAttempts: number;
+    retryAt: Date;
+}): Promise<{ status: StripeWebhookEventStatus; attempts: number } | null> {
+    const retryAtIso = input.retryAt.toISOString();
+    const rows = await db.execute<{
+        status: StripeWebhookEventStatus;
+        attempts: number;
+    }>(sql`
+        update ${stripeWebhookEvents}
+        set
+            attempts = attempts + 1,
+            status = case
+                when attempts + 1 >= ${input.maxAttempts} then 'failed'
+                else 'pending'
+            end,
+            claim_token = null,
+            started_at = null,
+            next_attempt_at = case
+                when attempts + 1 >= ${input.maxAttempts} then next_attempt_at
+                else ${retryAtIso}::timestamp
+            end,
+            last_error = ${input.errorMessage},
+            failed_at = case
+                when attempts + 1 >= ${input.maxAttempts} then now()
+                else null
+            end,
+            updated_at = now()
+        where event_id = ${input.eventId}
+          and status = 'processing'
+          and claim_token = ${input.claimToken}
+        returning status, attempts
+    `);
+    const row = Array.isArray(rows)
+        ? rows[0]
+        : ((
+              rows as {
+                  rows: {
+                      status: StripeWebhookEventStatus;
+                      attempts: number;
+                  }[];
+              }
+          ).rows ?? [])[0];
+    return row ?? null;
 }
 
 export interface UserBillingState {

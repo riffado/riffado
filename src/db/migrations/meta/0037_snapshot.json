@@ -1,6 +1,6 @@
 {
-  "id": "fefc5511-d9ed-47a3-b6ba-ea18202650da",
-  "prevId": "caf9f869-84c0-4517-8d5a-68e5748776d6",
+  "id": "eff627c9-f994-4dcd-8768-6902228b4d3c",
+  "prevId": "fefc5511-d9ed-47a3-b6ba-ea18202650da",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2680,6 +2680,19 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "auto_summarize": {
+          "name": "auto_summarize",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "auto_summarize_preset": {
+          "name": "auto_summarize_preset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "auto_sync_enabled": {
           "name": "auto_sync_enabled",
