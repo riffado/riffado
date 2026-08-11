@@ -182,12 +182,15 @@ List all recordings for current user.
       "duration": 3600000,
       "startTime": "2025-01-22T10:00:00.000Z",
       "filesize": 15728640,
-      "deviceSn": "888317426694681884"
+      "deviceSn": "888317426694681884",
+      "filetagId": "tag123"
     }
   ],
   "total": 100
 }
 ```
+
+`filetagId` is the id of the Plaud directory the recording belongs to (see Filetags below), or `null` when unorganized.
 
 #### GET `/recordings/[id]`
 
@@ -235,6 +238,96 @@ Transcribe a recording.
   "transcriptionId": "xyz789",
   "text": "Transcribed text...",
   "detectedLanguage": "en"
+}
+```
+
+#### POST `/recordings/filetag`
+
+Bulk-assign recordings to a directory (filetag). `filetagId: null` moves them to Unorganized. The change is written through to Plaud first; manually uploaded recordings are assigned locally without a Plaud call.
+
+**Body:**
+```json
+{
+  "recordingIds": ["abc123", "def456"],
+  "filetagId": "tag123"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "moved": 2
+}
+```
+
+Returns `409` when assigning a local-only directory to Plaud-backed recordings (the next sync would undo it).
+
+---
+
+### Filetags (Directories)
+
+Plaud directories ("filetags") mirrored from the official app: flat, single-level, each recording belongs to at most one. Mutations are written through to Plaud first and only persisted locally on success; users without a Plaud connection get local-only directories (`isLocalOnly: true`).
+
+#### GET `/filetags`
+
+List directories with per-directory recording counts.
+
+**Response:**
+```json
+{
+  "filetags": [
+    {
+      "id": "tag123",
+      "name": "Meetings",
+      "icon": "iconfont_folder_meeting",
+      "color": "#4c8eff",
+      "isLocalOnly": false
+    }
+  ],
+  "counts": {
+    "tag123": 12,
+    "unorganized": 23
+  }
+}
+```
+
+#### POST `/filetags`
+
+Create a directory. `icon` must be a canonical Plaud folder icon name; `color` one of the official palette (`#191919`, `#4c8eff`, `#46cf6c`, `#f9a251`, `#3dc8c8`, `#fb5c5c`, `#c149eb`). Both optional.
+
+**Body:**
+```json
+{
+  "name": "Meetings",
+  "icon": "iconfont_folder_meeting",
+  "color": "#4c8eff"
+}
+```
+
+**Response:** `201` with `{ "filetag": { ... } }`. Returns `409` when a directory with the same name already exists (locally or on Plaud).
+
+#### PATCH `/filetags/[id]`
+
+Partial update of `name`, `icon`, and/or `color`.
+
+**Body:**
+```json
+{
+  "name": "Client calls"
+}
+```
+
+**Response:** `{ "filetag": { ... } }`
+
+#### DELETE `/filetags/[id]`
+
+Delete a directory (also on Plaud). Its recordings become unorganized; they are not deleted.
+
+**Response:**
+```json
+{
+  "success": true
 }
 ```
 

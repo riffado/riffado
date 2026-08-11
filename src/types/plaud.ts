@@ -55,6 +55,35 @@ export interface PlaudApiError {
     msg: string;
 }
 
+/**
+ * A Plaud directory ("filetag"). `id` may come back numeric from some
+ * servers — normalize with `String()` at every boundary. `icon` may be a
+ * canonical `iconfont_folder_*` name or a legacy codepoint (`e627`, ...).
+ */
+export interface PlaudFileTag {
+    id: string | number;
+    name: string;
+    icon?: string;
+    color?: string;
+}
+
+export interface PlaudFiletagListResponse {
+    status: number;
+    msg?: string;
+    data_filetag_list?: PlaudFileTag[];
+}
+
+export interface PlaudFiletagMutationResponse {
+    status: number;
+    msg?: string;
+    data_filetag?: PlaudFileTag;
+}
+
+export interface PlaudUpdateFileTagsResponse {
+    status: number;
+    msg?: string;
+}
+
 export interface PlaudWorkspace {
     workspace_id: string;
     member_id: string;

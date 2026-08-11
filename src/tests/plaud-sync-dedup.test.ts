@@ -114,6 +114,9 @@ describe("syncRecordingsForUser in-process dedup", () => {
                 }),
         );
         (createPlaudClient as Mock).mockResolvedValue({
+            listFiletags: vi
+                .fn()
+                .mockResolvedValue({ status: 0, data_filetag_list: [] }),
             getRecordings,
             workspaceId: "ws-1",
             usingUserTokenFallback: false,
@@ -144,6 +147,9 @@ describe("syncRecordingsForUser in-process dedup", () => {
 
         const getRecordings = vi.fn().mockResolvedValue({ data_file_list: [] });
         (createPlaudClient as Mock).mockResolvedValue({
+            listFiletags: vi
+                .fn()
+                .mockResolvedValue({ status: 0, data_filetag_list: [] }),
             getRecordings,
             workspaceId: "ws-1",
             usingUserTokenFallback: false,
@@ -172,6 +178,9 @@ describe("syncRecordingsForUser in-process dedup", () => {
         wireSelectChain();
         wireUpdateChain();
         (createPlaudClient as Mock).mockResolvedValueOnce({
+            listFiletags: vi
+                .fn()
+                .mockResolvedValue({ status: 0, data_filetag_list: [] }),
             getRecordings: vi.fn().mockResolvedValue({ data_file_list: [] }),
             workspaceId: "ws-1",
             usingUserTokenFallback: false,

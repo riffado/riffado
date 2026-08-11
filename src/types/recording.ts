@@ -3,7 +3,13 @@ import type { recordings } from "@/db/schema";
 
 export type RecordingQueryResult = Pick<
     InferSelectModel<typeof recordings>,
-    "id" | "filename" | "duration" | "startTime" | "filesize" | "deviceSn"
+    | "id"
+    | "filename"
+    | "duration"
+    | "startTime"
+    | "filesize"
+    | "deviceSn"
+    | "filetagId"
 >;
 
 export type Recording = Omit<RecordingQueryResult, "startTime"> & {
@@ -15,6 +21,12 @@ export type Recording = Omit<RecordingQueryResult, "startTime"> & {
      */
     hasTranscript?: boolean;
     hasSummary?: boolean;
+    /**
+     * True when the recording was uploaded manually (plaudFileId starts
+     * with "uploaded-") and has no Plaud counterpart. Local-only
+     * recordings are the only ones assignable to local-only directories.
+     */
+    isLocalOnly?: boolean;
     /**
      * Coarse normalized amplitude peaks ([0, 1]) for waveform rendering.
      * Decoded client-side on first listen and cached server-side. Null
@@ -30,6 +42,7 @@ export function serializeRecording(
     flags?: {
         hasTranscript?: boolean;
         hasSummary?: boolean;
+        isLocalOnly?: boolean;
         waveformPeaks?: number[] | null;
     },
 ): Recording {
@@ -38,6 +51,7 @@ export function serializeRecording(
         startTime: recording.startTime.toISOString(),
         hasTranscript: flags?.hasTranscript ?? false,
         hasSummary: flags?.hasSummary ?? false,
+        isLocalOnly: flags?.isLocalOnly ?? false,
         // Empty arrays would be invalid per the field contract ("null
         // when never decoded"); collapse them to null at the
         // serialization boundary so consumers never have to special-case

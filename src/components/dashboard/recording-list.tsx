@@ -23,6 +23,7 @@ import { RecordingRow } from "@/components/dashboard/recording-row";
 import { Card, CardContent } from "@/components/ui/card";
 import { dateGroupLabel } from "@/lib/format-date";
 import type { DateTimeFormat } from "@/types/common";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 export type { PendingUpload } from "@/components/dashboard/pending-upload-row";
@@ -42,8 +43,16 @@ interface RecordingListProps {
     currentRecording: Recording | null;
     pendingUploads: PendingUpload[];
     inFlightActions: Map<string, "transcribing" | "summarizing">;
+    /** Directory list for the row "Move to directory" submenu. */
+    filetags: Filetag[];
+    /** Rendered above the toolbar, inside the card (the directory rail). */
+    railSlot?: React.ReactNode;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    onMoveToFiletag: (
+        recording: Recording,
+        filetagId: string | null,
+    ) => Promise<void>;
     initialDateTimeFormat: DateTimeFormat;
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
@@ -85,8 +94,11 @@ export function RecordingList({
     currentRecording,
     pendingUploads,
     inFlightActions,
+    filetags,
+    railSlot,
     onSelect,
     onDelete,
+    onMoveToFiletag,
     initialDateTimeFormat,
     initialSortOrder,
     initialDensity,
@@ -248,6 +260,7 @@ export function RecordingList({
     return (
         <Card hasNoPadding>
             <CardContent className="p-0">
+                {railSlot}
                 <RecordingListToolbar
                     query={query}
                     onQueryChange={setQuery}
@@ -281,7 +294,7 @@ export function RecordingList({
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
                         >
                             {group.label && (
-                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                                <div className="sticky top-0 z-10 bg-background/85 px-4 py-2 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                                     {group.label}
                                 </div>
                             )}
@@ -304,8 +317,10 @@ export function RecordingList({
                                         isCompact={isCompact}
                                         rowPadding={rowPadding}
                                         dateTimeFormat={dateTimeFormat}
+                                        filetags={filetags}
                                         onSelect={onSelect}
                                         onDelete={onDelete}
+                                        onMoveToFiletag={onMoveToFiletag}
                                         registerRef={registerRowRef}
                                     />
                                 ))}

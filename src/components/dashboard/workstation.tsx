@@ -4,7 +4,13 @@ import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/confirm-dialog";
 import { CommandPalette } from "@/components/dashboard/command-palette";
+import { FiletagDialog } from "@/components/dashboard/filetag-dialog";
+import {
+    type FiletagFilter,
+    FiletagRail,
+} from "@/components/dashboard/filetag-rail";
 import { PlaudReconnectBanner } from "@/components/dashboard/plaud-reconnect-banner";
 import {
     RecordingList,
@@ -30,6 +36,7 @@ import {
 import type { InitialSettings } from "@/lib/settings/initial-settings";
 import { SYNC_CONFIG } from "@/lib/sync-config";
 import { cn } from "@/lib/utils";
+import type { Filetag } from "@/types/filetag";
 import type { Recording } from "@/types/recording";
 
 interface TranscriptionData {
@@ -52,6 +59,8 @@ const EMPTY_PROVIDERS: Provider[] = [];
 interface WorkstationProps {
     recordings: Recording[];
     transcriptions: Map<string, TranscriptionData>;
+    /** Plaud directories (filetags), decrypted server-side. */
+    filetags: Filetag[];
     /**
      * When true, an admin shortcut appears in the avatar menu. Set by
      * the server-rendered page based on env.ADMIN_EMAILS membership;
@@ -84,9 +93,9 @@ interface WorkstationProps {
 
 /**
  * Top-level dashboard component. Composition root for the recording
- * list, the detail pane (player + transcription), and the four
+ * list, the detail pane (player + transcription), and the five
  * modals (CommandPalette, ShortcutsDialog, SettingsDialog,
- * OnboardingDialog).
+ * OnboardingDialog, FiletagDialog).
  *
  * State ownership is split:
  *  - selection / mobile master-detail toggle live here
@@ -101,6 +110,7 @@ interface WorkstationProps {
 export function Workstation({
     recordings,
     transcriptions,
+    filetags,
     isAdmin = false,
     userEmail = null,
     initialSettings,
@@ -130,6 +140,7 @@ export function Workstation({
 
     const { theme, setTheme } = useTheme(initialSettings.theme);
     const listRef = useRef<RecordingListHandle>(null);
+    const confirm = useConfirm();
 
     // Filter out optimistically-hidden (deleted) rows.
     const visibleRecordings = useMemo(
@@ -137,9 +148,53 @@ export function Workstation({
         [recordings, hiddenIds],
     );
 
+    const [filetagFilter, setFiletagFilter] = useState<FiletagFilter>("all");
+    const [filetagDialogOpen, setFiletagDialogOpen] = useState(false);
+    const [editingFiletag, setEditingFiletag] = useState<Filetag | null>(null);
+
+    const tagFilteredRecordings = useMemo(() => {
+        if (filetagFilter === "all") return visibleRecordings;
+        if (filetagFilter === "none") {
+            return visibleRecordings.filter((r) => r.filetagId === null);
+        }
+        return visibleRecordings.filter((r) => r.filetagId === filetagFilter);
+    }, [visibleRecordings, filetagFilter]);
+
+    const filetagCounts = useMemo(() => {
+        const byTag = new Map<string, number>();
+        let unorganized = 0;
+        for (const r of visibleRecordings) {
+            if (r.filetagId === null) unorganized++;
+            else byTag.set(r.filetagId, (byTag.get(r.filetagId) ?? 0) + 1);
+        }
+        return { total: visibleRecordings.length, unorganized, byTag };
+    }, [visibleRecordings]);
+
+    // If the active directory disappears (deleted here or in the official
+    // app, confirmed by a refresh), fall back to "all".
+    useEffect(() => {
+        if (
+            filetagFilter !== "all" &&
+            filetagFilter !== "none" &&
+            !filetags.some((tag) => tag.id === filetagFilter)
+        ) {
+            setFiletagFilter("all");
+        }
+    }, [filetags, filetagFilter]);
+
     const currentTranscription = currentRecording
         ? transcriptions.get(currentRecording.id)
         : undefined;
+
+    const currentFiletag = useMemo(
+        () =>
+            currentRecording?.filetagId
+                ? (filetags.find(
+                      (tag) => tag.id === currentRecording.filetagId,
+                  ) ?? null)
+                : null,
+        [currentRecording, filetags],
+    );
 
     // Keep currentRecording in sync with the recordings prop (updated
     // after refresh()). If the previously-selected recording is no
@@ -162,6 +217,28 @@ export function Workstation({
             return next.size === prev.size ? prev : next;
         });
     }, [recordings]);
+
+    // Keep the selection inside the active directory scope. When the
+    // filter changes (or a move pushes the current recording out of
+    // scope), fall back to the first visible recording so the detail
+    // pane and auto-advance always operate on the filtered list.
+    useEffect(() => {
+        setCurrentRecording((prev) => {
+            if (!prev) return prev;
+            if (tagFilteredRecordings.some((r) => r.id === prev.id)) {
+                return prev;
+            }
+            return tagFilteredRecordings[0] ?? null;
+        });
+    }, [tagFilteredRecordings]);
+
+    // On mobile, an empty selection has no detail pane to show: go
+    // back to the list.
+    useEffect(() => {
+        if (!currentRecording && mobileView === "detail") {
+            setMobileView("list");
+        }
+    }, [currentRecording, mobileView]);
 
     const {
         isAutoSyncing,
@@ -314,6 +391,90 @@ export function Workstation({
         [currentRecording, visibleRecordings, refresh],
     );
 
+    const handleMoveToFiletag = useCallback(
+        async (recording: Recording, filetagId: string | null) => {
+            if (recording.filetagId === filetagId) return;
+            try {
+                const res = await fetch("/api/recordings/filetag", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        recordingIds: [recording.id],
+                        filetagId,
+                    }),
+                });
+                if (!res.ok) {
+                    const data = (await res.json().catch(() => ({}))) as {
+                        error?: string;
+                    };
+                    toast.error(data.error ?? "Failed to move recording");
+                    return;
+                }
+                const target = filetagId
+                    ? filetags.find((tag) => tag.id === filetagId)
+                    : null;
+                toast.success(
+                    target
+                        ? `Moved to ${target.name}`
+                        : "Removed from directory",
+                );
+                refresh();
+            } catch {
+                toast.error("Failed to move recording");
+            }
+        },
+        [filetags, refresh],
+    );
+
+    const openCreateFiletag = useCallback(() => {
+        setEditingFiletag(null);
+        setFiletagDialogOpen(true);
+    }, []);
+
+    const openEditFiletag = useCallback((tag: Filetag) => {
+        setEditingFiletag(tag);
+        setFiletagDialogOpen(true);
+    }, []);
+
+    const handleDeleteFiletag = useCallback(
+        (tag: Filetag) => {
+            void confirm({
+                title: "Delete this directory?",
+                description: (
+                    <>
+                        <span className="font-medium text-foreground">
+                            {tag.name}
+                        </span>
+                        <br />
+                        Its recordings are kept and become "No directory".
+                        {!tag.isLocalOnly &&
+                            " The directory is also deleted in the Plaud app."}
+                    </>
+                ),
+                confirmLabel: "Delete",
+                pendingLabel: "Deleting…",
+                destructive: true,
+                errorMessage: "Failed to delete directory",
+                onConfirm: async () => {
+                    const res = await fetch(`/api/filetags/${tag.id}`, {
+                        method: "DELETE",
+                    });
+                    if (!res.ok) {
+                        const data = (await res.json().catch(() => ({}))) as {
+                            error?: string;
+                        };
+                        throw new Error(
+                            data.error ?? "Failed to delete directory",
+                        );
+                    }
+                    toast.success("Directory deleted");
+                    refresh();
+                },
+            });
+        },
+        [confirm, refresh],
+    );
+
     // Keyboard shortcuts (global). Disabled while any modal is open
     // so the modal owns keyboard focus exclusively. The shortcuts
     // dialog itself uses these very keys to navigate its rows.
@@ -325,7 +486,11 @@ export function Workstation({
         onOpenShortcuts: () => setShortcutsOpen(true),
         onOpenSettings: () => setSettingsOpen(true),
         enabled:
-            !settingsOpen && !onboardingOpen && !paletteOpen && !shortcutsOpen,
+            !settingsOpen &&
+            !onboardingOpen &&
+            !paletteOpen &&
+            !shortcutsOpen &&
+            !filetagDialogOpen,
     });
 
     return (
@@ -384,11 +549,23 @@ export function Workstation({
                             >
                                 <RecordingList
                                     ref={listRef}
-                                    recordings={visibleRecordings}
+                                    recordings={tagFilteredRecordings}
                                     transcriptions={transcriptions}
                                     currentRecording={currentRecording}
                                     pendingUploads={pendingUploads}
                                     inFlightActions={inFlightActions}
+                                    filetags={filetags}
+                                    railSlot={
+                                        <FiletagRail
+                                            filetags={filetags}
+                                            counts={filetagCounts}
+                                            activeFilter={filetagFilter}
+                                            onFilterChange={setFiletagFilter}
+                                            onCreate={openCreateFiletag}
+                                            onEdit={openEditFiletag}
+                                            onDelete={handleDeleteFiletag}
+                                        />
+                                    }
                                     onSelect={(r) => {
                                         setCurrentRecording(r);
                                         // Tapping a row on mobile
@@ -397,6 +574,7 @@ export function Workstation({
                                         setMobileView("detail");
                                     }}
                                     onDelete={handleDelete}
+                                    onMoveToFiletag={handleMoveToFiletag}
                                     initialDateTimeFormat={
                                         initialSettings.dateTimeFormat
                                     }
@@ -413,8 +591,9 @@ export function Workstation({
                             <WorkstationDetailPane
                                 currentRecording={currentRecording}
                                 currentTranscription={currentTranscription}
+                                currentFiletag={currentFiletag}
                                 isCurrentTranscribing={isCurrentTranscribing}
-                                visibleRecordings={visibleRecordings}
+                                visibleRecordings={tagFilteredRecordings}
                                 onTranscribe={handleTranscribe}
                                 onTranscribeComplete={refresh}
                                 onSelectRecording={setCurrentRecording}
@@ -437,7 +616,7 @@ export function Workstation({
             <CommandPalette
                 open={paletteOpen}
                 onOpenChange={setPaletteOpen}
-                recordings={visibleRecordings}
+                recordings={tagFilteredRecordings}
                 transcriptions={transcriptions}
                 currentRecording={currentRecording}
                 inFlightActions={inFlightActions}
@@ -453,6 +632,13 @@ export function Workstation({
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
                 onTranscribeRecording={transcribeById}
+            />
+
+            <FiletagDialog
+                open={filetagDialogOpen}
+                onOpenChange={setFiletagDialogOpen}
+                editing={editingFiletag}
+                onSaved={refresh}
             />
 
             <ShortcutsDialog

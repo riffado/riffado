@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
     aiEnhancements,
     plaudConnections,
+    plaudFiletags,
     recordings,
     transcriptions,
     userSettings,
@@ -11,6 +12,7 @@ import {
 import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
+import { isLocalOnlyRecording, serializeFiletag } from "@/lib/filetags/service";
 import { isAdminEmail } from "@/lib/hosted/admin/guard";
 import { initialSettingsFromRow } from "@/lib/settings/initial-settings";
 import { serializeRecording } from "@/types/recording";
@@ -24,6 +26,7 @@ export default async function DashboardPage() {
         userSummaryRows,
         [settingsRow],
         [connectionRow],
+        userFiletags,
     ] = await Promise.all([
         db
             .select({
@@ -33,6 +36,8 @@ export default async function DashboardPage() {
                 startTime: recordings.startTime,
                 filesize: recordings.filesize,
                 deviceSn: recordings.deviceSn,
+                filetagId: recordings.filetagId,
+                plaudFileId: recordings.plaudFileId,
                 waveformPeaks: recordings.waveformPeaks,
             })
             .from(recordings)
@@ -77,6 +82,11 @@ export default async function DashboardPage() {
             .from(plaudConnections)
             .where(eq(plaudConnections.userId, session.user.id))
             .limit(1),
+        db
+            .select()
+            .from(plaudFiletags)
+            .where(eq(plaudFiletags.userId, session.user.id))
+            .orderBy(plaudFiletags.createdAt),
     ]);
     const summaryIds = new Set(userSummaryRows.map((r) => r.recordingId));
     const transcriptIds = new Set(userTranscriptions.map((t) => t.recordingId));
@@ -84,18 +94,22 @@ export default async function DashboardPage() {
     // Content fields are encrypted at rest; decrypt server-side (this is
     // an RSC — client never sees a key) before serializing for the
     // workstation. Legacy plaintext rows pass through verbatim.
-    const recordingsData = userRecordings.map(({ waveformPeaks, ...r }) =>
-        serializeRecording(
-            { ...r, filename: decryptText(r.filename) },
-            {
-                hasTranscript: transcriptIds.has(r.id),
-                hasSummary: summaryIds.has(r.id),
-                // jsonb comes back already-parsed; coerce to the typed shape.
-                waveformPeaks: Array.isArray(waveformPeaks)
-                    ? (waveformPeaks as number[])
-                    : null,
-            },
-        ),
+    const recordingsData = userRecordings.map(
+        ({ waveformPeaks, plaudFileId, ...r }) =>
+            serializeRecording(
+                { ...r, filename: decryptText(r.filename) },
+                {
+                    hasTranscript: transcriptIds.has(r.id),
+                    hasSummary: summaryIds.has(r.id),
+                    // Derived flag only — the raw plaudFileId never
+                    // reaches the client.
+                    isLocalOnly: isLocalOnlyRecording({ plaudFileId }),
+                    // jsonb comes back already-parsed; coerce to the typed shape.
+                    waveformPeaks: Array.isArray(waveformPeaks)
+                        ? (waveformPeaks as number[])
+                        : null,
+                },
+            ),
     );
 
     const transcriptionMap = new Map(
@@ -110,10 +124,13 @@ export default async function DashboardPage() {
     // there is the only place callers need to touch.
     const initialSettings = initialSettingsFromRow(settingsRow);
 
+    const filetagsData = userFiletags.map(serializeFiletag);
+
     return (
         <Workstation
             recordings={recordingsData}
             transcriptions={transcriptionMap}
+            filetags={filetagsData}
             isAdmin={isAdminEmail(session.user.email)}
             userEmail={session.user.email ?? null}
             initialSettings={initialSettings}

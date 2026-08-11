@@ -41,8 +41,8 @@ describe("elevated cookie", () => {
         // flip a hex char
         const tamperedMac =
             parts[2][0] === "0"
-                ? "1" + parts[2].slice(1)
-                : "0" + parts[2].slice(1);
+                ? `1${parts[2].slice(1)}`
+                : `0${parts[2].slice(1)}`;
         const tampered = `${parts[0]}.${parts[1]}.${tamperedMac}`;
         expect(verifyElevatedCookie(tampered)).toBeNull();
     });
