@@ -10,6 +10,14 @@
 
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
+vi.mock("@/lib/env", () => ({
+    env: {
+        DEFAULT_STORAGE_TYPE: "local",
+        ENCRYPTION_KEY:
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    },
+}));
+
 vi.mock("@/lib/posthog-server", () => ({
     captureServerException: vi.fn(),
     captureServerEvent: vi.fn(),
@@ -36,6 +44,10 @@ vi.mock("@/lib/encryption/fields", () => ({
 
 vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/storage/factory", () => ({
+    createUserStorageProvider: vi.fn(),
 }));
 
 import { PATCH as patchRecording } from "@/app/api/recordings/[id]/route";
