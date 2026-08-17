@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { dbMock, emailMock, envMock, queriesMock } = vi.hoisted(() => ({
     dbMock: { select: vi.fn() },
@@ -45,6 +45,20 @@ describe("processExpiredTrials", () => {
         stubEmailLookup("default@example.com");
     });
 
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    /**
+     * Grace starts at the later of trial end and now (#277), so a test that
+     * asserts an exact `lapseAt + grace` deletion date has to run at the
+     * moment the trial expired -- which is what steady state looks like.
+     */
+    function freezeClockAt(instant: Date) {
+        vi.useFakeTimers();
+        vi.setSystemTime(instant);
+    }
+
     it("returns zeros when no candidates", async () => {
         queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([]);
         const result = await processExpiredTrials();
@@ -56,6 +70,7 @@ describe("processExpiredTrials", () => {
     it("demotes a post-launch no-card trial to hosted_free and schedules 7-day deletion", async () => {
         envMock.BILLING_LAUNCH_DATE = "2026-06-01";
         const lapseAt = new Date("2026-07-15T12:00:00Z");
+        freezeClockAt(lapseAt);
         queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([
             {
                 id: "u_trial",
@@ -84,6 +99,7 @@ describe("processExpiredTrials", () => {
     it("grandfathers pre-launch users into the 30-day paid grace", async () => {
         envMock.BILLING_LAUNCH_DATE = "2026-06-01";
         const lapseAt = new Date("2026-07-15T12:00:00Z");
+        freezeClockAt(lapseAt);
         queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([
             {
                 id: "u_pre",
@@ -106,6 +122,7 @@ describe("processExpiredTrials", () => {
 
     it("uses the paid grace window for users who have ever paid", async () => {
         const lapseAt = new Date("2026-07-15T12:00:00Z");
+        freezeClockAt(lapseAt);
         queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([
             {
                 id: "u_paid",
@@ -145,6 +162,51 @@ describe("processExpiredTrials", () => {
         const expectedMax = now + 7 * 24 * 60 * 60 * 1000 + 5_000;
         expect(scheduledAt).toBeGreaterThanOrEqual(expectedMin);
         expect(scheduledAt).toBeLessThanOrEqual(expectedMax);
+    });
+
+    it("starts grace at now, not trial end, for a long-overdue lapse (#277)", async () => {
+        // The phase was down for days, so trial end is further in the past
+        // than the grace window itself. Measuring grace from trial end would
+        // schedule deletion retroactively, and the `deletion` phase runs
+        // right after `trial-lapse` in the same tick.
+        const lapseAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+        queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([
+            {
+                id: "u_overdue",
+                createdAt: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000),
+                everPaidAt: null,
+                planTransitionUntil: lapseAt,
+            },
+        ]);
+
+        await processExpiredTrials();
+
+        const { scheduledAt } = queriesMock.scheduleAccountDeletion.mock
+            .calls[0][0] as { scheduledAt: Date };
+        expect(scheduledAt.getTime()).toBeGreaterThan(Date.now());
+        const expected = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        expect(Math.abs(scheduledAt.getTime() - expected)).toBeLessThan(5_000);
+    });
+
+    it("keeps a future trial end as the grace start", async () => {
+        // Defensive: the claim only returns elapsed windows, but if a row
+        // with a future window ever arrives, grace must not be shortened.
+        const lapseAt = new Date(Date.now() + 60 * 60 * 1000);
+        queriesMock.claimUsersWithExpiredTrials.mockResolvedValue([
+            {
+                id: "u_future",
+                createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                everPaidAt: null,
+                planTransitionUntil: lapseAt,
+            },
+        ]);
+
+        await processExpiredTrials();
+
+        expect(queriesMock.scheduleAccountDeletion).toHaveBeenCalledWith({
+            userId: "u_future",
+            scheduledAt: new Date(lapseAt.getTime() + 7 * 24 * 60 * 60 * 1000),
+        });
     });
 
     it("counts per-user errors and continues processing the batch", async () => {

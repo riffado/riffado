@@ -9,6 +9,25 @@ import {
     users,
 } from "@/db/schema";
 
+/**
+ * Coerce a timestamp column read through `db.execute`.
+ *
+ * `db.execute` hands back raw driver rows, and on postgres-js a
+ * `timestamp` column arrives as a string, not a `Date`. The generic on
+ * `db.execute<Shape>()` is an unchecked assertion, not a parse, so a
+ * `Date`-typed field there compiles fine and then blows up at the first
+ * `.getTime()` call in the caller. Every raw-SQL reader in this file
+ * coerces at the boundary so the exported signature is honest.
+ */
+function asDate(value: Date | string): Date {
+    return value instanceof Date ? value : new Date(value);
+}
+
+/** Nullable variant of `asDate`. */
+function asDateOrNull(value: Date | string | null | undefined): Date | null {
+    return value === null || value === undefined ? null : asDate(value);
+}
+
 export interface BillingCustomerRow {
     userId: string;
     stripeCustomerId: string;
@@ -640,7 +659,7 @@ export async function listFoundingReservationsForExpiryCheck(input: {
     const result = await db.execute<{
         id: string;
         stripe_checkout_session_id: string;
-        expires_at: Date;
+        expires_at: Date | string;
     }>(sql`
         select id, stripe_checkout_session_id, expires_at
         from ${foundingMemberReservations}
@@ -656,7 +675,7 @@ export async function listFoundingReservationsForExpiryCheck(input: {
     return rows.map((row) => ({
         id: row.id,
         stripeCheckoutSessionId: row.stripe_checkout_session_id,
-        expiresAt: row.expires_at,
+        expiresAt: asDate(row.expires_at),
     }));
 }
 
@@ -757,9 +776,9 @@ export async function claimUsersWithExpiredTrials(limit: number): Promise<
 > {
     const result = await db.execute<{
         id: string;
-        created_at: Date;
-        ever_paid_at: Date | null;
-        plan_transition_until: Date | null;
+        created_at: Date | string;
+        ever_paid_at: Date | string | null;
+        plan_transition_until: Date | string | null;
     }>(sql`
         select u.id, u.created_at, u.ever_paid_at, u.plan_transition_until
         from ${users} u
@@ -780,9 +799,9 @@ export async function claimUsersWithExpiredTrials(limit: number): Promise<
         : ((result as { rows: typeof result }).rows ?? []);
     return rows.map((r) => ({
         id: r.id,
-        createdAt: r.created_at,
-        everPaidAt: r.ever_paid_at,
-        planTransitionUntil: r.plan_transition_until,
+        createdAt: asDate(r.created_at),
+        everPaidAt: asDateOrNull(r.ever_paid_at),
+        planTransitionUntil: asDateOrNull(r.plan_transition_until),
     }));
 }
 
@@ -1004,7 +1023,7 @@ export async function listSubscriptionsForReconcile(input: {
         id: string;
         stripe_customer_id: string;
         status: string;
-        updated_at: Date;
+        updated_at: Date | string;
     }>(sql`
         select id, stripe_customer_id, status, updated_at
         from ${subscriptions}
@@ -1020,7 +1039,7 @@ export async function listSubscriptionsForReconcile(input: {
         id: r.id,
         stripeCustomerId: r.stripe_customer_id,
         status: r.status,
-        updatedAt: r.updated_at,
+        updatedAt: asDate(r.updated_at),
     }));
 }
 
@@ -1078,7 +1097,7 @@ export async function claimDueStripeWebhookEvents(input: {
     const claimed = await db.execute<{
         event_id: string;
         type: string;
-        event_created_at: Date;
+        event_created_at: Date | string;
         payload: Record<string, unknown>;
         attempts: number;
         claim_token: string;
@@ -1109,7 +1128,7 @@ export async function claimDueStripeWebhookEvents(input: {
     return rows.map((row) => ({
         eventId: row.event_id,
         type: row.type,
-        eventCreatedAt: row.event_created_at,
+        eventCreatedAt: asDate(row.event_created_at),
         payload: row.payload,
         attempts: row.attempts,
         claimToken: row.claim_token,

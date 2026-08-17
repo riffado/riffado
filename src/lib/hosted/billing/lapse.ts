@@ -8,6 +8,7 @@ import {
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendGraceStartedEmail } from "@/lib/notifications/email";
+import { captureServerException } from "@/lib/posthog-server";
 import {
     classifyGracePath,
     computeDeletionScheduledAt,
@@ -33,6 +34,14 @@ export interface LapseResult {
  *      where the grace window is decided by `classifyGracePath`
  *      (grandfathered pre-launch users get the longer paid window).
  *
+ * The grace window starts at the later of trial end and now. In steady
+ * state those are the same instant (the worker claims within one tick of
+ * expiry), but if the phase has been down, trial end can be arbitrarily
+ * far in the past -- and grace measured from then would already be spent,
+ * so the `deletion` phase later in the same tick would hard-delete the
+ * account minutes after its grace-started email. Grace is time to react
+ * to a lockout; it can't start before the lockout does.
+ *
  * Idempotent: `scheduleAccountDeletion` keeps the earlier timestamp by
  * default, so a re-claim after the next worker tick won't push deletion
  * out. Errors are per-user and don't abort the batch.
@@ -51,7 +60,10 @@ export async function processExpiredTrials(options?: {
                 createdAt: row.createdAt,
                 everPaidAt: row.everPaidAt,
             });
-            const lapseAt = row.planTransitionUntil ?? new Date();
+            const now = new Date();
+            const lapseAt = row.planTransitionUntil ?? now;
+            const graceStartsAt =
+                lapseAt.getTime() > now.getTime() ? lapseAt : now;
 
             // Schedule deletion BEFORE demoting the plan. `claimUsersWithExpiredTrials`
             // only selects `plan = 'hosted_pro'` rows, so once the demote below
@@ -62,7 +74,10 @@ export async function processExpiredTrials(options?: {
             // after a partial failure is safe.
             const scheduledAt = await scheduleAccountDeletion({
                 userId: row.id,
-                scheduledAt: computeDeletionScheduledAt({ lapseAt, path }),
+                scheduledAt: computeDeletionScheduledAt({
+                    lapseAt: graceStartsAt,
+                    path,
+                }),
             });
             await setUserPlan({ userId: row.id, plan: "hosted_free" });
             await sendGraceStartedNotice({
@@ -77,6 +92,11 @@ export async function processExpiredTrials(options?: {
                 `[billing-lapse] failed to lapse user ${row.id}:`,
                 error,
             );
+            captureServerException(error, {
+                source: "worker:billing",
+                phase: "trial-lapse",
+                distinctId: row.id,
+            });
         }
     }
 
