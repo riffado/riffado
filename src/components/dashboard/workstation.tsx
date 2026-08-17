@@ -122,6 +122,9 @@ export function Workstation({
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+    const [filenameOverrides, setFilenameOverrides] = useState<
+        Map<string, string>
+    >(() => new Map());
     // On <lg viewports the list and detail panes can't coexist -- we
     // toggle between them instead of stacking. Desktop ignores this
     // state entirely (both panes render via the grid).
@@ -133,13 +136,24 @@ export function Workstation({
 
     // Filter out optimistically-hidden (deleted) rows.
     const visibleRecordings = useMemo(
-        () => recordings.filter((r) => !hiddenIds.has(r.id)),
-        [recordings, hiddenIds],
+        () =>
+            recordings
+                .filter((r) => !hiddenIds.has(r.id))
+                .map((r) => {
+                    const filename = filenameOverrides.get(r.id);
+                    return filename !== undefined ? { ...r, filename } : r;
+                }),
+        [recordings, hiddenIds, filenameOverrides],
     );
 
     const currentTranscription = currentRecording
         ? transcriptions.get(currentRecording.id)
         : undefined;
+
+    const selectedRecording = currentRecording
+        ? (visibleRecordings.find((r) => r.id === currentRecording.id) ??
+          currentRecording)
+        : null;
 
     // Keep currentRecording in sync with the recordings prop (updated
     // after refresh()). If the previously-selected recording is no
@@ -314,6 +328,16 @@ export function Workstation({
         [currentRecording, visibleRecordings, refresh],
     );
 
+    const handleRenamed = useCallback(
+        (filename: string) => {
+            const id = currentRecording?.id;
+            if (!id) return;
+            setFilenameOverrides((prev) => new Map(prev).set(id, filename));
+            refresh();
+        },
+        [currentRecording?.id, refresh],
+    );
+
     // Keyboard shortcuts (global). Disabled while any modal is open
     // so the modal owns keyboard focus exclusively. The shortcuts
     // dialog itself uses these very keys to navigate its rows.
@@ -411,13 +435,14 @@ export function Workstation({
                             </div>
 
                             <WorkstationDetailPane
-                                currentRecording={currentRecording}
+                                currentRecording={selectedRecording}
                                 currentTranscription={currentTranscription}
                                 isCurrentTranscribing={isCurrentTranscribing}
                                 visibleRecordings={visibleRecordings}
                                 onTranscribe={handleTranscribe}
                                 onTranscribeComplete={refresh}
                                 onSelectRecording={setCurrentRecording}
+                                onRenamed={handleRenamed}
                                 onBackToList={() => setMobileView("list")}
                                 hiddenOnMobile={mobileView === "list"}
                                 initialPlaybackSpeed={

@@ -8,8 +8,12 @@ import {
     webhookDeliveries,
 } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
-import { decryptText } from "@/lib/encryption/fields";
+import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import {
+    MAX_RECORDING_TITLE_LENGTH,
+    normalizeRecordingTitle,
+} from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { emitEvent } from "@/lib/webhooks/emit";
 import { createRedactedWebhookPayload } from "@/lib/webhooks/payload";
@@ -67,6 +71,74 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         transcription: transcription
             ? { ...transcription, text: decryptText(transcription.text) }
             : null,
+    });
+});
+
+export const PATCH = apiHandler<IdContext>(async (request, context) => {
+    const session = await requireApiSession(request);
+    const { id } = await (context as IdContext).params;
+    const body = (await request.json().catch(() => ({}))) as Record<
+        string,
+        unknown
+    >;
+
+    if (typeof body.filename !== "string") {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "filename must be a string",
+            400,
+            { field: "filename" },
+        );
+    }
+
+    const filename = normalizeRecordingTitle(body.filename);
+    if (!filename) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "Name cannot be empty",
+            400,
+            { field: "filename" },
+        );
+    }
+    if (filename.length > MAX_RECORDING_TITLE_LENGTH) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `Name must be ${MAX_RECORDING_TITLE_LENGTH} characters or fewer`,
+            400,
+            { field: "filename", maxLength: MAX_RECORDING_TITLE_LENGTH },
+        );
+    }
+
+    const [updated] = await db
+        .update(recordings)
+        .set({
+            filename: encryptText(filename),
+            updatedAt: new Date(),
+        })
+        .where(
+            and(
+                eq(recordings.id, id),
+                eq(recordings.userId, session.user.id),
+                isNull(recordings.deletedAt),
+            ),
+        )
+        .returning({
+            id: recordings.id,
+            filename: recordings.filename,
+        });
+
+    if (!updated) {
+        throw new AppError(
+            ErrorCode.RECORDING_NOT_FOUND,
+            "Recording not found",
+            404,
+        );
+    }
+
+    await emitEvent("recording.updated", session.user.id, updated.id);
+
+    return NextResponse.json({
+        filename: decryptText(updated.filename),
     });
 });
 

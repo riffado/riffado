@@ -1,7 +1,9 @@
 "use client";
 
 import { AudioWaveform, Loader2 } from "lucide-react";
-import { CardHeader, CardTitle } from "@/components/ui/card";
+import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
+import { RecordingTitle } from "@/components/recordings/recording-title";
+import { CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDuration } from "@/lib/format-duration";
@@ -14,6 +16,7 @@ interface Props {
     scrubberStyle: "waveform" | "slider";
     waveformStatus: "idle" | "ready" | "decoding" | "skipped" | "error";
     onDecodeWaveform: () => void;
+    onRenamed?: (filename: string) => void;
 }
 
 /**
@@ -32,6 +35,7 @@ export function RecordingPlayerHeader({
     scrubberStyle,
     waveformStatus,
     onDecodeWaveform,
+    onRenamed,
 }: Props) {
     const metaParts: string[] = [
         formatDateTime(recording.startTime, "relative"),
@@ -41,9 +45,17 @@ export function RecordingPlayerHeader({
 
     return (
         <CardHeader className="gap-1">
-            <CardTitle className="truncate text-lg">
-                {recording.filename}
+            <CardTitle className="min-w-0 text-lg">
+                <RecordingTitle
+                    recordingId={recording.id}
+                    filename={recording.filename}
+                    onRenamed={onRenamed}
+                    className="text-lg"
+                />
             </CardTitle>
+            <CardAction>
+                <DownloadAudioButton recordingId={recording.id} />
+            </CardAction>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                 {metaParts.map((part, i) => (
                     <span key={part} className="inline-flex items-center gap-2">
