@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import {
@@ -67,7 +67,13 @@ export function RecordingWorkstation({
         setFilename(recording.filename);
     }, [recording.filename]);
 
-    const displayRecording = { ...recording, filename };
+    const displayRecording = useMemo(
+        () =>
+            filename === recording.filename
+                ? recording
+                : { ...recording, filename },
+        [recording, filename],
+    );
 
     const handleRenamed = useCallback(
         (next: string) => {

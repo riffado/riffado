@@ -52,6 +52,7 @@ vi.mock("@/lib/storage/factory", () => ({
 
 import { PATCH as patchRecording } from "@/app/api/recordings/[id]/route";
 import { db } from "@/db";
+import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
 import { encryptText } from "@/lib/encryption/fields";
 import { ErrorCode } from "@/lib/errors";
@@ -71,14 +72,48 @@ function patchRequest(body: unknown) {
 }
 
 function mockUpdateReturning(row: unknown) {
+    const whereSpy = vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue(row ? [row] : []),
+    });
     const set = vi.fn((values: Record<string, unknown>) => ({
         values,
-        where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue(row ? [row] : []),
-        }),
+        where: whereSpy,
     }));
     (db.update as Mock).mockReturnValue({ set });
-    return set;
+    return { set, whereSpy };
+}
+
+/**
+ * Walk a Drizzle SQL/expression tree looking for a reference to the
+ * given column object. Same approach as the #56 delete-route tests.
+ */
+function exprReferencesColumn(
+    expr: unknown,
+    col: unknown,
+    seen = new Set<unknown>(),
+): boolean {
+    if (expr == null || typeof expr !== "object") return false;
+    if (expr === col) return true;
+    if (seen.has(expr)) return false;
+    seen.add(expr);
+    for (const key of [
+        "queryChunks",
+        "sql",
+        "left",
+        "right",
+        "value",
+        "args",
+        "chunks",
+        "expr",
+    ]) {
+        const v = (expr as Record<string, unknown>)[key];
+        if (Array.isArray(v)) {
+            if (v.some((x) => exprReferencesColumn(x, col, seen))) return true;
+        } else if (exprReferencesColumn(v, col, seen)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 describe("PATCH /api/recordings/[id]", () => {
@@ -90,7 +125,7 @@ describe("PATCH /api/recordings/[id]", () => {
     });
 
     it("encrypts the new title at rest and returns plaintext", async () => {
-        const set = mockUpdateReturning({
+        const { set } = mockUpdateReturning({
             id: "rec-1",
             filename: "encrypted:Q4 planning",
         });
@@ -151,8 +186,20 @@ describe("PATCH /api/recordings/[id]", () => {
         expect(db.update).not.toHaveBeenCalled();
     });
 
+    it("rejects a JSON null body", async () => {
+        const response = await patchRecording(
+            patchRequest(null),
+            routeParams(),
+        );
+        expect(response.status).toBe(400);
+        await expect(response.json()).resolves.toMatchObject({
+            code: ErrorCode.INVALID_INPUT,
+        });
+        expect(db.update).not.toHaveBeenCalled();
+    });
+
     it("returns 404 when the row is missing or owned by another user", async () => {
-        mockUpdateReturning(null);
+        const { whereSpy } = mockUpdateReturning(null);
 
         const response = await patchRecording(
             patchRequest({ filename: "New name" }),
@@ -164,5 +211,13 @@ describe("PATCH /api/recordings/[id]", () => {
             code: ErrorCode.RECORDING_NOT_FOUND,
         });
         expect(emitEvent).not.toHaveBeenCalled();
+
+        const whereExpr = whereSpy.mock.calls.at(-1)?.[0];
+        expect(whereExpr).toBeDefined();
+        expect(exprReferencesColumn(whereExpr, recordings.userId)).toBe(true);
+        expect(exprReferencesColumn(whereExpr, recordings.id)).toBe(true);
+        expect(exprReferencesColumn(whereExpr, recordings.deletedAt)).toBe(
+            true,
+        );
     });
 });

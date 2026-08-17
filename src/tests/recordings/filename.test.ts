@@ -45,6 +45,16 @@ describe("sanitizeDownloadBasename", () => {
             MAX_RECORDING_TITLE_LENGTH,
         );
     });
+
+    it("prefixes Windows reserved device names, including with an extension", () => {
+        expect(sanitizeDownloadBasename("CON")).toBe("_CON");
+        expect(sanitizeDownloadBasename("lpt1")).toBe("_lpt1");
+        expect(sanitizeDownloadBasename("COM3.mp3")).toBe("_COM3.mp3");
+        expect(sanitizeDownloadBasename("nul")).toBe("_nul");
+        expect(sanitizeDownloadBasename("AUX")).toBe("_AUX");
+        expect(sanitizeDownloadBasename("PRN")).toBe("_PRN");
+        expect(sanitizeDownloadBasename("Meeting")).toBe("Meeting");
+    });
 });
 
 describe("buildDownloadFilename", () => {
@@ -69,6 +79,18 @@ describe("buildDownloadFilename", () => {
     it("keeps unicode in the download name", () => {
         expect(buildDownloadFilename("会議 日本語", "u/a.mp3", "id")).toBe(
             "会議 日本語.mp3",
+        );
+    });
+
+    it("prefixes reserved basenames after stripping a matching audio extension", () => {
+        expect(buildDownloadFilename("CON", "u/rec.mp3", "id")).toBe(
+            "_CON.mp3",
+        );
+        expect(buildDownloadFilename("CON.mp3", "u/rec.mp3", "id")).toBe(
+            "_CON.mp3",
+        );
+        expect(buildDownloadFilename("LPT1.wav", "u/rec.wav", "id")).toBe(
+            "_LPT1.wav",
         );
     });
 });

@@ -27,6 +27,10 @@ import {
     showNewRecordingNotification,
     showSyncCompleteNotification,
 } from "@/lib/notifications/browser";
+import {
+    applyFilenameOverrides,
+    reconcileFilenameOverrides,
+} from "@/lib/recordings/filename-overrides";
 import type { InitialSettings } from "@/lib/settings/initial-settings";
 import { SYNC_CONFIG } from "@/lib/sync-config";
 import { cn } from "@/lib/utils";
@@ -137,12 +141,10 @@ export function Workstation({
     // Filter out optimistically-hidden (deleted) rows.
     const visibleRecordings = useMemo(
         () =>
-            recordings
-                .filter((r) => !hiddenIds.has(r.id))
-                .map((r) => {
-                    const filename = filenameOverrides.get(r.id);
-                    return filename !== undefined ? { ...r, filename } : r;
-                }),
+            applyFilenameOverrides(
+                recordings.filter((r) => !hiddenIds.has(r.id)),
+                filenameOverrides,
+            ),
         [recordings, hiddenIds, filenameOverrides],
     );
 
@@ -175,6 +177,9 @@ export function Workstation({
             }
             return next.size === prev.size ? prev : next;
         });
+        setFilenameOverrides((prev) =>
+            reconcileFilenameOverrides(recordings, prev),
+        );
     }, [recordings]);
 
     const {

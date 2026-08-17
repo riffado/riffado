@@ -77,12 +77,13 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
 export const PATCH = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
     const { id } = await (context as IdContext).params;
-    const body = (await request.json().catch(() => ({}))) as Record<
-        string,
-        unknown
-    >;
-
-    if (typeof body.filename !== "string") {
+    const body = (await request.json().catch(() => ({}))) as unknown;
+    if (
+        body === null ||
+        typeof body !== "object" ||
+        Array.isArray(body) ||
+        typeof (body as { filename?: unknown }).filename !== "string"
+    ) {
         throw new AppError(
             ErrorCode.INVALID_INPUT,
             "filename must be a string",
@@ -91,7 +92,9 @@ export const PATCH = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    const filename = normalizeRecordingTitle(body.filename);
+    const filename = normalizeRecordingTitle(
+        (body as { filename: string }).filename,
+    );
     if (!filename) {
         throw new AppError(
             ErrorCode.INVALID_INPUT,

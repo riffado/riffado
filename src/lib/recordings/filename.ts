@@ -13,6 +13,14 @@ function stripControlChars(value: string): string {
     return out;
 }
 
+/** CON, PRN, AUX, NUL, COM1–9, LPT1–9 — reserved even with an extension. */
+const WINDOWS_RESERVED_BASENAME =
+    /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^.]+)?$/i;
+
+function escapeWindowsReservedBasename(name: string): string {
+    return WINDOWS_RESERVED_BASENAME.test(name) ? `_${name}` : name;
+}
+
 /**
  * Strip C0 controls and trim. Empty string means the caller should reject.
  */
@@ -41,9 +49,11 @@ export function sanitizeDownloadBasename(title: string): string {
         .replace(/\s+/g, " ")
         .trim();
     if (!cleaned) return "";
-    return cleaned.length > MAX_RECORDING_TITLE_LENGTH
-        ? cleaned.slice(0, MAX_RECORDING_TITLE_LENGTH).trim()
-        : cleaned;
+    const truncated =
+        cleaned.length > MAX_RECORDING_TITLE_LENGTH
+            ? cleaned.slice(0, MAX_RECORDING_TITLE_LENGTH).trim()
+            : cleaned;
+    return escapeWindowsReservedBasename(truncated);
 }
 
 /**
@@ -65,6 +75,7 @@ export function buildDownloadFilename(
     if (base.toLowerCase().endsWith(extSuffix)) {
         base = base.slice(0, -extSuffix.length);
     }
+    base = escapeWindowsReservedBasename(base);
     return `${base}${extSuffix}`;
 }
 
