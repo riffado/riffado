@@ -4,6 +4,7 @@ import { closeDueCycles } from "./cycle-close";
 import { processDueAccountDeletions } from "./deletion";
 import { reconcileExpiredFoundingReservations } from "./founding-reservations";
 import { processGraceReminders } from "./grace-reminders";
+import { processExpiredTransitions } from "./grandfather";
 import { processExpiredTrials } from "./lapse";
 import { reconcileStaleSubscriptions } from "./reconcile";
 import { processTransitionEmails } from "./transition-emails";
@@ -113,6 +114,19 @@ export async function tick(): Promise<void> {
             }
         });
 
+        // After transition-emails: the grandfather claim requires the
+        // "your window closed" notice to already be logged, so running it
+        // later in the same tick shortens the gap between that email and
+        // the deletion clock it refers to.
+        await runPhase("grandfather-lapse", async () => {
+            const grandfather = await processExpiredTransitions();
+            if (grandfather.scheduled > 0 || grandfather.errors > 0) {
+                console.log(
+                    `[billing-worker] grandfather-lapse scheduled=${grandfather.scheduled} errors=${grandfather.errors}`,
+                );
+            }
+        });
+
         tickCount += 1;
         if (tickCount % RECONCILE_EVERY_N_TICKS === 0) {
             await runPhase("reconcile", async () => {
@@ -140,6 +154,8 @@ export async function tick(): Promise<void> {
  *  - Closes due Mynah cycles
  *  - Detects expired trials with no card -> demotes + schedules deletion
  *  - Processes accounts whose grace window has elapsed -> hard delete
+ *  - Starts the deletion clock for grandfathered users whose transition
+ *    window has closed (after their read-only notice has gone out)
  *  - Drives the grandfathered-cohort reminder / ended emails once the
  *    configured launch date has arrived (launch notices use the operator script)
  *

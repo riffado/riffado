@@ -2,6 +2,19 @@ import { env } from "@/lib/env";
 
 export type GracePath = "trial" | "paid";
 
+/**
+ * Grace window (days) for the grandfathered pre-launch cohort once their
+ * transition window closes.
+ *
+ * Deliberately longer than `BILLING_PAID_GRACE_DAYS`, and deliberately a
+ * constant rather than another env knob: this cohort signed up when hosted
+ * was free and unmetered, so they never agreed to any billing terms, while
+ * `BILLING_PAID_GRACE_DAYS` governs subscribers who chose a plan and then
+ * lapsed. Widening the shared env value to cover this one-off migration
+ * would silently lengthen grace for everyone.
+ */
+export const GRANDFATHERED_GRACE_DAYS = 60;
+
 interface UserGraceInputs {
     /** When the user row was created. */
     createdAt: Date;
