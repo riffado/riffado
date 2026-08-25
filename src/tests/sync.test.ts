@@ -40,6 +40,10 @@ vi.mock("@/lib/transcription/transcribe-recording", () => ({
     transcribeRecording: vi.fn().mockResolvedValue({ success: true }),
 }));
 
+vi.mock("@/lib/sync/untranscribed", () => ({
+    listUntranscribedRecordingIds: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
@@ -53,6 +57,8 @@ import { db } from "@/db";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { captureServerException } from "@/lib/posthog-server";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
+import { listUntranscribedRecordingIds } from "@/lib/sync/untranscribed";
+import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 
 describe("Sync", () => {
     const mockUserId = "user-123";
@@ -161,6 +167,100 @@ describe("Sync", () => {
 
             expect(result.newRecordings).toBe(0);
             expect(result.updatedRecordings).toBe(0);
+        });
+
+        it("retries already-synced recordings that still have no transcript when auto-transcribe is on", async () => {
+            const mockConnection = {
+                id: "conn-1",
+                userId: mockUserId,
+                bearerToken: "encrypted-token",
+            };
+            const mockExistingRecording = {
+                id: "local-rec-1",
+                plaudFileId: "plaud-1",
+                plaudVersion: "1000",
+            };
+            const mockPlaudClient = {
+                getRecordings: vi.fn().mockResolvedValue({
+                    data_file_list: [
+                        {
+                            id: "plaud-1",
+                            filename: "Recording 1.mp3",
+                            duration: 60000,
+                            start_time: "2024-01-01T10:00:00Z",
+                            end_time: "2024-01-01T10:01:00Z",
+                            filesize: 1024000,
+                            file_md5: "abc123",
+                            serial_number: "SN123",
+                            version_ms: 1000,
+                            timezone: 0,
+                            zonemins: 0,
+                            scene: 0,
+                            is_trash: false,
+                        },
+                    ],
+                }),
+                downloadRecording: vi
+                    .fn()
+                    .mockResolvedValue(Buffer.from("audio")),
+            };
+            (createPlaudClient as Mock).mockResolvedValue(mockPlaudClient);
+            (listUntranscribedRecordingIds as Mock).mockResolvedValueOnce([
+                "local-rec-1",
+            ]);
+            (db.update as Mock).mockReturnValue({
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockResolvedValue(undefined),
+                }),
+            });
+
+            (db.select as Mock)
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([mockConnection]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi
+                                .fn()
+                                .mockResolvedValue([{ autoTranscribe: true }]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi
+                                .fn()
+                                .mockResolvedValue([
+                                    { email: "test@example.com" },
+                                ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi
+                                .fn()
+                                .mockResolvedValue([mockExistingRecording]),
+                        }),
+                    }),
+                });
+
+            await syncRecordingsForUser(mockUserId);
+
+            await vi.waitFor(() => {
+                expect(transcribeRecording).toHaveBeenCalledWith(
+                    mockUserId,
+                    "local-rec-1",
+                    { trigger: "sync" },
+                );
+            });
         });
 
         it("should update recordings with newer version", async () => {

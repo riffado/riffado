@@ -371,7 +371,10 @@ export async function deliverDueWebhooks(): Promise<void> {
 }
 
 export function signalWebhookWorker(): void {
-    if (!started) return;
+    if (!started) {
+        startWebhookWorker();
+        return;
+    }
     void deliverDueWebhooks();
 }
 
