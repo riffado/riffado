@@ -168,7 +168,7 @@ const baseEnvSchema = z.object({
         .transform((val) => (val ? Number(val) : 12))
         .pipe(z.number().int().positive()),
 
-    /** OpenAI-style audio transcription request timeout in milliseconds. */
+    /** OpenAI-compatible transcription request timeout (Whisper and chat-style). */
     WHISPER_REQUEST_TIMEOUT_MS: z
         .string()
         .regex(/^\d+$/, "WHISPER_REQUEST_TIMEOUT_MS must be a positive integer")
