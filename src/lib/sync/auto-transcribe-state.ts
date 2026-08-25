@@ -24,18 +24,6 @@ function excludeIdsForUser(userId: string): string[] {
     return [...new Set([...inFlightAutoTranscribeIds, ...(failed ?? [])])];
 }
 
-function takeOldestFailed(userId: string, count: number): string[] {
-    const failed = recentFailedByUser.get(userId);
-    if (!failed || count <= 0) return [];
-    const picked: string[] = [];
-    for (const id of failed) {
-        if (inFlightAutoTranscribeIds.has(id)) continue;
-        picked.push(id);
-        if (picked.length >= count) break;
-    }
-    return picked;
-}
-
 /**
  * Claim ids for a process-local auto-transcribe pass. Already in-flight
  * ids are skipped so overlapping syncs do not double-call the provider.
@@ -88,25 +76,59 @@ export function noteAutoTranscribeOutcome(
  * Newest-first retry ids for one user, excluding in-flight and that
  * user's recently failed recordings. Unused slots, or one slot when
  * the newest window is full, are filled from that user's oldest
- * failures so a stream of newer recordings cannot starve retries.
+ * still-eligible failures so a stream of newer recordings cannot
+ * starve retries. Deleted or already-transcribed failures are dropped.
  */
 export async function listAutoTranscribeRetryIds(
     userId: string,
-    options: Omit<AutoTranscribeRetryOptions, "excludeIds"> = {},
+    options: Omit<AutoTranscribeRetryOptions, "excludeIds" | "onlyIds"> = {},
 ): Promise<string[]> {
     const fresh = await listUntranscribedRecordingIds(userId, {
         ...options,
         excludeIds: excludeIdsForUser(userId),
     });
     const failed = recentFailedByUser.get(userId);
-    const failedCount = failed?.size ?? 0;
-    if (failedCount === 0) return fresh;
+    if (!failed || failed.size === 0) return fresh;
+
+    const candidates: string[] = [];
+    for (const id of failed) {
+        if (inFlightAutoTranscribeIds.has(id)) continue;
+        candidates.push(id);
+    }
+    if (candidates.length === 0) return fresh;
+
+    let stillEligible: string[];
+    try {
+        stillEligible = await listUntranscribedRecordingIds(userId, {
+            ...options,
+            excludeIds: [...inFlightAutoTranscribeIds],
+            onlyIds: candidates,
+            limit: candidates.length,
+        });
+    } catch (error) {
+        console.error("Auto-transcribe failure revalidation failed:", error);
+        return fresh;
+    }
+
+    const eligible = new Set(stillEligible);
+    for (const id of candidates) {
+        if (!eligible.has(id)) failed.delete(id);
+    }
+    if (failed.size === 0) {
+        recentFailedByUser.delete(userId);
+        return fresh;
+    }
 
     const reserve =
         fresh.length >= AUTO_TRANSCRIBE_RETRY_LIMIT
             ? 1
             : AUTO_TRANSCRIBE_RETRY_LIMIT - fresh.length;
-    const fromFailed = takeOldestFailed(userId, reserve);
+    const fromFailed: string[] = [];
+    for (const id of candidates) {
+        if (!eligible.has(id)) continue;
+        fromFailed.push(id);
+        if (fromFailed.length >= reserve) break;
+    }
     return [
         ...fresh.slice(0, AUTO_TRANSCRIBE_RETRY_LIMIT - fromFailed.length),
         ...fromFailed,

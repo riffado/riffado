@@ -1,4 +1,13 @@
-import { and, desc, eq, exists, isNull, not, notInArray } from "drizzle-orm";
+import {
+    and,
+    desc,
+    eq,
+    exists,
+    inArray,
+    isNull,
+    not,
+    notInArray,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { recordings, transcriptions } from "@/db/schema";
 
@@ -8,6 +17,8 @@ export const AUTO_TRANSCRIBE_RETRY_LIMIT = 5;
 export type AutoTranscribeRetryOptions = {
     transcriptMode?: string;
     excludeIds?: readonly string[];
+    /** When set, only these recording ids are considered. */
+    onlyIds?: readonly string[];
     limit?: number;
 };
 
@@ -23,6 +34,7 @@ export async function listUntranscribedRecordingIds(
     const limit = options.limit ?? AUTO_TRANSCRIBE_RETRY_LIMIT;
     const keepBoth = options.transcriptMode === "keep_both";
     const excludeIds = options.excludeIds ?? [];
+    const onlyIds = options.onlyIds ?? [];
 
     const sourceMatch = keepBoth
         ? and(
@@ -49,6 +61,9 @@ export async function listUntranscribedRecordingIds(
     ];
     if (excludeIds.length > 0) {
         conditions.push(notInArray(recordings.id, [...excludeIds]));
+    }
+    if (onlyIds.length > 0) {
+        conditions.push(inArray(recordings.id, [...onlyIds]));
     }
 
     const rows = await db

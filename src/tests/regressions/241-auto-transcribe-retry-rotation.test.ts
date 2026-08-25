@@ -26,14 +26,20 @@ const newestFive = ["n1", "n2", "n3", "n4", "n5"];
 const olderTwo = ["o1", "o2"];
 const incomingFive = ["new1", "new2", "new3", "new4", "new5"];
 
+function mockFreshThenEligible(fresh: string[], eligible: string[]) {
+    (listUntranscribedRecordingIds as Mock)
+        .mockResolvedValueOnce(fresh)
+        .mockResolvedValueOnce(eligible);
+}
+
 describe("issue #241: auto-transcribe retry rotation", () => {
     beforeEach(() => {
         resetAutoTranscribeStateForTests();
         vi.clearAllMocks();
     });
 
-    it("fills leftover slots from the oldest failures", async () => {
-        (listUntranscribedRecordingIds as Mock).mockResolvedValue(olderTwo);
+    it("fills leftover slots from the oldest still-eligible failures", async () => {
+        mockFreshThenEligible(olderTwo, newestFive);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
@@ -43,15 +49,29 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         });
 
         expect(ids).toEqual(["o1", "o2", "n1", "n2", "n3"]);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
-            transcriptMode: "plaud_only",
-            excludeIds: newestFive,
-        });
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(2);
+        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
+            1,
+            "user-1",
+            {
+                transcriptMode: "plaud_only",
+                excludeIds: newestFive,
+            },
+        );
+        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
+            2,
+            "user-1",
+            {
+                transcriptMode: "plaud_only",
+                excludeIds: [],
+                onlyIds: newestFive,
+                limit: 5,
+            },
+        );
     });
 
-    it("retries oldest failures when the newest-first window is empty", async () => {
-        (listUntranscribedRecordingIds as Mock).mockResolvedValue([]);
+    it("retries oldest eligible failures when the newest-first window is empty", async () => {
+        mockFreshThenEligible([], newestFive);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
@@ -59,14 +79,11 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         const ids = await listAutoTranscribeRetryIds("user-1");
 
         expect(ids).toEqual(newestFive);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
-            excludeIds: newestFive,
-        });
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(2);
     });
 
     it("reserves one slot for an older failure when newer recordings keep arriving", async () => {
-        (listUntranscribedRecordingIds as Mock).mockResolvedValue(incomingFive);
+        mockFreshThenEligible(incomingFive, newestFive);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
@@ -74,7 +91,7 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         const ids = await listAutoTranscribeRetryIds("user-1");
 
         expect(ids).toEqual(["new1", "new2", "new3", "new4", "n1"]);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(2);
     });
 
     it("does not inject failures when there were none", async () => {
@@ -94,6 +111,7 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         const ids = await listAutoTranscribeRetryIds("user-1");
 
         expect(ids).toEqual(["n2"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
         expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
             excludeIds: [],
         });
@@ -105,12 +123,20 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
-        (listUntranscribedRecordingIds as Mock).mockResolvedValue([]);
+        mockFreshThenEligible([], ["n2", "n3", "n4", "n5"]);
 
         const ids = await listAutoTranscribeRetryIds("user-1");
 
         expect(ids).toEqual(["n2", "n3", "n4", "n5"]);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
+        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
+            2,
+            "user-1",
+            {
+                excludeIds: ["n1"],
+                onlyIds: ["n2", "n3", "n4", "n5"],
+                limit: 4,
+            },
+        );
         releaseAutoTranscribeIds(claimed);
     });
 
@@ -121,7 +147,9 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         noteAutoTranscribeOutcome("user-2", "b-fail", false);
         (listUntranscribedRecordingIds as Mock)
             .mockResolvedValueOnce([])
-            .mockResolvedValueOnce(olderTwo);
+            .mockResolvedValueOnce(["b-fail"])
+            .mockResolvedValueOnce(olderTwo)
+            .mockResolvedValueOnce(newestFive);
 
         const user2 = await listAutoTranscribeRetryIds("user-2");
         const user1 = await listAutoTranscribeRetryIds("user-1");
@@ -133,9 +161,29 @@ describe("issue #241: auto-transcribe retry rotation", () => {
             "user-2",
             { excludeIds: ["b-fail"] },
         );
-        expect(listUntranscribedRecordingIds).toHaveBeenLastCalledWith(
+        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
+            3,
             "user-1",
             { excludeIds: newestFive },
+        );
+    });
+
+    it("discards failed ids that are no longer eligible", async () => {
+        for (const id of newestFive) {
+            noteAutoTranscribeOutcome("user-1", id, false);
+        }
+        mockFreshThenEligible(olderTwo, []);
+
+        const first = await listAutoTranscribeRetryIds("user-1");
+        expect(first).toEqual(olderTwo);
+
+        (listUntranscribedRecordingIds as Mock).mockResolvedValue(["fresh"]);
+        const second = await listAutoTranscribeRetryIds("user-1");
+
+        expect(second).toEqual(["fresh"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenLastCalledWith(
+            "user-1",
+            { excludeIds: [] },
         );
     });
 
@@ -143,7 +191,11 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         for (let i = 0; i < AUTO_TRANSCRIBE_FAILED_ID_LIMIT + 1; i++) {
             noteAutoTranscribeOutcome("user-1", `id-${i}`, false);
         }
-        (listUntranscribedRecordingIds as Mock).mockResolvedValue(["kept"]);
+        const remaining = Array.from(
+            { length: AUTO_TRANSCRIBE_FAILED_ID_LIMIT },
+            (_, i) => `id-${i + 1}`,
+        );
+        mockFreshThenEligible(["kept"], remaining);
 
         await listAutoTranscribeRetryIds("user-1");
 
