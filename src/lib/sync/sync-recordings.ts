@@ -135,7 +135,9 @@ async function allocateStorageKey(
             .limit(1);
         if (!existing) return key;
     }
-    return `${userId}/${plaudFileId}.${ext}`;
+    throw new Error(
+        "Unable to allocate a unique storage key for Plaud recording",
+    );
 }
 
 async function resolveStorageKey(

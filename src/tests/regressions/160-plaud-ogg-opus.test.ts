@@ -208,6 +208,35 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(storage.deleteFile).not.toHaveBeenCalled();
         });
 
+        it("fails closed when every candidate storage key is already held", async () => {
+            const storage = await storageMock();
+            stubPlaud();
+            stubSelects([
+                [{ id: "conn-1", userId: mockUserId, bearerToken: "tok" }],
+                [{ id: "settings-1" }],
+                [{ email: "t@example.com" }],
+                [],
+            ]);
+            (db.select as Mock).mockReturnValue({
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([{ id: "taken" }]),
+                    }),
+                }),
+            });
+            (db.update as Mock).mockReturnValue({
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockResolvedValue(undefined),
+                }),
+            });
+
+            const result = await syncRecordingsForUser(mockUserId);
+
+            expect(result.newRecordings).toBe(0);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(storage.uploadFile).not.toHaveBeenCalled();
+        });
+
         function stubUpdateTransaction() {
             const setPayloads: Array<{ storagePath?: string }> = [];
             (db.transaction as Mock).mockImplementation(
