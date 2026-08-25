@@ -209,6 +209,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         });
 
         function stubUpdateTransaction() {
+            const setPayloads: Array<{ storagePath?: string }> = [];
             (db.transaction as Mock).mockImplementation(
                 async (cb: (tx: unknown) => Promise<boolean>) => {
                     const tx = {
@@ -226,9 +227,18 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                             }),
                         }),
                         update: vi.fn().mockReturnValue({
-                            set: vi.fn().mockReturnValue({
-                                where: vi.fn().mockResolvedValue(undefined),
-                            }),
+                            set: vi
+                                .fn()
+                                .mockImplementation(
+                                    (payload: { storagePath?: string }) => {
+                                        setPayloads.push(payload);
+                                        return {
+                                            where: vi
+                                                .fn()
+                                                .mockResolvedValue(undefined),
+                                        };
+                                    },
+                                ),
                         }),
                     };
                     return cb(tx);
@@ -239,6 +249,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                     where: vi.fn().mockResolvedValue(undefined),
                 }),
             });
+            return { setPayloads };
         }
 
         it("re-syncs Ogg/Opus onto the existing key with an honest MIME", async () => {
@@ -260,7 +271,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 ],
                 [],
             ]);
-            stubUpdateTransaction();
+            const { setPayloads } = stubUpdateTransaction();
 
             const result = await syncRecordingsForUser(mockUserId);
 
@@ -271,6 +282,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 oggBuffer,
                 "audio/ogg",
             );
+            expect(setPayloads[0]?.storagePath).toBe(oldPath);
             expect(storage.deleteFile).not.toHaveBeenCalled();
         });
 
@@ -294,7 +306,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 [{ id: "other-rec" }],
                 [],
             ]);
-            stubUpdateTransaction();
+            const { setPayloads } = stubUpdateTransaction();
 
             const result = await syncRecordingsForUser(mockUserId);
 
@@ -302,10 +314,11 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(result.errors).toEqual([]);
             expect(storage.uploadFile).toHaveBeenCalledTimes(1);
             const [key, body, contentType] = storage.uploadFile.mock.calls[0];
+            expect(key).toBe("user-160/plaud-160.ogg");
             expect(key).not.toBe(sharedPath);
-            expect(key).toMatch(/\.ogg$/);
             expect(body).toBe(oggBuffer);
             expect(contentType).toBe("audio/ogg");
+            expect(setPayloads[0]?.storagePath).toBe(key);
             expect(storage.deleteFile).not.toHaveBeenCalled();
         });
     });

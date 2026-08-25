@@ -81,6 +81,73 @@ interface SyncContext {
     barkNotifications: boolean;
     notificationEmail: string | null;
     barkPushUrl: string | null;
+    storageKeys: StorageKeyAllocator;
+}
+
+class StorageKeyAllocator {
+    private readonly reserved = new Set<string>();
+    private tail: Promise<void> = Promise.resolve();
+
+    allocate(
+        userId: string,
+        baseName: string,
+        ext: string,
+        plaudFileId: string,
+    ): Promise<string> {
+        return this.enqueue(() =>
+            this.pickKey(userId, baseName, ext, plaudFileId),
+        );
+    }
+
+    reuse(storagePath: string): Promise<string> {
+        return this.enqueue(() => {
+            this.reserved.add(storagePath);
+            return storagePath;
+        });
+    }
+
+    private enqueue<T>(fn: () => Promise<T> | T): Promise<T> {
+        const run = this.tail.then(fn, fn);
+        this.tail = run.then(
+            () => undefined,
+            () => undefined,
+        );
+        return run;
+    }
+
+    private async pickKey(
+        userId: string,
+        baseName: string,
+        ext: string,
+        plaudFileId: string,
+    ): Promise<string> {
+        const candidate = (suffix: string) =>
+            `${userId}/${baseName}${suffix}.${ext}`;
+
+        for (let i = 0; i < 100; i++) {
+            const suffix = i === 0 ? "" : ` (${i + 1})`;
+            const key = candidate(suffix);
+            if (this.reserved.has(key)) continue;
+            const [existing] = await db
+                .select({ id: recordings.id })
+                .from(recordings)
+                .where(
+                    and(
+                        eq(recordings.userId, userId),
+                        eq(recordings.storagePath, key),
+                        ne(recordings.plaudFileId, plaudFileId),
+                    ),
+                )
+                .limit(1);
+            if (!existing) {
+                this.reserved.add(key);
+                return key;
+            }
+        }
+        const fallback = `${userId}/${plaudFileId}.${ext}`;
+        this.reserved.add(fallback);
+        return fallback;
+    }
 }
 
 /** A freshly-synced recording that Plaud may hold transcript/summary content
@@ -90,34 +157,6 @@ interface ImportCandidate {
     plaudFileId: string;
     isTrans: boolean;
     isSummary: boolean;
-}
-
-async function uniqueStorageKey(
-    userId: string,
-    baseName: string,
-    ext: string,
-    plaudFileId: string,
-): Promise<string> {
-    const candidate = (suffix: string) =>
-        `${userId}/${baseName}${suffix}.${ext}`;
-
-    for (let i = 0; i < 100; i++) {
-        const suffix = i === 0 ? "" : ` (${i + 1})`;
-        const key = candidate(suffix);
-        const [existing] = await db
-            .select({ id: recordings.id })
-            .from(recordings)
-            .where(
-                and(
-                    eq(recordings.userId, userId),
-                    eq(recordings.storagePath, key),
-                    ne(recordings.plaudFileId, plaudFileId),
-                ),
-            )
-            .limit(1);
-        if (!existing) return key;
-    }
-    return `${userId}/${plaudFileId}.${ext}`;
 }
 
 async function storagePathHeldByOtherRecording(
@@ -140,7 +179,7 @@ async function storagePathHeldByOtherRecording(
 }
 
 async function resolveStorageKey(
-    userId: string,
+    context: SyncContext,
     existingRecording: { id: string; storagePath: string | null } | undefined,
     safeName: string,
     fileExtension: string,
@@ -148,13 +187,26 @@ async function resolveStorageKey(
 ): Promise<string> {
     if (existingRecording?.storagePath) {
         const shared = await storagePathHeldByOtherRecording(
-            userId,
+            context.userId,
             existingRecording.storagePath,
             existingRecording.id,
         );
-        if (!shared) return existingRecording.storagePath;
+        if (!shared) {
+            return context.storageKeys.reuse(existingRecording.storagePath);
+        }
+        return context.storageKeys.allocate(
+            context.userId,
+            plaudFileId,
+            fileExtension,
+            plaudFileId,
+        );
     }
-    return uniqueStorageKey(userId, safeName, fileExtension, plaudFileId);
+    return context.storageKeys.allocate(
+        context.userId,
+        safeName,
+        fileExtension,
+        plaudFileId,
+    );
 }
 
 /**
@@ -256,7 +308,7 @@ async function processRecording(
             plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
             plaudRecording.id;
         const storageKey = await resolveStorageKey(
-            context.userId,
+            context,
             existingRecording,
             safeName,
             fileExtension,
@@ -558,6 +610,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             notificationEmail:
                 settings?.notificationEmail || user?.email || null,
             barkPushUrl: settings?.barkPushUrl || null,
+            storageKeys: new StorageKeyAllocator(),
         };
 
         const plaudClient = await createPlaudClient(
