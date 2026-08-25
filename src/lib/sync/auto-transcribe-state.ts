@@ -110,15 +110,17 @@ export async function listAutoTranscribeRetryIds(
         return fresh;
     }
 
+    if (recentFailedByUser.get(userId) !== failed) {
+        return fresh;
+    }
+
     const eligible = new Set(stillEligible);
-    if (recentFailedByUser.get(userId) === failed) {
-        for (const id of candidates) {
-            if (!eligible.has(id)) failed.delete(id);
-        }
-        if (failed.size === 0) {
-            recentFailedByUser.delete(userId);
-            return fresh;
-        }
+    for (const id of candidates) {
+        if (!eligible.has(id)) failed.delete(id);
+    }
+    if (failed.size === 0) {
+        recentFailedByUser.delete(userId);
+        return fresh;
     }
 
     const reserve =

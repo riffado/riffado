@@ -227,7 +227,7 @@ describe("issue #241: auto-transcribe retry rotation", () => {
             noteAutoTranscribeOutcome("user-1", id, true);
         }
         noteAutoTranscribeOutcome("user-1", "later", false);
-        resolveEligible([]);
+        resolveEligible(newestFive);
 
         expect(await pending).toEqual(olderTwo);
 
