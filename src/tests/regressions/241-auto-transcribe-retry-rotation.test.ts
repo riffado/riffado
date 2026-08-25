@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/lib/sync/untranscribed", () => ({
+    AUTO_TRANSCRIBE_RETRY_LIMIT: 5,
     listUntranscribedRecordingIds: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ import { listUntranscribedRecordingIds } from "@/lib/sync/untranscribed";
 
 const newestFive = ["n1", "n2", "n3", "n4", "n5"];
 const olderTwo = ["o1", "o2"];
+const incomingFive = ["new1", "new2", "new3", "new4", "new5"];
 
 describe("issue #241: auto-transcribe retry rotation", () => {
     beforeEach(() => {
@@ -30,7 +32,7 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         vi.clearAllMocks();
     });
 
-    it("excludes recent failures from the next newest-first window", async () => {
+    it("fills leftover slots from the oldest failures", async () => {
         (listUntranscribedRecordingIds as Mock).mockResolvedValue(olderTwo);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
@@ -40,7 +42,7 @@ describe("issue #241: auto-transcribe retry rotation", () => {
             transcriptMode: "plaud_only",
         });
 
-        expect(ids).toEqual(olderTwo);
+        expect(ids).toEqual(["o1", "o2", "n1", "n2", "n3"]);
         expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
         expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
             transcriptMode: "plaud_only",
@@ -48,10 +50,8 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         });
     });
 
-    it("wraps around and retries failures after the rest of the backlog is empty", async () => {
-        (listUntranscribedRecordingIds as Mock)
-            .mockResolvedValueOnce([])
-            .mockResolvedValueOnce(newestFive);
+    it("retries oldest failures when the newest-first window is empty", async () => {
+        (listUntranscribedRecordingIds as Mock).mockResolvedValue([]);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
@@ -59,20 +59,25 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         const ids = await listAutoTranscribeRetryIds("user-1");
 
         expect(ids).toEqual(newestFive);
-        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(2);
-        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
-            1,
-            "user-1",
-            { excludeIds: newestFive },
-        );
-        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
-            2,
-            "user-1",
-            { excludeIds: [] },
-        );
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
+            excludeIds: newestFive,
+        });
     });
 
-    it("does not wrap around when there were no recent failures", async () => {
+    it("reserves one slot for an older failure when newer recordings keep arriving", async () => {
+        (listUntranscribedRecordingIds as Mock).mockResolvedValue(incomingFive);
+        for (const id of newestFive) {
+            noteAutoTranscribeOutcome("user-1", id, false);
+        }
+
+        const ids = await listAutoTranscribeRetryIds("user-1");
+
+        expect(ids).toEqual(["new1", "new2", "new3", "new4", "n1"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not inject failures when there were none", async () => {
         (listUntranscribedRecordingIds as Mock).mockResolvedValue([]);
 
         const ids = await listAutoTranscribeRetryIds("user-1");
@@ -86,56 +91,47 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         noteAutoTranscribeOutcome("user-1", "n1", false);
         noteAutoTranscribeOutcome("user-1", "n1", true);
 
-        await listAutoTranscribeRetryIds("user-1");
+        const ids = await listAutoTranscribeRetryIds("user-1");
 
+        expect(ids).toEqual(["n2"]);
         expect(listUntranscribedRecordingIds).toHaveBeenCalledWith("user-1", {
             excludeIds: [],
         });
     });
 
-    it("keeps in-flight ids excluded even after the failure window wraps", async () => {
-        const claimed = claimAutoTranscribeIds(["busy"]);
-        expect(claimed).toEqual(["busy"]);
+    it("skips in-flight ids when filling from the failure window", async () => {
+        const claimed = claimAutoTranscribeIds(["n1"]);
+        expect(claimed).toEqual(["n1"]);
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
-        (listUntranscribedRecordingIds as Mock)
-            .mockResolvedValueOnce([])
-            .mockResolvedValueOnce(["o1"]);
+        (listUntranscribedRecordingIds as Mock).mockResolvedValue([]);
 
         const ids = await listAutoTranscribeRetryIds("user-1");
 
-        expect(ids).toEqual(["o1"]);
-        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
-            2,
-            "user-1",
-            { excludeIds: ["busy"] },
-        );
+        expect(ids).toEqual(["n2", "n3", "n4", "n5"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledTimes(1);
         releaseAutoTranscribeIds(claimed);
     });
 
-    it("does not clear another user's failures on wrap-around", async () => {
+    it("does not consume another user's failures when filling slots", async () => {
         for (const id of newestFive) {
             noteAutoTranscribeOutcome("user-1", id, false);
         }
         noteAutoTranscribeOutcome("user-2", "b-fail", false);
         (listUntranscribedRecordingIds as Mock)
             .mockResolvedValueOnce([])
-            .mockResolvedValueOnce(["b1"])
             .mockResolvedValueOnce(olderTwo);
 
-        await listAutoTranscribeRetryIds("user-2");
-        await listAutoTranscribeRetryIds("user-1");
+        const user2 = await listAutoTranscribeRetryIds("user-2");
+        const user1 = await listAutoTranscribeRetryIds("user-1");
 
+        expect(user2).toEqual(["b-fail"]);
+        expect(user1).toEqual(["o1", "o2", "n1", "n2", "n3"]);
         expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
             1,
             "user-2",
             { excludeIds: ["b-fail"] },
-        );
-        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
-            2,
-            "user-2",
-            { excludeIds: [] },
         );
         expect(listUntranscribedRecordingIds).toHaveBeenLastCalledWith(
             "user-1",

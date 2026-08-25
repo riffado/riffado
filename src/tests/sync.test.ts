@@ -41,6 +41,7 @@ vi.mock("@/lib/transcription/transcribe-recording", () => ({
 }));
 
 vi.mock("@/lib/sync/untranscribed", () => ({
+    AUTO_TRANSCRIBE_RETRY_LIMIT: 5,
     listUntranscribedRecordingIds: vi.fn().mockResolvedValue([]),
 }));
 

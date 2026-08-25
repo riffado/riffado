@@ -1,4 +1,5 @@
 import {
+    AUTO_TRANSCRIBE_RETRY_LIMIT,
     type AutoTranscribeRetryOptions,
     listUntranscribedRecordingIds,
 } from "@/lib/sync/untranscribed";
@@ -21,6 +22,18 @@ function failedIdsFor(userId: string): Set<string> {
 function excludeIdsForUser(userId: string): string[] {
     const failed = recentFailedByUser.get(userId);
     return [...new Set([...inFlightAutoTranscribeIds, ...(failed ?? [])])];
+}
+
+function takeOldestFailed(userId: string, count: number): string[] {
+    const failed = recentFailedByUser.get(userId);
+    if (!failed || count <= 0) return [];
+    const picked: string[] = [];
+    for (const id of failed) {
+        if (inFlightAutoTranscribeIds.has(id)) continue;
+        picked.push(id);
+        if (picked.length >= count) break;
+    }
+    return picked;
 }
 
 /**
@@ -73,26 +86,31 @@ export function noteAutoTranscribeOutcome(
 
 /**
  * Newest-first retry ids for one user, excluding in-flight and that
- * user's recently failed recordings. When that window is empty, only
- * that user's failures are cleared so the next pass can wrap around.
+ * user's recently failed recordings. Unused slots, or one slot when
+ * the newest window is full, are filled from that user's oldest
+ * failures so a stream of newer recordings cannot starve retries.
  */
 export async function listAutoTranscribeRetryIds(
     userId: string,
     options: Omit<AutoTranscribeRetryOptions, "excludeIds"> = {},
 ): Promise<string[]> {
-    const ids = await listUntranscribedRecordingIds(userId, {
+    const fresh = await listUntranscribedRecordingIds(userId, {
         ...options,
         excludeIds: excludeIdsForUser(userId),
     });
     const failed = recentFailedByUser.get(userId);
-    if (ids.length > 0 || !failed || failed.size === 0) {
-        return ids;
-    }
-    recentFailedByUser.delete(userId);
-    return listUntranscribedRecordingIds(userId, {
-        ...options,
-        excludeIds: excludeIdsForUser(userId),
-    });
+    const failedCount = failed?.size ?? 0;
+    if (failedCount === 0) return fresh;
+
+    const reserve =
+        fresh.length >= AUTO_TRANSCRIBE_RETRY_LIMIT
+            ? 1
+            : AUTO_TRANSCRIBE_RETRY_LIMIT - fresh.length;
+    const fromFailed = takeOldestFailed(userId, reserve);
+    return [
+        ...fresh.slice(0, AUTO_TRANSCRIBE_RETRY_LIMIT - fromFailed.length),
+        ...fromFailed,
+    ];
 }
 
 /** Test-only: drop process-local in-flight and failure state. */
