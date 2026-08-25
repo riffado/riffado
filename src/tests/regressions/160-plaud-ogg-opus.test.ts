@@ -202,7 +202,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(result.errors).toEqual([]);
             expect(storage.uploadFile).toHaveBeenCalledTimes(1);
             const [key, body, contentType] = storage.uploadFile.mock.calls[0];
-            expect(key).toMatch(/\.ogg$/);
+            expect(key).toBe("user-160/plaud-160.ogg");
             expect(body).toBe(oggBuffer);
             expect(contentType).toBe("audio/ogg");
             expect(storage.deleteFile).not.toHaveBeenCalled();
