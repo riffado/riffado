@@ -684,13 +684,16 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         if (context.autoTranscribe) {
             let retryIds: string[] = [];
             try {
-                retryIds = await listUntranscribedRecordingIds(userId);
+                retryIds = await listUntranscribedRecordingIds(userId, {
+                    transcriptMode: context.transcriptMode,
+                    excludeIds: [...inFlightAutoTranscribeIds],
+                });
             } catch (error) {
                 console.error("Auto-transcribe retry lookup failed:", error);
             }
             const mergedIds = [
                 ...new Set([...result.pendingTranscriptionIds, ...retryIds]),
-            ];
+            ].filter((id) => !inFlightAutoTranscribeIds.has(id));
             const idsToTranscribe =
                 context.transcriptMode === "keep_both"
                     ? mergedIds
@@ -742,18 +745,32 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
     }
 }
 
+const inFlightAutoTranscribeIds = new Set<string>();
+
 async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
-    for (const recordingId of recordingIds) {
-        try {
-            await transcribeRecording(userId, recordingId, { trigger: "sync" });
-        } catch (error) {
-            console.error(
-                `Auto-transcription failed for recording ${recordingId}:`,
-                error,
-            );
+    const ids = recordingIds.filter((id) => !inFlightAutoTranscribeIds.has(id));
+    for (const id of ids) {
+        inFlightAutoTranscribeIds.add(id);
+    }
+    try {
+        for (const recordingId of ids) {
+            try {
+                await transcribeRecording(userId, recordingId, {
+                    trigger: "sync",
+                });
+            } catch (error) {
+                console.error(
+                    `Auto-transcription failed for recording ${recordingId}:`,
+                    error,
+                );
+            }
+        }
+    } finally {
+        for (const id of ids) {
+            inFlightAutoTranscribeIds.delete(id);
         }
     }
 }

@@ -254,6 +254,13 @@ describe("Sync", () => {
 
             await syncRecordingsForUser(mockUserId);
 
+            expect(listUntranscribedRecordingIds).toHaveBeenCalledWith(
+                mockUserId,
+                {
+                    transcriptMode: "plaud_only",
+                    excludeIds: [],
+                },
+            );
             await vi.waitFor(() => {
                 expect(transcribeRecording).toHaveBeenCalledWith(
                     mockUserId,
@@ -261,6 +268,67 @@ describe("Sync", () => {
                     { trigger: "sync" },
                 );
             });
+        });
+
+        it("asks the retry lookup for missing Riffado transcripts in keep_both mode", async () => {
+            const mockPlaudClient = {
+                getRecordings: vi.fn().mockResolvedValue({
+                    data_file_list: [],
+                }),
+            };
+            (createPlaudClient as Mock).mockResolvedValue(mockPlaudClient);
+            (db.update as Mock).mockReturnValue({
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockResolvedValue(undefined),
+                }),
+            });
+            (db.select as Mock)
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    id: "conn-1",
+                                    userId: mockUserId,
+                                    bearerToken: "encrypted-token",
+                                },
+                            ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    autoTranscribe: true,
+                                    transcriptMode: "keep_both",
+                                },
+                            ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi
+                                .fn()
+                                .mockResolvedValue([
+                                    { email: "test@example.com" },
+                                ]),
+                        }),
+                    }),
+                });
+
+            await syncRecordingsForUser(mockUserId);
+
+            expect(listUntranscribedRecordingIds).toHaveBeenCalledWith(
+                mockUserId,
+                {
+                    transcriptMode: "keep_both",
+                    excludeIds: [],
+                },
+            );
         });
 
         it("should update recordings with newer version", async () => {
