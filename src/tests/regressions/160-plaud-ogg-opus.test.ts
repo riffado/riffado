@@ -132,8 +132,10 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             vi.clearAllMocks();
         });
 
-        it("uploads Ogg/Opus bytes as audio/ogg with a .ogg key", async () => {
-            const oldPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
+        async function runOggUpdate(args: {
+            oldPath: string;
+            otherHolders: unknown[];
+        }) {
             const storageMock = (await createUserStorageProvider(
                 mockUserId,
             )) as unknown as {
@@ -160,11 +162,12 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                         id: "local-rec-160",
                         plaudFileId: "plaud-160",
                         plaudVersion: "1",
-                        storagePath: oldPath,
+                        storagePath: args.oldPath,
                         deletedAt: null,
                     },
                 ],
                 [],
+                args.otherHolders,
             ];
             for (const result of results) {
                 chain.mockReturnValueOnce({
@@ -209,6 +212,15 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             });
 
             const result = await syncRecordingsForUser(mockUserId);
+            return { result, storageMock };
+        }
+
+        it("uploads Ogg/Opus bytes as audio/ogg with a .ogg key", async () => {
+            const oldPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
+            const { result, storageMock } = await runOggUpdate({
+                oldPath,
+                otherHolders: [],
+            });
 
             expect(result.updatedRecordings).toBe(1);
             expect(result.errors).toEqual([]);
@@ -220,6 +232,18 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(contentType).toBe("audio/ogg");
             expect(sniffAudio(body as Buffer).codec).toBe("opus");
             expect(storageMock.deleteFile).toHaveBeenCalledWith(oldPath);
+        });
+
+        it("does not delete a replaced path still referenced by another recording", async () => {
+            const oldPath = "user-160/shared.mp3.mp3";
+            const { result, storageMock } = await runOggUpdate({
+                oldPath,
+                otherHolders: [{ id: "local-rec-other" }],
+            });
+
+            expect(result.updatedRecordings).toBe(1);
+            expect(storageMock.uploadFile).toHaveBeenCalledTimes(1);
+            expect(storageMock.deleteFile).not.toHaveBeenCalled();
         });
     });
 
