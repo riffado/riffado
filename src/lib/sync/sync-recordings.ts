@@ -760,9 +760,9 @@ async function queueTranscriptions(
                 const outcome = await transcribeRecording(userId, recordingId, {
                     trigger: "sync",
                 });
-                noteAutoTranscribeOutcome(recordingId, outcome.success);
+                noteAutoTranscribeOutcome(userId, recordingId, outcome.success);
             } catch (error) {
-                noteAutoTranscribeOutcome(recordingId, false);
+                noteAutoTranscribeOutcome(userId, recordingId, false);
                 console.error(
                     `Auto-transcription failed for recording ${recordingId}:`,
                     error,
