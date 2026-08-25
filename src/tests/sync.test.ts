@@ -56,6 +56,7 @@ vi.mock("@/lib/posthog-server", () => ({
 import { db } from "@/db";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { captureServerException } from "@/lib/posthog-server";
+import { resetAutoTranscribeStateForTests } from "@/lib/sync/auto-transcribe-state";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 import { listUntranscribedRecordingIds } from "@/lib/sync/untranscribed";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
@@ -64,6 +65,7 @@ describe("Sync", () => {
     const mockUserId = "user-123";
 
     beforeEach(() => {
+        resetAutoTranscribeStateForTests();
         vi.clearAllMocks();
     });
 

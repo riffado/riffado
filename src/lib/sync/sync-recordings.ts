@@ -28,7 +28,12 @@ import {
     captureServerException,
 } from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
-import { listUntranscribedRecordingIds } from "@/lib/sync/untranscribed";
+import {
+    claimAutoTranscribeIds,
+    listAutoTranscribeRetryIds,
+    noteAutoTranscribeOutcome,
+    releaseAutoTranscribeIds,
+} from "@/lib/sync/auto-transcribe-state";
 import {
     upsertEnhancement,
     upsertTranscription,
@@ -684,22 +689,22 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         if (context.autoTranscribe) {
             let retryIds: string[] = [];
             try {
-                retryIds = await listUntranscribedRecordingIds(userId, {
+                retryIds = await listAutoTranscribeRetryIds(userId, {
                     transcriptMode: context.transcriptMode,
-                    excludeIds: [...inFlightAutoTranscribeIds],
                 });
             } catch (error) {
                 console.error("Auto-transcribe retry lookup failed:", error);
             }
             const mergedIds = [
                 ...new Set([...result.pendingTranscriptionIds, ...retryIds]),
-            ].filter((id) => !inFlightAutoTranscribeIds.has(id));
-            const idsToTranscribe =
+            ];
+            const eligibleIds =
                 context.transcriptMode === "keep_both"
                     ? mergedIds
                     : mergedIds.filter(
                           (id) => !plaudTranscriptImported.has(id),
                       );
+            const idsToTranscribe = claimAutoTranscribeIds(eligibleIds);
 
             if (idsToTranscribe.length > 0) {
                 queueTranscriptions(userId, idsToTranscribe).catch((error) => {
@@ -745,23 +750,19 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
     }
 }
 
-const inFlightAutoTranscribeIds = new Set<string>();
-
 async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
-    const ids = recordingIds.filter((id) => !inFlightAutoTranscribeIds.has(id));
-    for (const id of ids) {
-        inFlightAutoTranscribeIds.add(id);
-    }
     try {
-        for (const recordingId of ids) {
+        for (const recordingId of recordingIds) {
             try {
-                await transcribeRecording(userId, recordingId, {
+                const outcome = await transcribeRecording(userId, recordingId, {
                     trigger: "sync",
                 });
+                noteAutoTranscribeOutcome(recordingId, outcome.success);
             } catch (error) {
+                noteAutoTranscribeOutcome(recordingId, false);
                 console.error(
                     `Auto-transcription failed for recording ${recordingId}:`,
                     error,
@@ -769,9 +770,7 @@ async function queueTranscriptions(
             }
         }
     } finally {
-        for (const id of ids) {
-            inFlightAutoTranscribeIds.delete(id);
-        }
+        releaseAutoTranscribeIds(recordingIds);
     }
 }
 
