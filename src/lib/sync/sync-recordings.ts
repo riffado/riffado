@@ -8,6 +8,7 @@ import {
     userSettings,
     users,
 } from "@/db/schema";
+import { sniffAudio } from "@/lib/audio/sniff";
 import { encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
@@ -212,7 +213,8 @@ async function processRecording(
             false,
         );
 
-        const fileExtension = "mp3";
+        const sniffed = sniffAudio(audioBuffer);
+        const fileExtension = sniffed.extension;
         const safeName =
             plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
             plaudRecording.id;
@@ -222,7 +224,7 @@ async function processRecording(
             fileExtension,
             plaudRecording.id,
         );
-        const contentType = "audio/mpeg";
+        const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
         const recordingData = {
