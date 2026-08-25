@@ -12,10 +12,8 @@
 import type { OpenAI } from "openai";
 import { describe, expect, it, vi } from "vitest";
 
-const TIMEOUT_MS = 60 * 60 * 1000;
-
 vi.mock("@/lib/env", () => ({
-    env: { WHISPER_REQUEST_TIMEOUT_MS: TIMEOUT_MS },
+    env: { WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000 },
 }));
 
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
@@ -38,6 +36,8 @@ describe("issue #219 — chat-style transcription uses the long request timeout"
 
         expect(result.text).toBe("hello from chat");
         expect(create).toHaveBeenCalledTimes(1);
-        expect(create.mock.calls[0]?.[1]).toEqual({ timeout: TIMEOUT_MS });
+        expect(create.mock.calls[0]?.[1]).toEqual({
+            timeout: 60 * 60 * 1000,
+        });
     });
 });
