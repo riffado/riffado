@@ -120,25 +120,6 @@ async function uniqueStorageKey(
     return `${userId}/${plaudFileId}.${ext}`;
 }
 
-async function storagePathHeldByOtherRecording(
-    userId: string,
-    storagePath: string,
-    exceptRecordingId: string,
-): Promise<boolean> {
-    const [held] = await db
-        .select({ id: recordings.id })
-        .from(recordings)
-        .where(
-            and(
-                eq(recordings.userId, userId),
-                eq(recordings.storagePath, storagePath),
-                ne(recordings.id, exceptRecordingId),
-            ),
-        )
-        .limit(1);
-    return !!held;
-}
-
 /**
  * Build an import candidate for a freshly-synced recording, or `undefined`
  * when there's nothing to import — the recording is trashed, or Plaud reports
@@ -237,12 +218,14 @@ async function processRecording(
         const safeName =
             plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
             plaudRecording.id;
-        const storageKey = await uniqueStorageKey(
-            context.userId,
-            safeName,
-            fileExtension,
-            plaudRecording.id,
-        );
+        const storageKey =
+            existingRecording?.storagePath ??
+            (await uniqueStorageKey(
+                context.userId,
+                safeName,
+                fileExtension,
+                plaudRecording.id,
+            ));
         const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
@@ -307,25 +290,6 @@ async function processRecording(
                     );
                 }
                 return { status: "skipped" };
-            }
-
-            const previousPath = existingRecording.storagePath;
-            if (previousPath && previousPath !== storageKey) {
-                const shared = await storagePathHeldByOtherRecording(
-                    context.userId,
-                    previousPath,
-                    existingRecording.id,
-                );
-                if (!shared) {
-                    try {
-                        await storage.deleteFile(previousPath);
-                    } catch (cleanupError) {
-                        console.error(
-                            `Failed to delete replaced storage object ${previousPath}:`,
-                            cleanupError,
-                        );
-                    }
-                }
             }
 
             await emitEvent(
