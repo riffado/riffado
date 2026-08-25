@@ -290,6 +290,18 @@ async function processRecording(
                 return { status: "skipped" };
             }
 
+            const previousPath = existingRecording.storagePath;
+            if (previousPath && previousPath !== storageKey) {
+                try {
+                    await storage.deleteFile(previousPath);
+                } catch (cleanupError) {
+                    console.error(
+                        `Failed to delete replaced storage object ${previousPath}:`,
+                        cleanupError,
+                    );
+                }
+            }
+
             await emitEvent(
                 "recording.updated",
                 context.userId,

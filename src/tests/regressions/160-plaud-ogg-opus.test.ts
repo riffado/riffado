@@ -133,12 +133,15 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         });
 
         it("uploads Ogg/Opus bytes as audio/ogg with a .ogg key", async () => {
+            const oldPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
             const storageMock = (await createUserStorageProvider(
                 mockUserId,
             )) as unknown as {
                 uploadFile: Mock;
+                deleteFile: Mock;
             };
             storageMock.uploadFile.mockClear();
+            storageMock.deleteFile.mockClear();
 
             (createPlaudClient as Mock).mockResolvedValue({
                 getRecordings: vi.fn().mockResolvedValue({
@@ -157,6 +160,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                         id: "local-rec-160",
                         plaudFileId: "plaud-160",
                         plaudVersion: "1",
+                        storagePath: oldPath,
                         deletedAt: null,
                     },
                 ],
@@ -215,6 +219,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(body).toBe(oggBuffer);
             expect(contentType).toBe("audio/ogg");
             expect(sniffAudio(body as Buffer).codec).toBe("opus");
+            expect(storageMock.deleteFile).toHaveBeenCalledWith(oldPath);
         });
     });
 

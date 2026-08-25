@@ -36,6 +36,23 @@ describe("sniffAudio", () => {
         expect(sniffed.extension).toBe("mp3");
     });
 
+    it("detects MP3 from an MPEG-1 Layer III frame sync", () => {
+        const sniffed = sniffAudio(Buffer.from([0xff, 0xfb, 0x90, 0x00]));
+        expect(sniffed.container).toBe("mp3");
+        expect(sniffed.contentType).toBe("audio/mpeg");
+    });
+
+    it("does not classify ADTS AAC (0xFFF1 / 0xFFF9) as MP3", () => {
+        const f1 = sniffAudio(Buffer.from([0xff, 0xf1, 0x50, 0x80]));
+        expect(f1.container).toBe("aac");
+        expect(f1.contentType).toBe("audio/aac");
+        expect(f1.extension).toBe("aac");
+
+        const f9 = sniffAudio(Buffer.from([0xff, 0xf9, 0x50, 0x80]));
+        expect(f9.container).toBe("aac");
+        expect(f9.contentType).toBe("audio/aac");
+    });
+
     it("falls back to mp3/mpeg for unknown bytes (legacy Plaud default)", () => {
         const sniffed = sniffAudio(Buffer.from("not-audio"));
         expect(sniffed.container).toBe("unknown");

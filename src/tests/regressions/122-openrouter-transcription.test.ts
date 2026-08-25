@@ -93,17 +93,31 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 
 import { OpenAI } from "openai";
 import { db } from "@/db";
+import { createUserStorageProvider } from "@/lib/storage/factory";
 import { transcodeToMp3 } from "@/lib/transcription/ffmpeg";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
+
+function oggOpusBytes(): Buffer {
+    const buf = Buffer.alloc(48, 0);
+    buf.write("OggS", 0);
+    buf.write("OpusHead", 28);
+    return buf;
+}
 
 describe("issue #122 — OpenRouter transcription uses chat-completions", () => {
     const userId = "user-122";
     const recordingId = "rec-122";
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         audioCreate.mockReset();
         chatCreate.mockReset();
+        const storage = (await createUserStorageProvider(
+            userId,
+        )) as unknown as {
+            downloadFile: Mock;
+        };
+        storage.downloadFile.mockResolvedValue(Buffer.from("fake-mp3-bytes"));
         // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
         (OpenAI as unknown as Mock).mockImplementation(function () {
             return {
@@ -240,7 +254,15 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
         expect(audioPart?.input_audio?.data.length).toBeGreaterThan(0);
     });
 
-    it("transcodes opus/ogg to mp3 before chat.completions (OpenRouter cannot accept ogg)", async () => {
+    it("transcodes a .mp3 whose bytes are Ogg/Opus before chat.completions", async () => {
+        const ogg = oggOpusBytes();
+        const storage = (await createUserStorageProvider(
+            userId,
+        )) as unknown as {
+            downloadFile: Mock;
+        };
+        storage.downloadFile.mockResolvedValue(ogg);
+
         chatCreate.mockResolvedValue({
             choices: [{ message: { content: "opus became mp3" } }],
         });
@@ -254,8 +276,8 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
                                 id: recordingId,
                                 userId,
                                 plaudFileId: "plaud-1",
-                                filename: "Opus upload",
-                                storagePath: "rec-122.opus",
+                                filename: "2026-05-19 18-06-54.mp3",
+                                storagePath: "rec-122.mp3",
                                 deletedAt: null,
                             },
                         ]),
@@ -337,6 +359,7 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
         expect(result.success).toBe(true);
         expect(result.text).toBe("opus became mp3");
         expect(transcodeToMp3).toHaveBeenCalledTimes(1);
+        expect(transcodeToMp3).toHaveBeenCalledWith(ogg);
         expect(audioCreate).not.toHaveBeenCalled();
         expect(chatCreate).toHaveBeenCalledTimes(1);
         const contentParts = chatCreate.mock.calls[0]?.[0]?.messages?.[0]

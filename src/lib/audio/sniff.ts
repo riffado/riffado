@@ -4,6 +4,7 @@ export type AudioContainer =
     | "wav"
     | "mp4"
     | "flac"
+    | "aac"
     | "webm"
     | "unknown";
 
@@ -42,6 +43,9 @@ export function sniffAudio(buffer: Buffer): SniffedAudio {
     }
     if (isWebmContainer(buffer)) {
         return buildSniff("webm", "unknown");
+    }
+    if (isAdtsAac(buffer)) {
+        return buildSniff("aac", "aac");
     }
     if (isMp3Container(buffer)) {
         return buildSniff("mp3", "mp3");
@@ -85,6 +89,16 @@ function isWebmContainer(buffer: Buffer): boolean {
     );
 }
 
+function mpegLayerBits(secondByte: number): number {
+    return (secondByte >> 1) & 0x03;
+}
+
+function isAdtsAac(buffer: Buffer): boolean {
+    if (buffer.length < 2 || buffer[0] !== 0xff) return false;
+    if ((buffer[1] & 0xf0) !== 0xf0) return false;
+    return mpegLayerBits(buffer[1]) === 0;
+}
+
 function isMp3Container(buffer: Buffer): boolean {
     if (
         buffer.length >= 3 &&
@@ -94,9 +108,9 @@ function isMp3Container(buffer: Buffer): boolean {
     ) {
         return true;
     }
-    return (
-        buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0
-    );
+    if (buffer.length < 2 || buffer[0] !== 0xff) return false;
+    if ((buffer[1] & 0xe0) !== 0xe0) return false;
+    return mpegLayerBits(buffer[1]) !== 0;
 }
 
 function detectOggCodec(buffer: Buffer): AudioCodec {
@@ -128,6 +142,8 @@ function metaForContainer(container: AudioContainer): {
             return { extension: "m4a", contentType: "audio/mp4" };
         case "flac":
             return { extension: "flac", contentType: "audio/flac" };
+        case "aac":
+            return { extension: "aac", contentType: "audio/aac" };
         case "webm":
             return { extension: "webm", contentType: "audio/webm" };
         case "unknown":
