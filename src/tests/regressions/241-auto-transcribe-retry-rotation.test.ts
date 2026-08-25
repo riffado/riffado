@@ -206,4 +206,38 @@ describe("issue #241: auto-transcribe retry rotation", () => {
         expect(excludeIds).toContain("id-1");
         expect(excludeIds).toContain(`id-${AUTO_TRANSCRIBE_FAILED_ID_LIMIT}`);
     });
+
+    it("does not drop a newer failure set replaced during revalidation", async () => {
+        for (const id of newestFive) {
+            noteAutoTranscribeOutcome("user-1", id, false);
+        }
+        let resolveEligible: (ids: string[]) => void = () => {};
+        (listUntranscribedRecordingIds as Mock)
+            .mockResolvedValueOnce(olderTwo)
+            .mockImplementationOnce(
+                () =>
+                    new Promise<string[]>((resolve) => {
+                        resolveEligible = resolve;
+                    }),
+            );
+
+        const pending = listAutoTranscribeRetryIds("user-1");
+        await Promise.resolve();
+        for (const id of newestFive) {
+            noteAutoTranscribeOutcome("user-1", id, true);
+        }
+        noteAutoTranscribeOutcome("user-1", "later", false);
+        resolveEligible([]);
+
+        expect(await pending).toEqual(olderTwo);
+
+        mockFreshThenEligible(["fresh"], ["later"]);
+        const next = await listAutoTranscribeRetryIds("user-1");
+        expect(next).toEqual(["fresh", "later"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenNthCalledWith(
+            3,
+            "user-1",
+            { excludeIds: ["later"] },
+        );
+    });
 });
