@@ -208,25 +208,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(storage.deleteFile).not.toHaveBeenCalled();
         });
 
-        it("re-syncs Ogg/Opus onto the existing key with an honest MIME", async () => {
-            const oldPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
-            const storage = await storageMock();
-            stubPlaud();
-            stubSelects([
-                [{ id: "conn-1", userId: mockUserId, bearerToken: "tok" }],
-                [{ id: "settings-1" }],
-                [{ email: "t@example.com" }],
-                [
-                    {
-                        id: "local-rec-160",
-                        plaudFileId: "plaud-160",
-                        plaudVersion: "1",
-                        storagePath: oldPath,
-                        deletedAt: null,
-                    },
-                ],
-            ]);
-
+        function stubUpdateTransaction() {
             (db.transaction as Mock).mockImplementation(
                 async (cb: (tx: unknown) => Promise<boolean>) => {
                     const tx = {
@@ -257,6 +239,28 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                     where: vi.fn().mockResolvedValue(undefined),
                 }),
             });
+        }
+
+        it("re-syncs Ogg/Opus onto the existing key with an honest MIME", async () => {
+            const oldPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
+            const storage = await storageMock();
+            stubPlaud();
+            stubSelects([
+                [{ id: "conn-1", userId: mockUserId, bearerToken: "tok" }],
+                [{ id: "settings-1" }],
+                [{ email: "t@example.com" }],
+                [
+                    {
+                        id: "local-rec-160",
+                        plaudFileId: "plaud-160",
+                        plaudVersion: "1",
+                        storagePath: oldPath,
+                        deletedAt: null,
+                    },
+                ],
+                [],
+            ]);
+            stubUpdateTransaction();
 
             const result = await syncRecordingsForUser(mockUserId);
 
@@ -267,6 +271,41 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 oggBuffer,
                 "audio/ogg",
             );
+            expect(storage.deleteFile).not.toHaveBeenCalled();
+        });
+
+        it("allocates a new key when another row still shares storagePath", async () => {
+            const sharedPath = "user-160/2026-05-19 18-06-54.mp3.mp3";
+            const storage = await storageMock();
+            stubPlaud();
+            stubSelects([
+                [{ id: "conn-1", userId: mockUserId, bearerToken: "tok" }],
+                [{ id: "settings-1" }],
+                [{ email: "t@example.com" }],
+                [
+                    {
+                        id: "local-rec-160",
+                        plaudFileId: "plaud-160",
+                        plaudVersion: "1",
+                        storagePath: sharedPath,
+                        deletedAt: null,
+                    },
+                ],
+                [{ id: "other-rec" }],
+                [],
+            ]);
+            stubUpdateTransaction();
+
+            const result = await syncRecordingsForUser(mockUserId);
+
+            expect(result.updatedRecordings).toBe(1);
+            expect(result.errors).toEqual([]);
+            expect(storage.uploadFile).toHaveBeenCalledTimes(1);
+            const [key, body, contentType] = storage.uploadFile.mock.calls[0];
+            expect(key).not.toBe(sharedPath);
+            expect(key).toMatch(/\.ogg$/);
+            expect(body).toBe(oggBuffer);
+            expect(contentType).toBe("audio/ogg");
             expect(storage.deleteFile).not.toHaveBeenCalled();
         });
     });

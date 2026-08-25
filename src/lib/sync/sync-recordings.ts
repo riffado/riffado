@@ -120,6 +120,43 @@ async function uniqueStorageKey(
     return `${userId}/${plaudFileId}.${ext}`;
 }
 
+async function storagePathHeldByOtherRecording(
+    userId: string,
+    storagePath: string,
+    exceptRecordingId: string,
+): Promise<boolean> {
+    const [other] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, userId),
+                eq(recordings.storagePath, storagePath),
+                ne(recordings.id, exceptRecordingId),
+            ),
+        )
+        .limit(1);
+    return Boolean(other);
+}
+
+async function resolveStorageKey(
+    userId: string,
+    existingRecording: { id: string; storagePath: string | null } | undefined,
+    safeName: string,
+    fileExtension: string,
+    plaudFileId: string,
+): Promise<string> {
+    if (existingRecording?.storagePath) {
+        const shared = await storagePathHeldByOtherRecording(
+            userId,
+            existingRecording.storagePath,
+            existingRecording.id,
+        );
+        if (!shared) return existingRecording.storagePath;
+    }
+    return uniqueStorageKey(userId, safeName, fileExtension, plaudFileId);
+}
+
 /**
  * Build an import candidate for a freshly-synced recording, or `undefined`
  * when there's nothing to import — the recording is trashed, or Plaud reports
@@ -218,14 +255,13 @@ async function processRecording(
         const safeName =
             plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
             plaudRecording.id;
-        const storageKey =
-            existingRecording?.storagePath ??
-            (await uniqueStorageKey(
-                context.userId,
-                safeName,
-                fileExtension,
-                plaudRecording.id,
-            ));
+        const storageKey = await resolveStorageKey(
+            context.userId,
+            existingRecording,
+            safeName,
+            fileExtension,
+            plaudRecording.id,
+        );
         const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
