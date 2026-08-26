@@ -4,6 +4,8 @@
 
 ### Added
 - Custom summary prompts are now reachable from Settings → Summary: create, edit, view, and delete custom prompts, and select one as the default alongside the built-in presets. The per-recording summary dropdown also lists custom prompts and now initializes to the saved default instead of always defaulting to "General Summary" ([#199](https://github.com/riffado/riffado/issues/199)).
+- Download the original audio file from the recording player and the recording row menu (`GET /api/recordings/[id]/audio?download=1`) ([#229](https://github.com/riffado/riffado/issues/229)).
+- Inline rename for recording titles. Click the title in the player (or the recording page heading), edit, and press Enter. Persists via `PATCH /api/recordings/[id]` ([#217](https://github.com/riffado/riffado/issues/217)).
 
 ### Fixed
 - Changing the default summary prompt in Settings → Summary wiped any custom summary prompts on every save, since the request always sent `customPrompts: []` instead of the current list ([#199](https://github.com/riffado/riffado/issues/199)).

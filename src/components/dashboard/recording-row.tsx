@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import { Download, Loader2, MoreHorizontal, Play, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
+import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 import { cn } from "@/lib/utils";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
@@ -119,6 +120,16 @@ export function RecordingRow({
                         <DropdownMenuItem onSelect={() => onSelect(recording)}>
                             <Play />
                             Open
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                window.location.assign(
+                                    recordingAudioDownloadPath(recording.id),
+                                );
+                            }}
+                        >
+                            <Download />
+                            Download audio
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
