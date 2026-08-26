@@ -77,6 +77,12 @@ vi.mock("@/lib/hosted/transcription/mynah", () => ({
     transcribeViaMynah: vi.fn(),
 }));
 
+vi.mock("@/lib/transcription/ffmpeg", () => ({
+    transcodeToMp3: vi.fn().mockResolvedValue(Buffer.from("transcoded-mp3")),
+    ffmpegToOpus: vi.fn(),
+    runFfmpeg: vi.fn(),
+}));
+
 vi.mock("@/lib/ai/generate-title", () => ({
     generateTitleFromTranscription: vi.fn().mockResolvedValue(null),
 }));
@@ -87,16 +93,31 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 
 import { OpenAI } from "openai";
 import { db } from "@/db";
+import { createUserStorageProvider } from "@/lib/storage/factory";
+import { transcodeToMp3 } from "@/lib/transcription/ffmpeg";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
+
+function oggOpusBytes(): Buffer {
+    const buf = Buffer.alloc(48, 0);
+    buf.write("OggS", 0);
+    buf.write("OpusHead", 28);
+    return buf;
+}
 
 describe("issue #122 — OpenRouter transcription uses chat-completions", () => {
     const userId = "user-122";
     const recordingId = "rec-122";
 
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks();
         audioCreate.mockReset();
         chatCreate.mockReset();
+        const storage = (await createUserStorageProvider(
+            userId,
+        )) as unknown as {
+            downloadFile: Mock;
+        };
+        storage.downloadFile.mockResolvedValue(Buffer.from("fake-mp3-bytes"));
         // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
         (OpenAI as unknown as Mock).mockImplementation(function () {
             return {
@@ -233,7 +254,19 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
         expect(audioPart?.input_audio?.data.length).toBeGreaterThan(0);
     });
 
-    it("returns an actionable error when the audio is opus (chat-style providers can't accept it)", async () => {
+    it("transcodes a .mp3 whose bytes are Ogg/Opus before chat.completions", async () => {
+        const ogg = oggOpusBytes();
+        const storage = (await createUserStorageProvider(
+            userId,
+        )) as unknown as {
+            downloadFile: Mock;
+        };
+        storage.downloadFile.mockResolvedValue(ogg);
+
+        chatCreate.mockResolvedValue({
+            choices: [{ message: { content: "opus became mp3" } }],
+        });
+
         (db.select as Mock)
             .mockReturnValueOnce({
                 from: vi.fn().mockReturnValue({
@@ -243,8 +276,8 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
                                 id: recordingId,
                                 userId,
                                 plaudFileId: "plaud-1",
-                                filename: "Opus upload",
-                                storagePath: "rec-122.opus",
+                                filename: "2026-05-19 18-06-54.mp3",
+                                storagePath: "rec-122.mp3",
                                 deletedAt: null,
                             },
                         ]),
@@ -287,10 +320,54 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
                 }),
             });
 
+        const tx = {
+            select: vi
+                .fn()
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            for: vi.fn().mockReturnValue({
+                                limit: vi
+                                    .fn()
+                                    .mockResolvedValue([{ deletedAt: null }]),
+                            }),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([]),
+                        }),
+                    }),
+                }),
+            insert: vi.fn().mockReturnValue({
+                values: vi.fn().mockResolvedValue(undefined),
+            }),
+            update: vi.fn().mockReturnValue({
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockResolvedValue(undefined),
+                }),
+            }),
+        };
+        (db.transaction as Mock).mockImplementation(
+            async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
+        );
+
         const result = await transcribeRecording(userId, recordingId);
 
-        expect(result.success).toBe(false);
-        expect(result.error).toMatch(/mp3|wav/i);
-        expect(chatCreate).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        expect(result.text).toBe("opus became mp3");
+        expect(transcodeToMp3).toHaveBeenCalledTimes(1);
+        expect(transcodeToMp3).toHaveBeenCalledWith(ogg);
+        expect(audioCreate).not.toHaveBeenCalled();
+        expect(chatCreate).toHaveBeenCalledTimes(1);
+        const contentParts = chatCreate.mock.calls[0]?.[0]?.messages?.[0]
+            ?.content as Array<{
+            type: string;
+            input_audio?: { format: string };
+        }>;
+        const audioPart = contentParts.find((p) => p.type === "input_audio");
+        expect(audioPart?.input_audio?.format).toBe("mp3");
     });
 });

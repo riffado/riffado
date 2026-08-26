@@ -8,6 +8,7 @@ import {
     userSettings,
     users,
 } from "@/db/schema";
+import { sniffAudio } from "@/lib/audio/sniff";
 import { encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
@@ -91,14 +92,32 @@ interface ImportCandidate {
     isSummary: boolean;
 }
 
-async function uniqueStorageKey(
+async function storagePathHeldByOtherRecording(
     userId: string,
-    baseName: string,
-    ext: string,
+    storagePath: string,
+    exceptRecordingId: string,
+): Promise<boolean> {
+    const [other] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, userId),
+                eq(recordings.storagePath, storagePath),
+                ne(recordings.id, exceptRecordingId),
+            ),
+        )
+        .limit(1);
+    return Boolean(other);
+}
+
+async function allocateStorageKey(
+    userId: string,
     plaudFileId: string,
+    ext: string,
 ): Promise<string> {
     const candidate = (suffix: string) =>
-        `${userId}/${baseName}${suffix}.${ext}`;
+        `${userId}/${plaudFileId}${suffix}.${ext}`;
 
     for (let i = 0; i < 100; i++) {
         const suffix = i === 0 ? "" : ` (${i + 1})`;
@@ -116,7 +135,26 @@ async function uniqueStorageKey(
             .limit(1);
         if (!existing) return key;
     }
-    return `${userId}/${plaudFileId}.${ext}`;
+    throw new Error(
+        "Unable to allocate a unique storage key for Plaud recording",
+    );
+}
+
+async function resolveStorageKey(
+    userId: string,
+    existingRecording: { id: string; storagePath: string | null } | undefined,
+    fileExtension: string,
+    plaudFileId: string,
+): Promise<string> {
+    if (existingRecording?.storagePath) {
+        const shared = await storagePathHeldByOtherRecording(
+            userId,
+            existingRecording.storagePath,
+            existingRecording.id,
+        );
+        if (!shared) return existingRecording.storagePath;
+    }
+    return allocateStorageKey(userId, plaudFileId, fileExtension);
 }
 
 /**
@@ -212,17 +250,15 @@ async function processRecording(
             false,
         );
 
-        const fileExtension = "mp3";
-        const safeName =
-            plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
-            plaudRecording.id;
-        const storageKey = await uniqueStorageKey(
+        const sniffed = sniffAudio(audioBuffer);
+        const fileExtension = sniffed.extension;
+        const storageKey = await resolveStorageKey(
             context.userId,
-            safeName,
+            existingRecording,
             fileExtension,
             plaudRecording.id,
         );
-        const contentType = "audio/mpeg";
+        const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
         const recordingData = {

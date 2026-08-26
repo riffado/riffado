@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import { env } from "@/lib/env";
+import { ffmpegToOpus } from "@/lib/transcription/ffmpeg";
 
 const MIN_BITRATE_KBPS = 6;
 const WHISPER_HARD_LIMIT_BYTES = 25 * 1024 * 1024;
@@ -80,78 +80,4 @@ export async function maybeCompressForWhisper(
 
 function formatMib(bytes: number): string {
     return `${(bytes / 1024 / 1024).toFixed(2)} MiB`;
-}
-
-function ffmpegToOpus(input: Buffer, bitrateKbps: number): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        const ff = spawn(
-            "ffmpeg",
-            [
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-i",
-                "pipe:0",
-                "-vn",
-                "-map_metadata",
-                "-1",
-                "-ac",
-                "1",
-                "-c:a",
-                "libopus",
-                "-b:a",
-                `${bitrateKbps}k`,
-                "-application",
-                "voip",
-                "-f",
-                "ogg",
-                "pipe:1",
-            ],
-            { stdio: ["pipe", "pipe", "pipe"] },
-        );
-
-        const stdoutChunks: Buffer[] = [];
-        const stderrChunks: Buffer[] = [];
-        let settled = false;
-
-        const settleReject = (err: Error) => {
-            if (settled) return;
-            settled = true;
-            reject(err);
-        };
-
-        ff.stdout.on("data", (c: Buffer) => stdoutChunks.push(c));
-        ff.stderr.on("data", (c: Buffer) => stderrChunks.push(c));
-
-        ff.on("error", (err) => {
-            settleReject(
-                new Error(
-                    `ffmpeg spawn failed (binary missing from runtime image?): ${err.message}`,
-                ),
-            );
-        });
-
-        ff.on("close", (code) => {
-            if (settled) return;
-            if (code !== 0) {
-                const stderr = Buffer.concat(stderrChunks).toString("utf8");
-                settleReject(
-                    new Error(
-                        `ffmpeg exited with code ${code}: ${stderr.trim() || "(no stderr)"}`,
-                    ),
-                );
-                return;
-            }
-            settled = true;
-            resolve(Buffer.concat(stdoutChunks));
-        });
-
-        ff.stdin.on("error", (err) => {
-            settleReject(
-                new Error(`ffmpeg stdin write failed: ${err.message}`),
-            );
-        });
-
-        ff.stdin.end(input);
-    });
 }

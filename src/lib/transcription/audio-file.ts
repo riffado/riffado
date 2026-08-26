@@ -1,18 +1,9 @@
+import { sniffAudio } from "@/lib/audio/sniff";
 import { getAudioMimeType } from "@/lib/utils";
 
 export interface BuildAudioFileResult {
     file: File;
     contentType: string;
-}
-
-function isOggContainer(audioBuffer: Buffer): boolean {
-    if (audioBuffer.length < 4) return false;
-    return (
-        audioBuffer[0] === 0x4f &&
-        audioBuffer[1] === 0x67 &&
-        audioBuffer[2] === 0x67 &&
-        audioBuffer[3] === 0x53
-    );
 }
 
 /** Build the `File` passed to `openai.audio.transcriptions.create`. */
@@ -21,17 +12,16 @@ export function buildAudioFile(
     storagePath: string,
     decryptedFilename: string,
 ): BuildAudioFileResult {
-    const isOgg = isOggContainer(audioBuffer);
-
-    const ext = isOgg
-        ? "ogg"
+    const sniffed = sniffAudio(audioBuffer);
+    const known = sniffed.container !== "unknown";
+    const ext = known
+        ? sniffed.extension
         : storagePath.split(".").pop()?.toLowerCase() || "mp3";
+    const contentType = known
+        ? sniffed.contentType
+        : getAudioMimeType(storagePath);
 
-    const contentType = isOgg ? "audio/ogg" : getAudioMimeType(storagePath);
-
-    const filename = decryptedFilename.match(/\.\w{2,4}$/)
-        ? decryptedFilename
-        : `${decryptedFilename}.${ext}`;
+    const filename = withAudioExtension(decryptedFilename, ext);
 
     const view = new Uint8Array(
         audioBuffer.buffer as ArrayBuffer,
@@ -43,4 +33,11 @@ export function buildAudioFile(
     });
 
     return { file, contentType };
+}
+
+function withAudioExtension(name: string, ext: string): string {
+    if (/\.\w{2,4}$/.test(name)) {
+        return name.replace(/\.\w{2,4}$/, `.${ext}`);
+    }
+    return `${name}.${ext}`;
 }
