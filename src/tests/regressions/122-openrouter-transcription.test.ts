@@ -213,6 +213,12 @@ describe("issue #122 — OpenRouter transcription uses chat-completions", () => 
         expect(result.success).toBe(true);
         expect(audioCreate).not.toHaveBeenCalled();
         expect(chatCreate).toHaveBeenCalledTimes(1);
+        expect(OpenAI).toHaveBeenCalledWith(
+            expect.objectContaining({ timeout: 60 * 60 * 1000 }),
+        );
+        expect(chatCreate.mock.calls[0]?.[1]).toEqual({
+            timeout: 60 * 60 * 1000,
+        });
 
         const chatArgs = chatCreate.mock.calls[0]?.[0];
         expect(chatArgs?.model).toBe("google/gemini-2.5-flash-lite");

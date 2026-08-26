@@ -433,6 +433,7 @@ export async function transcribeRecording(
                 const openai = new OpenAI({
                     apiKey,
                     baseURL: credentials.baseUrl || undefined,
+                    timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
                 });
 
                 if (transcriptionStyle === "chat") {

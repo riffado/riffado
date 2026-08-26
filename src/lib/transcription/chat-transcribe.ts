@@ -1,4 +1,5 @@
 import type { OpenAI } from "openai";
+import { env } from "@/lib/env";
 
 export interface ChatTranscribeArgs {
     client: OpenAI;
@@ -50,24 +51,27 @@ export async function chatTranscribe({
         ? `${TRANSCRIBE_INSTRUCTION} The audio language is ${language}.`
         : TRANSCRIBE_INSTRUCTION;
 
-    const response = await client.chat.completions.create({
-        model,
-        messages: [
-            {
-                role: "user",
-                content: [
-                    { type: "text", text: prompt },
-                    {
-                        type: "input_audio",
-                        input_audio: { data, format },
-                    } as unknown as {
-                        type: "text";
-                        text: string;
-                    },
-                ],
-            },
-        ],
-    });
+    const response = await client.chat.completions.create(
+        {
+            model,
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: prompt },
+                        {
+                            type: "input_audio",
+                            input_audio: { data, format },
+                        } as unknown as {
+                            type: "text";
+                            text: string;
+                        },
+                    ],
+                },
+            ],
+        },
+        { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
+    );
 
     const text = response.choices?.[0]?.message?.content;
     if (typeof text !== "string" || text.trim() === "") {
