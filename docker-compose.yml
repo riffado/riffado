@@ -55,8 +55,23 @@ services:
       S3_REGION: ${S3_REGION:-}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+
+      # SMTP (optional: password reset + email notifications)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_MARKETING_FROM: ${SMTP_MARKETING_FROM:-}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
     volumes:
+      # Official compose defaults LOCAL_STORAGE_PATH to /app/audio.
+      # The app default without that override is ./storage → /app/storage
+      # in this image (WORKDIR /app). Persist both so neither path is
+      # wiped on container recreate.
       - audio:/app/audio
+      - storage:/app/storage
     depends_on:
       db:
         condition: service_healthy
@@ -71,4 +86,6 @@ volumes:
   pgdata:
     driver: local
   audio:
+    driver: local
+  storage:
     driver: local

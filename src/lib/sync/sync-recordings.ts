@@ -30,6 +30,12 @@ import {
 } from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
+    claimAutoTranscribeIds,
+    listAutoTranscribeRetryIds,
+    noteAutoTranscribeOutcome,
+    releaseAutoTranscribeIds,
+} from "@/lib/sync/auto-transcribe-state";
+import {
     upsertEnhancement,
     upsertTranscription,
 } from "@/lib/transcription/persist";
@@ -716,17 +722,31 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         // recordings that received a Plaud transcript (saves AI credits);
         // 'keep_both' runs anyway so both coexist. Recordings whose Plaud
         // transcript wasn't ready/failed fall back here naturally.
-        const idsToTranscribe =
-            context.transcriptMode === "keep_both"
-                ? result.pendingTranscriptionIds
-                : result.pendingTranscriptionIds.filter(
-                      (id) => !plaudTranscriptImported.has(id),
-                  );
+        if (context.autoTranscribe) {
+            let retryIds: string[] = [];
+            try {
+                retryIds = await listAutoTranscribeRetryIds(userId, {
+                    transcriptMode: context.transcriptMode,
+                });
+            } catch (error) {
+                console.error("Auto-transcribe retry lookup failed:", error);
+            }
+            const mergedIds = [
+                ...new Set([...result.pendingTranscriptionIds, ...retryIds]),
+            ];
+            const eligibleIds =
+                context.transcriptMode === "keep_both"
+                    ? mergedIds
+                    : mergedIds.filter(
+                          (id) => !plaudTranscriptImported.has(id),
+                      );
+            const idsToTranscribe = claimAutoTranscribeIds(eligibleIds);
 
-        if (context.autoTranscribe && idsToTranscribe.length > 0) {
-            queueTranscriptions(userId, idsToTranscribe).catch((error) => {
-                console.error("Background transcription failed:", error);
-            });
+            if (idsToTranscribe.length > 0) {
+                queueTranscriptions(userId, idsToTranscribe).catch((error) => {
+                    console.error("Background transcription failed:", error);
+                });
+            }
         }
 
         return result;
@@ -770,15 +790,23 @@ async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
-    for (const recordingId of recordingIds) {
-        try {
-            await transcribeRecording(userId, recordingId, { trigger: "sync" });
-        } catch (error) {
-            console.error(
-                `Auto-transcription failed for recording ${recordingId}:`,
-                error,
-            );
+    try {
+        for (const recordingId of recordingIds) {
+            try {
+                const outcome = await transcribeRecording(userId, recordingId, {
+                    trigger: "sync",
+                });
+                noteAutoTranscribeOutcome(userId, recordingId, outcome.success);
+            } catch (error) {
+                noteAutoTranscribeOutcome(userId, recordingId, false);
+                console.error(
+                    `Auto-transcription failed for recording ${recordingId}:`,
+                    error,
+                );
+            }
         }
+    } finally {
+        releaseAutoTranscribeIds(recordingIds);
     }
 }
 
