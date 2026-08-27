@@ -229,8 +229,8 @@ export interface TranscribeResult {
     detectedLanguage?: string | null;
 }
 
-// Per-recording in-flight dedup within one process. First caller wins
-// (including force/providerId/model). Cross-process is out of scope.
+// Per-recording in-flight dedup within one process. Force and non-force
+// are partitioned so Retry cannot inherit an auto-transcribe skip.
 const inFlightTranscriptions = new Map<string, Promise<TranscribeResult>>();
 
 export async function transcribeRecording(
@@ -238,7 +238,7 @@ export async function transcribeRecording(
     recordingId: string,
     opts: TranscribeOptions = {},
 ): Promise<TranscribeResult> {
-    const key = `${userId}:${recordingId}`;
+    const key = `${userId}:${recordingId}:${opts.force ? "force" : "auto"}`;
     const inFlight = inFlightTranscriptions.get(key);
     if (inFlight) {
         return inFlight;

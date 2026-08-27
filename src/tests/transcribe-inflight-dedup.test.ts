@@ -8,11 +8,12 @@
  *      `sync-recordings.ts`) can land mid-Retry on the same worker.
  *
  * #282's `claimAutoTranscribeIds` only skips ids already in the
- * auto-transcribe set. It does not cover Retry double-click or Retry
- * overlapping a sync pass. This map is complementary, not a substitute.
+ * auto-transcribe set. It does not cover Retry double-click.
+ * This map is complementary, not a substitute.
  *
- * Concurrent calls for the same (userId, recordingId) share one
- * in-flight promise. Mirrors `inFlightSyncs` in `sync-recordings.ts`.
+ * Equivalent-option calls for the same (userId, recordingId, force)
+ * share one in-flight promise. Force is partitioned from non-force so
+ * Retry cannot inherit an auto-transcribe idempotent skip.
  * Multi-process hosted correctness is out of scope.
  */
 
@@ -92,93 +93,63 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 
 import { OpenAI } from "openai";
 import { db } from "@/db";
+import { isHostedLockedOut } from "@/lib/entitlements";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 
 const USER_ID = "user-dedup";
 
+function createDeferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
 /**
- * Stage one full transcribe attempt's worth of DB reads on `db.select`
- * and `db.transaction`. Matches the current `transcribeRecordingInner`
- * select order: recording, existing riffado transcript, default
- * credentials, user settings. Each inner call consumes one staging.
- * Staging twice covers a non-deduped fanout and is harmless overshoot
- * when dedup engages.
+ * Concurrent-safe stub: every `db.select` returns the same union row so
+ * interleaved inners do not consume a FIFO Once-queue out of order.
+ * `existingText` makes the idempotent skip fire for non-force callers.
  */
-function stageOneAttempt(recordingId: string, userId: string = USER_ID) {
-    const recordingRow = {
-        id: recordingId,
-        userId,
-        plaudFileId: `plaud-${recordingId}`,
+function installSelectStub(opts: { existingText?: string } = {}) {
+    const row = {
+        id: "row-1",
+        userId: USER_ID,
+        plaudFileId: "plaud-1",
         filename: "Some Recording",
-        storagePath: `${recordingId}.mp3`,
+        storagePath: "rec.mp3",
         deletedAt: null,
-    };
-    const credsRow = {
-        id: "creds-1",
+        text: opts.existingText,
+        detectedLanguage: opts.existingText ? "en" : null,
         provider: "OpenAI",
         apiKey: "encrypted-key",
         baseUrl: null,
         defaultModel: "whisper-1",
+        autoGenerateTitle: false,
+        syncTitleToPlaud: false,
+        transcriptionQuality: "balanced",
+        defaultTranscriptionLanguage: null,
     };
 
-    (db.select as Mock)
-        .mockReturnValueOnce({
-            from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue([recordingRow]),
-                }),
+    (db.select as Mock).mockReturnValue({
+        from: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+                limit: vi.fn().mockResolvedValue([row]),
             }),
-        })
-        .mockReturnValueOnce({
+        }),
+    });
+
+    const tx = {
+        select: vi.fn().mockReturnValue({
             from: vi.fn().mockReturnValue({
                 where: vi.fn().mockReturnValue({
+                    for: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([{ deletedAt: null }]),
+                    }),
                     limit: vi.fn().mockResolvedValue([]),
                 }),
             }),
-        })
-        .mockReturnValueOnce({
-            from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue([credsRow]),
-                }),
-            }),
-        })
-        .mockReturnValueOnce({
-            from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue([
-                        {
-                            autoGenerateTitle: false,
-                            syncTitleToPlaud: false,
-                            transcriptionQuality: "balanced",
-                            defaultTranscriptionLanguage: null,
-                        },
-                    ]),
-                }),
-            }),
-        });
-
-    const tx = {
-        select: vi
-            .fn()
-            .mockReturnValueOnce({
-                from: vi.fn().mockReturnValue({
-                    where: vi.fn().mockReturnValue({
-                        for: vi.fn().mockReturnValue({
-                            limit: vi
-                                .fn()
-                                .mockResolvedValue([{ deletedAt: null }]),
-                        }),
-                    }),
-                }),
-            })
-            .mockReturnValueOnce({
-                from: vi.fn().mockReturnValue({
-                    where: vi.fn().mockReturnValue({
-                        limit: vi.fn().mockResolvedValue([]),
-                    }),
-                }),
-            }),
+        }),
         insert: vi.fn().mockReturnValue({
             values: vi.fn().mockResolvedValue(undefined),
         }),
@@ -188,7 +159,7 @@ function stageOneAttempt(recordingId: string, userId: string = USER_ID) {
             }),
         }),
     };
-    (db.transaction as Mock).mockImplementationOnce(
+    (db.transaction as Mock).mockImplementation(
         async (cb: (t: typeof tx) => Promise<unknown>) => cb(tx),
     );
     (db.delete as Mock).mockReturnValue({
@@ -201,6 +172,8 @@ describe("transcribeRecording — in-flight dedup", () => {
         (db.select as Mock).mockReset();
         (db.transaction as Mock).mockReset();
         (db.delete as Mock).mockReset();
+        (isHostedLockedOut as Mock).mockReset();
+        (isHostedLockedOut as Mock).mockResolvedValue(false);
         audioCreate.mockReset();
         chatCreate.mockReset();
         // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
@@ -217,8 +190,7 @@ describe("transcribeRecording — in-flight dedup", () => {
             text: "shared transcript",
             language: "en",
         });
-        stageOneAttempt("rec-shared");
-        stageOneAttempt("rec-shared");
+        installSelectStub();
 
         const callA = transcribeRecording(USER_ID, "rec-shared", {
             force: true,
@@ -235,43 +207,54 @@ describe("transcribeRecording — in-flight dedup", () => {
         expect(audioCreate).toHaveBeenCalledTimes(1);
     });
 
-    it("shares the in-flight promise when Retry (force) overlaps a sync auto-transcribe", async () => {
+    it("does not let a force Retry inherit an in-flight auto-transcribe skip", async () => {
+        const lockout = createDeferred<boolean>();
+        (isHostedLockedOut as Mock)
+            .mockImplementationOnce(() => lockout.promise)
+            .mockResolvedValue(false);
         audioCreate.mockResolvedValue({
-            text: "overlap transcript",
+            text: "forced retranscription",
             language: "en",
         });
-        stageOneAttempt("rec-overlap");
-        stageOneAttempt("rec-overlap");
+        installSelectStub({ existingText: "already transcribed" });
 
-        const retry = transcribeRecording(USER_ID, "rec-overlap", {
+        const auto = transcribeRecording(USER_ID, "rec-skip", {
+            trigger: "sync",
+        });
+        await Promise.resolve();
+
+        const retry = transcribeRecording(USER_ID, "rec-skip", {
             force: true,
             trigger: "manual",
         });
-        const auto = transcribeRecording(USER_ID, "rec-overlap", {
-            trigger: "sync",
-        });
+        await vi.waitFor(() => expect(audioCreate).toHaveBeenCalledTimes(1));
 
-        const [resRetry, resAuto] = await Promise.all([retry, auto]);
+        lockout.resolve(false);
+        const [autoRes, retryRes] = await Promise.all([auto, retry]);
 
-        expect(resRetry.success).toBe(true);
-        expect(resAuto.success).toBe(true);
-        expect(resRetry).toBe(resAuto);
+        expect(autoRes.success).toBe(true);
+        expect(autoRes.text).toBe("already transcribed");
+        expect(retryRes.success).toBe(true);
+        expect(retryRes.text).toBe("forced retranscription");
+        expect(retryRes).not.toBe(autoRes);
         expect(audioCreate).toHaveBeenCalledTimes(1);
     });
 
     it("does NOT dedup across distinct recordingIds (each gets its own provider call)", async () => {
-        audioCreate.mockResolvedValue({
-            text: "transcript",
-            language: "en",
-        });
-        stageOneAttempt("rec-a");
-        const resA = await transcribeRecording(USER_ID, "rec-a", {
+        const gate = createDeferred<{ text: string; language: string }>();
+        audioCreate.mockReturnValue(gate.promise);
+        installSelectStub();
+
+        const callA = transcribeRecording(USER_ID, "rec-a", {
             force: true,
         });
-        stageOneAttempt("rec-b");
-        const resB = await transcribeRecording(USER_ID, "rec-b", {
+        const callB = transcribeRecording(USER_ID, "rec-b", {
             force: true,
         });
+        await vi.waitFor(() => expect(audioCreate).toHaveBeenCalledTimes(2));
+
+        gate.resolve({ text: "transcript", language: "en" });
+        const [resA, resB] = await Promise.all([callA, callB]);
 
         expect(resA.success).toBe(true);
         expect(resB.success).toBe(true);
@@ -279,18 +262,20 @@ describe("transcribeRecording — in-flight dedup", () => {
     });
 
     it("does NOT dedup across distinct users even with the same recordingId (key namespaces by userId)", async () => {
-        audioCreate.mockResolvedValue({
-            text: "transcript",
-            language: "en",
-        });
-        stageOneAttempt("rec-shared-id", "user-a");
-        const resA = await transcribeRecording("user-a", "rec-shared-id", {
+        const gate = createDeferred<{ text: string; language: string }>();
+        audioCreate.mockReturnValue(gate.promise);
+        installSelectStub();
+
+        const callA = transcribeRecording("user-a", "rec-shared-id", {
             force: true,
         });
-        stageOneAttempt("rec-shared-id", "user-b");
-        const resB = await transcribeRecording("user-b", "rec-shared-id", {
+        const callB = transcribeRecording("user-b", "rec-shared-id", {
             force: true,
         });
+        await vi.waitFor(() => expect(audioCreate).toHaveBeenCalledTimes(2));
+
+        gate.resolve({ text: "transcript", language: "en" });
+        const [resA, resB] = await Promise.all([callA, callB]);
 
         expect(resA.success).toBe(true);
         expect(resB.success).toBe(true);
@@ -302,7 +287,7 @@ describe("transcribeRecording — in-flight dedup", () => {
             text: "first call",
             language: "en",
         });
-        stageOneAttempt("rec-followup");
+        installSelectStub();
         const first = await transcribeRecording(USER_ID, "rec-followup", {
             force: true,
         });
@@ -313,7 +298,6 @@ describe("transcribeRecording — in-flight dedup", () => {
             text: "second call",
             language: "en",
         });
-        stageOneAttempt("rec-followup");
         const second = await transcribeRecording(USER_ID, "rec-followup", {
             force: true,
         });
@@ -323,8 +307,7 @@ describe("transcribeRecording — in-flight dedup", () => {
 
     it("propagates errors to all concurrent waiters and still clears the cache for a fresh retry", async () => {
         audioCreate.mockRejectedValueOnce(new Error("upstream 500"));
-        stageOneAttempt("rec-error");
-        stageOneAttempt("rec-error");
+        installSelectStub();
 
         const callA = transcribeRecording(USER_ID, "rec-error", {
             force: true,
@@ -345,7 +328,6 @@ describe("transcribeRecording — in-flight dedup", () => {
             text: "succeeded on retry",
             language: "en",
         });
-        stageOneAttempt("rec-error");
         const retry = await transcribeRecording(USER_ID, "rec-error", {
             force: true,
         });
