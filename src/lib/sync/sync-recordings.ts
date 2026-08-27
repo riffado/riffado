@@ -226,6 +226,19 @@ async function processRecording(
             existingRecording &&
             existingRecording.plaudVersion === versionKey
         ) {
+            // Audio is current, but Plaud may have finished a transcript or
+            // summary without bumping version_ms. Keep those rows eligible
+            // for content backfill (#274). Tombstones stay skipped.
+            if (context.importPlaudContent && !existingRecording.deletedAt) {
+                return {
+                    status: "skipped",
+                    recordingId: existingRecording.id,
+                    importCandidate: buildImportCandidate(
+                        existingRecording.id,
+                        plaudRecording,
+                    ),
+                };
+            }
             return { status: "skipped" };
         }
 
@@ -626,6 +639,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             } else if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
                 hasMore = false;
             } else if (
+                // Two no-change pages imply older audio is unchanged
+                // (list is edit_time desc). That must not apply while
+                // import is on: Plaud can attach transcript/summary to
+                // older files without a version bump, and those sit
+                // past the first two pages (#274).
+                !context.importPlaudContent &&
                 result.newRecordings === 0 &&
                 result.updatedRecordings === 0
             ) {
@@ -834,14 +853,10 @@ async function importPlaudContent(
     for (const candidate of candidates) {
         if (tokenDead) break;
         try {
-            const detail = await plaudClient.getFileDetail(
-                candidate.plaudFileId,
-            );
-            const { transcript, summary } = selectContentItems(detail);
-
-            // --- Transcript (coexists with the user's own; gap-fill only) ---
-            const transcriptLink = transcript?.data_link;
-            if (candidate.isTrans && isReady(transcript) && transcriptLink) {
+            // Gap-fill checks first so a version-unchanged backfill walk
+            // (#274) does not call getFileDetail for rows already imported.
+            let needsTranscript = false;
+            if (candidate.isTrans) {
                 const [existing] = await db
                     .select({ id: transcriptions.id })
                     .from(transcriptions)
@@ -862,34 +877,12 @@ async function importPlaudContent(
                     // 'plaud_only' still suppresses re-transcription.
                     transcriptImported.add(candidate.recordingId);
                 } else {
-                    const parsed = parseTranscript(
-                        await plaudClient.fetchContentLink(transcriptLink),
-                    );
-                    if (parsed.text.trim()) {
-                        const { committed } = await upsertTranscription({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            text: parsed.text,
-                            detectedLanguage: parsed.language,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
-                        if (committed) {
-                            transcriptImported.add(candidate.recordingId);
-                            await emitEvent(
-                                "transcription.completed",
-                                context.userId,
-                                candidate.recordingId,
-                            );
-                        }
-                    }
+                    needsTranscript = true;
                 }
             }
 
-            // --- Summary (single per recording; gap-fill only) ---
-            const summaryLink = summary?.data_link;
-            if (candidate.isSummary && isReady(summary) && summaryLink) {
+            let needsSummary = false;
+            if (candidate.isSummary) {
                 const [existing] = await db
                     .select({ id: aiEnhancements.id })
                     .from(aiEnhancements)
@@ -903,27 +896,63 @@ async function importPlaudContent(
                         ),
                     )
                     .limit(1);
+                if (!existing) needsSummary = true;
+            }
 
-                if (!existing) {
-                    // Prefer the inline copy (no S3 round-trip, no presign
-                    // expiry, #203); fall back to the presigned link.
-                    const inline = findInlineContent(detail, summary?.data_id);
-                    const parsed = parseSummary(
-                        inline ??
-                            (await plaudClient.fetchContentLink(summaryLink)),
-                    );
-                    if (parsed.summary.trim()) {
-                        await upsertEnhancement({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            summary: parsed.summary,
-                            keyPoints: parsed.keyPoints,
-                            actionItems: parsed.actionItems,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
+            if (!needsTranscript && !needsSummary) continue;
+
+            const detail = await plaudClient.getFileDetail(
+                candidate.plaudFileId,
+            );
+            const { transcript, summary } = selectContentItems(detail);
+
+            // --- Transcript (coexists with the user's own; gap-fill only) ---
+            const transcriptLink = transcript?.data_link;
+            if (needsTranscript && isReady(transcript) && transcriptLink) {
+                const parsed = parseTranscript(
+                    await plaudClient.fetchContentLink(transcriptLink),
+                );
+                if (parsed.text.trim()) {
+                    const { committed } = await upsertTranscription({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        text: parsed.text,
+                        detectedLanguage: parsed.language,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
+                    if (committed) {
+                        transcriptImported.add(candidate.recordingId);
+                        await emitEvent(
+                            "transcription.completed",
+                            context.userId,
+                            candidate.recordingId,
+                        );
                     }
+                }
+            }
+
+            // --- Summary (single per recording; gap-fill only) ---
+            const summaryLink = summary?.data_link;
+            if (needsSummary && isReady(summary) && summaryLink) {
+                // Prefer the inline copy (no S3 round-trip, no presign
+                // expiry, #203); fall back to the presigned link.
+                const inline = findInlineContent(detail, summary?.data_id);
+                const parsed = parseSummary(
+                    inline ?? (await plaudClient.fetchContentLink(summaryLink)),
+                );
+                if (parsed.summary.trim()) {
+                    await upsertEnhancement({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        summary: parsed.summary,
+                        keyPoints: parsed.keyPoints,
+                        actionItems: parsed.actionItems,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
                 }
             }
         } catch (error) {
