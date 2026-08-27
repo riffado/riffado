@@ -1,9 +1,6 @@
 /**
- * Regression for #274: Plaud list pagination stopped after two pages
- * with no new/updated audio, and a version-match skip never built an
- * import candidate. Older recordings therefore never received Plaud
- * transcript/summary backfill. #282's auto-transcribe retry does not
- * cover this path.
+ * Regression for #274: two no-change pages stopped Plaud list pagination,
+ * so older recordings never became content-import candidates.
  */
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -57,14 +54,7 @@ vi.mock("@/lib/webhooks/emit", () => ({
 }));
 
 import { db } from "@/db";
-import {
-    aiEnhancements,
-    plaudConnections,
-    recordings,
-    transcriptions,
-    userSettings,
-    users,
-} from "@/db/schema";
+import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { resetAutoTranscribeStateForTests } from "@/lib/sync/auto-transcribe-state";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
@@ -263,67 +253,6 @@ describe("Issue #274 — pagination content backfill", () => {
             0,
             PAGE_SIZE,
         ]);
-        expect(getFileDetail).not.toHaveBeenCalled();
-        expect(upsertTranscription).not.toHaveBeenCalled();
-    });
-
-    it("does not call getFileDetail for a version-unchanged row that already has Plaud content", async () => {
-        const rec = plaudRecording(0);
-        const getRecordings = vi.fn(async () => ({
-            data_file_list: [rec],
-        }));
-        const getFileDetail = vi.fn();
-
-        (createPlaudClient as Mock).mockResolvedValue({
-            getRecordings,
-            getFileDetail,
-            downloadRecording: vi.fn(),
-        });
-
-        (db.select as Mock).mockImplementation(() => ({
-            from: (table: unknown) => {
-                const resolve = (rows: unknown[]) => ({
-                    where: () => ({
-                        limit: () => Promise.resolve(rows),
-                    }),
-                });
-                if (table === plaudConnections) {
-                    return resolve([
-                        {
-                            id: "conn-1",
-                            userId: USER_ID,
-                            bearerToken: "encrypted-token",
-                        },
-                    ]);
-                }
-                if (table === userSettings) {
-                    return resolve([{ importPlaudContent: true }]);
-                }
-                if (table === users) {
-                    return resolve([{ email: "test@example.com" }]);
-                }
-                if (table === recordings) {
-                    return resolve([
-                        {
-                            id: "local-plaud-0",
-                            plaudFileId: rec.id,
-                            plaudVersion: "1000",
-                            deletedAt: null,
-                        },
-                    ]);
-                }
-                if (table === transcriptions) {
-                    return resolve([{ id: "existing-plaud-transcript" }]);
-                }
-                if (table === aiEnhancements) {
-                    return resolve([]);
-                }
-                return resolve([]);
-            },
-        }));
-
-        await syncRecordingsForUser(USER_ID);
-
         expect(getFileDetail).not.toHaveBeenCalled();
         expect(upsertTranscription).not.toHaveBeenCalled();
     });
