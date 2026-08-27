@@ -1,12 +1,6 @@
 "use client";
 
-import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-    useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
     getAllSummaryPrompts,
@@ -14,14 +8,10 @@ import {
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
 import {
-    getInFlightSummary,
-    hasInFlightSummary,
+    addSummarizingId,
     isSummarizingForView,
-    nextSummariesById,
-    type SummaryJobResult,
-    subscribeInFlightSummaries,
-    summaryForView,
-    trackInFlightSummary,
+    removeSummarizingId,
+    shouldApplySummaryToView,
 } from "@/lib/summary/job-scope";
 
 export interface SummaryPromptOption {
@@ -64,9 +54,6 @@ interface UseTranscriptionSummaryOptions {
  * same expand/preset/optimistic-delete UX -- only the visual chrome
  * differs.
  *
- * Spinner and result are keyed by recording id so a job started on A
- * cannot paint onto B when the panel stays mounted across selection.
- *
  * Returns flat state + handlers; callers compose their own JSX so the
  * dashboard's shadcn `Card`/`Button` look and the recording page's
  * `Panel`/`MetalButton` look stay distinct on purpose.
@@ -75,15 +62,11 @@ export function useTranscriptionSummary({
     recordingId,
     transcriptionText,
 }: UseTranscriptionSummaryOptions) {
-    const [summariesById, setSummariesById] = useState<
-        Map<string, SummaryData | null>
-    >(() => new Map());
-    const summaryData = summaryForView(summariesById, recordingId);
-    const isSummarizing = useSyncExternalStore(
-        subscribeInFlightSummaries,
-        () => isSummarizingForView(recordingId),
-        () => false,
+    const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
+    const [summarizingIds, setSummarizingIds] = useState(
+        () => new Set<string>(),
     );
+    const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPresetState] = useState("general");
     // Set the moment the caller (the per-recording dropdown) makes an
@@ -139,36 +122,29 @@ export function useTranscriptionSummary({
         return () => controller.abort();
     }, []);
 
+    const recordingIdRef = useRef(recordingId);
+    if (recordingId !== recordingIdRef.current) {
+        recordingIdRef.current = recordingId;
+        setSummaryData(null);
+    }
+
     // Detect when transcription text actually changes -> invalidate
     // the cached summary so the next fetch lands fresh. We compare
     // through a ref because the dashboard variant receives the text
     // via prop (parent-owned), and reading prop-vs-state isn't enough
-    // to spot a stale summary. Only the same recording is cleared;
-    // switching recordings must not wipe another id's cached result.
-    const recordingIdRef = useRef(recordingId);
+    // to spot a stale summary.
     const transcriptionTextRef = useRef(transcriptionText);
-    const prevRecordingId = recordingIdRef.current;
-    recordingIdRef.current = recordingId;
     if (transcriptionText !== transcriptionTextRef.current) {
         transcriptionTextRef.current = transcriptionText;
-        if (recordingId && recordingId === prevRecordingId) {
-            setSummaryFetchKey((k) => k + 1);
-            setSummariesById((prev) => {
-                if (!prev.has(recordingId)) return prev;
-                const next = new Map(prev);
-                next.delete(recordingId);
-                return next;
-            });
-        }
+        setSummaryFetchKey((k) => k + 1);
+        setSummaryData(null);
     }
 
     // Fetch when recording id changes or the re-fetch key bumps.
-    // Writes land on the requested id only -- a late GET for A must
-    // not populate B's slot, and an in-flight POST for that id wins
-    // over an empty GET.
     // biome-ignore lint/correctness/useExhaustiveDependencies: summaryFetchKey is an intentional re-fetch trigger
     useEffect(() => {
         if (!recordingId) {
+            setSummaryData(null);
             return;
         }
         const requestedId = recordingId;
@@ -178,120 +154,85 @@ export function useTranscriptionSummary({
         })
             .then((res) => res.json())
             .then((data) => {
-                if (hasInFlightSummary(requestedId)) return;
-                setSummariesById((prev) =>
-                    nextSummariesById(
-                        prev,
+                if (
+                    !shouldApplySummaryToView(
+                        recordingIdRef.current,
                         requestedId,
-                        data.summary ? data : null,
-                    ),
-                );
+                    )
+                ) {
+                    return;
+                }
+                if (data.summary) {
+                    setSummaryData(data);
+                } else {
+                    setSummaryData(null);
+                }
             })
             .catch(() => {});
         return () => controller.abort();
     }, [recordingId, summaryFetchKey]);
 
-    // A remounted hook (recording page) or a return to this id must
-    // adopt an already-running job so the spinner stays up and the
-    // result writes into this id's slot when it lands.
-    useEffect(() => {
-        if (!recordingId || !isSummarizing) return;
-        const requestedId = recordingId;
-        const job = getInFlightSummary(requestedId);
-        if (!job) return;
-        let cancelled = false;
-        job.then((result) => {
-            if (cancelled) return;
-            const typed = result as SummaryJobResult<SummaryData>;
-            if (typed.status === "ok") {
-                setSummariesById((prev) =>
-                    nextSummariesById(prev, requestedId, typed.data),
-                );
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [recordingId, isSummarizing]);
-
     const handleSummarize = useCallback(async () => {
         if (!recordingId) return;
         const targetId = recordingId;
-        const result = await trackInFlightSummary(targetId, async () => {
-            try {
-                const response = await fetch(
-                    `/api/recordings/${targetId}/summary`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ preset: summaryPreset }),
-                    },
-                );
-                if (response.ok) {
-                    const data = (await response.json()) as SummaryData;
-                    return { status: "ok" as const, data };
+        setSummarizingIds((prev) => addSummarizingId(prev, targetId));
+        try {
+            const response = await fetch(
+                `/api/recordings/${targetId}/summary`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ preset: summaryPreset }),
+                },
+            );
+            if (response.ok) {
+                const data = (await response.json()) as SummaryData;
+                if (
+                    shouldApplySummaryToView(recordingIdRef.current, targetId)
+                ) {
+                    setSummaryData(data);
                 }
-                const error = await response.json().catch(() => ({}));
-                return {
-                    status: "error" as const,
-                    message: error.error || "Summary generation failed",
-                };
-            } catch {
-                return {
-                    status: "error" as const,
-                    message: "Failed to generate summary",
-                };
-            }
-        });
-        switch (result.status) {
-            case "ok":
-                setSummariesById((prev) =>
-                    nextSummariesById(prev, targetId, result.data),
-                );
-                if (result.data.promptFallback) {
+                if (data.promptFallback) {
                     toast.warning(
                         "Selected summary prompt is no longer available -- used your default prompt instead.",
                     );
                 } else {
                     toast.success("Summary generated");
                 }
-                break;
-            case "error":
-                toast.error(result.message);
-                break;
-            default: {
-                const _exhaustive: never = result;
-                return _exhaustive;
+            } else {
+                const error = await response.json().catch(() => ({}));
+                toast.error(error.error || "Summary generation failed");
             }
+        } catch {
+            toast.error("Failed to generate summary");
+        } finally {
+            setSummarizingIds((prev) => removeSummarizingId(prev, targetId));
         }
     }, [recordingId, summaryPreset]);
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
-        const targetId = recordingId;
-        const previous = summaryForView(summariesById, targetId);
-        setSummariesById((prev) => nextSummariesById(prev, targetId, null));
+        // Optimistic delete -- the summary disappears immediately and
+        // only comes back if the server rejects the request.
+        const previous = summaryData;
+        setSummaryData(null);
 
         try {
             const response = await fetch(
-                `/api/recordings/${targetId}/summary`,
+                `/api/recordings/${recordingId}/summary`,
                 { method: "DELETE" },
             );
             if (response.ok) {
                 toast.success("Summary deleted");
             } else {
-                setSummariesById((prev) =>
-                    nextSummariesById(prev, targetId, previous),
-                );
+                setSummaryData(previous);
                 toast.error("Failed to delete summary");
             }
         } catch {
-            setSummariesById((prev) =>
-                nextSummariesById(prev, targetId, previous),
-            );
+            setSummaryData(previous);
             toast.error("Failed to delete summary");
         }
-    }, [recordingId, summariesById]);
+    }, [recordingId, summaryData]);
 
     /**
      * Imperative re-fetch trigger. Use after a re-transcribe call
@@ -299,16 +240,9 @@ export function useTranscriptionSummary({
      * key forces a GET without changing recordingId.
      */
     const refetchSummary = useCallback(() => {
-        if (recordingId) {
-            setSummariesById((prev) => {
-                if (!prev.has(recordingId)) return prev;
-                const next = new Map(prev);
-                next.delete(recordingId);
-                return next;
-            });
-        }
+        setSummaryData(null);
         setSummaryFetchKey((k) => k + 1);
-    }, [recordingId]);
+    }, []);
 
     return {
         summaryData,

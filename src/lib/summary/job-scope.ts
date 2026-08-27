@@ -1,76 +1,31 @@
-export type SummaryJobResult<T> =
-    | { status: "ok"; data: T }
-    | { status: "error"; message: string };
-
-const jobs = new Map<string, Promise<unknown>>();
-const listeners = new Set<() => void>();
-
-function emit(): void {
-    for (const listener of listeners) listener();
-}
-
-export function subscribeInFlightSummaries(
-    onStoreChange: () => void,
-): () => void {
-    listeners.add(onStoreChange);
-    return () => {
-        listeners.delete(onStoreChange);
-    };
-}
-
-export function hasInFlightSummary(recordingId: string): boolean {
-    return jobs.has(recordingId);
-}
-
-export function getInFlightSummary(
-    recordingId: string,
-): Promise<unknown> | undefined {
-    return jobs.get(recordingId);
-}
-
 export function isSummarizingForView(
     viewRecordingId: string | null | undefined,
+    summarizingIds: ReadonlySet<string>,
 ): boolean {
-    return viewRecordingId != null && hasInFlightSummary(viewRecordingId);
+    return viewRecordingId != null && summarizingIds.has(viewRecordingId);
 }
 
-export function trackInFlightSummary<T>(
-    recordingId: string,
-    work: () => Promise<T>,
-): Promise<T> {
-    const existing = jobs.get(recordingId);
-    if (existing) return existing as Promise<T>;
-
-    const promise = work().finally(() => {
-        if (jobs.get(recordingId) === promise) {
-            jobs.delete(recordingId);
-            emit();
-        }
-    });
-    jobs.set(recordingId, promise);
-    emit();
-    return promise;
+export function shouldApplySummaryToView(
+    viewRecordingId: string | null | undefined,
+    jobRecordingId: string,
+): boolean {
+    return viewRecordingId === jobRecordingId;
 }
 
-export function nextSummariesById<T>(
-    prev: ReadonlyMap<string, T | null>,
+export function addSummarizingId(
+    prev: ReadonlySet<string>,
     recordingId: string,
-    data: T | null,
-): Map<string, T | null> {
-    const next = new Map(prev);
-    next.set(recordingId, data);
+): Set<string> {
+    const next = new Set(prev);
+    next.add(recordingId);
     return next;
 }
 
-export function summaryForView<T>(
-    byId: ReadonlyMap<string, T | null>,
-    viewRecordingId: string | null | undefined,
-): T | null {
-    if (!viewRecordingId) return null;
-    return byId.get(viewRecordingId) ?? null;
-}
-
-export function resetInFlightSummaries(): void {
-    jobs.clear();
-    emit();
+export function removeSummarizingId(
+    prev: ReadonlySet<string>,
+    recordingId: string,
+): Set<string> {
+    const next = new Set(prev);
+    next.delete(recordingId);
+    return next;
 }
