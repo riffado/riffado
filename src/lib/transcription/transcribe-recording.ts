@@ -229,7 +229,30 @@ export interface TranscribeResult {
     detectedLanguage?: string | null;
 }
 
+// Per-recording in-flight dedup within one process. First caller wins
+// (including force/providerId/model). Cross-process is out of scope.
+const inFlightTranscriptions = new Map<string, Promise<TranscribeResult>>();
+
 export async function transcribeRecording(
+    userId: string,
+    recordingId: string,
+    opts: TranscribeOptions = {},
+): Promise<TranscribeResult> {
+    const key = `${userId}:${recordingId}`;
+    const inFlight = inFlightTranscriptions.get(key);
+    if (inFlight) {
+        return inFlight;
+    }
+    const work = transcribeRecordingInner(userId, recordingId, opts);
+    inFlightTranscriptions.set(key, work);
+    try {
+        return await work;
+    } finally {
+        inFlightTranscriptions.delete(key);
+    }
+}
+
+async function transcribeRecordingInner(
     userId: string,
     recordingId: string,
     opts: TranscribeOptions = {},
