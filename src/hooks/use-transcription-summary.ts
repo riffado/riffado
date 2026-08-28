@@ -11,6 +11,7 @@ import {
     addSummarizingId,
     isSummarizingForView,
     removeSummarizingId,
+    shouldApplyFetchedSummary,
     shouldApplySummaryToView,
 } from "@/lib/summary/job-scope";
 
@@ -123,6 +124,10 @@ export function useTranscriptionSummary({
     }, []);
 
     const recordingIdRef = useRef(recordingId);
+    const summarizingIdsRef = useRef(summarizingIds);
+    summarizingIdsRef.current = summarizingIds;
+    const fetchGenerationRef = useRef(0);
+    const getAbortRef = useRef<AbortController | null>(null);
     if (recordingId !== recordingIdRef.current) {
         recordingIdRef.current = recordingId;
         setSummaryData(null);
@@ -141,6 +146,9 @@ export function useTranscriptionSummary({
     }
 
     // Fetch when recording id changes or the re-fetch key bumps.
+    // Abort on cleanup is an optimization; apply only if this fetch's
+    // generation is still current so a late A GET cannot overwrite a
+    // newer A GET (A → B → A) or a just-finished POST.
     // biome-ignore lint/correctness/useExhaustiveDependencies: summaryFetchKey is an intentional re-fetch trigger
     useEffect(() => {
         if (!recordingId) {
@@ -148,18 +156,25 @@ export function useTranscriptionSummary({
             return;
         }
         const requestedId = recordingId;
+        const generation = ++fetchGenerationRef.current;
         const controller = new AbortController();
+        getAbortRef.current = controller;
         fetch(`/api/recordings/${requestedId}/summary`, {
             signal: controller.signal,
         })
             .then((res) => res.json())
             .then((data) => {
                 if (
-                    !shouldApplySummaryToView(
+                    !shouldApplyFetchedSummary(
                         recordingIdRef.current,
                         requestedId,
+                        fetchGenerationRef.current,
+                        generation,
                     )
                 ) {
+                    return;
+                }
+                if (summarizingIdsRef.current.has(requestedId)) {
                     return;
                 }
                 if (data.summary) {
@@ -169,12 +184,19 @@ export function useTranscriptionSummary({
                 }
             })
             .catch(() => {});
-        return () => controller.abort();
+        return () => {
+            controller.abort();
+            if (getAbortRef.current === controller) {
+                getAbortRef.current = null;
+            }
+        };
     }, [recordingId, summaryFetchKey]);
 
     const handleSummarize = useCallback(async () => {
         if (!recordingId) return;
         const targetId = recordingId;
+        getAbortRef.current?.abort();
+        fetchGenerationRef.current += 1;
         setSummarizingIds((prev) => addSummarizingId(prev, targetId));
         try {
             const response = await fetch(
@@ -190,6 +212,7 @@ export function useTranscriptionSummary({
                 if (
                     shouldApplySummaryToView(recordingIdRef.current, targetId)
                 ) {
+                    fetchGenerationRef.current += 1;
                     setSummaryData(data);
                 }
                 if (data.promptFallback) {
@@ -212,6 +235,7 @@ export function useTranscriptionSummary({
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
+        const targetId = recordingId;
         // Optimistic delete -- the summary disappears immediately and
         // only comes back if the server rejects the request.
         const previous = summaryData;
@@ -219,17 +243,23 @@ export function useTranscriptionSummary({
 
         try {
             const response = await fetch(
-                `/api/recordings/${recordingId}/summary`,
+                `/api/recordings/${targetId}/summary`,
                 { method: "DELETE" },
             );
             if (response.ok) {
                 toast.success("Summary deleted");
             } else {
-                setSummaryData(previous);
+                if (
+                    shouldApplySummaryToView(recordingIdRef.current, targetId)
+                ) {
+                    setSummaryData(previous);
+                }
                 toast.error("Failed to delete summary");
             }
         } catch {
-            setSummaryData(previous);
+            if (shouldApplySummaryToView(recordingIdRef.current, targetId)) {
+                setSummaryData(previous);
+            }
             toast.error("Failed to delete summary");
         }
     }, [recordingId, summaryData]);

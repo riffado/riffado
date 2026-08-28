@@ -3,25 +3,103 @@
  *   "Summary job is not scoped to a recording; spinner and result follow
  *    the user to whichever recording is open"
  *
- * `useTranscriptionSummary` kept a single `isSummarizing` + `summaryData`.
- * Dashboard `TranscriptionPanel` stays mounted across selection, so a
- * Summarize on A leaked the spinner onto B and wrote A's result into B
- * when the POST settled. These helpers are what the hook uses to key
- * spinner and result by recording id.
+ * Helper tests cover the id-keying predicates. Hook tests mount the real
+ * `useTranscriptionSummary` with a mocked fetch so a wiring regression
+ * (single boolean, missing apply guard, missing generation token) fails.
  *
  * Covers: id change mid-flight, completion after switch, two recordings,
- * returning to A while A's job is still running.
+ * returning to A while A's job is still running, delete restore after
+ * switch, GET-after-POST, A → B → A stale GET.
  */
 
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import { act, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import {
     addSummarizingId,
     isSummarizingForView,
     removeSummarizingId,
+    shouldApplyFetchedSummary,
     shouldApplySummaryToView,
 } from "@/lib/summary/job-scope";
 
+vi.mock("sonner", () => ({
+    toast: {
+        success: vi.fn(),
+        error: vi.fn(),
+        warning: vi.fn(),
+    },
+}));
+
 type Summary = { summary: string };
+
+type PendingRequest = {
+    url: string;
+    method: string;
+    resolve: (value: Response) => void;
+};
+
+function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+    });
+}
+
+function summaryBody(text: string) {
+    return { summary: text, keyPoints: null, actionItems: null };
+}
+
+let pending: PendingRequest[] = [];
+
+beforeEach(() => {
+    pending = [];
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (url.includes("/api/settings/user")) {
+            return Promise.resolve(jsonResponse({}));
+        }
+        return new Promise<Response>((resolve) => {
+            pending.push({ url, method, resolve });
+        });
+    });
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
+function takePending(method: string, recordingId: string): PendingRequest {
+    const needle = `/api/recordings/${recordingId}/summary`;
+    const idx = pending.findIndex(
+        (p) => p.method === method && p.url.includes(needle),
+    );
+    if (idx < 0) {
+        throw new Error(
+            `missing ${method} ${recordingId}: ${JSON.stringify(pending)}`,
+        );
+    }
+    const [req] = pending.splice(idx, 1);
+    return req;
+}
+
+async function flush(): Promise<void> {
+    await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+    });
+}
+
+function renderSummary(recordingId: string, transcriptionText: string) {
+    return renderHook(
+        (props: { recordingId: string; transcriptionText: string }) =>
+            useTranscriptionSummary(props),
+        { initialProps: { recordingId, transcriptionText } },
+    );
+}
 
 function createView(initialId: string) {
     let viewId: string | null = initialId;
@@ -48,10 +126,15 @@ function createView(initialId: string) {
             }
             summarizingIds = removeSummarizingId(summarizingIds, id);
         },
+        restoreDelete(id: string, previous: Summary | null) {
+            if (shouldApplySummaryToView(viewId, id)) {
+                summaryData = previous;
+            }
+        },
     };
 }
 
-describe("summary job scope (#283)", () => {
+describe("summary job-scope helpers (#283)", () => {
     it("does not show A's spinner on B after an id change mid-flight", () => {
         const view = createView("rec-a");
         view.start("rec-a");
@@ -117,5 +200,222 @@ describe("summary job scope (#283)", () => {
             isSummarizing: false,
             summaryData: null,
         });
+    });
+
+    it("does not restore A's failed delete onto B", () => {
+        const view = createView("rec-a");
+        view.select("rec-b");
+        view.restoreDelete("rec-a", { summary: "summary for A" });
+        expect(view.snapshot().summaryData).toBeNull();
+    });
+
+    it("rejects a GET whose generation is no longer current", () => {
+        expect(shouldApplyFetchedSummary("rec-a", "rec-a", 3, 1)).toBe(false);
+        expect(shouldApplyFetchedSummary("rec-a", "rec-a", 3, 3)).toBe(true);
+        expect(shouldApplyFetchedSummary("rec-b", "rec-a", 3, 3)).toBe(false);
+    });
+});
+
+describe("useTranscriptionSummary (#283)", () => {
+    it("does not show A's spinner or summary on B after an id change mid-flight", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(true);
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(false);
+        expect(hook.result.current.summaryData).toBeNull();
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        expect(hook.result.current.isSummarizing).toBe(false);
+        expect(hook.result.current.summaryData).toBeNull();
+    });
+
+    it("does not write A's completed POST into B", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData).toBeNull();
+        expect(hook.result.current.isSummarizing).toBe(false);
+    });
+
+    it("keeps A's spinner when returning to A while the POST is still running", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        act(() => {
+            void hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(false);
+
+        hook.rerender({ recordingId: "rec-a", transcriptionText: "text-a" });
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(true);
+    });
+
+    it("scopes two in-flight recordings independently", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarizeA!: Promise<void>;
+        act(() => {
+            summarizeA = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        let summarizeB!: Promise<void>;
+        act(() => {
+            summarizeB = hook.result.current.handleSummarize();
+        });
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(true);
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await act(async () => {
+            await summarizeA;
+        });
+        expect(hook.result.current.isSummarizing).toBe(true);
+        expect(hook.result.current.summaryData).toBeNull();
+
+        takePending("POST", "rec-b").resolve(
+            jsonResponse(summaryBody("from B")),
+        );
+        await act(async () => {
+            await summarizeB;
+        });
+        expect(hook.result.current.isSummarizing).toBe(false);
+        expect(hook.result.current.summaryData?.summary).toBe("from B");
+    });
+
+    it("does not restore A's failed delete onto B", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("from A");
+
+        let deleted!: Promise<void>;
+        act(() => {
+            deleted = hook.result.current.handleDeleteSummary();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        takePending("DELETE", "rec-a").resolve(
+            jsonResponse({ error: "fail" }, 500),
+        );
+        await act(async () => {
+            await deleted;
+        });
+
+        expect(hook.result.current.summaryData).toBeNull();
+        expect(hook.result.current.isSummarizing).toBe(false);
+    });
+
+    it("does not let a pre-existing GET overwrite a completed POST", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        const getA = takePending("GET", "rec-a");
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("generated")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+        expect(hook.result.current.summaryData?.summary).toBe("generated");
+
+        getA.resolve(jsonResponse(summaryBody("stale GET")));
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("generated");
+    });
+
+    it("does not let an older A GET overwrite a newer A GET after A → B → A", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        const firstA = takePending("GET", "rec-a");
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        hook.rerender({ recordingId: "rec-a", transcriptionText: "text-a" });
+        await flush();
+        const secondA = takePending("GET", "rec-a");
+
+        secondA.resolve(jsonResponse(summaryBody("newer A")));
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("newer A");
+
+        firstA.resolve(jsonResponse(summaryBody("older A")));
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("newer A");
     });
 });

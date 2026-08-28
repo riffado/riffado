@@ -12,6 +12,18 @@ export function shouldApplySummaryToView(
     return viewRecordingId === jobRecordingId;
 }
 
+export function shouldApplyFetchedSummary(
+    viewRecordingId: string | null | undefined,
+    requestedId: string,
+    currentGeneration: number,
+    fetchGeneration: number,
+): boolean {
+    return (
+        shouldApplySummaryToView(viewRecordingId, requestedId) &&
+        currentGeneration === fetchGeneration
+    );
+}
+
 export function addSummarizingId(
     prev: ReadonlySet<string>,
     recordingId: string,
