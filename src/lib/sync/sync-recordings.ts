@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -184,6 +184,81 @@ function buildImportCandidate(
     };
 }
 
+async function loadPlaudContentGaps(
+    userId: string,
+    recordingId: string,
+    flags: { isTrans: boolean; isSummary: boolean },
+): Promise<{
+    needsTranscript: boolean;
+    needsSummary: boolean;
+    hasPlaudTranscript: boolean;
+}> {
+    let needsTranscript = false;
+    let hasPlaudTranscript = false;
+    if (flags.isTrans) {
+        const [existing] = await db
+            .select({ id: transcriptions.id })
+            .from(transcriptions)
+            .where(
+                and(
+                    eq(transcriptions.recordingId, recordingId),
+                    eq(transcriptions.userId, userId),
+                    eq(transcriptions.source, "plaud"),
+                ),
+            )
+            .limit(1);
+        if (existing) hasPlaudTranscript = true;
+        else needsTranscript = true;
+    }
+
+    let needsSummary = false;
+    if (flags.isSummary) {
+        const [existing] = await db
+            .select({ id: aiEnhancements.id })
+            .from(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.recordingId, recordingId),
+                    eq(aiEnhancements.userId, userId),
+                ),
+            )
+            .limit(1);
+        if (!existing) needsSummary = true;
+    }
+
+    return { needsTranscript, needsSummary, hasPlaudTranscript };
+}
+
+async function hasUnseenPlaudTranscriptGaps(
+    userId: string,
+    seenRecordingIds: Set<string>,
+): Promise<boolean> {
+    const conditions = [
+        eq(recordings.userId, userId),
+        isNull(recordings.deletedAt),
+        isNull(transcriptions.id),
+    ];
+    if (seenRecordingIds.size > 0) {
+        conditions.push(notInArray(recordings.id, [...seenRecordingIds]));
+    }
+
+    const [row] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .leftJoin(
+            transcriptions,
+            and(
+                eq(transcriptions.recordingId, recordings.id),
+                eq(transcriptions.userId, userId),
+                eq(transcriptions.source, "plaud"),
+            ),
+        )
+        .where(and(...conditions))
+        .limit(1);
+
+    return Boolean(row);
+}
+
 /**
  * Mutable per-sync-run flag. Once a new recording is blocked by the
  * storage cap, every subsequent new recording in the same run is skipped
@@ -200,6 +275,7 @@ async function processRecording(
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     capState: CapState,
+    seenRecordingIds: Set<string>,
 ): Promise<{
     status: "new" | "updated" | "skipped" | "error";
     recordingId?: string;
@@ -220,22 +296,36 @@ async function processRecording(
             )
             .limit(1);
 
+        if (existingRecording) seenRecordingIds.add(existingRecording.id);
+
         const versionKey = plaudRecording.version_ms.toString();
 
         if (
             existingRecording &&
             existingRecording.plaudVersion === versionKey
         ) {
-            // Version match skips the audio download, not content backfill (#274).
             if (context.importPlaudContent && !existingRecording.deletedAt) {
-                return {
-                    status: "skipped",
-                    recordingId: existingRecording.id,
-                    importCandidate: buildImportCandidate(
+                const importCandidate = buildImportCandidate(
+                    existingRecording.id,
+                    plaudRecording,
+                );
+                if (importCandidate) {
+                    const gaps = await loadPlaudContentGaps(
+                        context.userId,
                         existingRecording.id,
-                        plaudRecording,
-                    ),
-                };
+                        {
+                            isTrans: importCandidate.isTrans,
+                            isSummary: importCandidate.isSummary,
+                        },
+                    );
+                    if (gaps.needsTranscript || gaps.needsSummary) {
+                        return {
+                            status: "skipped",
+                            recordingId: existingRecording.id,
+                            importCandidate,
+                        };
+                    }
+                }
             }
             return { status: "skipped" };
         }
@@ -362,6 +452,8 @@ async function processRecording(
             .values(recordingData)
             .returning({ id: recordings.id });
 
+        seenRecordingIds.add(newRecording.id);
+
         await emitEvent("recording.synced", context.userId, newRecording.id);
 
         return {
@@ -387,6 +479,7 @@ async function processBatch(
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     capState: CapState,
+    seenRecordingIds: Set<string>,
 ): Promise<{
     newCount: number;
     updatedCount: number;
@@ -398,7 +491,14 @@ async function processBatch(
 }> {
     const results = await Promise.allSettled(
         batch.map((rec) =>
-            processRecording(rec, context, plaudClient, storage, capState),
+            processRecording(
+                rec,
+                context,
+                plaudClient,
+                storage,
+                capState,
+                seenRecordingIds,
+            ),
         ),
     );
 
@@ -582,6 +682,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
         const capState: CapState = { blocked: false };
+        const seenRecordingIds = new Set<string>();
 
         let page = 0;
         let hasMore = true;
@@ -603,6 +704,10 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 break;
             }
 
+            let pageNew = 0;
+            let pageUpdated = 0;
+            let pageCandidateCount = 0;
+
             for (
                 let i = 0;
                 i < plaudRecordings.length;
@@ -618,8 +723,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     plaudClient,
                     storage,
                     capState,
+                    seenRecordingIds,
                 );
 
+                pageNew += batchResult.newCount;
+                pageUpdated += batchResult.updatedCount;
+                pageCandidateCount += batchResult.importCandidates.length;
                 result.newRecordings += batchResult.newCount;
                 result.updatedRecordings += batchResult.updatedCount;
                 result.errors.push(...batchResult.errors);
@@ -637,15 +746,27 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             } else if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
                 hasMore = false;
             } else if (
-                // Import can still need later pages after two no-change
-                // audio pages (#274).
-                !context.importPlaudContent &&
-                result.newRecordings === 0 &&
-                result.updatedRecordings === 0
+                pageNew === 0 &&
+                pageUpdated === 0 &&
+                pageCandidateCount === 0
             ) {
                 consecutiveEmptyPages++;
                 if (consecutiveEmptyPages >= 2) {
-                    hasMore = false;
+                    if (context.importPlaudContent) {
+                        if (
+                            !(await hasUnseenPlaudTranscriptGaps(
+                                userId,
+                                seenRecordingIds,
+                            ))
+                        ) {
+                            hasMore = false;
+                        }
+                    } else if (
+                        result.newRecordings === 0 &&
+                        result.updatedRecordings === 0
+                    ) {
+                        hasMore = false;
+                    }
                 }
             } else {
                 consecutiveEmptyPages = 0;
@@ -848,6 +969,19 @@ async function importPlaudContent(
     for (const candidate of candidates) {
         if (tokenDead) break;
         try {
+            const gaps = await loadPlaudContentGaps(
+                context.userId,
+                candidate.recordingId,
+                {
+                    isTrans: candidate.isTrans,
+                    isSummary: candidate.isSummary,
+                },
+            );
+            if (gaps.hasPlaudTranscript) {
+                transcriptImported.add(candidate.recordingId);
+            }
+            if (!gaps.needsTranscript && !gaps.needsSummary) continue;
+
             const detail = await plaudClient.getFileDetail(
                 candidate.plaudFileId,
             );
@@ -855,89 +989,51 @@ async function importPlaudContent(
 
             // --- Transcript (coexists with the user's own; gap-fill only) ---
             const transcriptLink = transcript?.data_link;
-            if (candidate.isTrans && isReady(transcript) && transcriptLink) {
-                const [existing] = await db
-                    .select({ id: transcriptions.id })
-                    .from(transcriptions)
-                    .where(
-                        and(
-                            eq(
-                                transcriptions.recordingId,
-                                candidate.recordingId,
-                            ),
-                            eq(transcriptions.userId, context.userId),
-                            eq(transcriptions.source, "plaud"),
-                        ),
-                    )
-                    .limit(1);
-
-                if (existing) {
-                    // Already imported on a prior sync. Treat as present so
-                    // 'plaud_only' still suppresses re-transcription.
-                    transcriptImported.add(candidate.recordingId);
-                } else {
-                    const parsed = parseTranscript(
-                        await plaudClient.fetchContentLink(transcriptLink),
-                    );
-                    if (parsed.text.trim()) {
-                        const { committed } = await upsertTranscription({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            text: parsed.text,
-                            detectedLanguage: parsed.language,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
-                        if (committed) {
-                            transcriptImported.add(candidate.recordingId);
-                            await emitEvent(
-                                "transcription.completed",
-                                context.userId,
-                                candidate.recordingId,
-                            );
-                        }
+            if (gaps.needsTranscript && isReady(transcript) && transcriptLink) {
+                const parsed = parseTranscript(
+                    await plaudClient.fetchContentLink(transcriptLink),
+                );
+                if (parsed.text.trim()) {
+                    const { committed } = await upsertTranscription({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        text: parsed.text,
+                        detectedLanguage: parsed.language,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
+                    if (committed) {
+                        transcriptImported.add(candidate.recordingId);
+                        await emitEvent(
+                            "transcription.completed",
+                            context.userId,
+                            candidate.recordingId,
+                        );
                     }
                 }
             }
 
             // --- Summary (single per recording; gap-fill only) ---
             const summaryLink = summary?.data_link;
-            if (candidate.isSummary && isReady(summary) && summaryLink) {
-                const [existing] = await db
-                    .select({ id: aiEnhancements.id })
-                    .from(aiEnhancements)
-                    .where(
-                        and(
-                            eq(
-                                aiEnhancements.recordingId,
-                                candidate.recordingId,
-                            ),
-                            eq(aiEnhancements.userId, context.userId),
-                        ),
-                    )
-                    .limit(1);
-
-                if (!existing) {
-                    // Prefer the inline copy (no S3 round-trip, no presign
-                    // expiry, #203); fall back to the presigned link.
-                    const inline = findInlineContent(detail, summary?.data_id);
-                    const parsed = parseSummary(
-                        inline ??
-                            (await plaudClient.fetchContentLink(summaryLink)),
-                    );
-                    if (parsed.summary.trim()) {
-                        await upsertEnhancement({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            summary: parsed.summary,
-                            keyPoints: parsed.keyPoints,
-                            actionItems: parsed.actionItems,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
-                    }
+            if (gaps.needsSummary && isReady(summary) && summaryLink) {
+                // Prefer the inline copy (no S3 round-trip, no presign
+                // expiry, #203); fall back to the presigned link.
+                const inline = findInlineContent(detail, summary?.data_id);
+                const parsed = parseSummary(
+                    inline ?? (await plaudClient.fetchContentLink(summaryLink)),
+                );
+                if (parsed.summary.trim()) {
+                    await upsertEnhancement({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        summary: parsed.summary,
+                        keyPoints: parsed.keyPoints,
+                        actionItems: parsed.actionItems,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
                 }
             }
         } catch (error) {

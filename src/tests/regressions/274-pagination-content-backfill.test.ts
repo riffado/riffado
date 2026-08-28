@@ -54,7 +54,14 @@ vi.mock("@/lib/webhooks/emit", () => ({
 }));
 
 import { db } from "@/db";
-import { plaudConnections, recordings, userSettings, users } from "@/db/schema";
+import {
+    aiEnhancements,
+    plaudConnections,
+    recordings,
+    transcriptions,
+    userSettings,
+    users,
+} from "@/db/schema";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { resetAutoTranscribeStateForTests } from "@/lib/sync/auto-transcribe-state";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
@@ -62,6 +69,12 @@ import { upsertTranscription } from "@/lib/transcription/persist";
 
 const USER_ID = "user-274";
 const PAGE_SIZE = 50;
+
+type Fixture = {
+    rec: ReturnType<typeof plaudRecording>;
+    deletedAt?: Date | null;
+    hasPlaudTranscript?: boolean;
+};
 
 function plaudRecording(
     index: number,
@@ -86,10 +99,30 @@ function plaudRecording(
     };
 }
 
-function pageOf(startIndex: number, count: number) {
-    return Array.from({ length: count }, (_, i) =>
-        plaudRecording(startIndex + i),
-    );
+function fixture(
+    index: number,
+    opts: { deletedAt?: Date | null; hasPlaudTranscript?: boolean } = {},
+): Fixture {
+    return {
+        rec: plaudRecording(index),
+        deletedAt: opts.deletedAt,
+        hasPlaudTranscript: opts.hasPlaudTranscript,
+    };
+}
+
+function findLocalId(clause: unknown): string | undefined {
+    const seen = new Set<unknown>();
+    const stack: unknown[] = [clause];
+    while (stack.length > 0) {
+        const cur = stack.pop();
+        if (cur == null || seen.has(cur)) continue;
+        if (typeof cur === "string" && cur.startsWith("local-")) return cur;
+        if (typeof cur !== "object") continue;
+        seen.add(cur);
+        if (Array.isArray(cur)) stack.push(...cur);
+        else stack.push(...Object.values(cur as Record<string, unknown>));
+    }
+    return undefined;
 }
 
 function readyDetail(fileId: string) {
@@ -111,50 +144,110 @@ function readyDetail(fileId: string) {
 
 function mockSelects(opts: {
     importPlaudContent: boolean;
-    recordingsInOrder: ReturnType<typeof plaudRecording>[];
+    fixtures: Fixture[];
 }) {
+    const byLocalId = new Map(
+        opts.fixtures.map((f) => [`local-${f.rec.id}`, f]),
+    );
     let recordingLookup = 0;
 
-    (db.select as Mock).mockImplementation(() => ({
-        from: (table: unknown) => {
-            const resolve = (rows: unknown[]) => ({
-                where: () => ({
-                    limit: () => Promise.resolve(rows),
-                }),
-            });
+    (db.select as Mock).mockImplementation(() => {
+        let table: unknown;
+        let joined = false;
+        let whereClause: unknown;
+        const chain = {
+            from: (next: unknown) => {
+                table = next;
+                return chain;
+            },
+            leftJoin: () => {
+                joined = true;
+                return chain;
+            },
+            where: (clause?: unknown) => {
+                whereClause = clause;
+                return chain;
+            },
+            limit: () => {
+                if (table === plaudConnections) {
+                    return Promise.resolve([
+                        {
+                            id: "conn-1",
+                            userId: USER_ID,
+                            bearerToken: "encrypted-token",
+                        },
+                    ]);
+                }
+                if (table === userSettings) {
+                    return Promise.resolve([
+                        { importPlaudContent: opts.importPlaudContent },
+                    ]);
+                }
+                if (table === users) {
+                    return Promise.resolve([{ email: "test@example.com" }]);
+                }
+                if (table === recordings) {
+                    if (joined) {
+                        const unseen = opts.fixtures
+                            .slice(recordingLookup)
+                            .find((f) => !f.deletedAt && !f.hasPlaudTranscript);
+                        return Promise.resolve(
+                            unseen ? [{ id: `local-${unseen.rec.id}` }] : [],
+                        );
+                    }
+                    const f = opts.fixtures[recordingLookup++];
+                    if (!f) return Promise.resolve([]);
+                    return Promise.resolve([
+                        {
+                            id: `local-${f.rec.id}`,
+                            plaudFileId: f.rec.id,
+                            plaudVersion: "1000",
+                            deletedAt: f.deletedAt ?? null,
+                        },
+                    ]);
+                }
+                if (table === transcriptions) {
+                    const localId = findLocalId(whereClause);
+                    const f = localId ? byLocalId.get(localId) : undefined;
+                    if (f?.hasPlaudTranscript) {
+                        return Promise.resolve([{ id: `tr-${f.rec.id}` }]);
+                    }
+                    return Promise.resolve([]);
+                }
+                if (table === aiEnhancements) {
+                    return Promise.resolve([]);
+                }
+                return Promise.resolve([]);
+            },
+        };
+        return chain;
+    });
+}
 
-            if (table === plaudConnections) {
-                return resolve([
-                    {
-                        id: "conn-1",
-                        userId: USER_ID,
-                        bearerToken: "encrypted-token",
-                    },
-                ]);
-            }
-            if (table === userSettings) {
-                return resolve([
-                    { importPlaudContent: opts.importPlaudContent },
-                ]);
-            }
-            if (table === users) {
-                return resolve([{ email: "test@example.com" }]);
-            }
-            if (table === recordings) {
-                const rec = opts.recordingsInOrder[recordingLookup++];
-                if (!rec) return resolve([]);
-                return resolve([
-                    {
-                        id: `local-${rec.id}`,
-                        plaudFileId: rec.id,
-                        plaudVersion: "1000",
-                        deletedAt: null,
-                    },
-                ]);
-            }
-            return resolve([]);
-        },
-    }));
+function mockPlaudPages(
+    pages: ReturnType<typeof plaudRecording>[][],
+    extras: {
+        getFileDetail?: Mock;
+        fetchContentLink?: Mock;
+    } = {},
+) {
+    const getRecordings = vi.fn(async (skip: number) => {
+        const pageIndex = skip / PAGE_SIZE;
+        return { data_file_list: pages[pageIndex] ?? [] };
+    });
+    const getFileDetail =
+        extras.getFileDetail ??
+        vi.fn(async (fileId: string) => readyDetail(fileId));
+    const fetchContentLink =
+        extras.fetchContentLink ??
+        vi.fn(async () => [{ speaker: 1, content: "hello from plaud" }]);
+    (createPlaudClient as Mock).mockResolvedValue({
+        getRecordings,
+        getFileDetail,
+        fetchContentLink,
+        downloadRecording: vi.fn(),
+    });
+    return { getRecordings, getFileDetail };
 }
 
 describe("Issue #274 — pagination content backfill", () => {
@@ -169,33 +262,24 @@ describe("Issue #274 — pagination content backfill", () => {
     });
 
     it("pages past two unchanged versions and imports a distinct older recording", async () => {
-        const page1 = pageOf(0, PAGE_SIZE);
-        const page2 = pageOf(PAGE_SIZE, PAGE_SIZE);
-        const older = plaudRecording(PAGE_SIZE * 2);
-        const page3 = [older];
-        const all = [...page1, ...page2, ...page3];
-
-        const getRecordings = vi.fn(async (skip: number) => {
-            if (skip === 0) return { data_file_list: page1 };
-            if (skip === PAGE_SIZE) return { data_file_list: page2 };
-            if (skip === PAGE_SIZE * 2) return { data_file_list: page3 };
-            return { data_file_list: [] };
-        });
-        const getFileDetail = vi.fn(async (fileId: string) =>
-            readyDetail(fileId),
+        const tombstone = fixture(0, { deletedAt: new Date("2024-02-01") });
+        const alreadyImported = fixture(1, { hasPlaudTranscript: true });
+        const page1Rest = Array.from({ length: PAGE_SIZE - 2 }, (_, i) =>
+            fixture(i + 2),
         );
-        const fetchContentLink = vi.fn(async () => [
-            { speaker: 1, content: "hello from plaud" },
+        const page1 = [tombstone, alreadyImported, ...page1Rest];
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i),
+        );
+        const older = fixture(PAGE_SIZE * 2);
+        const fixtures = [...page1, ...page2, older];
+
+        const { getRecordings, getFileDetail } = mockPlaudPages([
+            page1.map((f) => f.rec),
+            page2.map((f) => f.rec),
+            [older.rec],
         ]);
-
-        (createPlaudClient as Mock).mockResolvedValue({
-            getRecordings,
-            getFileDetail,
-            fetchContentLink,
-            downloadRecording: vi.fn(),
-        });
-
-        mockSelects({ importPlaudContent: true, recordingsInOrder: all });
+        mockSelects({ importPlaudContent: true, fixtures });
 
         const result = await syncRecordingsForUser(USER_ID);
 
@@ -208,42 +292,46 @@ describe("Issue #274 — pagination content backfill", () => {
             "edit_time",
             true,
         );
-        expect(getFileDetail).toHaveBeenCalledWith(older.id);
-        expect(getFileDetail.mock.calls.map((c) => c[0])).toEqual(
-            all.map((r) => r.id),
-        );
+
+        const fetched = getFileDetail.mock.calls.map((c) => c[0] as string);
+        expect(fetched).not.toContain(tombstone.rec.id);
+        expect(fetched).not.toContain(alreadyImported.rec.id);
+        expect(fetched).toContain(older.rec.id);
         expect(upsertTranscription).toHaveBeenCalledWith(
             expect.objectContaining({
                 userId: USER_ID,
-                recordingId: `local-${older.id}`,
+                recordingId: `local-${older.rec.id}`,
                 source: "plaud",
                 text: "Speaker 1: hello from plaud",
             }),
         );
-        expect(upsertTranscription).toHaveBeenCalledTimes(all.length);
+        expect(upsertTranscription).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                recordingId: `local-${tombstone.rec.id}`,
+            }),
+        );
+        expect(upsertTranscription).not.toHaveBeenCalledWith(
+            expect.objectContaining({
+                recordingId: `local-${alreadyImported.rec.id}`,
+            }),
+        );
     });
 
     it("still stops after two no-change pages when Plaud import is off", async () => {
-        const page1 = pageOf(0, PAGE_SIZE);
-        const page2 = pageOf(PAGE_SIZE, PAGE_SIZE);
-        const older = plaudRecording(PAGE_SIZE * 2);
-        const all = [...page1, ...page2, older];
-
-        const getRecordings = vi.fn(async (skip: number) => {
-            if (skip === 0) return { data_file_list: page1 };
-            if (skip === PAGE_SIZE) return { data_file_list: page2 };
-            if (skip === PAGE_SIZE * 2) return { data_file_list: [older] };
-            return { data_file_list: [] };
+        const page1 = Array.from({ length: PAGE_SIZE }, (_, i) => fixture(i));
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i),
+        );
+        const older = fixture(PAGE_SIZE * 2);
+        const { getRecordings, getFileDetail } = mockPlaudPages([
+            page1.map((f) => f.rec),
+            page2.map((f) => f.rec),
+            [older.rec],
+        ]);
+        mockSelects({
+            importPlaudContent: false,
+            fixtures: [...page1, ...page2, older],
         });
-        const getFileDetail = vi.fn();
-
-        (createPlaudClient as Mock).mockResolvedValue({
-            getRecordings,
-            getFileDetail,
-            downloadRecording: vi.fn(),
-        });
-
-        mockSelects({ importPlaudContent: false, recordingsInOrder: all });
 
         const result = await syncRecordingsForUser(USER_ID);
 
@@ -255,5 +343,71 @@ describe("Issue #274 — pagination content backfill", () => {
         ]);
         expect(getFileDetail).not.toHaveBeenCalled();
         expect(upsertTranscription).not.toHaveBeenCalled();
+    });
+
+    it("stops after two empty pages when every seen row is already imported", async () => {
+        const page1 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(i, { hasPlaudTranscript: true }),
+        );
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i, { hasPlaudTranscript: true }),
+        );
+        const older = fixture(PAGE_SIZE * 2, { hasPlaudTranscript: true });
+        const { getRecordings, getFileDetail } = mockPlaudPages([
+            page1.map((f) => f.rec),
+            page2.map((f) => f.rec),
+            [older.rec],
+        ]);
+        mockSelects({
+            importPlaudContent: true,
+            fixtures: [...page1, ...page2, older],
+        });
+
+        await syncRecordingsForUser(USER_ID);
+
+        expect(getRecordings.mock.calls.map((c) => c[0])).toEqual([
+            0,
+            PAGE_SIZE,
+        ]);
+        expect(getFileDetail).not.toHaveBeenCalled();
+        expect(upsertTranscription).not.toHaveBeenCalled();
+    });
+
+    it("keeps paging when recent pages are imported and an older row still needs content", async () => {
+        const page1 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(i, { hasPlaudTranscript: true }),
+        );
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i, { hasPlaudTranscript: true }),
+        );
+        const older = fixture(PAGE_SIZE * 2);
+        const { getRecordings, getFileDetail } = mockPlaudPages([
+            page1.map((f) => f.rec),
+            page2.map((f) => f.rec),
+            [older.rec],
+        ]);
+        mockSelects({
+            importPlaudContent: true,
+            fixtures: [...page1, ...page2, older],
+        });
+
+        await syncRecordingsForUser(USER_ID);
+
+        expect(getRecordings).toHaveBeenCalledWith(
+            PAGE_SIZE * 2,
+            PAGE_SIZE,
+            0,
+            "edit_time",
+            true,
+        );
+        expect(getFileDetail.mock.calls.map((c) => c[0])).toEqual([
+            older.rec.id,
+        ]);
+        expect(upsertTranscription).toHaveBeenCalledTimes(1);
+        expect(upsertTranscription).toHaveBeenCalledWith(
+            expect.objectContaining({
+                recordingId: `local-${older.rec.id}`,
+            }),
+        );
     });
 });
