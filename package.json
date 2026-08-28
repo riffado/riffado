@@ -90,7 +90,7 @@
         "@biomejs/biome": "^2.3.7",
         "@react-email/render": "^2.0.0",
         "@tailwindcss/postcss": "^4",
-        "@testing-library/react": "^16.3.3",
+        "@testing-library/react": "16.3.2",
         "@types/archiver": "^8.0.0",
         "@types/mdx": "^2.0.13",
         "@types/node": "^20",
