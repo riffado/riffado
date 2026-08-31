@@ -214,20 +214,26 @@ export function useTranscriptionSummary({
                 ) {
                     fetchGenerationRef.current += 1;
                     setSummaryData(data);
-                }
-                if (data.promptFallback) {
-                    toast.warning(
-                        "Selected summary prompt is no longer available -- used your default prompt instead.",
-                    );
-                } else {
-                    toast.success("Summary generated");
+                    if (data.promptFallback) {
+                        toast.warning(
+                            "Selected summary prompt is no longer available -- used your default prompt instead.",
+                        );
+                    } else {
+                        toast.success("Summary generated");
+                    }
                 }
             } else {
                 const error = await response.json().catch(() => ({}));
-                toast.error(error.error || "Summary generation failed");
+                if (
+                    shouldApplySummaryToView(recordingIdRef.current, targetId)
+                ) {
+                    toast.error(error.error || "Summary generation failed");
+                }
             }
         } catch {
-            toast.error("Failed to generate summary");
+            if (shouldApplySummaryToView(recordingIdRef.current, targetId)) {
+                toast.error("Failed to generate summary");
+            }
         } finally {
             setSummarizingIds((prev) => removeSummarizingId(prev, targetId));
         }

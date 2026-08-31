@@ -5,16 +5,18 @@
  *
  * Helper tests cover the id-keying predicates. Hook tests mount the real
  * `useTranscriptionSummary` with a mocked fetch so a wiring regression
- * (single boolean, missing apply guard, missing generation token) fails.
+ * (single boolean, missing apply guard, missing generation token,
+ * ungated POST toasts) fails.
  *
  * Covers: id change mid-flight, completion after switch, two recordings,
  * returning to A while A's job is still running, delete restore after
- * switch, GET-after-POST, A → B → A stale GET.
+ * switch, GET-after-POST, A → B → A stale GET, POST toasts after switch.
  */
 
 // @vitest-environment jsdom
 
 import { act, renderHook } from "@testing-library/react";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import {
@@ -39,6 +41,7 @@ type PendingRequest = {
     url: string;
     method: string;
     resolve: (value: Response) => void;
+    reject: (reason?: unknown) => void;
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -56,14 +59,17 @@ let pending: PendingRequest[] = [];
 
 beforeEach(() => {
     pending = [];
+    vi.mocked(toast.success).mockClear();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.warning).mockClear();
     vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         const method = (init?.method ?? "GET").toUpperCase();
         if (url.includes("/api/settings/user")) {
             return Promise.resolve(jsonResponse({}));
         }
-        return new Promise<Response>((resolve) => {
-            pending.push({ url, method, resolve });
+        return new Promise<Response>((resolve, reject) => {
+            pending.push({ url, method, resolve, reject });
         });
     });
 });
@@ -99,6 +105,32 @@ function renderSummary(recordingId: string, transcriptionText: string) {
             useTranscriptionSummary(props),
         { initialProps: { recordingId, transcriptionText } },
     );
+}
+
+function expectNoSummaryToasts() {
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+}
+
+async function summarizeOnAThenSwitchToB() {
+    const hook = renderSummary("rec-a", "text-a");
+    await flush();
+    takePending("GET", "rec-a").resolve(jsonResponse({}));
+    await flush();
+
+    let summarize!: Promise<void>;
+    act(() => {
+        summarize = hook.result.current.handleSummarize();
+    });
+    await flush();
+
+    hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+    await flush();
+    takePending("GET", "rec-b").resolve(jsonResponse({}));
+    await flush();
+
+    return { hook, summarize };
 }
 
 function createView(initialId: string) {
@@ -249,21 +281,7 @@ describe("useTranscriptionSummary (#283)", () => {
     });
 
     it("does not write A's completed POST into B", async () => {
-        const hook = renderSummary("rec-a", "text-a");
-        await flush();
-        takePending("GET", "rec-a").resolve(jsonResponse({}));
-        await flush();
-
-        let summarize!: Promise<void>;
-        act(() => {
-            summarize = hook.result.current.handleSummarize();
-        });
-        await flush();
-
-        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
-        await flush();
-        takePending("GET", "rec-b").resolve(jsonResponse({}));
-        await flush();
+        const { hook, summarize } = await summarizeOnAThenSwitchToB();
 
         takePending("POST", "rec-a").resolve(
             jsonResponse(summaryBody("from A")),
@@ -274,6 +292,47 @@ describe("useTranscriptionSummary (#283)", () => {
 
         expect(hook.result.current.summaryData).toBeNull();
         expect(hook.result.current.isSummarizing).toBe(false);
+        expectNoSummaryToasts();
+    });
+
+    it("does not toast A's POST HTTP error on B", async () => {
+        const { hook, summarize } = await summarizeOnAThenSwitchToB();
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse({ error: "nope" }, 500),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData).toBeNull();
+        expectNoSummaryToasts();
+    });
+
+    it("does not toast A's promptFallback warning on B", async () => {
+        const { hook, summarize } = await summarizeOnAThenSwitchToB();
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse({ ...summaryBody("from A"), promptFallback: true }),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData).toBeNull();
+        expectNoSummaryToasts();
+    });
+
+    it("does not toast A's POST network error on B", async () => {
+        const { hook, summarize } = await summarizeOnAThenSwitchToB();
+
+        takePending("POST", "rec-a").reject(new Error("network"));
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData).toBeNull();
+        expectNoSummaryToasts();
     });
 
     it("keeps A's spinner when returning to A while the POST is still running", async () => {
@@ -330,6 +389,7 @@ describe("useTranscriptionSummary (#283)", () => {
         });
         expect(hook.result.current.isSummarizing).toBe(true);
         expect(hook.result.current.summaryData).toBeNull();
+        expectNoSummaryToasts();
 
         takePending("POST", "rec-b").resolve(
             jsonResponse(summaryBody("from B")),
@@ -339,6 +399,9 @@ describe("useTranscriptionSummary (#283)", () => {
         });
         expect(hook.result.current.isSummarizing).toBe(false);
         expect(hook.result.current.summaryData?.summary).toBe("from B");
+        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.error).not.toHaveBeenCalled();
+        expect(toast.warning).not.toHaveBeenCalled();
     });
 
     it("does not restore A's failed delete onto B", async () => {
@@ -390,6 +453,9 @@ describe("useTranscriptionSummary (#283)", () => {
             await summarize;
         });
         expect(hook.result.current.summaryData?.summary).toBe("generated");
+        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.error).not.toHaveBeenCalled();
+        expect(toast.warning).not.toHaveBeenCalled();
 
         getA.resolve(jsonResponse(summaryBody("stale GET")));
         await flush();
