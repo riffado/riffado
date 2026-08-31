@@ -472,6 +472,7 @@ describe("useTranscriptionSummary (#283)", () => {
 
         expect(hook.result.current.summaryData).toBeNull();
         expect(hook.result.current.isSummarizing).toBe(false);
+        expectNoSummaryToasts();
     });
 
     it("does not let a pre-existing GET overwrite a completed POST", async () => {
@@ -673,5 +674,97 @@ describe("useTranscriptionSummary (#283)", () => {
             "from re-transcribe",
         );
         expectNoSummaryToasts();
+    });
+
+    it("does not toast A's delete success on B", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await flush();
+
+        let deleted!: Promise<void>;
+        act(() => {
+            deleted = hook.result.current.handleDeleteSummary();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        takePending("DELETE", "rec-a").resolve(jsonResponse({ ok: true }));
+        await act(async () => {
+            await deleted;
+        });
+
+        expectNoSummaryToasts();
+    });
+
+    it("toasts delete success when still on A", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await flush();
+
+        let deleted!: Promise<void>;
+        act(() => {
+            deleted = hook.result.current.handleDeleteSummary();
+        });
+        await flush();
+        takePending("DELETE", "rec-a").resolve(jsonResponse({ ok: true }));
+        await act(async () => {
+            await deleted;
+        });
+
+        expect(toast.success).toHaveBeenCalledWith("Summary deleted");
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it("ignores a second summarize while one is in flight", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let first!: Promise<void>;
+        let second!: Promise<void>;
+        act(() => {
+            first = hook.result.current.handleSummarize();
+            second = hook.result.current.handleSummarize();
+        });
+        await flush();
+        expect(
+            pending.filter(
+                (p) => p.method === "POST" && p.url.includes("/rec-a/"),
+            ),
+        ).toHaveLength(1);
+
+        act(() => {
+            void hook.result.current.handleSummarize();
+        });
+        await flush();
+        expect(
+            pending.filter(
+                (p) => p.method === "POST" && p.url.includes("/rec-a/"),
+            ),
+        ).toHaveLength(1);
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await act(async () => {
+            await first;
+            await second;
+        });
+
+        expect(hook.result.current.summaryData?.summary).toBe("from A");
+        expect(hook.result.current.isSummarizing).toBe(false);
+        expect(toast.success).toHaveBeenCalledTimes(1);
+        expect(toast.success).toHaveBeenCalledWith("Summary generated");
     });
 });

@@ -70,6 +70,7 @@ export function useTranscriptionSummary({
     const [summarizingIds, setSummarizingIds] = useState(
         () => new Set<string>(),
     );
+    const summarizingIdsRef = useRef(summarizingIds);
     const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPresetState] = useState("general");
@@ -206,6 +207,7 @@ export function useTranscriptionSummary({
 
     const handleSummarize = useCallback(async () => {
         if (!recordingId) return;
+        if (summarizingIdsRef.current.has(recordingId)) return;
         const targetId = recordingId;
         const postGeneration = contentGenerationFor(
             contentGenByIdRef.current,
@@ -220,7 +222,11 @@ export function useTranscriptionSummary({
             );
         getAbortRef.current?.abort();
         fetchGenerationRef.current += 1;
-        setSummarizingIds((prev) => addSummarizingId(prev, targetId));
+        summarizingIdsRef.current = addSummarizingId(
+            summarizingIdsRef.current,
+            targetId,
+        );
+        setSummarizingIds(summarizingIdsRef.current);
         try {
             const response = await fetch(
                 `/api/recordings/${targetId}/summary`,
@@ -254,7 +260,11 @@ export function useTranscriptionSummary({
                 toast.error("Failed to generate summary");
             }
         } finally {
-            setSummarizingIds((prev) => removeSummarizingId(prev, targetId));
+            summarizingIdsRef.current = removeSummarizingId(
+                summarizingIdsRef.current,
+                targetId,
+            );
+            setSummarizingIds(summarizingIdsRef.current);
         }
     }, [recordingId, summaryPreset]);
 
@@ -265,6 +275,8 @@ export function useTranscriptionSummary({
         // only comes back if the server rejects the request.
         const previous = summaryData;
         setSummaryData(null);
+        const deleteIsCurrent = () =>
+            shouldApplySummaryToView(recordingIdRef.current, targetId);
 
         try {
             const response = await fetch(
@@ -272,20 +284,20 @@ export function useTranscriptionSummary({
                 { method: "DELETE" },
             );
             if (response.ok) {
-                toast.success("Summary deleted");
-            } else {
-                if (
-                    shouldApplySummaryToView(recordingIdRef.current, targetId)
-                ) {
-                    setSummaryData(previous);
+                if (deleteIsCurrent()) {
+                    toast.success("Summary deleted");
                 }
-                toast.error("Failed to delete summary");
+            } else {
+                if (deleteIsCurrent()) {
+                    setSummaryData(previous);
+                    toast.error("Failed to delete summary");
+                }
             }
         } catch {
-            if (shouldApplySummaryToView(recordingIdRef.current, targetId)) {
+            if (deleteIsCurrent()) {
                 setSummaryData(previous);
+                toast.error("Failed to delete summary");
             }
-            toast.error("Failed to delete summary");
         }
     }, [recordingId, summaryData]);
 
