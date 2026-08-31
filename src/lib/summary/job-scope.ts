@@ -38,6 +38,17 @@ export function bumpContentGeneration(
     gens.set(recordingId, contentGenerationFor(gens, recordingId) + 1);
 }
 
+export function rememberTranscriptionText(
+    texts: Map<string, string | null | undefined>,
+    recordingId: string,
+    text: string | null | undefined,
+): boolean {
+    const seen = texts.has(recordingId);
+    const prev = texts.get(recordingId);
+    texts.set(recordingId, text);
+    return seen && prev !== text;
+}
+
 export function addSummarizingId(
     prev: ReadonlySet<string>,
     recordingId: string,

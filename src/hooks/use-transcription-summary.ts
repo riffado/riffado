@@ -12,6 +12,7 @@ import {
     bumpContentGeneration,
     contentGenerationFor,
     isSummarizingForView,
+    rememberTranscriptionText,
     removeSummarizingId,
     shouldApplyFetchedSummary,
     shouldApplySummaryToView,
@@ -128,9 +129,11 @@ export function useTranscriptionSummary({
     const recordingIdRef = useRef(recordingId);
     const fetchGenerationRef = useRef(0);
     const contentGenByIdRef = useRef(new Map<string, number>());
+    const lastTextByIdRef = useRef(
+        new Map<string, string | null | undefined>(),
+    );
     const getAbortRef = useRef<AbortController | null>(null);
-    const recordingChanged = recordingId !== recordingIdRef.current;
-    if (recordingChanged) {
+    if (recordingId !== recordingIdRef.current) {
         recordingIdRef.current = recordingId;
         setSummaryData(null);
     }
@@ -139,17 +142,22 @@ export function useTranscriptionSummary({
     // the cached summary so the next fetch lands fresh. We compare
     // through a ref because the dashboard variant receives the text
     // via prop (parent-owned), and reading prop-vs-state isn't enough
-    // to spot a stale summary. Same-recording text changes also bump
-    // that id's content generation so an in-flight POST for the old
-    // text cannot apply.
+    // to spot a stale summary.
     const transcriptionTextRef = useRef(transcriptionText);
     if (transcriptionText !== transcriptionTextRef.current) {
         transcriptionTextRef.current = transcriptionText;
-        if (!recordingChanged && recordingId) {
-            bumpContentGeneration(contentGenByIdRef.current, recordingId);
-        }
         setSummaryFetchKey((k) => k + 1);
         setSummaryData(null);
+    }
+    if (
+        recordingId &&
+        rememberTranscriptionText(
+            lastTextByIdRef.current,
+            recordingId,
+            transcriptionText,
+        )
+    ) {
+        bumpContentGeneration(contentGenByIdRef.current, recordingId);
     }
 
     // Fetch when recording id changes or the re-fetch key bumps.

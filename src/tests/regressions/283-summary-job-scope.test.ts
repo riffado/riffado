@@ -11,7 +11,8 @@
  * Covers: id change mid-flight, completion after switch, two recordings,
  * returning to A while A's job is still running, delete restore after
  * switch, GET-after-POST, A → B → A stale GET, POST toasts after switch,
- * stale POST after transcription change or refetch.
+ * stale POST after transcription change, refetch, or off-screen
+ * re-transcribe.
  */
 
 // @vitest-environment jsdom
@@ -25,6 +26,7 @@ import {
     bumpContentGeneration,
     contentGenerationFor,
     isSummarizingForView,
+    rememberTranscriptionText,
     removeSummarizingId,
     shouldApplyFetchedSummary,
     shouldApplySummaryToView,
@@ -272,6 +274,16 @@ describe("summary job-scope helpers (#283)", () => {
                 postGen,
             ),
         ).toBe(false);
+    });
+
+    it("detects a recording's transcription change after visiting another id", () => {
+        const texts = new Map<string, string | null | undefined>();
+        expect(rememberTranscriptionText(texts, "rec-a", "text-a")).toBe(false);
+        expect(rememberTranscriptionText(texts, "rec-b", "text-b")).toBe(false);
+        expect(rememberTranscriptionText(texts, "rec-a", "text-a")).toBe(false);
+        expect(rememberTranscriptionText(texts, "rec-a", "text-a-v2")).toBe(
+            true,
+        );
     });
 });
 
@@ -618,5 +630,48 @@ describe("useTranscriptionSummary (#283)", () => {
         );
         await flush();
         expect(hook.result.current.summaryData?.summary).toBe("from A");
+    });
+
+    it("does not let A's POST overwrite a GET after off-screen re-transcribe", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        hook.rerender({
+            recordingId: "rec-a",
+            transcriptionText: "text-a-v2",
+        });
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from re-transcribe")),
+        );
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe(
+            "from re-transcribe",
+        );
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from old text")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData?.summary).toBe(
+            "from re-transcribe",
+        );
+        expectNoSummaryToasts();
     });
 });
