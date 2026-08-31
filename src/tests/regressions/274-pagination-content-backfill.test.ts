@@ -65,7 +65,10 @@ import {
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { resetAutoTranscribeStateForTests } from "@/lib/sync/auto-transcribe-state";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
-import { upsertTranscription } from "@/lib/transcription/persist";
+import {
+    upsertEnhancement,
+    upsertTranscription,
+} from "@/lib/transcription/persist";
 
 const USER_ID = "user-274";
 const PAGE_SIZE = 50;
@@ -74,6 +77,7 @@ type Fixture = {
     rec: ReturnType<typeof plaudRecording>;
     deletedAt?: Date | null;
     hasPlaudTranscript?: boolean;
+    hasSummary?: boolean;
 };
 
 function plaudRecording(
@@ -101,12 +105,18 @@ function plaudRecording(
 
 function fixture(
     index: number,
-    opts: { deletedAt?: Date | null; hasPlaudTranscript?: boolean } = {},
+    opts: {
+        deletedAt?: Date | null;
+        hasPlaudTranscript?: boolean;
+        hasSummary?: boolean;
+        is_summary?: boolean;
+    } = {},
 ): Fixture {
     return {
-        rec: plaudRecording(index),
+        rec: plaudRecording(index, { is_summary: opts.is_summary }),
         deletedAt: opts.deletedAt,
         hasPlaudTranscript: opts.hasPlaudTranscript,
+        hasSummary: opts.hasSummary,
     };
 }
 
@@ -125,19 +135,38 @@ function findLocalId(clause: unknown): string | undefined {
     return undefined;
 }
 
-function readyDetail(fileId: string) {
+function readyDetail(fileId: string, opts: { summary?: boolean } = {}) {
+    const content_list = [
+        {
+            data_id: `source_transaction:${fileId}`,
+            data_type: "transaction",
+            task_status: 1,
+            data_link: `https://s3.example/${fileId}.json`,
+        },
+    ];
+    const pre_download_content_list: {
+        data_id: string;
+        data_content: string;
+    }[] = [];
+    if (opts.summary) {
+        const dataId = `auto_sum:${fileId}`;
+        content_list.push({
+            data_id: dataId,
+            data_type: "auto_sum_note",
+            task_status: 1,
+            data_link: `https://s3.example/${fileId}-sum.json`,
+        });
+        pre_download_content_list.push({
+            data_id: dataId,
+            data_content: JSON.stringify({ summary: "imported summary" }),
+        });
+    }
     return {
         status: 0,
         data: {
             file_id: fileId,
-            content_list: [
-                {
-                    data_id: `source_transaction:${fileId}`,
-                    data_type: "transaction",
-                    task_status: 1,
-                    data_link: `https://s3.example/${fileId}.json`,
-                },
-            ],
+            content_list,
+            pre_download_content_list,
         },
     };
 }
@@ -190,7 +219,11 @@ function mockSelects(opts: {
                     if (joined) {
                         const unseen = opts.fixtures
                             .slice(recordingLookup)
-                            .find((f) => !f.deletedAt && !f.hasPlaudTranscript);
+                            .find(
+                                (f) =>
+                                    !f.deletedAt &&
+                                    (!f.hasPlaudTranscript || !f.hasSummary),
+                            );
                         return Promise.resolve(
                             unseen ? [{ id: `local-${unseen.rec.id}` }] : [],
                         );
@@ -215,6 +248,11 @@ function mockSelects(opts: {
                     return Promise.resolve([]);
                 }
                 if (table === aiEnhancements) {
+                    const localId = findLocalId(whereClause);
+                    const f = localId ? byLocalId.get(localId) : undefined;
+                    if (f?.hasSummary) {
+                        return Promise.resolve([{ id: `sum-${f.rec.id}` }]);
+                    }
                     return Promise.resolve([]);
                 }
                 return Promise.resolve([]);
@@ -346,13 +384,17 @@ describe("Issue #274 — pagination content backfill", () => {
     });
 
     it("stops after two empty pages when every seen row is already imported", async () => {
+        const imported = {
+            hasPlaudTranscript: true,
+            hasSummary: true,
+        };
         const page1 = Array.from({ length: PAGE_SIZE }, (_, i) =>
-            fixture(i, { hasPlaudTranscript: true }),
+            fixture(i, imported),
         );
         const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
-            fixture(PAGE_SIZE + i, { hasPlaudTranscript: true }),
+            fixture(PAGE_SIZE + i, imported),
         );
-        const older = fixture(PAGE_SIZE * 2, { hasPlaudTranscript: true });
+        const older = fixture(PAGE_SIZE * 2, imported);
         const { getRecordings, getFileDetail } = mockPlaudPages([
             page1.map((f) => f.rec),
             page2.map((f) => f.rec),
@@ -407,6 +449,58 @@ describe("Issue #274 — pagination content backfill", () => {
         expect(upsertTranscription).toHaveBeenCalledWith(
             expect.objectContaining({
                 recordingId: `local-${older.rec.id}`,
+            }),
+        );
+    });
+
+    it("keeps paging when an older row has a Plaud transcript but still needs its summary", async () => {
+        const imported = {
+            hasPlaudTranscript: true,
+            hasSummary: true,
+        };
+        const page1 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(i, imported),
+        );
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i, imported),
+        );
+        const older = fixture(PAGE_SIZE * 2, {
+            hasPlaudTranscript: true,
+            is_summary: true,
+        });
+        const { getRecordings, getFileDetail } = mockPlaudPages(
+            [page1.map((f) => f.rec), page2.map((f) => f.rec), [older.rec]],
+            {
+                getFileDetail: vi.fn(async (fileId: string) =>
+                    readyDetail(fileId, { summary: true }),
+                ),
+            },
+        );
+        mockSelects({
+            importPlaudContent: true,
+            fixtures: [...page1, ...page2, older],
+        });
+
+        await syncRecordingsForUser(USER_ID);
+
+        expect(getRecordings).toHaveBeenCalledWith(
+            PAGE_SIZE * 2,
+            PAGE_SIZE,
+            0,
+            "edit_time",
+            true,
+        );
+        expect(getFileDetail.mock.calls.map((c) => c[0])).toEqual([
+            older.rec.id,
+        ]);
+        expect(upsertTranscription).not.toHaveBeenCalled();
+        expect(upsertEnhancement).toHaveBeenCalledTimes(1);
+        expect(upsertEnhancement).toHaveBeenCalledWith(
+            expect.objectContaining({
+                userId: USER_ID,
+                recordingId: `local-${older.rec.id}`,
+                source: "plaud",
+                summary: "imported summary",
             }),
         );
     });

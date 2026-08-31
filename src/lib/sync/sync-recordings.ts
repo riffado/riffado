@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, notInArray } from "drizzle-orm";
+import { and, eq, isNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -229,14 +229,14 @@ async function loadPlaudContentGaps(
     return { needsTranscript, needsSummary, hasPlaudTranscript };
 }
 
-async function hasUnseenPlaudTranscriptGaps(
+async function hasUnseenPlaudContentGaps(
     userId: string,
     seenRecordingIds: Set<string>,
 ): Promise<boolean> {
     const conditions = [
         eq(recordings.userId, userId),
         isNull(recordings.deletedAt),
-        isNull(transcriptions.id),
+        or(isNull(transcriptions.id), isNull(aiEnhancements.id)),
     ];
     if (seenRecordingIds.size > 0) {
         conditions.push(notInArray(recordings.id, [...seenRecordingIds]));
@@ -251,6 +251,13 @@ async function hasUnseenPlaudTranscriptGaps(
                 eq(transcriptions.recordingId, recordings.id),
                 eq(transcriptions.userId, userId),
                 eq(transcriptions.source, "plaud"),
+            ),
+        )
+        .leftJoin(
+            aiEnhancements,
+            and(
+                eq(aiEnhancements.recordingId, recordings.id),
+                eq(aiEnhancements.userId, userId),
             ),
         )
         .where(and(...conditions))
@@ -754,7 +761,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 if (consecutiveEmptyPages >= 2) {
                     if (context.importPlaudContent) {
                         if (
-                            !(await hasUnseenPlaudTranscriptGaps(
+                            !(await hasUnseenPlaudContentGaps(
                                 userId,
                                 seenRecordingIds,
                             ))
