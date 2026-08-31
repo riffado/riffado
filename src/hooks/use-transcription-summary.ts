@@ -9,6 +9,8 @@ import {
 } from "@/lib/ai/summary-presets";
 import {
     addSummarizingId,
+    bumpContentGeneration,
+    contentGenerationFor,
     isSummarizingForView,
     removeSummarizingId,
     shouldApplyFetchedSummary,
@@ -124,11 +126,11 @@ export function useTranscriptionSummary({
     }, []);
 
     const recordingIdRef = useRef(recordingId);
-    const summarizingIdsRef = useRef(summarizingIds);
-    summarizingIdsRef.current = summarizingIds;
     const fetchGenerationRef = useRef(0);
+    const contentGenByIdRef = useRef(new Map<string, number>());
     const getAbortRef = useRef<AbortController | null>(null);
-    if (recordingId !== recordingIdRef.current) {
+    const recordingChanged = recordingId !== recordingIdRef.current;
+    if (recordingChanged) {
         recordingIdRef.current = recordingId;
         setSummaryData(null);
     }
@@ -137,10 +139,15 @@ export function useTranscriptionSummary({
     // the cached summary so the next fetch lands fresh. We compare
     // through a ref because the dashboard variant receives the text
     // via prop (parent-owned), and reading prop-vs-state isn't enough
-    // to spot a stale summary.
+    // to spot a stale summary. Same-recording text changes also bump
+    // that id's content generation so an in-flight POST for the old
+    // text cannot apply.
     const transcriptionTextRef = useRef(transcriptionText);
     if (transcriptionText !== transcriptionTextRef.current) {
         transcriptionTextRef.current = transcriptionText;
+        if (!recordingChanged && recordingId) {
+            bumpContentGeneration(contentGenByIdRef.current, recordingId);
+        }
         setSummaryFetchKey((k) => k + 1);
         setSummaryData(null);
     }
@@ -174,9 +181,6 @@ export function useTranscriptionSummary({
                 ) {
                     return;
                 }
-                if (summarizingIdsRef.current.has(requestedId)) {
-                    return;
-                }
                 if (data.summary) {
                     setSummaryData(data);
                 } else {
@@ -195,6 +199,17 @@ export function useTranscriptionSummary({
     const handleSummarize = useCallback(async () => {
         if (!recordingId) return;
         const targetId = recordingId;
+        const postGeneration = contentGenerationFor(
+            contentGenByIdRef.current,
+            targetId,
+        );
+        const postIsCurrent = () =>
+            shouldApplyFetchedSummary(
+                recordingIdRef.current,
+                targetId,
+                contentGenerationFor(contentGenByIdRef.current, targetId),
+                postGeneration,
+            );
         getAbortRef.current?.abort();
         fetchGenerationRef.current += 1;
         setSummarizingIds((prev) => addSummarizingId(prev, targetId));
@@ -209,9 +224,7 @@ export function useTranscriptionSummary({
             );
             if (response.ok) {
                 const data = (await response.json()) as SummaryData;
-                if (
-                    shouldApplySummaryToView(recordingIdRef.current, targetId)
-                ) {
+                if (postIsCurrent()) {
                     fetchGenerationRef.current += 1;
                     setSummaryData(data);
                     if (data.promptFallback) {
@@ -224,14 +237,12 @@ export function useTranscriptionSummary({
                 }
             } else {
                 const error = await response.json().catch(() => ({}));
-                if (
-                    shouldApplySummaryToView(recordingIdRef.current, targetId)
-                ) {
+                if (postIsCurrent()) {
                     toast.error(error.error || "Summary generation failed");
                 }
             }
         } catch {
-            if (shouldApplySummaryToView(recordingIdRef.current, targetId)) {
+            if (postIsCurrent()) {
                 toast.error("Failed to generate summary");
             }
         } finally {
@@ -276,6 +287,10 @@ export function useTranscriptionSummary({
      * key forces a GET without changing recordingId.
      */
     const refetchSummary = useCallback(() => {
+        const id = recordingIdRef.current;
+        if (id) {
+            bumpContentGeneration(contentGenByIdRef.current, id);
+        }
         setSummaryData(null);
         setSummaryFetchKey((k) => k + 1);
     }, []);

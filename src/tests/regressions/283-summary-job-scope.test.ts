@@ -6,11 +6,12 @@
  * Helper tests cover the id-keying predicates. Hook tests mount the real
  * `useTranscriptionSummary` with a mocked fetch so a wiring regression
  * (single boolean, missing apply guard, missing generation token,
- * ungated POST toasts) fails.
+ * ungated POST toasts, stale POST after re-transcribe) fails.
  *
  * Covers: id change mid-flight, completion after switch, two recordings,
  * returning to A while A's job is still running, delete restore after
- * switch, GET-after-POST, A → B → A stale GET, POST toasts after switch.
+ * switch, GET-after-POST, A → B → A stale GET, POST toasts after switch,
+ * stale POST after transcription change or refetch.
  */
 
 // @vitest-environment jsdom
@@ -21,6 +22,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import {
     addSummarizingId,
+    bumpContentGeneration,
+    contentGenerationFor,
     isSummarizingForView,
     removeSummarizingId,
     shouldApplyFetchedSummary,
@@ -245,6 +248,30 @@ describe("summary job-scope helpers (#283)", () => {
         expect(shouldApplyFetchedSummary("rec-a", "rec-a", 3, 1)).toBe(false);
         expect(shouldApplyFetchedSummary("rec-a", "rec-a", 3, 3)).toBe(true);
         expect(shouldApplyFetchedSummary("rec-b", "rec-a", 3, 3)).toBe(false);
+    });
+
+    it("rejects a POST after that recording's content generation moved", () => {
+        const gens = new Map<string, number>();
+        const postGen = contentGenerationFor(gens, "rec-a");
+        bumpContentGeneration(gens, "rec-b");
+        expect(
+            shouldApplyFetchedSummary(
+                "rec-a",
+                "rec-a",
+                contentGenerationFor(gens, "rec-a"),
+                postGen,
+            ),
+        ).toBe(true);
+
+        bumpContentGeneration(gens, "rec-a");
+        expect(
+            shouldApplyFetchedSummary(
+                "rec-a",
+                "rec-a",
+                contentGenerationFor(gens, "rec-a"),
+                postGen,
+            ),
+        ).toBe(false);
     });
 });
 
@@ -483,5 +510,113 @@ describe("useTranscriptionSummary (#283)", () => {
         firstA.resolve(jsonResponse(summaryBody("older A")));
         await flush();
         expect(hook.result.current.summaryData?.summary).toBe("newer A");
+    });
+
+    it("does not let a stale POST overwrite a GET after transcription changes", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({
+            recordingId: "rec-a",
+            transcriptionText: "text-a-v2",
+        });
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from re-transcribe")),
+        );
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe(
+            "from re-transcribe",
+        );
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from old text")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData?.summary).toBe(
+            "from re-transcribe",
+        );
+        expectNoSummaryToasts();
+    });
+
+    it("does not let a stale POST overwrite a GET after refetchSummary", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        act(() => {
+            hook.result.current.refetchSummary();
+        });
+        await flush();
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("from refetch")),
+        );
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("from refetch");
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from old text")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+
+        expect(hook.result.current.summaryData?.summary).toBe("from refetch");
+        expectNoSummaryToasts();
+    });
+
+    it("applies A's POST after returning to A without a content change", async () => {
+        const hook = renderSummary("rec-a", "text-a");
+        await flush();
+        takePending("GET", "rec-a").resolve(jsonResponse({}));
+        await flush();
+
+        let summarize!: Promise<void>;
+        act(() => {
+            summarize = hook.result.current.handleSummarize();
+        });
+        await flush();
+
+        hook.rerender({ recordingId: "rec-b", transcriptionText: "text-b" });
+        await flush();
+        takePending("GET", "rec-b").resolve(jsonResponse({}));
+        await flush();
+
+        hook.rerender({ recordingId: "rec-a", transcriptionText: "text-a" });
+        await flush();
+        expect(hook.result.current.isSummarizing).toBe(true);
+
+        takePending("POST", "rec-a").resolve(
+            jsonResponse(summaryBody("from A")),
+        );
+        await act(async () => {
+            await summarize;
+        });
+        expect(hook.result.current.summaryData?.summary).toBe("from A");
+        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+
+        takePending("GET", "rec-a").resolve(
+            jsonResponse(summaryBody("stale GET after return")),
+        );
+        await flush();
+        expect(hook.result.current.summaryData?.summary).toBe("from A");
     });
 });

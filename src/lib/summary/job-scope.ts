@@ -24,6 +24,20 @@ export function shouldApplyFetchedSummary(
     );
 }
 
+export function contentGenerationFor(
+    gens: ReadonlyMap<string, number>,
+    recordingId: string,
+): number {
+    return gens.get(recordingId) ?? 0;
+}
+
+export function bumpContentGeneration(
+    gens: Map<string, number>,
+    recordingId: string,
+): void {
+    gens.set(recordingId, contentGenerationFor(gens, recordingId) + 1);
+}
+
 export function addSummarizingId(
     prev: ReadonlySet<string>,
     recordingId: string,
