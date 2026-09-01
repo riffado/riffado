@@ -236,6 +236,7 @@ async function hasUnseenPlaudContentGaps(
     const conditions = [
         eq(recordings.userId, userId),
         isNull(recordings.deletedAt),
+        ne(recordings.deviceSn, "local"),
         or(isNull(transcriptions.id), isNull(aiEnhancements.id)),
     ];
     if (seenRecordingIds.size > 0) {

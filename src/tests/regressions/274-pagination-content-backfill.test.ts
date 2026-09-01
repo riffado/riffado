@@ -78,6 +78,7 @@ type Fixture = {
     deletedAt?: Date | null;
     hasPlaudTranscript?: boolean;
     hasSummary?: boolean;
+    deviceSn?: string;
 };
 
 function plaudRecording(
@@ -110,6 +111,7 @@ function fixture(
         hasPlaudTranscript?: boolean;
         hasSummary?: boolean;
         is_summary?: boolean;
+        deviceSn?: string;
     } = {},
 ): Fixture {
     return {
@@ -117,22 +119,35 @@ function fixture(
         deletedAt: opts.deletedAt,
         hasPlaudTranscript: opts.hasPlaudTranscript,
         hasSummary: opts.hasSummary,
+        deviceSn: opts.deviceSn,
     };
 }
 
-function findLocalId(clause: unknown): string | undefined {
+function walkStrings(clause: unknown): string[] {
+    const out: string[] = [];
     const seen = new Set<unknown>();
     const stack: unknown[] = [clause];
     while (stack.length > 0) {
         const cur = stack.pop();
         if (cur == null || seen.has(cur)) continue;
-        if (typeof cur === "string" && cur.startsWith("local-")) return cur;
+        if (typeof cur === "string") {
+            out.push(cur);
+            continue;
+        }
         if (typeof cur !== "object") continue;
         seen.add(cur);
         if (Array.isArray(cur)) stack.push(...cur);
         else stack.push(...Object.values(cur as Record<string, unknown>));
     }
-    return undefined;
+    return out;
+}
+
+function collectLocalIds(clause: unknown): Set<string> {
+    return new Set(walkStrings(clause).filter((s) => s.startsWith("local-")));
+}
+
+function findLocalId(clause: unknown): string | undefined {
+    return walkStrings(clause).find((s) => s.startsWith("local-"));
 }
 
 function readyDetail(fileId: string, opts: { summary?: boolean } = {}) {
@@ -178,6 +193,7 @@ function mockSelects(opts: {
     const byLocalId = new Map(
         opts.fixtures.map((f) => [`local-${f.rec.id}`, f]),
     );
+    const plaudFixtures = opts.fixtures.filter((f) => f.deviceSn !== "local");
     let recordingLookup = 0;
 
     (db.select as Mock).mockImplementation(() => {
@@ -217,18 +233,22 @@ function mockSelects(opts: {
                 }
                 if (table === recordings) {
                     if (joined) {
-                        const unseen = opts.fixtures
-                            .slice(recordingLookup)
-                            .find(
-                                (f) =>
-                                    !f.deletedAt &&
-                                    (!f.hasPlaudTranscript || !f.hasSummary),
-                            );
+                        const seenIds = collectLocalIds(whereClause);
+                        const excludeLocalUploads =
+                            walkStrings(whereClause).includes("local");
+                        const unseen = opts.fixtures.find(
+                            (f) =>
+                                (!excludeLocalUploads ||
+                                    f.deviceSn !== "local") &&
+                                !f.deletedAt &&
+                                (!f.hasPlaudTranscript || !f.hasSummary) &&
+                                !seenIds.has(`local-${f.rec.id}`),
+                        );
                         return Promise.resolve(
                             unseen ? [{ id: `local-${unseen.rec.id}` }] : [],
                         );
                     }
-                    const f = opts.fixtures[recordingLookup++];
+                    const f = plaudFixtures[recordingLookup++];
                     if (!f) return Promise.resolve([]);
                     return Promise.resolve([
                         {
@@ -503,5 +523,38 @@ describe("Issue #274 — pagination content backfill", () => {
                 summary: "imported summary",
             }),
         );
+    });
+
+    it("stops after two empty pages when only a local upload still has no content", async () => {
+        const imported = {
+            hasPlaudTranscript: true,
+            hasSummary: true,
+        };
+        const page1 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(i, imported),
+        );
+        const page2 = Array.from({ length: PAGE_SIZE }, (_, i) =>
+            fixture(PAGE_SIZE + i, imported),
+        );
+        const older = fixture(PAGE_SIZE * 2, imported);
+        const localUpload = fixture(9999, { deviceSn: "local" });
+        const { getRecordings, getFileDetail } = mockPlaudPages([
+            page1.map((f) => f.rec),
+            page2.map((f) => f.rec),
+            [older.rec],
+        ]);
+        mockSelects({
+            importPlaudContent: true,
+            fixtures: [...page1, ...page2, older, localUpload],
+        });
+
+        await syncRecordingsForUser(USER_ID);
+
+        expect(getRecordings.mock.calls.map((c) => c[0])).toEqual([
+            0,
+            PAGE_SIZE,
+        ]);
+        expect(getFileDetail).not.toHaveBeenCalled();
+        expect(upsertTranscription).not.toHaveBeenCalled();
     });
 });
