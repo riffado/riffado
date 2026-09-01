@@ -229,7 +229,30 @@ export interface TranscribeResult {
     detectedLanguage?: string | null;
 }
 
+// Per-recording in-flight dedup within one process. Force and non-force
+// are partitioned so Retry cannot inherit an auto-transcribe skip.
+const inFlightTranscriptions = new Map<string, Promise<TranscribeResult>>();
+
 export async function transcribeRecording(
+    userId: string,
+    recordingId: string,
+    opts: TranscribeOptions = {},
+): Promise<TranscribeResult> {
+    const key = `${userId}:${recordingId}:${opts.force ? "force" : "auto"}`;
+    const inFlight = inFlightTranscriptions.get(key);
+    if (inFlight) {
+        return inFlight;
+    }
+    const work = transcribeRecordingInner(userId, recordingId, opts);
+    inFlightTranscriptions.set(key, work);
+    try {
+        return await work;
+    } finally {
+        inFlightTranscriptions.delete(key);
+    }
+}
+
+async function transcribeRecordingInner(
     userId: string,
     recordingId: string,
     opts: TranscribeOptions = {},
