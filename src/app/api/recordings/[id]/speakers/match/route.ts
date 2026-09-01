@@ -11,6 +11,10 @@ import {
     SPEAKER_MATCH_THRESHOLD,
 } from "@/lib/speakers/embeddings";
 import {
+    classifyConflictSpeaker,
+    isUniqueViolation,
+} from "@/lib/speakers/match-write";
+import {
     assertRecordingOwned,
     MAX_SPEAKERS_PER_MATCH,
     parseSpeakerLabel,
@@ -18,6 +22,7 @@ import {
 } from "@/lib/speakers/request";
 import {
     type SpeakerName,
+    type SpeakerNameRow,
     serializeSpeakerName,
     type VoiceProfileRow,
 } from "@/types/speaker";
@@ -207,16 +212,93 @@ export const POST = apiHandler<IdContext>(async (request, context) => {
                 continue;
             }
 
-            const [row] = await tx
-                .insert(speakerNames)
-                .values({
-                    ...values,
-                    userId: session.user.id,
-                    recordingId: id,
-                    speakerLabel,
+            let inserted: SpeakerNameRow[] | undefined;
+            try {
+                inserted = await tx.transaction(async (inner) => {
+                    return inner
+                        .insert(speakerNames)
+                        .values({
+                            ...values,
+                            userId: session.user.id,
+                            recordingId: id,
+                            speakerLabel,
+                        })
+                        .onConflictDoUpdate({
+                            target: [
+                                speakerNames.recordingId,
+                                speakerNames.speakerLabel,
+                            ],
+                            set: values,
+                            setWhere: ne(speakerNames.source, "manual"),
+                        })
+                        .returning();
+                });
+            } catch (error) {
+                if (!isUniqueViolation(error)) throw error;
+            }
+
+            const [row] = inserted ?? [];
+            if (row) {
+                matched.push(serializeSpeakerName(row));
+                continue;
+            }
+
+            const [created] = await tx
+                .select({
+                    id: speakerNames.id,
+                    source: speakerNames.source,
+                    displayName: speakerNames.displayName,
                 })
-                .returning();
-            matched.push(serializeSpeakerName(row));
+                .from(speakerNames)
+                .where(
+                    and(
+                        eq(speakerNames.recordingId, id),
+                        eq(speakerNames.userId, session.user.id),
+                        eq(speakerNames.speakerLabel, speakerLabel),
+                    ),
+                )
+                .for("update")
+                .limit(1);
+
+            const conflict = classifyConflictSpeaker(created);
+            switch (conflict.action) {
+                case "skip":
+                    skipped.push({
+                        speakerLabel,
+                        reason: "manual",
+                        displayName: conflict.displayName,
+                    });
+                    break;
+                case "update": {
+                    const [updated] = await tx
+                        .update(speakerNames)
+                        .set(values)
+                        .where(
+                            and(
+                                eq(speakerNames.id, conflict.id),
+                                eq(speakerNames.userId, session.user.id),
+                                ne(speakerNames.source, "manual"),
+                            ),
+                        )
+                        .returning();
+                    if (updated) {
+                        matched.push(serializeSpeakerName(updated));
+                    } else {
+                        skipped.push({
+                            speakerLabel,
+                            reason: "manual",
+                            displayName: conflict.displayName,
+                        });
+                    }
+                    break;
+                }
+                case "none":
+                    break;
+                default: {
+                    const _exhaustive: never = conflict;
+                    void _exhaustive;
+                }
+            }
         }
 
         return { matched, unmatched, skipped };

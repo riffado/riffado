@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    nextSpeakerEditGeneration,
+    rollbackSpeakerName,
+    shouldApplySpeakerEdit,
+} from "@/lib/speakers/rename-state";
 import {
     indexSpeakerNames,
     type SpeakerName,
@@ -22,9 +27,15 @@ import {
  */
 export function useSpeakerNames(recordingId: string | null | undefined) {
     const [speakerNames, setSpeakerNames] = useState<SpeakerNameMap>({});
+    const speakerNamesRef = useRef<SpeakerNameMap>({});
+    const generationsRef = useRef(new Map<string, number>());
+
+    speakerNamesRef.current = speakerNames;
 
     useEffect(() => {
         setSpeakerNames({});
+        speakerNamesRef.current = {};
+        generationsRef.current = new Map();
         if (!recordingId) return;
 
         const controller = new AbortController();
@@ -34,7 +45,9 @@ export function useSpeakerNames(recordingId: string | null | undefined) {
             .then((response) => (response.ok ? response.json() : null))
             .then((data: { speakers?: SpeakerName[] } | null) => {
                 if (data?.speakers) {
-                    setSpeakerNames(indexSpeakerNames(data.speakers));
+                    const next = indexSpeakerNames(data.speakers);
+                    speakerNamesRef.current = next;
+                    setSpeakerNames(next);
                 }
             })
             .catch(() => {});
@@ -47,17 +60,42 @@ export function useSpeakerNames(recordingId: string | null | undefined) {
             if (!recordingId) return;
 
             const name = displayName.trim();
-            const previous = speakerNames;
-            const existing = previous[speakerLabel];
+            const previousForLabel = speakerNamesRef.current[speakerLabel];
+
+            if (!name && !previousForLabel) return;
+            if (
+                name &&
+                previousForLabel?.displayName === name &&
+                previousForLabel.source === "manual"
+            ) {
+                return;
+            }
+
+            const opGeneration = nextSpeakerEditGeneration(
+                generationsRef.current,
+                speakerLabel,
+            );
+
+            const applyIfCurrent = (
+                updater: (current: SpeakerNameMap) => SpeakerNameMap,
+            ) => {
+                setSpeakerNames((current) => {
+                    if (
+                        !shouldApplySpeakerEdit(
+                            generationsRef.current,
+                            speakerLabel,
+                            opGeneration,
+                        )
+                    ) {
+                        return current;
+                    }
+                    return updater(current);
+                });
+            };
 
             if (!name) {
-                if (!existing) return;
-                setSpeakerNames(
-                    Object.fromEntries(
-                        Object.entries(previous).filter(
-                            ([label]) => label !== speakerLabel,
-                        ),
-                    ),
+                applyIfCurrent((current) =>
+                    rollbackSpeakerName(current, speakerLabel, undefined),
                 );
                 try {
                     const response = await fetch(
@@ -66,21 +104,20 @@ export function useSpeakerNames(recordingId: string | null | undefined) {
                     );
                     if (!response.ok) throw new Error("request failed");
                 } catch {
-                    setSpeakerNames(previous);
+                    applyIfCurrent((current) =>
+                        rollbackSpeakerName(
+                            current,
+                            speakerLabel,
+                            previousForLabel,
+                        ),
+                    );
                     toast.error("Failed to clear speaker name");
                 }
                 return;
             }
 
-            if (
-                existing?.displayName === name &&
-                existing.source === "manual"
-            ) {
-                return;
-            }
-
-            setSpeakerNames({
-                ...previous,
+            applyIfCurrent((current) => ({
+                ...current,
                 [speakerLabel]: {
                     speakerLabel,
                     displayName: name,
@@ -89,7 +126,7 @@ export function useSpeakerNames(recordingId: string | null | undefined) {
                     voiceProfileId: null,
                     updatedAt: new Date().toISOString(),
                 },
-            });
+            }));
 
             try {
                 const response = await fetch(
@@ -109,17 +146,23 @@ export function useSpeakerNames(recordingId: string | null | undefined) {
                 };
                 const saved = data.speaker;
                 if (saved) {
-                    setSpeakerNames((current) => ({
+                    applyIfCurrent((current) => ({
                         ...current,
                         [speakerLabel]: saved,
                     }));
                 }
             } catch {
-                setSpeakerNames(previous);
+                applyIfCurrent((current) =>
+                    rollbackSpeakerName(
+                        current,
+                        speakerLabel,
+                        previousForLabel,
+                    ),
+                );
                 toast.error("Failed to rename speaker");
             }
         },
-        [recordingId, speakerNames],
+        [recordingId],
     );
 
     return { speakerNames, renameSpeaker };
