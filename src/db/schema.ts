@@ -395,6 +395,90 @@ export const aiEnhancements = pgTable(
     }),
 );
 
+/**
+ * A known person's voice, stored as the centroid of every speaker
+ * embedding observed for them. One row per person per user, which is what
+ * lets a name learned on one recording auto-tag the same voice on the
+ * next one.
+ *
+ * `displayName` is the identity key (unique per user) because that is the
+ * only handle the caller supplying embeddings has for a person.
+ */
+export const voiceProfiles = pgTable(
+    "voice_profiles",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        displayName: text("display_name").notNull(),
+        // Centroid of the samples that formed this profile. jsonb rather
+        // than a pgvector column so the schema stays portable to a stock
+        // Postgres image: the candidate set is one user's own profiles,
+        // small enough to cosine-match in application code.
+        embedding: jsonb("embedding").$type<number[]>().notNull(),
+        sampleCount: integer("sample_count").notNull().default(1),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        userIdIdx: index("voice_profiles_user_id_idx").on(table.userId),
+        userDisplayNameUnique: unique(
+            "voice_profiles_user_id_display_name_unique",
+        ).on(table.userId, table.displayName),
+    }),
+);
+
+/**
+ * Human name for one diarized speaker label inside one recording
+ * ("SPEAKER_00" -> "Alice"). The transcript text is never rewritten; the
+ * label stays the stable key and this row is the display layer.
+ *
+ * `source` records who named the speaker: 'manual' (the user, in the
+ * transcript UI) or 'auto' (a voice-embedding match, with `confidence`
+ * holding the cosine similarity). A manual row is authoritative and is
+ * never overwritten by an auto match.
+ */
+export const speakerNames = pgTable(
+    "speaker_names",
+    {
+        id: text("id")
+            .primaryKey()
+            .$defaultFn(() => nanoid()),
+        userId: text("user_id")
+            .notNull()
+            .references(() => users.id, { onDelete: "cascade" }),
+        recordingId: text("recording_id")
+            .notNull()
+            .references(() => recordings.id, { onDelete: "cascade" }),
+        speakerLabel: varchar("speaker_label", { length: 50 }).notNull(),
+        displayName: text("display_name").notNull(),
+        // Set null (not cascade) so deleting a voice profile downgrades the
+        // name to a plain label-to-name mapping instead of erasing it.
+        voiceProfileId: text("voice_profile_id").references(
+            () => voiceProfiles.id,
+            { onDelete: "set null" },
+        ),
+        source: varchar("source", { length: 20 }).notNull().default("manual"),
+        // Cosine similarity of the match when source = 'auto'; null for
+        // manual names.
+        confidence: real("confidence"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        recordingIdIdx: index("speaker_names_recording_id_idx").on(
+            table.recordingId,
+        ),
+        userIdIdx: index("speaker_names_user_id_idx").on(table.userId),
+        recordingSpeakerLabelUnique: unique(
+            "speaker_names_recording_id_speaker_label_unique",
+        ).on(table.recordingId, table.speakerLabel),
+    }),
+);
+
 // API Credentials (encrypted)
 export const apiCredentials = pgTable("api_credentials", {
     id: text("id")
