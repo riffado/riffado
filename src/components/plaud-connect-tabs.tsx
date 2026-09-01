@@ -51,6 +51,7 @@ const TOKEN_GRAB_SNIPPET =
 function regionLabel(base: string): string {
     if (base.includes("euc1")) return "EU (Frankfurt)";
     if (base.includes("apse1")) return "Asia Pacific (Singapore)";
+    if (base.includes("api.plaud.cn")) return "China Mainland";
     if (base.includes("api.plaud.ai")) return "Global";
     return base;
 }

@@ -279,10 +279,22 @@ describe("PlaudClient", () => {
             expect(isValidPlaudApiUrl("https://api-usw1.plaud.ai")).toBe(true);
         });
 
+        // Plaud runs a region-separated China deployment; accounts created
+        // on web.plaud.cn do not exist on the .ai side, so the gate has to
+        // admit .cn or those users can never connect at all.
+        it("should accept valid plaud.cn HTTPS URLs (China mainland)", () => {
+            expect(isValidPlaudApiUrl("https://api.plaud.cn")).toBe(true);
+            expect(isValidPlaudApiUrl("https://web.plaud.cn")).toBe(true);
+            expect(isValidPlaudApiUrl("https://plaud.cn")).toBe(true);
+        });
+
         it("should reject non-plaud domains", () => {
             expect(isValidPlaudApiUrl("https://evil.com")).toBe(false);
             expect(isValidPlaudApiUrl("https://plaud.ai.evil.com")).toBe(false);
             expect(isValidPlaudApiUrl("https://notplaud.ai")).toBe(false);
+            // Same look-alike traps for the .cn domain.
+            expect(isValidPlaudApiUrl("https://plaud.cn.evil.com")).toBe(false);
+            expect(isValidPlaudApiUrl("https://notplaud.cn")).toBe(false);
         });
 
         it("should reject non-HTTPS URLs", () => {
@@ -304,6 +316,9 @@ describe("PlaudClient", () => {
             expect(serverKeyFromApiBase("https://api-apse1.plaud.ai")).toBe(
                 "apse1",
             );
+            // Resolving to 'cn' (not 'custom') is what makes the settings
+            // page render a readable region label instead of the raw base URL.
+            expect(serverKeyFromApiBase("https://api.plaud.cn")).toBe("cn");
         });
 
         it("should return 'custom' for unknown URLs", () => {
