@@ -87,24 +87,36 @@ describe("shouldProxyPlaud", () => {
         expect(shouldProxyPlaud("https://resource.plaud.ai/foo")).toBe(true);
         expect(shouldProxyPlaud("https://plaud.ai/")).toBe(true);
         expect(shouldProxyPlaud("https://api.plaud.cn/foo")).toBe(true);
+        expect(shouldProxyPlaud("https://resource.plaud.cn/foo")).toBe(true);
         expect(shouldProxyPlaud("https://plaud.cn/")).toBe(true);
     });
 
     it("rejects non-Plaud, http, and malformed URLs", () => {
         expect(shouldProxyPlaud("https://example.com/")).toBe(false);
         expect(shouldProxyPlaud("https://plaud.ai.evil.com/")).toBe(false);
+        expect(shouldProxyPlaud("https://notplaud.ai/")).toBe(false);
         expect(shouldProxyPlaud("http://api.plaud.ai/")).toBe(false);
         expect(shouldProxyPlaud("not-a-url")).toBe(false);
         expect(shouldProxyPlaud("https://plaud.cn.evil.com/")).toBe(false);
+        expect(shouldProxyPlaud("https://notplaud.cn/")).toBe(false);
+        expect(
+            shouldProxyPlaud("https://resource.plaud.cn.evil.com/audio.mp3"),
+        ).toBe(false);
     });
 
-    it("skips resource.plaud.ai when PLAUD_PROXY_SCOPE=api-only", () => {
+    it("skips .ai and .cn resource hosts when PLAUD_PROXY_SCOPE=api-only", () => {
         mockEnv.PLAUD_PROXY_SCOPE = "api-only";
         expect(shouldProxyPlaud("https://api.plaud.ai/foo")).toBe(true);
         expect(shouldProxyPlaud("https://api-euc1.plaud.ai/foo")).toBe(true);
-        expect(shouldProxyPlaud("https://resource.plaud.ai/file.mp3")).toBe(
+        expect(shouldProxyPlaud("https://api.plaud.cn/foo")).toBe(true);
+        expect(shouldProxyPlaud("https://resource.plaud.ai/audio.mp3")).toBe(
             false,
         );
+        expect(shouldProxyPlaud("https://resource.plaud.cn/audio.mp3")).toBe(
+            false,
+        );
+        expect(shouldProxyPlaud("https://plaud.ai.evil.com/")).toBe(false);
+        expect(shouldProxyPlaud("https://plaud.cn.evil.com/")).toBe(false);
     });
 });
 

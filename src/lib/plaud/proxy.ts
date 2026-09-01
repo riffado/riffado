@@ -75,6 +75,11 @@ async function fetchProxyList(): Promise<WebshareProxy[]> {
     }
 }
 
+const PLAUD_RESOURCE_HOSTS = new Set([
+    "resource.plaud.ai",
+    "resource.plaud.cn",
+]);
+
 /** Whether `url` should route through the Plaud proxy. */
 export function shouldProxyPlaud(url: string): boolean {
     try {
@@ -87,7 +92,10 @@ export function shouldProxyPlaud(url: string): boolean {
             h === "plaud.cn" ||
             h.endsWith(".plaud.cn");
         if (!isPlaud) return false;
-        if (env.PLAUD_PROXY_SCOPE === "api-only" && h === "resource.plaud.ai") {
+        if (
+            env.PLAUD_PROXY_SCOPE === "api-only" &&
+            PLAUD_RESOURCE_HOSTS.has(h)
+        ) {
             return false;
         }
         return true;
