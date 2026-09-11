@@ -1,3 +1,5 @@
+import { usesDefaultPostgresPassword } from "./lib/postgres-password";
+
 type WebhookWorkerModule = {
     startWebhookWorker: () => void;
 };
@@ -18,6 +20,7 @@ type EnvModule = {
     env: {
         IS_HOSTED: boolean;
         RATE_LIMIT_TRUST_PROXY_HEADERS?: boolean;
+        DATABASE_URL?: string;
     };
 };
 
@@ -56,6 +59,12 @@ export async function register() {
     if (!env.IS_HOSTED && env.RATE_LIMIT_TRUST_PROXY_HEADERS !== true) {
         console.warn(
             "[rate-limit] RATE_LIMIT_TRUST_PROXY_HEADERS is not true: per-IP rate limiting on sign-in/sign-up/reset-password is INACTIVE. Set it to true behind a trusted reverse proxy to enable credential-stuffing protection.",
+        );
+    }
+
+    if (usesDefaultPostgresPassword(env.DATABASE_URL)) {
+        console.warn(
+            "[db] DATABASE_URL uses the known default password \"postgres\". Set a unique POSTGRES_PASSWORD in .env and rotate the role in place (ALTER USER postgres WITH PASSWORD '...'; then recreate the app). Recreating the db volume is not required.",
         );
     }
 

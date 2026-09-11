@@ -7,17 +7,20 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      # Default preserved for backward compat with existing self-host
-      # deploys. The one-line installer (scripts/install.sh) generates a
-      # random POSTGRES_PASSWORD and writes it to .env. Existing operators
-      # can rotate by setting POSTGRES_PASSWORD in .env, recreating the
-      # `db` volume, and restoring from a backup.
+      # Unset defaults to `postgres` so existing volumes still start
+      # (Postgres applies POSTGRES_PASSWORD only on first init). New
+      # installs via scripts/install.sh write a random value to .env.
+      # Rotate in place, do not recreate the db volume:
+      #   openssl rand -hex 24
+      #   docker compose exec db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '<value>'"
+      #   set POSTGRES_PASSWORD=<value> in .env
+      #   docker compose up -d --force-recreate app
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: riffado
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

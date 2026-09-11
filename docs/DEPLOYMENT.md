@@ -46,6 +46,9 @@ openssl rand -hex 32
 
 # Generate ENCRYPTION_KEY
 openssl rand -hex 32
+
+# Generate POSTGRES_PASSWORD (bundled db service)
+openssl rand -hex 24
 ```
 
 ### 3. Configure Environment
@@ -60,6 +63,7 @@ Edit `.env` with your values:
 
 ```env
 # Database (use the service name from docker-compose.yml)
+POSTGRES_PASSWORD=<generated-db-password>
 DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@db:5432/riffado
 
 # Auth
@@ -194,6 +198,21 @@ pm2 startup
 | `SMTP_FROM` | From email address | - |
 
 ## Database Setup
+
+Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
+The app reaches it over the Compose network (`db:5432`).
+
+### Rotating the bundled Postgres password
+
+Postgres applies `POSTGRES_PASSWORD` only on first init. Changing `.env`
+and recreating the `db` volume is not required and would wipe data.
+
+```bash
+NEW_PW="$(openssl rand -hex 24)"
+docker compose exec db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '${NEW_PW}'"
+# Write the same value to .env as POSTGRES_PASSWORD=<value>
+docker compose up -d --force-recreate app
+```
 
 ### PostgreSQL Configuration
 

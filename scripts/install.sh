@@ -9,7 +9,7 @@
 #   1. Verifies Docker + docker compose v2 are installed and running.
 #   2. Creates an install directory (default $HOME/riffado).
 #   3. Downloads docker-compose.yml + env.example from the GitHub release.
-#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY).
+#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD).
 #   5. Pulls images and starts the stack.
 #   6. Waits for /api/health to return 200.
 #
@@ -134,6 +134,7 @@ ok "Downloaded docker-compose.yml and .env"
 
 BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
 ENCRYPTION_KEY="$(openssl rand -hex 32)"
+POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 
 # Patch the .env in place. macOS ships BSD sed which requires a backup-suffix
 # arg to -i; GNU sed does not. Use a temp file + mv to stay portable.
@@ -160,6 +161,7 @@ patch_env() {
 
 patch_env BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
 patch_env ENCRYPTION_KEY "$ENCRYPTION_KEY"
+patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
 patch_env APP_URL "$APP_URL"
 if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
     # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
