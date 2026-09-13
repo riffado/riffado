@@ -103,10 +103,12 @@ export class ElevenLabsTranscribeError extends Error {
 }
 
 export class ElevenLabsFileTooLargeError extends Error {
-    constructor(public sizeBytes: number) {
+    constructor(public sizeBytes?: number) {
         super(
-            `Audio file (${Math.round(sizeBytes / 1024 / 1024)} MB) exceeds the ` +
-                `${ELEVENLABS_MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`,
+            sizeBytes === undefined
+                ? `Audio file exceeds the ${ELEVENLABS_MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`
+                : `Audio file (${Math.round(sizeBytes / 1024 / 1024)} MB) exceeds the ` +
+                      `${ELEVENLABS_MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`,
         );
         this.name = "ElevenLabsFileTooLargeError";
     }

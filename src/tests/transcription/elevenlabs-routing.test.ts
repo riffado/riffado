@@ -44,12 +44,17 @@ vi.mock("@/lib/storage/factory", () => ({
     }),
 }));
 
-const { openaiConstructed, elevenLabsTranscribeMock, compressMock } =
-    vi.hoisted(() => ({
-        openaiConstructed: vi.fn(),
-        elevenLabsTranscribeMock: vi.fn(),
-        compressMock: vi.fn(),
-    }));
+const {
+    openaiConstructed,
+    elevenLabsTranscribeMock,
+    compressMock,
+    downloadFileWithLimitMock,
+} = vi.hoisted(() => ({
+    openaiConstructed: vi.fn(),
+    elevenLabsTranscribeMock: vi.fn(),
+    compressMock: vi.fn(),
+    downloadFileWithLimitMock: vi.fn(),
+}));
 
 vi.mock("openai", () => {
     const MockOpenAI = vi.fn(function (this: unknown, ...args: unknown[]) {
@@ -76,6 +81,16 @@ vi.mock("@/lib/transcription/elevenlabs-transcribe", async (importOriginal) => {
 vi.mock("@/lib/transcription/compress-audio", () => ({
     maybeCompressForWhisper: compressMock,
 }));
+
+vi.mock("@/lib/storage/download-limited", async (importOriginal) => {
+    const actual =
+        await importOriginal<typeof import("@/lib/storage/download-limited")>();
+    downloadFileWithLimitMock.mockImplementation(actual.downloadFileWithLimit);
+    return {
+        ...actual,
+        downloadFileWithLimit: downloadFileWithLimitMock,
+    };
+});
 
 vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
@@ -107,6 +122,7 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 }));
 
 import { db } from "@/db";
+import { DownloadSizeLimitError } from "@/lib/storage/download-limited";
 import { ELEVENLABS_MAX_FILE_BYTES } from "@/lib/transcription/elevenlabs-transcribe";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 
@@ -357,6 +373,30 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
 
         expect(result.success).toBe(false);
         expect(result.errorCode).toBe("FILE_TOO_LARGE");
+        expect(elevenLabsTranscribeMock).not.toHaveBeenCalled();
+    });
+
+    it("uses a size-independent message when the stream exceeds the cap despite a small recorded filesize", async () => {
+        downloadFileWithLimitMock.mockRejectedValueOnce(
+            new DownloadSizeLimitError(ELEVENLABS_MAX_FILE_BYTES),
+        );
+        mockRecordingFlow(
+            {},
+            {
+                recordingOverrides: {
+                    filesize: 0,
+                },
+            },
+        );
+
+        const result = await transcribeRecording(userId, recordingId);
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe("FILE_TOO_LARGE");
+        expect(result.error).not.toContain("(0 MB)");
+        expect(result.error).toBe(
+            `Audio file exceeds the ${ELEVENLABS_MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`,
+        );
         expect(elevenLabsTranscribeMock).not.toHaveBeenCalled();
     });
 });

@@ -2,7 +2,8 @@
  * Unit tests for `downloadFileWithLimit`: it must abort as soon as the
  * running total crosses the cap instead of buffering the whole stream
  * first, and must return the full buffer when the stream stays under
- * the cap.
+ * the cap. The destination buffer grows geometrically from observed
+ * stream bytes only -- it is never sized from caller-supplied metadata.
  */
 
 import { Readable } from "node:stream";
@@ -79,76 +80,70 @@ describe("downloadFileWithLimit", () => {
         ).rejects.toThrow(/boom/);
     });
 
-    describe("with expectedBytes", () => {
-        it("returns the exact bytes when the hint matches the real size", async () => {
-            const source = Buffer.from("hello world");
-            const stream = Readable.from([
-                source.subarray(0, 6),
-                source.subarray(6),
-            ]);
-            const storage = fakeStorage(stream);
-
-            const result = await downloadFileWithLimit(
-                storage,
-                "key",
-                1024,
-                source.length,
-            );
-
-            expect(result.equals(source)).toBe(true);
-        });
-
-        it("returns the exact bytes when the hint understates the real size (overflow path)", async () => {
+    describe("buffer growth", () => {
+        it("returns byte-exact output for a large payload delivered in many small chunks that force several growth steps", async () => {
             const source = Buffer.from(
-                Array.from({ length: 50 }, (_, i) => i % 256),
+                Array.from({ length: 300_000 }, (_, i) => i % 256),
             );
-            // Chunk boundaries deliberately straddle the hinted length so the
-            // split-chunk path is exercised, not just whole-chunk overflow.
-            const stream = Readable.from([
-                source.subarray(0, 7),
-                source.subarray(7, 13),
-                source.subarray(13, 22),
-                source.subarray(22),
-            ]);
+            const chunkSize = 37;
+            const chunks: Buffer[] = [];
+            for (let i = 0; i < source.length; i += chunkSize) {
+                chunks.push(source.subarray(i, i + chunkSize));
+            }
+            const stream = Readable.from(chunks);
             const storage = fakeStorage(stream);
 
             const result = await downloadFileWithLimit(
                 storage,
                 "key",
-                1024,
-                10,
+                10 * 1024 * 1024,
             );
 
             expect(result.length).toBe(source.length);
             expect(result.equals(source)).toBe(true);
         });
 
-        it("returns the exact bytes when the hint overstates the real size", async () => {
-            const source = Buffer.from("short");
+        it("handles a single chunk larger than the initial capacity", async () => {
+            const source = Buffer.alloc(200 * 1024, "z");
             const stream = Readable.from([source]);
             const storage = fakeStorage(stream);
 
             const result = await downloadFileWithLimit(
                 storage,
                 "key",
-                1024,
-                10_000,
+                1024 * 1024,
             );
 
             expect(result.equals(source)).toBe(true);
         });
 
-        it("still rejects with DownloadSizeLimitError once the true total exceeds maxBytes", async () => {
-            const chunk = Buffer.alloc(10, "a");
-            const chunks = Array.from({ length: 1000 }, () => chunk);
-            const stream = Readable.from(chunks);
-            const destroySpy = vi.spyOn(stream, "destroy");
+        it("returns an empty buffer for an empty stream", async () => {
+            const stream = Readable.from([]);
+            const storage = fakeStorage(stream);
+
+            const result = await downloadFileWithLimit(storage, "key", 1024);
+
+            expect(result.length).toBe(0);
+        });
+
+        it("succeeds when the payload lands exactly on maxBytes", async () => {
+            const source = Buffer.alloc(100, "x");
+            const stream = Readable.from([source]);
+            const storage = fakeStorage(stream);
+
+            const result = await downloadFileWithLimit(storage, "key", 100);
+
+            expect(result.equals(source)).toBe(true);
+        });
+
+        it("rejects when the payload is one byte over maxBytes", async () => {
+            const source = Buffer.alloc(101, "x");
+            const stream = Readable.from([source]);
             const storage = fakeStorage(stream);
 
             await expect(
-                downloadFileWithLimit(storage, "key", 25, 15),
+                downloadFileWithLimit(storage, "key", 100),
             ).rejects.toBeInstanceOf(DownloadSizeLimitError);
-            expect(destroySpy).toHaveBeenCalled();
         });
     });
 });
