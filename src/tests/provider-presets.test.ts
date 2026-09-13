@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     findPreset,
+    getTranscriptionStyle,
     getVisiblePresets,
     isLocalPreset,
     LOCAL_PRESET_NAMES,
@@ -68,6 +69,31 @@ describe("provider-presets", () => {
                 if (!p.knownTranscriptionModels) continue;
                 expect(p.knownTranscriptionModels).toContain(p.defaultModel);
             }
+        });
+    });
+
+    describe("ElevenLabs", () => {
+        it("uses the elevenlabs transcription style with scribe_v2 as default", () => {
+            const preset = findPreset("ElevenLabs");
+            expect(preset).toBeDefined();
+            expect(preset?.transcriptionStyle).toBe("elevenlabs");
+            expect(preset?.defaultModel).toBe("scribe_v2");
+            expect(preset?.knownTranscriptionModels).toContain("scribe_v1");
+        });
+
+        it("is not a local preset and stays visible on hosted", () => {
+            expect(isLocalPreset("ElevenLabs")).toBe(false);
+            expect(
+                getVisiblePresets({ isHosted: true }).some(
+                    (p) => p.name === "ElevenLabs",
+                ),
+            ).toBe(true);
+        });
+    });
+
+    describe("getTranscriptionStyle", () => {
+        it("resolves 'elevenlabs' for the ElevenLabs preset", () => {
+            expect(getTranscriptionStyle("ElevenLabs")).toBe("elevenlabs");
         });
     });
 });

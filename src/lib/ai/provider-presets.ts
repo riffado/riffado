@@ -1,4 +1,4 @@
-export type TranscriptionStyle = "whisper" | "chat" | "gemini";
+export type TranscriptionStyle = "whisper" | "chat" | "gemini" | "elevenlabs";
 
 export interface ProviderPreset {
     name: string;
@@ -81,6 +81,14 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
             "gemini-1.5-flash",
             "gemini-1.5-pro",
         ],
+    },
+    {
+        name: "ElevenLabs",
+        baseUrl: "https://api.elevenlabs.io/v1",
+        placeholder: "sk_...",
+        defaultModel: "scribe_v2",
+        transcriptionStyle: "elevenlabs",
+        knownTranscriptionModels: ["scribe_v2", "scribe_v1"],
     },
     {
         name: "Custom",

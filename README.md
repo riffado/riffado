@@ -24,6 +24,7 @@ Riffado is an open-source companion app for AI voice recorders. It syncs your re
 
 - Self-hosted. Your recordings, your storage, your API keys.
 - Works with any OpenAI-compatible provider — OpenAI, Groq, OpenRouter, Together, LM Studio, Ollama, Azure, anything with a `baseURL`.
+- ElevenLabs Scribe support with speaker labels (diarization) and automatic language detection.
 - Free browser transcription via Transformers.js (Whisper in WebAssembly).
 - Local filesystem or S3-compatible storage (AWS S3, Cloudflare R2, MinIO, Backblaze B2, DigitalOcean Spaces, Wasabi).
 - AES-256-GCM encryption at rest for tokens, API keys, transcripts, and summaries.

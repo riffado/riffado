@@ -467,6 +467,11 @@ export const userSettings = pgTable("user_settings", {
     transcriptionQuality: varchar("transcription_quality", { length: 20 })
         .notNull()
         .default("balanced"), // 'fast', 'balanced', 'accurate'
+    // Speaker diarization. Only providers with a diarizing surface honor
+    // this (ElevenLabs Scribe today); Whisper-style providers ignore it.
+    speakerDiarization: boolean("speaker_diarization").notNull().default(true),
+    // Optional speaker-count hint, 1..32. Null lets the provider decide.
+    diarizationSpeakerCount: integer("diarization_speaker_count"),
     // Plaud-native content import (feature #204). When enabled, sync imports
     // Plaud's own transcript/summary (source='plaud') for recordings Plaud
     // has already processed, instead of only the audio.

@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS = {
     playerScrubber: "waveform" as const,
     defaultTranscriptionLanguage: null,
     transcriptionQuality: "balanced" as const,
+    speakerDiarization: true,
+    diarizationSpeakerCount: null,
     dateTimeFormat: "relative" as const,
     recordingListSortOrder: "newest" as const,
     itemsPerPage: 50,
@@ -83,6 +85,8 @@ const SETTINGS_FIELDS = [
     "playerScrubber",
     "defaultTranscriptionLanguage",
     "transcriptionQuality",
+    "speakerDiarization",
+    "diarizationSpeakerCount",
     "dateTimeFormat",
     "recordingListSortOrder",
     "itemsPerPage",
@@ -192,6 +196,23 @@ export const PUT = apiHandler(async (request: Request) => {
             throw new AppError(
                 ErrorCode.INVALID_INPUT,
                 `Invalid ${field} value`,
+                400,
+                { field },
+            );
+        }
+        if (
+            field === "diarizationSpeakerCount" &&
+            value !== undefined &&
+            value !== null &&
+            !(
+                Number.isInteger(value) &&
+                (value as number) >= 1 &&
+                (value as number) <= 32
+            )
+        ) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                "Invalid diarizationSpeakerCount value",
                 400,
                 { field },
             );

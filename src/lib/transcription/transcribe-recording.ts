@@ -30,6 +30,7 @@ import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
+import { elevenLabsTranscribe } from "@/lib/transcription/elevenlabs-transcribe";
 import {
     buildTranscriptionParams,
     getResponseFormat,
@@ -352,6 +353,8 @@ async function transcribeRecordingInner(
         const defaultLanguage =
             settings?.defaultTranscriptionLanguage || undefined;
         const quality = settings?.transcriptionQuality || "balanced";
+        const diarize = settings?.speakerDiarization ?? true;
+        const numSpeakers = settings?.diarizationSpeakerCount ?? undefined;
         const autoGenerateTitle = settings?.autoGenerateTitle ?? true;
         const syncTitleToPlaud = settings?.syncTitleToPlaud ?? false;
         const autoSummarize = settings?.autoSummarize ?? false;
@@ -436,6 +439,8 @@ async function transcribeRecordingInner(
 
             // Route based on the provider's transcription style:
             // - "gemini": Google Gemini native generateContent API (inlineData)
+            // - "elevenlabs": ElevenLabs Scribe /v1/speech-to-text (xi-api-key,
+            //   diarized words[] response)
             // - "chat": OpenAI-compatible chat completions with input_audio
             //   (OpenRouter today; #122 -- /v1/audio/transcriptions 404s there)
             // - "whisper": OpenAI-compatible /v1/audio/transcriptions
@@ -450,6 +455,21 @@ async function transcribeRecordingInner(
                     audioBuffer,
                     contentType,
                     language: defaultLanguage,
+                });
+                transcriptionText = result.text;
+                detectedLanguage = result.detectedLanguage;
+            } else if (transcriptionStyle === "elevenlabs") {
+                // ElevenLabs has no 25 MiB request cap, so the Whisper
+                // compression step (below) is skipped for this style.
+                const result = await elevenLabsTranscribe({
+                    apiKey,
+                    model,
+                    file: audioFile,
+                    baseUrl: credentials.baseUrl,
+                    language: defaultLanguage,
+                    diarize,
+                    numSpeakers,
+                    timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                 });
                 transcriptionText = result.text;
                 detectedLanguage = result.detectedLanguage;

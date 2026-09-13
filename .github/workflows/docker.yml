@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - 'v*'
+  workflow_dispatch:
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -60,11 +61,16 @@ jobs:
           #   - `X.Y.Z` / `X.Y` → specific release versions
           #   - `dev`          → rolling build from `main` (unstable, opt-in)
           # `main` is a rolling integration branch, so it MUST NOT overwrite `latest`.
+          # The `sha` line is a fallback for manual `workflow_dispatch` runs
+          # (e.g. testing this workflow on a feature branch) so metadata-action
+          # always emits at least one tag even when none of the canonical
+          # rules above match the ref. It never fires on push/tag events.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Compute arch-suffixed tags
         id: arch_tags
@@ -130,6 +136,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,format=short,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Create and push multi-arch manifest
         run: |
@@ -148,4 +155,14 @@ jobs:
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.version }}
+          # Reuse the tag docker/metadata-action already computed
+          # (steps.meta.outputs.tags), which it lowercases internally,
+          # instead of re-deriving the reference from `github.repository`
+          # here. `github.repository` preserves the original owner/repo
+          # case, and registries require a lowercase reference -- an
+          # owner name with any uppercase letter (as on a personal fork)
+          # made this step fail with "must be lowercase" even though the
+          # push itself (which goes through metadata-action's tags)
+          # succeeded.
+          image_tag="$(head -n1 <<< "${{ steps.meta.outputs.tags }}")"
+          docker buildx imagetools inspect "$image_tag"
