@@ -8,6 +8,13 @@ export interface ProviderPreset {
     transcriptionStyle: TranscriptionStyle;
     fetchAudioModels?: boolean;
     knownTranscriptionModels?: readonly string[];
+    /**
+     * Whether this provider can be used for AI enhancements (summaries,
+     * titles) via `chat.completions`. Defaults to `true` when omitted --
+     * only transcription-only providers (e.g. ElevenLabs Scribe) set this
+     * to `false`.
+     */
+    supportsEnhancement?: boolean;
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -89,6 +96,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         defaultModel: "scribe_v2",
         transcriptionStyle: "elevenlabs",
         knownTranscriptionModels: ["scribe_v2", "scribe_v1"],
+        supportsEnhancement: false,
     },
     {
         name: "Custom",
@@ -125,4 +133,12 @@ export function getTranscriptionStyle(
     providerName: string,
 ): TranscriptionStyle {
     return findPreset(providerName)?.transcriptionStyle ?? "whisper";
+}
+
+/**
+ * Whether a provider can run AI enhancements (summaries, titles) via
+ * `chat.completions`. Unknown/custom provider names default to `true`.
+ */
+export function supportsEnhancement(providerName: string): boolean {
+    return findPreset(providerName)?.supportsEnhancement ?? true;
 }

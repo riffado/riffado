@@ -85,7 +85,10 @@ function selectChain() {
         },
         where: () => c,
         for: () => c,
-        orderBy: () => c,
+        // `orderBy` terminates the credentials lookup in
+        // generate-summary.ts / generate-title.ts (no trailing `.limit()`
+        // there), so it must resolve like `.limit()` does.
+        orderBy: () => Promise.resolve(selectResults.get(table)?.shift() ?? []),
         limit: () => Promise.resolve(selectResults.get(table)?.shift() ?? []),
     };
     return c;
@@ -132,9 +135,9 @@ describe("POST /api/recordings/[id]/summary — no transcript truncation (#213)"
         selectResults.set(userSettings, [
             [{ summaryPrompt: null, aiOutputLanguage: null }],
         ]);
-        // apiCredentials is selected twice: default-enhancement then
-        // default-transcription. The enhancement row wins, so the second
-        // (transcription) query result is unused.
+        // apiCredentials is selected once: every credential for the user,
+        // ordered by createdAt, with the enhancement-default (supporting)
+        // row picked in memory.
         selectResults.set(apiCredentials, [
             [
                 {
@@ -146,7 +149,6 @@ describe("POST /api/recordings/[id]/summary — no transcript truncation (#213)"
                     userId: "user-1",
                 },
             ],
-            [],
         ]);
         // No existing enhancement row -> insert path.
         selectResults.set(aiEnhancements, [[]]);

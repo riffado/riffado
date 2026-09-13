@@ -141,6 +141,26 @@ function selectRows(rows: unknown[], captureWhere?: (expr: unknown) => void) {
     };
 }
 
+// The credentials lookup in `generate-summary.ts` / `generate-title.ts`
+// is a single `.orderBy()`-terminated query (no `.limit()`) that returns
+// every one of the user's credentials for in-memory enhancement-provider
+// selection.
+function selectRowsOrdered(
+    rows: unknown[],
+    captureWhere?: (expr: unknown) => void,
+) {
+    return {
+        from: vi.fn().mockReturnValue({
+            where: vi.fn((expr: unknown) => {
+                captureWhere?.(expr);
+                return {
+                    orderBy: vi.fn().mockResolvedValue(rows),
+                };
+            }),
+        }),
+    };
+}
+
 function lockedRecordingRows(rows: unknown[]) {
     return {
         from: vi.fn().mockReturnValue({
@@ -278,9 +298,8 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
                 ),
             )
             .mockReturnValueOnce(selectRows([]))
-            .mockReturnValueOnce(selectRows([]))
             .mockReturnValueOnce(
-                selectRows([
+                selectRowsOrdered([
                     {
                         id: "creds-1",
                         provider: "openai",
@@ -347,9 +366,8 @@ describe("Issue #79 - v1 incremental update timestamps", () => {
                 ]),
             )
             .mockReturnValueOnce(selectRows([]))
-            .mockReturnValueOnce(selectRows([]))
             .mockReturnValueOnce(
-                selectRows([
+                selectRowsOrdered([
                     {
                         id: "creds-1",
                         provider: "openai",

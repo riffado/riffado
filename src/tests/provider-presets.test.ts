@@ -6,6 +6,7 @@ import {
     isLocalPreset,
     LOCAL_PRESET_NAMES,
     PROVIDER_PRESETS,
+    supportsEnhancement,
 } from "@/lib/ai/provider-presets";
 
 describe("provider-presets", () => {
@@ -94,6 +95,23 @@ describe("provider-presets", () => {
     describe("getTranscriptionStyle", () => {
         it("resolves 'elevenlabs' for the ElevenLabs preset", () => {
             expect(getTranscriptionStyle("ElevenLabs")).toBe("elevenlabs");
+        });
+    });
+
+    describe("supportsEnhancement", () => {
+        it("is false for ElevenLabs", () => {
+            expect(supportsEnhancement("ElevenLabs")).toBe(false);
+        });
+
+        it("is true for every other preset", () => {
+            for (const preset of PROVIDER_PRESETS) {
+                if (preset.name === "ElevenLabs") continue;
+                expect(supportsEnhancement(preset.name)).toBe(true);
+            }
+        });
+
+        it("is true for an unknown/custom provider name", () => {
+            expect(supportsEnhancement("Nope")).toBe(true);
         });
     });
 });

@@ -20,7 +20,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { findPreset, getVisiblePresets } from "@/lib/ai/provider-presets";
+import {
+    findPreset,
+    getVisiblePresets,
+    supportsEnhancement,
+} from "@/lib/ai/provider-presets";
 
 interface AddProviderDialogProps {
     open: boolean;
@@ -55,6 +59,9 @@ export function AddProviderDialog({
         if (preset) {
             setBaseUrl(preset.baseUrl);
             setDefaultModel(preset.defaultModel);
+        }
+        if (!supportsEnhancement(value)) {
+            setIsDefaultEnhancement(false);
         }
     };
 
@@ -207,10 +214,17 @@ export function AddProviderDialog({
                                 onChange={(e) =>
                                     setIsDefaultEnhancement(e.target.checked)
                                 }
-                                disabled={isLoading}
+                                disabled={
+                                    isLoading || !supportsEnhancement(provider)
+                                }
                             />
                             <span>Use for AI enhancements</span>
                         </label>
+                        {provider && !supportsEnhancement(provider) && (
+                            <p className="text-xs text-muted-foreground pl-6">
+                                {provider} transcribes only.
+                            </p>
+                        )}
                     </Panel>
 
                     <div className="flex gap-2">

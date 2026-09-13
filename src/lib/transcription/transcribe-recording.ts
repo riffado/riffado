@@ -25,12 +25,20 @@ import {
     captureServerException,
 } from "@/lib/posthog-server";
 import { consumeRateLimitBucket } from "@/lib/rate-limit";
+import {
+    DownloadSizeLimitError,
+    downloadFileWithLimit,
+} from "@/lib/storage/download-limited";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
 import { buildAudioFile } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
-import { elevenLabsTranscribe } from "@/lib/transcription/elevenlabs-transcribe";
+import {
+    ELEVENLABS_MAX_FILE_BYTES,
+    ElevenLabsFileTooLargeError,
+    elevenLabsTranscribe,
+} from "@/lib/transcription/elevenlabs-transcribe";
 import {
     buildTranscriptionParams,
     getResponseFormat,
@@ -419,10 +427,47 @@ async function transcribeRecordingInner(
         } else if (credentials) {
             const apiKey = decrypt(credentials.apiKey);
 
-            const storage = await createUserStorageProvider(userId);
-            const audioBuffer = await storage.downloadFile(
-                recording.storagePath,
+            // Route based on the provider's transcription style:
+            // - "gemini": Google Gemini native generateContent API (inlineData)
+            // - "elevenlabs": ElevenLabs Scribe /v1/speech-to-text (xi-api-key,
+            //   diarized words[] response)
+            // - "chat": OpenAI-compatible chat completions with input_audio
+            //   (OpenRouter today; #122 -- /v1/audio/transcriptions 404s there)
+            // - "whisper": OpenAI-compatible /v1/audio/transcriptions
+            const transcriptionStyle = getTranscriptionStyle(
+                credentials.provider,
             );
+
+            if (
+                transcriptionStyle === "elevenlabs" &&
+                recording.filesize > ELEVENLABS_MAX_FILE_BYTES
+            ) {
+                throw new ElevenLabsFileTooLargeError(recording.filesize);
+            }
+
+            const storage = await createUserStorageProvider(userId);
+            let audioBuffer: Buffer;
+            if (transcriptionStyle === "elevenlabs") {
+                // Streamed so the cap is enforced before the whole buffer
+                // is materialized; the recorded filesize can understate
+                // the stored object, so the stream guard still applies.
+                try {
+                    audioBuffer = await downloadFileWithLimit(
+                        storage,
+                        recording.storagePath,
+                        ELEVENLABS_MAX_FILE_BYTES,
+                    );
+                } catch (err) {
+                    if (err instanceof DownloadSizeLimitError) {
+                        throw new ElevenLabsFileTooLargeError(
+                            recording.filesize,
+                        );
+                    }
+                    throw err;
+                }
+            } else {
+                audioBuffer = await storage.downloadFile(recording.storagePath);
+            }
 
             // `recording.filename` is encrypted at rest; decrypt before
             // passing to the transcription provider as a filename hint.
@@ -436,17 +481,6 @@ async function transcribeRecordingInner(
             const model = opts.model || credentials.defaultModel || "whisper-1";
             persistProvider = credentials.provider;
             persistModel = model;
-
-            // Route based on the provider's transcription style:
-            // - "gemini": Google Gemini native generateContent API (inlineData)
-            // - "elevenlabs": ElevenLabs Scribe /v1/speech-to-text (xi-api-key,
-            //   diarized words[] response)
-            // - "chat": OpenAI-compatible chat completions with input_audio
-            //   (OpenRouter today; #122 -- /v1/audio/transcriptions 404s there)
-            // - "whisper": OpenAI-compatible /v1/audio/transcriptions
-            const transcriptionStyle = getTranscriptionStyle(
-                credentials.provider,
-            );
 
             if (transcriptionStyle === "gemini") {
                 const result = await geminiTranscribe({

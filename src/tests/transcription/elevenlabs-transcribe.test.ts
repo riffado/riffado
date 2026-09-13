@@ -414,6 +414,7 @@ describe("elevenLabsTranscribe -- errors and retries", () => {
         await expect(promise).rejects.toBeInstanceOf(ElevenLabsTranscribeError);
         await expect(promise).rejects.toThrow(/rejected the API key/i);
         await expect(promise).rejects.not.toThrow(/internal diagnostic/i);
+        expect(fetchSpy).toHaveBeenCalledOnce();
     });
 
     it("maps 422 to an invalid-parameters message", async () => {
@@ -489,6 +490,160 @@ describe("elevenLabsTranscribe -- errors and retries", () => {
             timeoutMs: 5000,
         });
         const assertion = expect(result).rejects.toThrow(/503/);
+        await vi.runAllTimersAsync();
+        await assertion;
+
+        // Initial attempt + 2 retries.
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it("honors the retry-after header (capped) instead of the exponential backoff", async () => {
+        vi.useFakeTimers();
+        const fetchSpy = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response("slow down", {
+                    status: 429,
+                    headers: { "retry-after": "5" },
+                }),
+            )
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ text: "ok" }), { status: 200 }),
+            );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const result = elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            timeoutMs: 5000,
+        });
+
+        await vi.advanceTimersByTimeAsync(4999);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+        await expect(result).resolves.toMatchObject({ text: "ok" });
+    });
+
+    it("uses exponential backoff delays when retry-after is absent", async () => {
+        vi.useFakeTimers();
+        const fetchSpy = vi
+            .fn()
+            .mockResolvedValueOnce(new Response("down", { status: 503 }))
+            .mockResolvedValueOnce(new Response("down", { status: 503 }))
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ text: "ok" }), { status: 200 }),
+            );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const result = elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            timeoutMs: 5000,
+        });
+
+        // First retry delay: INITIAL_RETRY_DELAY_MS * 2**0 = 1000ms.
+        await vi.advanceTimersByTimeAsync(999);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+        // Second retry delay: INITIAL_RETRY_DELAY_MS * 2**1 = 2000ms.
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
+
+        await expect(result).resolves.toMatchObject({ text: "ok" });
+    });
+
+    it("retries after a fetch rejection (network interruption)", async () => {
+        vi.useFakeTimers();
+        const fetchSpy = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("network reset"))
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ text: "ok" }), { status: 200 }),
+            );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const result = elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            timeoutMs: 5000,
+        });
+        await vi.runAllTimersAsync();
+
+        await expect(result).resolves.toMatchObject({ text: "ok" });
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries after a per-attempt timeout and eventually times out for good if it never recovers", async () => {
+        vi.useFakeTimers();
+        let call = 0;
+        const fetchSpy = vi.fn().mockImplementation(
+            (_url: string, init: { signal: AbortSignal }) =>
+                new Promise<Response>((resolve, reject) => {
+                    call += 1;
+                    if (call === 1) {
+                        init.signal.addEventListener("abort", () => {
+                            const err = new Error("Aborted");
+                            err.name = "AbortError";
+                            reject(err);
+                        });
+                        return;
+                    }
+                    resolve(
+                        new Response(JSON.stringify({ text: "ok" }), {
+                            status: 200,
+                        }),
+                    );
+                }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const result = elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            timeoutMs: 5000,
+        });
+        await vi.runAllTimersAsync();
+
+        await expect(result).resolves.toMatchObject({ text: "ok" });
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("gives up with a 504 after every attempt times out", async () => {
+        vi.useFakeTimers();
+        const fetchSpy = vi.fn().mockImplementation(
+            (_url: string, init: { signal: AbortSignal }) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init.signal.addEventListener("abort", () => {
+                        const err = new Error("Aborted");
+                        err.name = "AbortError";
+                        reject(err);
+                    });
+                }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        const result = elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            timeoutMs: 5000,
+        });
+        const assertion = expect(result).rejects.toThrow(/timed out/i);
         await vi.runAllTimersAsync();
         await assertion;
 

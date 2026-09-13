@@ -8,6 +8,7 @@ import {
     userSettings,
 } from "@/db/schema";
 import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
+import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import {
     getAiOutputLanguageDirective,
     getDefaultSummaryPromptConfig,
@@ -163,25 +164,20 @@ export async function generateSummaryForRecording(
     }
 
     // Credentials: prefer the user's enhancement-default provider, fall
-    // back to any configured provider.
-    const [enhancementCredentials] = await db
-        .select()
-        .from(apiCredentials)
-        .where(
-            and(
-                eq(apiCredentials.userId, userId),
-                eq(apiCredentials.isDefaultEnhancement, true),
-            ),
-        )
-        .limit(1);
-
-    const [fallbackCredentials] = await db
+    // back to any configured one. Transcription-only providers are skipped
+    // in both picks: a stored enhancement default can predate that
+    // restriction.
+    const userCredentials = await db
         .select()
         .from(apiCredentials)
         .where(eq(apiCredentials.userId, userId))
-        .limit(1);
+        .orderBy(apiCredentials.createdAt);
 
-    const credentials = enhancementCredentials || fallbackCredentials;
+    const credentials =
+        userCredentials.find(
+            (row) =>
+                row.isDefaultEnhancement && supportsEnhancement(row.provider),
+        ) ?? userCredentials.find((row) => supportsEnhancement(row.provider));
 
     if (!credentials) {
         throw new AppError(

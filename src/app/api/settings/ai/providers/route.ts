@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
 import { listUserProviders } from "@/lib/ai/list-providers";
+import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
@@ -38,6 +39,15 @@ export const POST = apiHandler(async (request: Request) => {
             ErrorCode.MISSING_REQUIRED_FIELD,
             "Provider and API key are required",
             400,
+        );
+    }
+
+    if (isDefaultEnhancement && !supportsEnhancement(provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${provider} does not support AI enhancements (transcription only)`,
+            400,
+            { field: "isDefaultEnhancement" },
         );
     }
 

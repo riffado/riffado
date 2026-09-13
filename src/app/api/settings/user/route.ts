@@ -201,6 +201,19 @@ export const PUT = apiHandler(async (request: Request) => {
             );
         }
         if (
+            field === "speakerDiarization" &&
+            value !== undefined &&
+            value !== null &&
+            typeof value !== "boolean"
+        ) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                "Invalid speakerDiarization value",
+                400,
+                { field },
+            );
+        }
+        if (
             field === "diarizationSpeakerCount" &&
             value !== undefined &&
             value !== null &&

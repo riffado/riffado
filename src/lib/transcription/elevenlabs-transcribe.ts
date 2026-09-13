@@ -16,8 +16,12 @@ const MAX_RETRY_DELAY_MS = 30_000;
 // ElevenLabs advertises a 5 GB per-request limit, far beyond OpenAI's
 // 25 MiB. The whole buffer is still materialized in memory (same as every
 // other provider path today), so cap well under that to avoid OOMing the
-// transcription worker on a pathological upload.
-const MAX_FILE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+// transcription worker on a pathological upload. The real enforcement
+// point is `downloadFileWithLimit` in `transcribe-recording.ts`, which
+// aborts the download before the buffer is fully materialized; the check
+// below is a last-resort assertion for any caller that hands in an
+// already-materialized `File`.
+export const ELEVENLABS_MAX_FILE_BYTES = 1024 * 1024 * 1024; // 1 GiB
 
 function isTransientStatus(status: number): boolean {
     return (
@@ -102,7 +106,7 @@ export class ElevenLabsFileTooLargeError extends Error {
     constructor(public sizeBytes: number) {
         super(
             `Audio file (${Math.round(sizeBytes / 1024 / 1024)} MB) exceeds the ` +
-                `${MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`,
+                `${ELEVENLABS_MAX_FILE_BYTES / 1024 / 1024} MB limit for ElevenLabs transcription.`,
         );
         this.name = "ElevenLabsFileTooLargeError";
     }
@@ -208,16 +212,78 @@ async function postSpeechToText(args: {
     for (;;) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
-        let response: Response;
         try {
-            response = await fetch(url, {
+            const response = await fetch(url, {
                 method: "POST",
                 headers: { "xi-api-key": apiKey },
                 body: form,
                 signal: controller.signal,
             });
+
+            if (response.ok) {
+                return (await response.json()) as ElevenLabsTranscriptionResponse;
+            }
+
+            if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
+                const delay =
+                    retryAfterMs(response.headers.get("retry-after")) ??
+                    Math.min(
+                        INITIAL_RETRY_DELAY_MS * 2 ** attempt,
+                        MAX_RETRY_DELAY_MS,
+                    );
+                await response.text().catch(() => "");
+                attempt += 1;
+                console.warn(
+                    `[elevenlabs] transcription request failed (${response.status}), retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`,
+                );
+                await sleep(delay);
+                continue;
+            }
+
+            const detail = await response.text().catch(() => "");
+            console.error(
+                `[elevenlabs] transcription request failed (${response.status}): ${detail.slice(0, 2000)}`,
+            );
+
+            if (response.status === 401 || response.status === 403) {
+                throw new ElevenLabsTranscribeError(
+                    response.status,
+                    "ElevenLabs rejected the API key.",
+                );
+            }
+            if (response.status === 422) {
+                throw new ElevenLabsTranscribeError(
+                    422,
+                    "ElevenLabs rejected the transcription request (invalid parameters).",
+                );
+            }
+            throw new ElevenLabsTranscribeError(
+                response.status,
+                `ElevenLabs returned ${response.status} while transcribing.`,
+            );
         } catch (err) {
-            if ((err as Error).name === "AbortError") {
+            // A non-retryable status error raised above must propagate as-is
+            // -- it is not a network failure and must not be reinterpreted
+            // as one by the fallback handling below.
+            if (err instanceof ElevenLabsTranscribeError) {
+                throw err;
+            }
+
+            const isAbort = (err as Error).name === "AbortError";
+            if (attempt < MAX_RETRIES) {
+                const delay = Math.min(
+                    INITIAL_RETRY_DELAY_MS * 2 ** attempt,
+                    MAX_RETRY_DELAY_MS,
+                );
+                attempt += 1;
+                console.warn(
+                    `[elevenlabs] transcription request ${isAbort ? "timed out" : "failed to reach ElevenLabs"}, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`,
+                );
+                await sleep(delay);
+                continue;
+            }
+
+            if (isAbort) {
                 throw new ElevenLabsTranscribeError(
                     504,
                     "Timed out waiting for ElevenLabs to transcribe the audio.",
@@ -230,48 +296,6 @@ async function postSpeechToText(args: {
         } finally {
             clearTimeout(timer);
         }
-
-        if (response.ok) {
-            return (await response.json()) as ElevenLabsTranscriptionResponse;
-        }
-
-        if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
-            const delay =
-                retryAfterMs(response.headers.get("retry-after")) ??
-                Math.min(
-                    INITIAL_RETRY_DELAY_MS * 2 ** attempt,
-                    MAX_RETRY_DELAY_MS,
-                );
-            await response.text().catch(() => "");
-            attempt += 1;
-            console.warn(
-                `[elevenlabs] transcription request failed (${response.status}), retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`,
-            );
-            await sleep(delay);
-            continue;
-        }
-
-        const detail = await response.text().catch(() => "");
-        console.error(
-            `[elevenlabs] transcription request failed (${response.status}): ${detail.slice(0, 2000)}`,
-        );
-
-        if (response.status === 401 || response.status === 403) {
-            throw new ElevenLabsTranscribeError(
-                response.status,
-                "ElevenLabs rejected the API key.",
-            );
-        }
-        if (response.status === 422) {
-            throw new ElevenLabsTranscribeError(
-                422,
-                "ElevenLabs rejected the transcription request (invalid parameters).",
-            );
-        }
-        throw new ElevenLabsTranscribeError(
-            response.status,
-            `ElevenLabs returned ${response.status} while transcribing.`,
-        );
     }
 }
 
@@ -289,7 +313,7 @@ export async function elevenLabsTranscribe(
         timeoutMs,
     } = args;
 
-    if (file.size > MAX_FILE_BYTES) {
+    if (file.size > ELEVENLABS_MAX_FILE_BYTES) {
         throw new ElevenLabsFileTooLargeError(file.size);
     }
 

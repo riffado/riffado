@@ -4,6 +4,7 @@
  * Whisper-only compression step, and forwards the diarization settings.
  */
 
+import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/db", () => ({
@@ -35,6 +36,11 @@ vi.mock("@/lib/encryption/fields", async () => {
 vi.mock("@/lib/storage/factory", () => ({
     createUserStorageProvider: vi.fn().mockResolvedValue({
         downloadFile: vi.fn().mockResolvedValue(Buffer.from("fake-mp3-bytes")),
+        downloadStream: vi
+            .fn()
+            .mockImplementation(async () =>
+                Readable.from([Buffer.from("fake-mp3-bytes")]),
+            ),
     }),
 }));
 
@@ -56,9 +62,16 @@ vi.mock("openai", () => {
     return { OpenAI: MockOpenAI };
 });
 
-vi.mock("@/lib/transcription/elevenlabs-transcribe", () => ({
-    elevenLabsTranscribe: elevenLabsTranscribeMock,
-}));
+vi.mock("@/lib/transcription/elevenlabs-transcribe", async (importOriginal) => {
+    const actual =
+        await importOriginal<
+            typeof import("@/lib/transcription/elevenlabs-transcribe")
+        >();
+    return {
+        ...actual,
+        elevenLabsTranscribe: elevenLabsTranscribeMock,
+    };
+});
 
 vi.mock("@/lib/transcription/compress-audio", () => ({
     maybeCompressForWhisper: compressMock,
@@ -99,13 +112,17 @@ import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 const userId = "user-el";
 const recordingId = "rec-el";
 
-function mockRecordingFlow(settingsOverrides: Record<string, unknown> = {}) {
+function mockRecordingFlow(
+    settingsOverrides: Record<string, unknown> = {},
+    opts: { rawSettingsRow?: Record<string, unknown> } = {},
+) {
     const recordingRow = {
         id: recordingId,
         userId,
         plaudFileId: "plaud-1",
         filename: "Some Recording",
         storagePath: "rec-el.mp3",
+        filesize: 1024,
         deletedAt: null,
     };
     const credsRow = {
@@ -114,6 +131,16 @@ function mockRecordingFlow(settingsOverrides: Record<string, unknown> = {}) {
         apiKey: "encrypted-key",
         baseUrl: null,
         defaultModel: "scribe_v2",
+    };
+
+    const settingsRow = opts.rawSettingsRow ?? {
+        autoGenerateTitle: false,
+        syncTitleToPlaud: false,
+        transcriptionQuality: "balanced",
+        defaultTranscriptionLanguage: null,
+        speakerDiarization: true,
+        diarizationSpeakerCount: null,
+        ...settingsOverrides,
     };
 
     (db.select as Mock)
@@ -145,17 +172,7 @@ function mockRecordingFlow(settingsOverrides: Record<string, unknown> = {}) {
         .mockReturnValueOnce({
             from: vi.fn().mockReturnValue({
                 where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue([
-                        {
-                            autoGenerateTitle: false,
-                            syncTitleToPlaud: false,
-                            transcriptionQuality: "balanced",
-                            defaultTranscriptionLanguage: null,
-                            speakerDiarization: true,
-                            diarizationSpeakerCount: null,
-                            ...settingsOverrides,
-                        },
-                    ]),
+                    limit: vi.fn().mockResolvedValue([settingsRow]),
                 }),
             }),
         });
@@ -291,5 +308,33 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
             model: "scribe_v2",
             source: "riffado",
         });
+    });
+
+    it("defaults diarize to true and numSpeakers to undefined when the settings row omits both fields", async () => {
+        elevenLabsTranscribeMock.mockResolvedValue({
+            text: "plain",
+            detectedLanguage: null,
+            speakerCount: 0,
+        });
+        mockRecordingFlow(
+            {},
+            {
+                rawSettingsRow: {
+                    autoGenerateTitle: false,
+                    syncTitleToPlaud: false,
+                    transcriptionQuality: "balanced",
+                    defaultTranscriptionLanguage: null,
+                    // speakerDiarization / diarizationSpeakerCount
+                    // intentionally omitted -- exercises the `?? true` /
+                    // `?? undefined` fallbacks in transcribe-recording.ts.
+                },
+            },
+        );
+
+        await transcribeRecording(userId, recordingId);
+
+        const args = elevenLabsTranscribeMock.mock.calls[0][0];
+        expect(args.diarize).toBe(true);
+        expect(args.numSpeakers).toBeUndefined();
     });
 });

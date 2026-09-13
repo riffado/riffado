@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
+import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
 import { buildChatCompletionParams } from "./chat-completion-params";
@@ -58,27 +59,22 @@ export async function generateTitleFromTranscription(
             }
         }
 
-        // Get user's AI credentials (prefer enhancement provider, fallback to any configured provider)
-        const [enhancementCredentials] = await db
-            .select()
-            .from(apiCredentials)
-            .where(
-                and(
-                    eq(apiCredentials.userId, userId),
-                    eq(apiCredentials.isDefaultEnhancement, true),
-                ),
-            )
-            .limit(1);
-
-        const [fallbackCredentials] = await db
+        // Prefer the enhancement-default provider, fall back to any
+        // configured one. Transcription-only providers are skipped in both
+        // picks: a stored enhancement default can predate that restriction.
+        const userCredentials = await db
             .select()
             .from(apiCredentials)
             .where(eq(apiCredentials.userId, userId))
-            .orderBy(apiCredentials.createdAt)
-            .limit(1);
+            .orderBy(apiCredentials.createdAt);
 
-        // Prefer enhancement provider, fallback to any configured provider
-        const credentials = enhancementCredentials || fallbackCredentials;
+        const credentials =
+            userCredentials.find(
+                (row) =>
+                    row.isDefaultEnhancement &&
+                    supportsEnhancement(row.provider),
+            ) ??
+            userCredentials.find((row) => supportsEnhancement(row.provider));
 
         if (!credentials) {
             console.warn("No AI provider found for title generation");

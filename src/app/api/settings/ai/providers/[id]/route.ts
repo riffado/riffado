@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
+import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
@@ -38,6 +39,15 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
 
     if (!existing) {
         throw new AppError(ErrorCode.NOT_FOUND, "Provider not found", 404);
+    }
+
+    if (isDefaultEnhancement && !supportsEnhancement(existing.provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${existing.provider} does not support AI enhancements (transcription only)`,
+            400,
+            { field: "isDefaultEnhancement" },
+        );
     }
 
     // On hosted, the app process can't reach the user's machine — reject

@@ -25,8 +25,10 @@ which API surface the transcription worker should use:
   dedicated transcription endpoint. Used by OpenRouter routing
   Gemini / GPT-audio / Voxtral.
 - **ElevenLabs-style** (`/v1/speech-to-text`, multipart upload,
-  `xi-api-key` auth) — not OpenAI-compatible, but the only preset that
-  returns speaker labels. Used by ElevenLabs Scribe.
+  `xi-api-key` auth) — not OpenAI-compatible. Used by ElevenLabs Scribe,
+  which returns speaker labels via diarization. OpenAI's
+  `gpt-4o-transcribe-diarize` model also returns speaker labels, through
+  the regular Whisper-style endpoint.
 
 Pick a preset, paste your API key, choose a default model, save. Repeat
 for additional providers.
@@ -68,18 +70,27 @@ specific reason to use a larger model.
 
 ## Speaker labels
 
-**Settings → Transcription → Speaker labels** turns on diarization,
-currently supported only by ElevenLabs Scribe. When enabled, the
-transcript comes back split by speaker:
+Two providers can return speaker-labelled transcripts, controlled
+differently:
 
-```
-Speaker 1: Hallo zusammen, schön dass ihr da seid.
-Speaker 2: Guten Morgen, lass uns anfangen.
-```
+- **ElevenLabs Scribe** — diarization is controlled by **Settings →
+  Transcription → Speaker labels**. Turning it on splits the transcript
+  by speaker:
 
-An optional "Expected speakers" hint (2–8, or Auto) can improve
-diarization accuracy but is not a hard limit. Providers other than
-ElevenLabs ignore this setting and return an unlabeled transcript.
+  ```
+  Speaker 1: Hallo zusammen, schön dass ihr da seid.
+  Speaker 2: Guten Morgen, lass uns anfangen.
+  ```
+
+  An optional "Expected speakers" hint (1–32, or Auto) can improve
+  diarization accuracy but is not a hard limit.
+- **OpenAI `gpt-4o-transcribe-diarize`** — diarization is selected by
+  picking that model as the provider's default (or per-recording)
+  model, not by the Speaker labels toggle. The toggle has no effect on
+  OpenAI's output either way.
+
+Providers other than these two ignore diarization entirely and return
+an unlabeled transcript.
 
 Language is auto-detected by default (**Settings → Transcription →
 Default transcription language → Auto-detect**), so German recordings
