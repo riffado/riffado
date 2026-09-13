@@ -104,9 +104,6 @@ export function EditProviderDialog({
             setBaseUrl(preset.baseUrl);
             setDefaultModel(preset.defaultModel);
         }
-        if (!supportsEnhancement(value)) {
-            setIsDefaultEnhancement(false);
-        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -316,14 +313,14 @@ export function EditProviderDialog({
                                 }
                                 disabled={
                                     isLoading ||
-                                    !supportsEnhancement(providerName)
+                                    !supportsEnhancement(provider.provider)
                                 }
                             />
                             <span>Use for AI enhancements</span>
                         </label>
-                        {providerName && !supportsEnhancement(providerName) && (
+                        {!supportsEnhancement(provider.provider) && (
                             <p className="text-xs text-muted-foreground pl-6">
-                                {providerName} transcribes only.
+                                {provider.provider} transcribes only.
                             </p>
                         )}
                     </Panel>

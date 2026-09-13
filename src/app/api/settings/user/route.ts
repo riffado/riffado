@@ -203,7 +203,6 @@ export const PUT = apiHandler(async (request: Request) => {
         if (
             field === "speakerDiarization" &&
             value !== undefined &&
-            value !== null &&
             typeof value !== "boolean"
         ) {
             throw new AppError(

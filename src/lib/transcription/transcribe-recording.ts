@@ -61,6 +61,7 @@ export type TranscribeErrorCode =
     | "RECORDING_DELETED"
     | "HOSTED_LOCKED_OUT"
     | "MYNAH_BUDGET_EXHAUSTED"
+    | "FILE_TOO_LARGE"
     | "TRANSCRIPTION_FAILED";
 
 export interface StoreBrowserTranscriptionInput {
@@ -456,6 +457,7 @@ async function transcribeRecordingInner(
                         storage,
                         recording.storagePath,
                         ELEVENLABS_MAX_FILE_BYTES,
+                        recording.filesize,
                     );
                 } catch (err) {
                     if (err instanceof DownloadSizeLimitError) {
@@ -795,6 +797,16 @@ async function transcribeRecordingInner(
                 success: false,
                 error: "You've used all of your included Mynah transcription for this cycle. It resets next cycle, or add your own AI provider to keep transcribing.",
                 errorCode: "MYNAH_BUDGET_EXHAUSTED",
+            };
+        }
+        if (error instanceof ElevenLabsFileTooLargeError) {
+            await emitEvent("transcription.failed", userId, recordingId, {
+                error: error.message,
+            });
+            return {
+                success: false,
+                error: error.message,
+                errorCode: "FILE_TOO_LARGE",
             };
         }
         captureServerException(error, {

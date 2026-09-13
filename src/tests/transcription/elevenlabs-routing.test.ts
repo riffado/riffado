@@ -107,6 +107,7 @@ vi.mock("@/lib/plaud/client-factory", () => ({
 }));
 
 import { db } from "@/db";
+import { ELEVENLABS_MAX_FILE_BYTES } from "@/lib/transcription/elevenlabs-transcribe";
 import { transcribeRecording } from "@/lib/transcription/transcribe-recording";
 
 const userId = "user-el";
@@ -114,7 +115,10 @@ const recordingId = "rec-el";
 
 function mockRecordingFlow(
     settingsOverrides: Record<string, unknown> = {},
-    opts: { rawSettingsRow?: Record<string, unknown> } = {},
+    opts: {
+        rawSettingsRow?: Record<string, unknown>;
+        recordingOverrides?: Record<string, unknown>;
+    } = {},
 ) {
     const recordingRow = {
         id: recordingId,
@@ -124,6 +128,7 @@ function mockRecordingFlow(
         storagePath: "rec-el.mp3",
         filesize: 1024,
         deletedAt: null,
+        ...opts.recordingOverrides,
     };
     const credsRow = {
         id: "creds-el",
@@ -336,5 +341,22 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         const args = elevenLabsTranscribeMock.mock.calls[0][0];
         expect(args.diarize).toBe(true);
         expect(args.numSpeakers).toBeUndefined();
+    });
+
+    it("returns errorCode FILE_TOO_LARGE without calling elevenLabsTranscribe when the recorded filesize exceeds the cap", async () => {
+        mockRecordingFlow(
+            {},
+            {
+                recordingOverrides: {
+                    filesize: ELEVENLABS_MAX_FILE_BYTES + 1,
+                },
+            },
+        );
+
+        const result = await transcribeRecording(userId, recordingId);
+
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe("FILE_TOO_LARGE");
+        expect(elevenLabsTranscribeMock).not.toHaveBeenCalled();
     });
 });

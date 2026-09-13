@@ -78,4 +78,77 @@ describe("downloadFileWithLimit", () => {
             downloadFileWithLimit(storage, "key", 1024),
         ).rejects.toThrow(/boom/);
     });
+
+    describe("with expectedBytes", () => {
+        it("returns the exact bytes when the hint matches the real size", async () => {
+            const source = Buffer.from("hello world");
+            const stream = Readable.from([
+                source.subarray(0, 6),
+                source.subarray(6),
+            ]);
+            const storage = fakeStorage(stream);
+
+            const result = await downloadFileWithLimit(
+                storage,
+                "key",
+                1024,
+                source.length,
+            );
+
+            expect(result.equals(source)).toBe(true);
+        });
+
+        it("returns the exact bytes when the hint understates the real size (overflow path)", async () => {
+            const source = Buffer.from(
+                Array.from({ length: 50 }, (_, i) => i % 256),
+            );
+            // Chunk boundaries deliberately straddle the hinted length so the
+            // split-chunk path is exercised, not just whole-chunk overflow.
+            const stream = Readable.from([
+                source.subarray(0, 7),
+                source.subarray(7, 13),
+                source.subarray(13, 22),
+                source.subarray(22),
+            ]);
+            const storage = fakeStorage(stream);
+
+            const result = await downloadFileWithLimit(
+                storage,
+                "key",
+                1024,
+                10,
+            );
+
+            expect(result.length).toBe(source.length);
+            expect(result.equals(source)).toBe(true);
+        });
+
+        it("returns the exact bytes when the hint overstates the real size", async () => {
+            const source = Buffer.from("short");
+            const stream = Readable.from([source]);
+            const storage = fakeStorage(stream);
+
+            const result = await downloadFileWithLimit(
+                storage,
+                "key",
+                1024,
+                10_000,
+            );
+
+            expect(result.equals(source)).toBe(true);
+        });
+
+        it("still rejects with DownloadSizeLimitError once the true total exceeds maxBytes", async () => {
+            const chunk = Buffer.alloc(10, "a");
+            const chunks = Array.from({ length: 1000 }, () => chunk);
+            const stream = Readable.from(chunks);
+            const destroySpy = vi.spyOn(stream, "destroy");
+            const storage = fakeStorage(stream);
+
+            await expect(
+                downloadFileWithLimit(storage, "key", 25, 15),
+            ).rejects.toBeInstanceOf(DownloadSizeLimitError);
+            expect(destroySpy).toHaveBeenCalled();
+        });
+    });
 });
