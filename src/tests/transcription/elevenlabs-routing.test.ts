@@ -287,6 +287,34 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         expect(args.model).toBe("scribe_v2");
     });
 
+    it("forwards an explicitly selected language", async () => {
+        elevenLabsTranscribeMock.mockResolvedValue({
+            text: "plain",
+            detectedLanguage: "de",
+            speakerCount: 0,
+        });
+        mockRecordingFlow({ defaultTranscriptionLanguage: "de" });
+
+        await transcribeRecording(userId, recordingId);
+
+        const args = elevenLabsTranscribeMock.mock.calls[0][0];
+        expect(args.language).toBe("de");
+    });
+
+    it("normalizes an empty-string language to undefined", async () => {
+        elevenLabsTranscribeMock.mockResolvedValue({
+            text: "plain",
+            detectedLanguage: null,
+            speakerCount: 0,
+        });
+        mockRecordingFlow({ defaultTranscriptionLanguage: "" });
+
+        await transcribeRecording(userId, recordingId);
+
+        const args = elevenLabsTranscribeMock.mock.calls[0][0];
+        expect(args.language).toBeUndefined();
+    });
+
     it("passes diarize: false and the speaker-count hint when set", async () => {
         elevenLabsTranscribeMock.mockResolvedValue({
             text: "plain",
@@ -331,7 +359,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         });
     });
 
-    it("defaults diarize to true and numSpeakers to undefined when the settings row omits both fields", async () => {
+    it("defaults diarize to true, numSpeakers to undefined, and language to undefined when the settings row omits all three fields", async () => {
         elevenLabsTranscribeMock.mockResolvedValue({
             text: "plain",
             detectedLanguage: null,
@@ -344,9 +372,9 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
                     autoGenerateTitle: false,
                     syncTitleToPlaud: false,
                     transcriptionQuality: "balanced",
-                    defaultTranscriptionLanguage: null,
-                    // speakerDiarization / diarizationSpeakerCount
-                    // intentionally omitted -- exercises the `?? true` /
+                    // defaultTranscriptionLanguage / speakerDiarization /
+                    // diarizationSpeakerCount intentionally omitted --
+                    // exercises the `|| undefined` / `?? true` /
                     // `?? undefined` fallbacks in transcribe-recording.ts.
                 },
             },
@@ -357,6 +385,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         const args = elevenLabsTranscribeMock.mock.calls[0][0];
         expect(args.diarize).toBe(true);
         expect(args.numSpeakers).toBeUndefined();
+        expect(args.language).toBeUndefined();
     });
 
     it("returns errorCode FILE_TOO_LARGE without calling elevenLabsTranscribe when the recorded filesize exceeds the cap", async () => {
