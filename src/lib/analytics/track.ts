@@ -16,11 +16,18 @@ declare global {
     }
 }
 
+function tracker() {
+    if (typeof window.oa?.track === "function") return window.oa;
+    if (typeof window.openanalytics?.track === "function") {
+        return window.openanalytics;
+    }
+    return undefined;
+}
+
 export function track(name: string, props?: Record<string, unknown>) {
     if (typeof window === "undefined") return;
     try {
-        const oa = window.oa ?? window.openanalytics;
-        oa?.track?.(name, props);
+        tracker()?.track?.(name, props);
     } catch {
         // Analytics must never break the page.
     }

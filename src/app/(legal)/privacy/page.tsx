@@ -22,7 +22,7 @@ import { marketingMetadata } from "@/lib/seo/marketing-metadata";
  *
  * Every factual claim here is traceable to code: AES-256-GCM token
  * encryption (`src/lib/encryption.ts`), full-archive export, account
- * deletion, user-configured AI providers.
+ * deletion, cookieless usage analytics, user-configured AI providers.
  * Do not add claims the code does not back. Variable facts (entity,
  * address, recipient categories, contacts) come from
  * `@/lib/legal/constants`.
@@ -95,6 +95,12 @@ export default function PrivacyPage() {
                     billing country, renewal or cancellation dates, withdrawal
                     waiver timestamp, and processor metadata needed to reconcile
                     billing. We never see or store your full card number.
+                </li>
+                <li>
+                    <strong>Usage analytics</strong>: privacy-friendly,
+                    aggregate usage data collected with a cookieless tracker. It
+                    does not use advertising cookies and is not gated on a
+                    consent banner.
                 </li>
             </ul>
 

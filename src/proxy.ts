@@ -36,7 +36,11 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+    // NOTE: "js" is deliberately NOT in this extension exclusion list.
+    // `/psthg/static/...` and `/psthg/array/...` serve JavaScript through
+    // App Router handlers and must still hit `decideHostnameGate` when
+    // ADMIN_HOSTNAME is set. `_next/static` already covers Next chunks.
     matcher: [
-        "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|woff|woff2|ttf|otf|map|js)).*)",
+        "/((?!_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|css|woff|woff2|ttf|otf|map)).*)",
     ],
 };
