@@ -22,7 +22,7 @@ import { marketingMetadata } from "@/lib/seo/marketing-metadata";
  *
  * Every factual claim here is traceable to code: AES-256-GCM token
  * encryption (`src/lib/encryption.ts`), full-archive export, account
- * deletion, self-hosted Rybbit analytics, user-configured AI providers.
+ * deletion, user-configured AI providers.
  * Do not add claims the code does not back. Variable facts (entity,
  * address, recipient categories, contacts) come from
  * `@/lib/legal/constants`.
@@ -95,12 +95,6 @@ export default function PrivacyPage() {
                     billing country, renewal or cancellation dates, withdrawal
                     waiver timestamp, and processor metadata needed to reconcile
                     billing. We never see or store your full card number.
-                </li>
-                <li>
-                    <strong>Usage analytics</strong>: privacy-friendly,
-                    aggregate usage data collected through analytics software we
-                    host ourselves. It uses no advertising cookies and is not
-                    shared with any third party.
                 </li>
             </ul>
 
@@ -180,10 +174,6 @@ export default function PrivacyPage() {
                     </tbody>
                 </table>
             </div>
-            <p>
-                Our analytics software runs on our own infrastructure, so it is
-                not a third-party recipient of your data.
-            </p>
 
             <h2>AI providers you configure</h2>
             <p>

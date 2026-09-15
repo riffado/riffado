@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     // `IS_HOSTED` (a deployment-time-only var) at container runtime.
     // Moved to route handlers under `src/app/psthg/` (see
     // `src/lib/posthog/proxy.ts`), which run per-request and read live
-    // env, same pattern as the Rybbit proxy.
+    // env, same pattern as other hosted-only proxies.
     skipTrailingSlashRedirect: true,
     // `scripts/install.sh` is read from disk at request time by the
     // /install.sh routes; declare it so the standalone tracer ships it.

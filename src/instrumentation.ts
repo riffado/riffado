@@ -118,7 +118,7 @@ export async function register() {
  * error that escapes a Server Component, Route Handler, or Server Action
  * without being caught -- this is what closes the gap `apiHandler`-based
  * capture can't: routes that don't use `apiHandler` (better-auth, health,
- * the Rybbit proxy passthroughs, etc.) and React Server Component render
+ * the PostHog proxy passthroughs, etc.) and React Server Component render
  * errors. Hard-gated on IS_HOSTED inside `captureServerException` itself.
  */
 export async function onRequestError(

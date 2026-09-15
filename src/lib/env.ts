@@ -202,9 +202,12 @@ const baseEnvSchema = z.object({
         .transform((val) => val === "true"),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
-    /** Rybbit analytics (hosted only). Inert unless both site id and host are set. */
-    RYBBIT_SITE_ID: z.string().optional(),
-    RYBBIT_HOST: z.string().url("RYBBIT_HOST must be a valid URL").optional(),
+    /**
+     * Open Analytics tracking key (hosted only). Inert unless set.
+     * Collector and script URL are hardcoded to oa.perier.pl; the snippet
+     * is cookieless (`data-storage="none"`) and is not gated on a banner.
+     */
+    OA_TRACKING_KEY: z.string().optional(),
 
     /**
      * PostHog analytics (hosted-only, hard-gated on IS_HOSTED regardless of
@@ -768,8 +771,7 @@ function validateEnv(): Env {
             SMTP_HOST: process.env.SMTP_HOST,
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,
-            RYBBIT_SITE_ID: process.env.RYBBIT_SITE_ID,
-            RYBBIT_HOST: process.env.RYBBIT_HOST,
+            OA_TRACKING_KEY: process.env.OA_TRACKING_KEY,
             POSTHOG_KEY: process.env.POSTHOG_KEY,
             SMTP_USER: process.env.SMTP_USER,
             SMTP_PASSWORD: process.env.SMTP_PASSWORD,

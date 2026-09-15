@@ -91,14 +91,8 @@ export type RecipientCategory = {
  * guidelines: what kind of provider, what it does, where it processes,
  * and the transfer safeguard.
  *
- * Self-hosted analytics (Rybbit) runs on the operator's own
- * infrastructure and is intentionally NOT a third-party recipient.
- * User-configured AI providers are not the operator's processors either
- * -- the user contracts with them directly.
- *
- * When error monitoring (PostHog EU) ships, add an "error monitoring
- * provider" category here; being EU-hosted it introduces no new
- * international-transfer concern.
+ * User-configured AI providers are not the operator's processors --
+ * the user contracts with them directly.
  */
 export const RECIPIENT_CATEGORIES: RecipientCategory[] = [
     {

@@ -7,7 +7,7 @@ let warnedMisconfig = false;
 /**
  * Hard-gated on `IS_HOSTED` -- self-host deployments never call
  * `posthog.init()`, even if `POSTHOG_KEY` happens to be set. Mirrors
- * `RybbitAnalytics`'s gating shape.
+ * `OpenAnalytics`'s gating shape.
  */
 export function PostHogAnalytics() {
     if (!env.IS_HOSTED) return null;
