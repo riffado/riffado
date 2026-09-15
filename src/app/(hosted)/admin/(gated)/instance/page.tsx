@@ -33,7 +33,7 @@ export default async function AdminInstancePage() {
         { k: "SMTP", v: env.SMTP_HOST ? `set: ${env.SMTP_HOST}` : "unset" },
         {
             k: "Open Analytics",
-            v: env.OA_TRACKING_KEY ? "configured" : "off",
+            v: env.OA_TRACKING_KEY && env.OA_HOST ? "configured" : "off",
         },
         { k: "Encryption key fingerprint", v: keyFp },
         { k: "Auth secret fingerprint", v: authFp },

@@ -203,11 +203,12 @@ const baseEnvSchema = z.object({
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
     /**
-     * Open Analytics tracking key (hosted only). Inert unless set.
-     * Collector and script URL are hardcoded to oa.perier.pl; the snippet
-     * is cookieless (`data-storage="none"`) and is not gated on a banner.
+     * Open Analytics (hosted only). Inert unless both the tracking key
+     * and host are set. Script is `${OA_HOST}/oa.js`; collector is
+     * OA_HOST. Cookieless (`data-storage="none"`); not gated on a banner.
      */
     OA_TRACKING_KEY: z.string().optional(),
+    OA_HOST: z.string().url("OA_HOST must be a valid URL").optional(),
 
     /**
      * PostHog analytics (hosted-only, hard-gated on IS_HOSTED regardless of
@@ -772,6 +773,7 @@ function validateEnv(): Env {
             SMTP_PORT: process.env.SMTP_PORT,
             SMTP_SECURE: process.env.SMTP_SECURE,
             OA_TRACKING_KEY: process.env.OA_TRACKING_KEY,
+            OA_HOST: process.env.OA_HOST,
             POSTHOG_KEY: process.env.POSTHOG_KEY,
             SMTP_USER: process.env.SMTP_USER,
             SMTP_PASSWORD: process.env.SMTP_PASSWORD,
