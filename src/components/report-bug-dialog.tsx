@@ -12,6 +12,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { uiText } from "@/lib/i18n";
 import {
     buildReportBugBodyPreview,
     buildReportBugMailto,
@@ -57,17 +58,21 @@ export function ReportBugDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Report a bug</DialogTitle>
+                    <DialogTitle>{uiText("Report a bug")}</DialogTitle>
                     <DialogDescription>
                         {errorId
-                            ? "Something went wrong. The details below will be pre-filled \u2014 add what you were doing and we'll take a look."
-                            : "Pick how you'd like to report this. Your version and deployment mode are pre-filled to save you typing."}
+                            ? uiText(
+                                  "Something went wrong. The details below will be pre-filled — add what you were doing and we'll take a look.",
+                              )
+                            : uiText(
+                                  "Pick how you'd like to report this. Your version and deployment mode are pre-filled to save you typing.",
+                              )}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">
-                        Preview
+                        {uiText("Preview")}
                     </p>
                     <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 p-3 text-xs whitespace-pre-wrap break-words">
                         {preview}
@@ -83,7 +88,7 @@ export function ReportBugDialog({
                                 onClick={() => onOpenChange(false)}
                             >
                                 <Mail className="size-4" />
-                                Email us
+                                {uiText("Email us")}
                             </a>
                         </Button>
                     ) : null}
@@ -95,7 +100,7 @@ export function ReportBugDialog({
                             onClick={() => onOpenChange(false)}
                         >
                             <Github className="size-4" />
-                            Report on GitHub
+                            {uiText("Report on GitHub")}
                         </a>
                     </Button>
                 </DialogFooter>
@@ -132,7 +137,7 @@ export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
                 onClick={() => setOpen(true)}
                 className={`${RESET_BUTTON_CLASSES} ${className ?? ""}`}
             >
-                Report a bug
+                {uiText("Report a bug")}
             </button>
             <ReportBugDialog
                 isHosted={isHosted}

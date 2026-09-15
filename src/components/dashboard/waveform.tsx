@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface WaveformProps {
@@ -307,11 +308,14 @@ export function Waveform({
             onKeyDown={onKeyDown}
             role="slider"
             tabIndex={disabled ? -1 : 0}
-            aria-label="Audio waveform scrubber"
+            aria-label={uiText("Audio waveform scrubber")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(progress * 100)}
-            aria-valuetext={`${formatSeconds(progress * durationSeconds)} of ${formatSeconds(durationSeconds)}`}
+            aria-valuetext={uiText("{current} of {total}", {
+                current: formatSeconds(progress * durationSeconds),
+                total: formatSeconds(durationSeconds),
+            })}
             aria-disabled={disabled || undefined}
             style={{ height }}
         >

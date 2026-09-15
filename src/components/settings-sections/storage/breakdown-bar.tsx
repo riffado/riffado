@@ -1,6 +1,7 @@
 "use client";
 
 import { formatBytes } from "@/lib/format-bytes";
+import { uiText } from "@/lib/i18n";
 
 /**
  * Shared color stops between the breakdown bar and the largest list.
@@ -52,19 +53,26 @@ export function BreakdownBar({ segments, totalBytes }: BreakdownBarProps) {
     return (
         <div className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">
-                <div className="text-sm font-medium">Storage breakdown</div>
+                <div className="text-sm font-medium">
+                    {uiText("Storage breakdown")}
+                </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
-                    Top {segments.length} ={" "}
+                    {uiText("Top")}
+                    {segments.length} ={" "}
                     <span className="font-medium text-foreground">
                         {topPct.toFixed(0)}%
                     </span>{" "}
-                    of {formatBytes(totalBytes)}
+                    {uiText("of")}
+                    {formatBytes(totalBytes)}
                 </div>
             </div>
             <div
                 className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
                 role="img"
-                aria-label={`Top ${segments.length} recordings account for ${topPct.toFixed(0)} percent of storage`}
+                aria-label={uiText(
+                    "Top {count} recordings account for {percent} percent of storage",
+                    { count: segments.length, percent: topPct.toFixed(0) },
+                )}
             >
                 {segments.map((s, i) => (
                     <div
@@ -78,7 +86,9 @@ export function BreakdownBar({ segments, totalBytes }: BreakdownBarProps) {
                     <div
                         className={`${REST_COLOR} h-full`}
                         style={{ width: `${restWidth}%` }}
-                        title={`Everything else: ${formatBytes(restBytes)}`}
+                        title={uiText("Everything else: {size}", {
+                            size: formatBytes(restBytes),
+                        })}
                     />
                 )}
             </div>

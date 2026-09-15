@@ -15,20 +15,22 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { uiText } from "@/lib/i18n";
 
 const syncIntervalPresets = [
-    { label: "1 minute", value: 60 * 1000 },
-    { label: "2 minutes", value: 2 * 60 * 1000 },
-    { label: "5 minutes", value: 5 * 60 * 1000 },
-    { label: "10 minutes", value: 10 * 60 * 1000 },
-    { label: "15 minutes", value: 15 * 60 * 1000 },
-    { label: "30 minutes", value: 30 * 60 * 1000 },
-    { label: "1 hour", value: 60 * 60 * 1000 },
+    { label: uiText("1 minute"), value: 60 * 1000 },
+    { label: uiText("2 minutes"), value: 2 * 60 * 1000 },
+    { label: uiText("5 minutes"), value: 5 * 60 * 1000 },
+    { label: uiText("10 minutes"), value: 10 * 60 * 1000 },
+    { label: uiText("15 minutes"), value: 15 * 60 * 1000 },
+    { label: uiText("30 minutes"), value: 30 * 60 * 1000 },
+    { label: uiText("1 hour"), value: 60 * 60 * 1000 },
 ];
 
 const getSyncIntervalLabel = (value: number) => {
     return (
-        syncIntervalPresets.find((p) => p.value === value)?.label || "Custom"
+        syncIntervalPresets.find((p) => p.value === value)?.label ||
+        uiText("Custom")
     );
 };
 
@@ -124,7 +126,7 @@ export function SyncSection() {
                 const prev = previousValues.syncNotifications;
                 if (typeof prev === "boolean") setSyncNotifications(prev);
             }
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -139,16 +141,20 @@ export function SyncSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Sync"
-                description="When and how Riffado pulls new recordings from your Plaud device."
+                title={uiText("Sync")}
+                description={uiText(
+                    "When and how Riffado pulls new recordings from your Plaud device.",
+                )}
                 icon={RefreshCw}
             />
             <div className="space-y-3">
-                <SettingsCard title="Auto-sync">
+                <SettingsCard title={uiText("Auto-sync")}>
                     <ToggleRow
                         id="auto-sync"
-                        label="Enable auto-sync"
-                        description="Automatically sync recordings from your Plaud device at regular intervals."
+                        label={uiText("Enable auto-sync")}
+                        description={uiText(
+                            "Automatically sync recordings from your Plaud device at regular intervals.",
+                        )}
                         checked={autoSyncEnabled}
                         onCheckedChange={(checked) => {
                             setAutoSyncEnabled(checked);
@@ -163,7 +169,7 @@ export function SyncSection() {
                         <div className="mt-3 space-y-3 border-t pt-3">
                             <div className="space-y-2">
                                 <Label htmlFor="sync-interval">
-                                    Sync interval
+                                    {uiText("Sync interval")}
                                 </Label>
                                 <Select
                                     value={syncInterval.toString()}
@@ -199,8 +205,10 @@ export function SyncSection() {
 
                             <ToggleRow
                                 id="sync-on-mount"
-                                label="Sync on app load"
-                                description="Automatically sync when the app first loads."
+                                label={uiText("Sync on app load")}
+                                description={uiText(
+                                    "Automatically sync when the app first loads.",
+                                )}
                                 checked={syncOnMount}
                                 onCheckedChange={(checked) => {
                                     setSyncOnMount(checked);
@@ -213,8 +221,10 @@ export function SyncSection() {
 
                             <ToggleRow
                                 id="sync-on-visibility"
-                                label="Sync on tab visibility"
-                                description="Sync when you return to the app tab."
+                                label={uiText("Sync on tab visibility")}
+                                description={uiText(
+                                    "Sync when you return to the app tab.",
+                                )}
                                 checked={syncOnVisibilityChange}
                                 onCheckedChange={(checked) => {
                                     setSyncOnVisibilityChange(checked);
@@ -228,11 +238,13 @@ export function SyncSection() {
                     )}
                 </SettingsCard>
 
-                <SettingsCard title="Notifications">
+                <SettingsCard title={uiText("Notifications")}>
                     <ToggleRow
                         id="sync-notifications"
-                        label="Show sync notifications"
-                        description="Display notifications when sync completes."
+                        label={uiText("Show sync notifications")}
+                        description={uiText(
+                            "Display notifications when sync completes.",
+                        )}
                         checked={syncNotifications}
                         onCheckedChange={(checked) => {
                             setSyncNotifications(checked);

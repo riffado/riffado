@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { uiText } from "@/lib/i18n";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -54,8 +55,8 @@ interface TranscriptionPanelProps {
 
 function transcriptSourceLabel(source: string): string {
     if (source === "plaud") return "Plaud";
-    if (source === "mixed") return "Mix";
-    return "Your provider";
+    if (source === "mixed") return uiText("Mix");
+    return uiText("Your provider");
 }
 
 export function TranscriptionPanel({
@@ -109,7 +110,7 @@ export function TranscriptionPanel({
                     <div className="flex items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
                             <FileText className="size-5" />
-                            Transcription
+                            {uiText("Transcription")}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                             {activeTranscript?.text && (
@@ -120,7 +121,7 @@ export function TranscriptionPanel({
                                     disabled={isTranscribing}
                                 >
                                     <RefreshCw className="size-4 mr-2" />
-                                    Re-transcribe
+                                    {uiText("Re-transcribe")}
                                 </Button>
                             )}
                             {!activeTranscript?.text && !isTranscribing && (
@@ -131,7 +132,7 @@ export function TranscriptionPanel({
                                         disabled={isTranscribing}
                                     >
                                         <Sparkles className="size-4 mr-2" />
-                                        Transcribe
+                                        {uiText("Transcribe")}
                                     </Button>
                                     <TranscribeInBrowserButton
                                         recordingId={recording.id}
@@ -158,7 +159,7 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-12">
                             <div className="animate-spin size-8 border-2 border-primary border-t-transparent rounded-full mb-4" />
                             <p className="text-sm text-muted-foreground">
-                                Transcribing audio…
+                                {uiText("Transcribing audio…")}
                             </p>
                         </div>
                     ) : activeTranscript?.text ? (
@@ -199,7 +200,7 @@ export function TranscriptionPanel({
                                     <div className="flex items-center gap-1">
                                         <Languages className="size-3" />
                                         <span>
-                                            Language:{" "}
+                                            {uiText("Language:")}{" "}
                                             {activeTranscript.language}
                                         </span>
                                     </div>
@@ -210,10 +211,11 @@ export function TranscriptionPanel({
                                               .trim()
                                               .split(/\s+/).length
                                         : 0}{" "}
-                                    words
+                                    {uiText("words")}
                                 </div>
                                 <div>
-                                    {activeTranscript.text.length} characters
+                                    {activeTranscript.text.length}{" "}
+                                    {uiText("characters")}
                                 </div>
                             </div>
                         </div>
@@ -221,8 +223,9 @@ export function TranscriptionPanel({
                         <div className="flex flex-col items-center justify-center py-10 text-center">
                             <FileText className="size-10 text-muted-foreground mb-3" />
                             <p className="text-sm text-muted-foreground">
-                                No transcription yet. Use the Transcribe button
-                                above.
+                                {uiText(
+                                    "No transcription yet. Use the Transcribe button above.",
+                                )}
                             </p>
                         </div>
                     )}
@@ -236,7 +239,7 @@ export function TranscriptionPanel({
                         <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">
                                 <ListChecks className="size-5" />
-                                Summary
+                                {uiText("Summary")}
                             </CardTitle>
                             <div className="flex items-center gap-2">
                                 {!isSummarizing && (
@@ -272,17 +275,17 @@ export function TranscriptionPanel({
                                     {isSummarizing ? (
                                         <>
                                             <Loader2 className="size-4 mr-2 animate-spin" />
-                                            Generating…
+                                            {uiText("Generating…")}
                                         </>
                                     ) : summaryData ? (
                                         <>
                                             <RefreshCw className="size-4 mr-2" />
-                                            Re-generate
+                                            {uiText("Re-generate")}
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="size-4 mr-2" />
-                                            Summarize
+                                            {uiText("Summarize")}
                                         </>
                                     )}
                                 </Button>
@@ -294,7 +297,7 @@ export function TranscriptionPanel({
                             <div className="flex flex-col items-center justify-center py-8">
                                 <Loader2 className="size-8 animate-spin text-primary mb-4" />
                                 <p className="text-sm text-muted-foreground">
-                                    Generating summary…
+                                    {uiText("Generating summary…")}
                                 </p>
                             </div>
                         ) : summaryData?.summary ? (
@@ -312,8 +315,8 @@ export function TranscriptionPanel({
                                         <ChevronDown className="size-4" />
                                     )}
                                     {summaryExpanded
-                                        ? "Collapse"
-                                        : "Expand summary"}
+                                        ? uiText("Collapse")
+                                        : uiText("Expand summary")}
                                 </button>
 
                                 {summaryExpanded && (
@@ -331,7 +334,7 @@ export function TranscriptionPanel({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Key Points
+                                                        {uiText("Key Points")}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.keyPoints.map(
@@ -360,7 +363,7 @@ export function TranscriptionPanel({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Action Items
+                                                        {uiText("Action Items")}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.actionItems.map(
@@ -404,7 +407,7 @@ export function TranscriptionPanel({
                                                 className="text-destructive hover:text-destructive"
                                             >
                                                 <Trash2 className="size-4 mr-1" />
-                                                Delete
+                                                {uiText("Delete")}
                                             </Button>
                                         </div>
                                     </div>
@@ -414,8 +417,9 @@ export function TranscriptionPanel({
                             <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <ListChecks className="size-10 text-muted-foreground mb-3" />
                                 <p className="text-sm text-muted-foreground">
-                                    No summary yet. Click "Summarize" to
-                                    generate one.
+                                    {uiText(
+                                        'No summary yet. Click "Summarize" to generate one.',
+                                    )}
                                 </p>
                             </div>
                         )}

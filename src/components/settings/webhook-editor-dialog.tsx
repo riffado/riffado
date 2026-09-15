@@ -13,6 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import { DEFAULT_WEBHOOK_EVENTS, type WebhookEndpoint } from "./webhook-types";
 
 interface WebhookForm {
@@ -125,12 +127,18 @@ export function WebhookEditorDialog({
             } else {
                 onOpenChange(false);
             }
-            toast.success(editingWebhook ? "Webhook updated" : "Webhook added");
+            toast.success(
+                editingWebhook
+                    ? uiText("Webhook updated")
+                    : uiText("Webhook added"),
+            );
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to save webhook",
+                uiError(
+                    error instanceof Error
+                        ? error.message
+                        : uiText("Failed to save webhook"),
+                ),
             );
         } finally {
             setIsSaving(false);
@@ -140,19 +148,21 @@ export function WebhookEditorDialog({
     const copySecret = async () => {
         if (!createdSecret) return;
         await navigator.clipboard.writeText(createdSecret);
-        toast.success("Secret copied");
+        toast.success(uiText("Secret copied"));
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl">
                 <DialogTitle>
-                    {editingWebhook ? "Edit Webhook" : "Add Webhook"}
+                    {editingWebhook
+                        ? uiText("Edit Webhook")
+                        : uiText("Add Webhook")}
                 </DialogTitle>
                 {createdSecret ? (
                     <div className="space-y-4">
                         <DialogDescription>
-                            This signing secret is shown once.
+                            {uiText("This signing secret is shown once.")}
                         </DialogDescription>
                         <div className="rounded-md border bg-muted p-3 font-mono text-sm break-all">
                             {createdSecret}
@@ -165,7 +175,7 @@ export function WebhookEditorDialog({
                                 onClick={copySecret}
                             >
                                 <Clipboard className="size-4" />
-                                Copy
+                                {uiText("Copy")}
                             </Button>
                             <Button
                                 type="button"
@@ -176,7 +186,7 @@ export function WebhookEditorDialog({
                                 }}
                             >
                                 <Check className="size-4" />
-                                Saved
+                                {uiText("Saved")}
                             </Button>
                         </div>
                     </div>
@@ -199,7 +209,7 @@ export function WebhookEditorDialog({
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="webhook-description">
-                                Description
+                                {uiText("Description")}
                             </Label>
                             <Input
                                 id="webhook-description"
@@ -210,12 +220,12 @@ export function WebhookEditorDialog({
                                         description: event.target.value,
                                     }))
                                 }
-                                placeholder="Automation receiver"
+                                placeholder={uiText("Automation receiver")}
                                 disabled={isSaving}
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label>Events</Label>
+                            <Label>{uiText("Events")}</Label>
                             <div className="grid gap-2 sm:grid-cols-2">
                                 {events.map((event) => (
                                     <label
@@ -240,7 +250,9 @@ export function WebhookEditorDialog({
                             </div>
                         </div>
                         <div className="flex items-center justify-between rounded-md border p-3">
-                            <Label htmlFor="webhook-enabled">Enabled</Label>
+                            <Label htmlFor="webhook-enabled">
+                                {uiText("Enabled")}
+                            </Label>
                             <Switch
                                 id="webhook-enabled"
                                 checked={form.enabled}
@@ -260,7 +272,7 @@ export function WebhookEditorDialog({
                                 onClick={() => onOpenChange(false)}
                                 disabled={isSaving}
                             >
-                                Cancel
+                                {uiText("Cancel")}
                             </Button>
                             <Button
                                 type="submit"
@@ -270,7 +282,7 @@ export function WebhookEditorDialog({
                                     form.events.length === 0
                                 }
                             >
-                                Save
+                                {uiText("Save")}
                             </Button>
                         </div>
                     </form>

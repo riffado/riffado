@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 import { cn } from "@/lib/utils";
 import type { DateTimeFormat } from "@/types/common";
@@ -73,8 +74,8 @@ export function RecordingRow({
                                     aria-hidden="true"
                                 />
                                 {inFlight === "transcribing"
-                                    ? "Transcribing"
-                                    : "Summarizing"}
+                                    ? uiText("Transcribing")
+                                    : uiText("Summarizing")}
                             </span>
                         )}
                     </div>
@@ -110,7 +111,7 @@ export function RecordingRow({
                         <Button
                             variant="ghost"
                             size="icon-sm"
-                            aria-label="Row actions"
+                            aria-label={uiText("Row actions")}
                             onClick={(e) => e.stopPropagation()}
                         >
                             <MoreHorizontal className="size-4" />
@@ -119,7 +120,7 @@ export function RecordingRow({
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={() => onSelect(recording)}>
                             <Play />
-                            Open
+                            {uiText("Open")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => {
@@ -129,7 +130,7 @@ export function RecordingRow({
                             }}
                         >
                             <Download />
-                            Download audio
+                            {uiText("Download audio")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -138,28 +139,27 @@ export function RecordingRow({
                                 // Keep menu mounted so confirm dialog can take focus.
                                 e.preventDefault();
                                 void confirm({
-                                    title: "Delete this recording?",
+                                    title: uiText("Delete this recording?"),
                                     description: (
                                         <>
                                             <span className="font-medium text-foreground">
                                                 {recording.filename}
                                             </span>
                                             <br />
-                                            The audio file and any transcript or
-                                            summary will be removed. If the file
-                                            is still on your Plaud device, the
-                                            next sync will re-download it.
+                                            {uiText(
+                                                "The audio file and any transcript or summary will be removed. If the file is still on your Plaud device, the next sync will re-download it.",
+                                            )}
                                         </>
                                     ),
-                                    confirmLabel: "Delete",
-                                    pendingLabel: "Deleting…",
+                                    confirmLabel: uiText("Delete"),
+                                    pendingLabel: uiText("Deleting…"),
                                     destructive: true,
                                     onConfirm: () => onDelete(recording),
                                 });
                             }}
                         >
                             <Trash2 />
-                            Delete
+                            {uiText("Delete")}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

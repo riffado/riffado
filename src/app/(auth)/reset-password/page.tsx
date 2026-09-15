@@ -6,6 +6,7 @@ import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 import { resetPasswordMode } from "@/lib/auth/reset-password-mode";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 
 interface ResetPasswordPageProps {
     // Next.js delivers query params as `string | string[] | undefined` --
@@ -33,11 +34,13 @@ export default async function ResetPasswordPage({
 
     const mode = resetPasswordMode(token, error);
     const title =
-        mode === "invalid" ? "Invalid reset link" : "Set a new password";
+        mode === "invalid"
+            ? uiText("Invalid reset link")
+            : uiText("Set a new password");
     const subtitle =
         mode === "invalid"
-            ? "This link is missing or has expired."
-            : "Choose a password you don't use anywhere else.";
+            ? uiText("This link is missing or has expired.")
+            : uiText("Choose a password you don't use anywhere else.");
 
     if (env.IS_HOSTED) {
         return (

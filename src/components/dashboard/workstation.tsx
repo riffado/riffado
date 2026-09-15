@@ -22,6 +22,8 @@ import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useTheme } from "@/hooks/use-theme";
 import { useTranscribeQueue } from "@/hooks/use-transcribe-queue";
 import { useUploadQueue } from "@/hooks/use-upload-queue";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import {
     requestNotificationPermission,
     showNewRecordingNotification,
@@ -198,10 +200,12 @@ export function Workstation({
             if (initialSettings.syncNotifications !== false) {
                 if (newRecordings > 0) {
                     toast.success(
-                        `Synced ${newRecordings} new recording${newRecordings !== 1 ? "s" : ""}`,
+                        uiText("Synced {count} new recordings", {
+                            count: newRecordings,
+                        }),
                     );
                 } else {
-                    toast.success("Sync complete - no new recordings");
+                    toast.success(uiText("Sync complete - no new recordings"));
                 }
             }
             if (initialSettings.browserNotifications) {
@@ -217,7 +221,7 @@ export function Workstation({
             }
         },
         onError: (error) => {
-            toast.error(error);
+            toast.error(uiError(error));
         },
     });
 
@@ -317,7 +321,7 @@ export function Workstation({
                 if (posthog.__loaded) {
                     posthog.capture("recording_deleted");
                 }
-                toast.success("Recording deleted");
+                toast.success(uiText("Recording deleted"));
                 refresh();
             } catch (err) {
                 // Rollback

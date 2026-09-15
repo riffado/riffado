@@ -7,6 +7,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { uiText } from "@/lib/i18n";
 
 interface ShortcutsDialogProps {
     open: boolean;
@@ -20,19 +21,19 @@ interface ShortcutRow {
 
 const groups: { title: string; rows: ShortcutRow[] }[] = [
     {
-        title: "Global",
+        title: uiText("Global shortcuts"),
         rows: [
-            { keys: ["⌘", "K"], description: "Command palette" },
-            { keys: ["?"], description: "Show this cheatsheet" },
-            { keys: [","], description: "Open settings" },
-            { keys: ["/"], description: "Focus search" },
+            { keys: ["⌘", "K"], description: uiText("Command palette") },
+            { keys: ["?"], description: uiText("Show this cheatsheet") },
+            { keys: [","], description: uiText("Open settings") },
+            { keys: ["/"], description: uiText("Focus search") },
         ],
     },
     {
-        title: "Recording list",
+        title: uiText("Recording list"),
         rows: [
-            { keys: ["j"], description: "Next recording" },
-            { keys: ["k"], description: "Previous recording" },
+            { keys: ["j"], description: uiText("Next recording") },
+            { keys: ["k"], description: uiText("Previous recording") },
             // No `Enter → Focus player` row here: selecting a recording
             // via j/k already mounts the player; there's no separate
             // "focus the player" gesture and adding one would conflict
@@ -40,13 +41,13 @@ const groups: { title: string; rows: ShortcutRow[] }[] = [
         ],
     },
     {
-        title: "Player",
+        title: uiText("Player"),
         rows: [
-            { keys: ["Space"], description: "Play / pause" },
-            { keys: ["←"], description: "Seek back 5s" },
-            { keys: ["→"], description: "Seek forward 5s" },
-            { keys: ["↑"], description: "Volume up" },
-            { keys: ["↓"], description: "Volume down" },
+            { keys: [uiText("Space")], description: uiText("Play / pause") },
+            { keys: ["←"], description: uiText("Seek back 5s") },
+            { keys: ["→"], description: uiText("Seek forward 5s") },
+            { keys: ["↑"], description: uiText("Volume up") },
+            { keys: ["↓"], description: uiText("Volume down") },
         ],
     },
 ];
@@ -64,9 +65,11 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Keyboard shortcuts</DialogTitle>
+                    <DialogTitle>{uiText("Keyboard shortcuts")}</DialogTitle>
                     <DialogDescription>
-                        Power-user shortcuts available across the dashboard.
+                        {uiText(
+                            "Power-user shortcuts available across the dashboard.",
+                        )}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-5">

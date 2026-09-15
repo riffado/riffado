@@ -2,6 +2,7 @@
 
 import posthog from "posthog-js";
 import { useEffect } from "react";
+import { uiText } from "@/lib/i18n";
 
 /**
  * Root-layout-level error boundary -- catches errors that occur in
@@ -22,7 +23,7 @@ export default function GlobalError({
     }, [error]);
 
     return (
-        <html lang="en">
+        <html lang="zh-CN">
             <body>
                 <div
                     style={{
@@ -37,8 +38,8 @@ export default function GlobalError({
                         fontFamily: "system-ui, sans-serif",
                     }}
                 >
-                    <h2>Something went wrong</h2>
-                    <p>Please reload the page.</p>
+                    <h2>{uiText("Something went wrong")}</h2>
+                    <p>{uiText("Please reload the page.")}</p>
                 </div>
             </body>
         </html>

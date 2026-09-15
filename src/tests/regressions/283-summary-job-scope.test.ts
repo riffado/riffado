@@ -21,6 +21,7 @@ import { act, renderHook } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { uiText } from "@/lib/i18n";
 import {
     addSummarizingId,
     bumpContentGeneration,
@@ -438,7 +439,7 @@ describe("useTranscriptionSummary (#283)", () => {
         });
         expect(hook.result.current.isSummarizing).toBe(false);
         expect(hook.result.current.summaryData?.summary).toBe("from B");
-        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.success).toHaveBeenCalledWith(uiText("Summary generated"));
         expect(toast.error).not.toHaveBeenCalled();
         expect(toast.warning).not.toHaveBeenCalled();
     });
@@ -493,7 +494,7 @@ describe("useTranscriptionSummary (#283)", () => {
             await summarize;
         });
         expect(hook.result.current.summaryData?.summary).toBe("generated");
-        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.success).toHaveBeenCalledWith(uiText("Summary generated"));
         expect(toast.error).not.toHaveBeenCalled();
         expect(toast.warning).not.toHaveBeenCalled();
 
@@ -624,7 +625,7 @@ describe("useTranscriptionSummary (#283)", () => {
             await summarize;
         });
         expect(hook.result.current.summaryData?.summary).toBe("from A");
-        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.success).toHaveBeenCalledWith(uiText("Summary generated"));
 
         takePending("GET", "rec-a").resolve(
             jsonResponse(summaryBody("stale GET after return")),
@@ -721,7 +722,7 @@ describe("useTranscriptionSummary (#283)", () => {
             await deleted;
         });
 
-        expect(toast.success).toHaveBeenCalledWith("Summary deleted");
+        expect(toast.success).toHaveBeenCalledWith(uiText("Summary deleted"));
         expect(toast.error).not.toHaveBeenCalled();
     });
 
@@ -765,6 +766,6 @@ describe("useTranscriptionSummary (#283)", () => {
         expect(hook.result.current.summaryData?.summary).toBe("from A");
         expect(hook.result.current.isSummarizing).toBe(false);
         expect(toast.success).toHaveBeenCalledTimes(1);
-        expect(toast.success).toHaveBeenCalledWith("Summary generated");
+        expect(toast.success).toHaveBeenCalledWith(uiText("Summary generated"));
     });
 });

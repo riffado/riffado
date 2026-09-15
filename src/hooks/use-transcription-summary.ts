@@ -7,6 +7,8 @@ import {
     getDefaultSummaryPromptConfig,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import {
     addSummarizingId,
     bumpContentGeneration,
@@ -89,7 +91,7 @@ export function useTranscriptionSummary({
     >(() =>
         getAllSummaryPrompts(getDefaultSummaryPromptConfig()).map((p) => ({
             id: p.id,
-            name: p.name,
+            name: p.isPreset ? uiText(p.name) : p.name,
             isPreset: p.isPreset,
         })),
     );
@@ -118,7 +120,7 @@ export function useTranscriptionSummary({
                 setSummaryPromptOptions(
                     getAllSummaryPrompts(config).map((p) => ({
                         id: p.id,
-                        name: p.name,
+                        name: p.isPreset ? uiText(p.name) : p.name,
                         isPreset: p.isPreset,
                     })),
                 );
@@ -243,21 +245,28 @@ export function useTranscriptionSummary({
                     setSummaryData(data);
                     if (data.promptFallback) {
                         toast.warning(
-                            "Selected summary prompt is no longer available -- used your default prompt instead.",
+                            uiText(
+                                "Selected summary prompt is no longer available -- used your default prompt instead.",
+                            ),
                         );
                     } else {
-                        toast.success("Summary generated");
+                        toast.success(uiText("Summary generated"));
                     }
                 }
             } else {
                 const error = await response.json().catch(() => ({}));
                 if (postIsCurrent()) {
-                    toast.error(error.error || "Summary generation failed");
+                    toast.error(
+                        uiError(
+                            error.error || uiText("Summary generation failed"),
+                            error.code,
+                        ),
+                    );
                 }
             }
         } catch {
             if (postIsCurrent()) {
-                toast.error("Failed to generate summary");
+                toast.error(uiText("Failed to generate summary"));
             }
         } finally {
             summarizingIdsRef.current = removeSummarizingId(
@@ -285,18 +294,18 @@ export function useTranscriptionSummary({
             );
             if (response.ok) {
                 if (deleteIsCurrent()) {
-                    toast.success("Summary deleted");
+                    toast.success(uiText("Summary deleted"));
                 }
             } else {
                 if (deleteIsCurrent()) {
                     setSummaryData(previous);
-                    toast.error("Failed to delete summary");
+                    toast.error(uiText("Failed to delete summary"));
                 }
             }
         } catch {
             if (deleteIsCurrent()) {
                 setSummaryData(previous);
-                toast.error("Failed to delete summary");
+                toast.error(uiText("Failed to delete summary"));
             }
         }
     }, [recordingId, summaryData]);

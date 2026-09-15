@@ -5,6 +5,7 @@ import {
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 import { isSmtpConfigured } from "@/lib/smtp";
 
 export default async function ForgotPasswordPage() {
@@ -16,10 +17,10 @@ export default async function ForgotPasswordPage() {
     // subtitle is fine. On self-host, SMTP may not be configured -- the
     // form body explains the operator help in that case; the subtitle
     // here stays neutral so it reads correctly either way.
-    const title = "Reset password";
+    const title = uiText("Reset password");
     const subtitle = smtp
-        ? "We'll email you a link to set a new password."
-        : "Password reset requires SMTP to be configured.";
+        ? uiText("We'll email you a link to set a new password.")
+        : uiText("Password reset requires SMTP to be configured.");
 
     if (env.IS_HOSTED) {
         return (

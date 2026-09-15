@@ -9,6 +9,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { uiText } from "@/lib/i18n";
 import type { SettingsSection } from "@/types/settings";
 
 interface Props {
@@ -43,10 +44,10 @@ export function SettingsNavMobile({
             >
                 <SelectTrigger
                     className="w-[180px]"
-                    aria-label="Select settings section"
+                    aria-label={uiText("Select settings section")}
                 >
                     <SelectValue>
-                        {activeNavItem?.name || "Settings"}
+                        {activeNavItem?.name || uiText("Settings")}
                     </SelectValue>
                 </SelectTrigger>
                 <SelectContent>

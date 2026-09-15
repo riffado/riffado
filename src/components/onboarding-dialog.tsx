@@ -18,6 +18,7 @@ import {
     OnboardingStepWelcome,
 } from "@/components/onboarding-steps";
 import { Button } from "@/components/ui/button";
+import { uiText } from "@/lib/i18n";
 
 type OnboardingStep = "welcome" | "plaud" | "ai-provider" | "complete";
 
@@ -116,7 +117,7 @@ export function OnboardingDialog({
             onOpenChange(false);
             refresh();
         } catch {
-            toast.error("Failed to complete onboarding");
+            toast.error(uiText("Failed to complete onboarding"));
         }
     };
 
@@ -137,7 +138,7 @@ export function OnboardingDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-2xl" hidden>
-                        Welcome to Riffado
+                        {uiText("Welcome to Riffado")}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -175,7 +176,7 @@ export function OnboardingDialog({
                                     onClick={() => setStep(prevStep)}
                                 >
                                     <ArrowLeft className="size-4 mr-2" />
-                                    Previous
+                                    {uiText("Previous")}
                                 </Button>
                             )}
                         </div>
@@ -205,18 +206,18 @@ export function OnboardingDialog({
                                     variant="ghost"
                                     onClick={() => setStep(nextStep)}
                                 >
-                                    Skip
+                                    {uiText("Skip")}
                                 </Button>
                             )}
                             {step === "complete" ? (
                                 <Button onClick={handleComplete}>
-                                    Get Started
+                                    {uiText("Get Started")}
                                     <ArrowRight className="size-4 ml-2" />
                                 </Button>
                             ) : (
                                 nextStep && (
                                     <Button onClick={() => setStep(nextStep)}>
-                                        Next
+                                        {uiText("Next")}
                                         <ArrowRight className="size-4 ml-2" />
                                     </Button>
                                 )

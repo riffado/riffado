@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { uiText } from "@/lib/i18n";
 
 export function useSettings() {
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);
@@ -19,7 +20,7 @@ export function useSettings() {
                 throw new Error("Failed to save settings");
             }
         } catch {
-            toast.error("Failed to save settings");
+            toast.error(uiText("Failed to save settings"));
             throw new Error("Failed to save settings");
         } finally {
             setIsSavingSettings(false);

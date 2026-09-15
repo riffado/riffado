@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export interface PendingUpload {
@@ -28,7 +29,8 @@ export function PendingUploadRow({
                     {upload.filename}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                    Uploading… {formatSize(upload.filesize)}
+                    {uiText("Uploading…")}
+                    {formatSize(upload.filesize)}
                 </p>
             </div>
         </div>

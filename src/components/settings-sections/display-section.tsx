@@ -14,38 +14,39 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { uiText } from "@/lib/i18n";
 
 const dateTimeFormatOptions = [
     {
-        label: "Relative",
+        label: uiText("Relative"),
         value: "relative",
-        description: "e.g., 2 hours ago",
+        description: uiText("e.g., 2 hours ago"),
     },
     {
-        label: "Absolute",
+        label: uiText("Absolute"),
         value: "absolute",
-        description: "e.g., Jan 15, 2024 3:45 PM",
+        description: uiText("e.g., Jan 15, 2024 3:45 PM"),
     },
     {
         label: "ISO",
         value: "iso",
-        description: "e.g., 2024-01-15T15:45:00Z",
+        description: uiText("e.g., 2024-01-15T15:45:00Z"),
     },
 ];
 
 const sortOrderOptions = [
-    { label: "Newest first", value: "newest" },
-    { label: "Oldest first", value: "oldest" },
-    { label: "By name", value: "name" },
+    { label: uiText("Newest first"), value: "newest" },
+    { label: uiText("Oldest first"), value: "oldest" },
+    { label: uiText("By name"), value: "name" },
 ];
 
 const themeOptions = [
-    { label: "Light", value: "light" },
-    { label: "Dark", value: "dark" },
+    { label: uiText("Light"), value: "light" },
+    { label: uiText("Dark"), value: "dark" },
     {
-        label: "System",
+        label: uiText("System"),
         value: "system",
-        description: "Follow system preference",
+        description: uiText("Follow system preference"),
     },
 ];
 
@@ -149,7 +150,9 @@ export function DisplaySection() {
                     const prev = previousValues.theme;
                     if (typeof prev === "string") setTheme(prev);
                 }
-                toast.error("Failed to save settings. Changes reverted.");
+                toast.error(
+                    uiText("Failed to save settings. Changes reverted."),
+                );
             }
         };
 
@@ -171,13 +174,17 @@ export function DisplaySection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Display"
-                description="How dates, lists, and the overall UI present themselves."
+                title={uiText("Display")}
+                description={uiText(
+                    "How dates, lists, and the overall UI present themselves.",
+                )}
                 icon={Monitor}
             />
             <div className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="date-time-format">Date/time format</Label>
+                    <Label htmlFor="date-time-format">
+                        {uiText("Date/time format")}
+                    </Label>
                     <Select
                         value={dateTimeFormat}
                         onValueChange={(value) => {
@@ -192,7 +199,7 @@ export function DisplaySection() {
                             <SelectValue>
                                 {dateTimeFormatOptions.find(
                                     (opt) => opt.value === dateTimeFormat,
-                                )?.label || "Relative"}
+                                )?.label || uiText("Relative")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -215,7 +222,7 @@ export function DisplaySection() {
 
                 <div className="space-y-2">
                     <Label htmlFor="sort-order">
-                        Recording list sort order
+                        {uiText("Recording list sort order")}
                     </Label>
                     <Select
                         value={recordingListSortOrder}
@@ -232,7 +239,7 @@ export function DisplaySection() {
                                 {sortOrderOptions.find(
                                     (opt) =>
                                         opt.value === recordingListSortOrder,
-                                )?.label || "Newest first"}
+                                )?.label || uiText("Newest first")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -249,7 +256,9 @@ export function DisplaySection() {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="items-per-page">Items per page</Label>
+                    <Label htmlFor="items-per-page">
+                        {uiText("Items per page")}
+                    </Label>
                     <Input
                         id="items-per-page"
                         type="number"
@@ -272,12 +281,14 @@ export function DisplaySection() {
                         }}
                     />
                     <p className="text-xs text-muted-foreground">
-                        Number of recordings to display per page (10-100)
+                        {uiText(
+                            "Number of recordings to display per page (10-100)",
+                        )}
                     </p>
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="theme">Theme</Label>
+                    <Label htmlFor="theme">{uiText("Theme")}</Label>
                     <Select
                         value={theme}
                         onValueChange={(value) => {
@@ -289,7 +300,7 @@ export function DisplaySection() {
                         <SelectTrigger id="theme" className="w-full">
                             <SelectValue>
                                 {themeOptions.find((opt) => opt.value === theme)
-                                    ?.label || "System"}
+                                    ?.label || uiText("System")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>

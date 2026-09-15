@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { uiText } from "@/lib/i18n";
 
 // ISO-639-1 codes from Whisper's supported-languages list. Sticking to
 // languages with non-trivial user populations to keep the dropdown
@@ -21,52 +22,52 @@ import { useSettings } from "@/hooks/use-settings";
 // these entries just let users force a language for noisy recordings
 // or when auto-detect mis-routes (Slavic / Romance neighbours).
 const languageOptions = [
-    { label: "Auto-detect", value: null },
-    { label: "English", value: "en" },
-    { label: "Spanish", value: "es" },
-    { label: "French", value: "fr" },
-    { label: "German", value: "de" },
-    { label: "Italian", value: "it" },
-    { label: "Portuguese", value: "pt" },
-    { label: "Dutch", value: "nl" },
-    { label: "Swedish", value: "sv" },
-    { label: "Danish", value: "da" },
-    { label: "Norwegian", value: "no" },
-    { label: "Finnish", value: "fi" },
-    { label: "Polish", value: "pl" },
-    { label: "Czech", value: "cs" },
-    { label: "Ukrainian", value: "uk" },
-    { label: "Russian", value: "ru" },
-    { label: "Romanian", value: "ro" },
-    { label: "Hungarian", value: "hu" },
-    { label: "Greek", value: "el" },
-    { label: "Turkish", value: "tr" },
-    { label: "Arabic", value: "ar" },
-    { label: "Hebrew", value: "he" },
-    { label: "Hindi", value: "hi" },
-    { label: "Indonesian", value: "id" },
-    { label: "Vietnamese", value: "vi" },
-    { label: "Thai", value: "th" },
-    { label: "Chinese", value: "zh" },
-    { label: "Japanese", value: "ja" },
-    { label: "Korean", value: "ko" },
+    { label: uiText("Auto-detect"), value: null },
+    { label: uiText("English"), value: "en" },
+    { label: uiText("Spanish"), value: "es" },
+    { label: uiText("French"), value: "fr" },
+    { label: uiText("German"), value: "de" },
+    { label: uiText("Italian"), value: "it" },
+    { label: uiText("Portuguese"), value: "pt" },
+    { label: uiText("Dutch"), value: "nl" },
+    { label: uiText("Swedish"), value: "sv" },
+    { label: uiText("Danish"), value: "da" },
+    { label: uiText("Norwegian"), value: "no" },
+    { label: uiText("Finnish"), value: "fi" },
+    { label: uiText("Polish"), value: "pl" },
+    { label: uiText("Czech"), value: "cs" },
+    { label: uiText("Ukrainian"), value: "uk" },
+    { label: uiText("Russian"), value: "ru" },
+    { label: uiText("Romanian"), value: "ro" },
+    { label: uiText("Hungarian"), value: "hu" },
+    { label: uiText("Greek"), value: "el" },
+    { label: uiText("Turkish"), value: "tr" },
+    { label: uiText("Arabic"), value: "ar" },
+    { label: uiText("Hebrew"), value: "he" },
+    { label: uiText("Hindi"), value: "hi" },
+    { label: uiText("Indonesian"), value: "id" },
+    { label: uiText("Vietnamese"), value: "vi" },
+    { label: uiText("Thai"), value: "th" },
+    { label: uiText("Chinese"), value: "zh" },
+    { label: uiText("Japanese"), value: "ja" },
+    { label: uiText("Korean"), value: "ko" },
 ];
 
 const qualityOptions = [
     {
-        label: "Fast",
+        label: uiText("Fast"),
         value: "fast",
-        description: "Faster transcription, lower accuracy",
+        description: uiText("Faster transcription, lower accuracy"),
     },
     {
-        label: "Balanced",
+        label: uiText("Balanced"),
         value: "balanced",
-        description: "Good balance of speed and accuracy",
+        description: uiText("Good balance of speed and accuracy"),
     },
     {
-        label: "Accurate",
+        label: uiText("Accurate"),
         value: "accurate",
-        description: "Highest accuracy, slower transcription",
+        description: uiText("Highest accuracy, slower transcription"),
     },
 ];
 
@@ -136,7 +137,7 @@ export function TranscriptionSection() {
         } catch {
             setAutoTranscribe(previous);
             pendingChangesRef.current.delete("autoTranscribe");
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -173,7 +174,7 @@ export function TranscriptionSection() {
             setImportPlaudContent(prev.importPlaudContent);
             setTranscriptMode(prev.transcriptMode);
             setPreferredTranscriptSource(prev.preferredTranscriptSource);
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -274,7 +275,7 @@ export function TranscriptionSection() {
                     pendingChangesRef.current.delete("syncTitleToPlaud");
                 }
             }
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -289,19 +290,22 @@ export function TranscriptionSection() {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Transcription"
-                description="Defaults and provider selection for converting audio to text."
+                title={uiText("Transcription")}
+                description={uiText(
+                    "Defaults and provider selection for converting audio to text.",
+                )}
                 icon={FileText}
             />
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5 flex-1">
                         <Label htmlFor="auto-transcribe" className="text-base">
-                            Auto-transcribe new recordings
+                            {uiText("Auto-transcribe new recordings")}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Automatically transcribe recordings when they are
-                            synced from your Plaud device
+                            {uiText(
+                                "Automatically transcribe recordings when they are synced from your Plaud device",
+                            )}
                         </p>
                     </div>
                     <Switch
@@ -318,12 +322,12 @@ export function TranscriptionSection() {
                             htmlFor="import-plaud-content"
                             className="text-base"
                         >
-                            Import Plaud transcripts and summaries
+                            {uiText("Import Plaud transcripts and summaries")}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            When Plaud already transcribed a recording, import
-                            its transcript and summary on sync instead of
-                            re-doing the work with your own AI provider.
+                            {uiText(
+                                "When Plaud already transcribed a recording, import its transcript and summary on sync instead of re-doing the work with your own AI provider.",
+                            )}
                         </p>
                     </div>
                     <Switch
@@ -342,7 +346,7 @@ export function TranscriptionSection() {
                     <>
                         <div className="space-y-2">
                             <Label htmlFor="transcript-mode">
-                                When Plaud has a transcript
+                                {uiText("When Plaud has a transcript")}
                             </Label>
                             <Select
                                 value={transcriptMode}
@@ -361,22 +365,27 @@ export function TranscriptionSection() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="plaud_only">
-                                        Use Plaud only (saves AI credits)
+                                        {uiText(
+                                            "Use Plaud only (saves AI credits)",
+                                        )}
                                     </SelectItem>
                                     <SelectItem value="keep_both">
-                                        Keep both — also run my provider
+                                        {uiText(
+                                            "Keep both — also run my provider",
+                                        )}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                Keep both also transcribes with your own
-                                provider so you can compare them.
+                                {uiText(
+                                    "Keep both also transcribes with your own provider so you can compare them.",
+                                )}
                             </p>
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="preferred-transcript-source">
-                                Primary transcript
+                                {uiText("Primary transcript")}
                             </Label>
                             <Select
                                 value={preferredTranscriptSource}
@@ -396,13 +405,14 @@ export function TranscriptionSection() {
                                 <SelectContent>
                                     <SelectItem value="plaud">Plaud</SelectItem>
                                     <SelectItem value="riffado">
-                                        My provider
+                                        {uiText("My provider")}
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                Shown by default and used for summaries when
-                                both exist.
+                                {uiText(
+                                    "Shown by default and used for summaries when both exist.",
+                                )}
                             </p>
                         </div>
                     </>
@@ -410,7 +420,7 @@ export function TranscriptionSection() {
 
                 <div className="space-y-2">
                     <Label htmlFor="transcription-language">
-                        Default transcription language
+                        {uiText("Default transcription language")}
                     </Label>
                     <Select
                         value={defaultTranscriptionLanguage || "auto"}
@@ -432,7 +442,7 @@ export function TranscriptionSection() {
                                     (opt) =>
                                         opt.value ===
                                         defaultTranscriptionLanguage,
-                                )?.label || "Auto-detect"}
+                                )?.label || uiText("Auto-detect")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -447,14 +457,15 @@ export function TranscriptionSection() {
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                        Language to use for transcription. Auto-detect will
-                        identify the language automatically.
+                        {uiText(
+                            "Language to use for transcription. Auto-detect will identify the language automatically.",
+                        )}
                     </p>
                 </div>
 
                 <div className="space-y-2">
                     <Label htmlFor="transcription-quality">
-                        Transcription quality
+                        {uiText("Transcription quality")}
                     </Label>
                     <Select
                         value={transcriptionQuality}
@@ -473,7 +484,7 @@ export function TranscriptionSection() {
                             <SelectValue>
                                 {qualityOptions.find(
                                     (opt) => opt.value === transcriptionQuality,
-                                )?.label || "Balanced"}
+                                )?.label || uiText("Balanced")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -493,7 +504,9 @@ export function TranscriptionSection() {
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                        Balance between transcription speed and accuracy
+                        {uiText(
+                            "Balance between transcription speed and accuracy",
+                        )}
                     </p>
                 </div>
 
@@ -503,11 +516,12 @@ export function TranscriptionSection() {
                             htmlFor="auto-generate-title"
                             className="text-base"
                         >
-                            Auto-generate titles
+                            {uiText("Auto-generate titles")}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Automatically generate descriptive titles from
-                            transcriptions using AI
+                            {uiText(
+                                "Automatically generate descriptive titles from transcriptions using AI",
+                            )}
                         </p>
                     </div>
                     <Switch
@@ -530,11 +544,12 @@ export function TranscriptionSection() {
                                 htmlFor="sync-title-plaud"
                                 className="text-base"
                             >
-                                Sync titles to Plaud
+                                {uiText("Sync titles to Plaud")}
                             </Label>
                             <p className="text-sm text-muted-foreground">
-                                Update the filename in your Plaud device when
-                                titles are generated
+                                {uiText(
+                                    "Update the filename in your Plaud device when titles are generated",
+                                )}
                             </p>
                         </div>
                         <Switch

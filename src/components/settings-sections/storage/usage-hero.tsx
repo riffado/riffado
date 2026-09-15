@@ -2,7 +2,8 @@
 
 import { useId } from "react";
 import { formatBytes } from "@/lib/format-bytes";
-import { formatHoursCompact } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
+import { formatUiHoursCompact as formatHoursCompact } from "@/lib/i18n/format";
 
 interface UsageHeroProps {
     usedBytes: number;
@@ -52,13 +53,17 @@ export function UsageHero({
         capacity = {
             used: usedBytes,
             total: quotaBytes,
-            remainingLabel: `${formatBytes(Math.max(0, quotaBytes - usedBytes))} remaining`,
+            remainingLabel: uiText("{size} remaining", {
+                size: formatBytes(Math.max(0, quotaBytes - usedBytes)),
+            }),
         };
     } else if (typeof diskFreeBytes === "number" && diskFreeBytes >= 0) {
         capacity = {
             used: usedBytes,
             total: usedBytes + diskFreeBytes,
-            remainingLabel: `${formatBytes(diskFreeBytes)} free on disk`,
+            remainingLabel: uiText("{size} free on disk", {
+                size: formatBytes(diskFreeBytes),
+            }),
         };
     }
 
@@ -78,21 +83,24 @@ export function UsageHero({
                 )}
                 <div className="min-w-0">
                     <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Storage used
+                        {uiText("Storage used")}
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground">
                         {recordingCount.toLocaleString()}{" "}
-                        {recordingCount === 1 ? "recording" : "recordings"}
+                        {recordingCount === 1
+                            ? uiText("recording")
+                            : uiText("recordings")}
                         {totalDurationMs > 0 && (
                             <>
                                 {" · "}
-                                {formatHoursCompact(totalDurationMs)} total
+                                {formatHoursCompact(totalDurationMs)}{" "}
+                                {uiText("total")}
                             </>
                         )}
                         {avgBytes > 0 && (
                             <>
                                 {" · "}
-                                {formatBytes(avgBytes)} avg
+                                {formatBytes(avgBytes)} {uiText("avg")}
                             </>
                         )}
                     </div>
@@ -150,7 +158,8 @@ function CapacityRing({ used, total, usedBytes }: CapacityRingProps) {
                 aria-labelledby={`${id}-title`}
             >
                 <title id={`${id}-title`}>
-                    Storage capacity: {pctLabel} used
+                    {uiText("Storage capacity:")}
+                    {pctLabel} {uiText("used")}
                 </title>
                 {/* Track */}
                 <circle
@@ -180,7 +189,7 @@ function CapacityRing({ used, total, usedBytes }: CapacityRingProps) {
                     {formatBytes(usedBytes)}
                 </div>
                 <div className="text-[11px] text-muted-foreground tabular-nums">
-                    {pctLabel} used
+                    {pctLabel} {uiText("used")}
                 </div>
             </div>
         </div>

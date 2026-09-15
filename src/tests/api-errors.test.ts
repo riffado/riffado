@@ -21,6 +21,7 @@ vi.mock("@/lib/posthog-server", () => ({
 
 import { getApiErrorMessage, parseApiError } from "@/lib/api-errors";
 import { ErrorCode } from "@/lib/errors";
+import { uiText } from "@/lib/i18n";
 
 function jsonResponse(status: number, body: unknown): Response {
     return new Response(JSON.stringify(body), {
@@ -73,12 +74,14 @@ describe("parseApiError", () => {
 });
 
 describe("getApiErrorMessage", () => {
-    it("returns the envelope's error message", async () => {
+    it("localizes known error codes only for display", async () => {
         const res = jsonResponse(400, {
             error: "Invalid code",
             code: ErrorCode.PLAUD_OTP_INVALID,
         });
-        expect(await getApiErrorMessage(res)).toBe("Invalid code");
+        expect(await getApiErrorMessage(res)).toBe(
+            uiText("The verification code is invalid. Please try again."),
+        );
     });
 
     it("returns a non-empty string even when the body is empty", async () => {

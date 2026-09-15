@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { UI_LOCALE } from "@/lib/i18n";
 
 interface Props {
     /** Date object or anything `new Date(...)` accepts (ISO string, ms). */
@@ -33,8 +34,8 @@ export function LocalTime({ value, variant = "datetime", className }: Props) {
     useEffect(() => {
         setText(
             variant === "date"
-                ? date.toLocaleDateString()
-                : date.toLocaleString(),
+                ? date.toLocaleDateString(UI_LOCALE)
+                : date.toLocaleString(UI_LOCALE),
         );
     }, [date, variant]);
 

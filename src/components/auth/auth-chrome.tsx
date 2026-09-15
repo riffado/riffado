@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { LogoWordmark } from "@/components/icons/logo";
 import { Panel } from "@/components/panel";
+import { uiText } from "@/lib/i18n";
 
 interface AuthChromeProps {
     /** Headline above the form. e.g. "Sign in" / "Create account". */
@@ -29,16 +30,22 @@ export function HostedAuthChrome({
 }: AuthChromeProps) {
     const bullets = [
         {
-            label: "Choose your AI",
-            body: "OpenAI or Groq for transcription, Anthropic and others for summaries, or Whisper running locally on your machine.",
+            label: uiText("Choose your AI"),
+            body: uiText(
+                "OpenAI or Groq for transcription, Anthropic and others for summaries, or Whisper running locally on your machine.",
+            ),
         },
         {
-            label: "Own your transcripts",
-            body: "Local disk, your own cloud storage, or ours. Export anytime.",
+            label: uiText("Own your transcripts"),
+            body: uiText(
+                "Local disk, your own cloud storage, or ours. Export anytime.",
+            ),
         },
         {
-            label: "Multi-device ready",
-            body: "Plaud Note family today. More device support on the way.",
+            label: uiText("Multi-device ready"),
+            body: uiText(
+                "Plaud Note family today. More device support on the way.",
+            ),
         },
     ];
 
@@ -57,8 +64,9 @@ export function HostedAuthChrome({
                 </div>
                 <div className="relative space-y-8">
                     <p className="max-w-md text-2xl font-semibold leading-tight tracking-tight">
-                        Open-source AI transcription for the recorder you
-                        already own.
+                        {uiText(
+                            "Open-source AI transcription for the recorder you already own.",
+                        )}
                     </p>
                     <ul className="space-y-5 max-w-md">
                         {bullets.map((b) => (
@@ -125,19 +133,19 @@ export function HostedAuthChrome({
                     </div>
                     {children}
                     <p className="text-center text-xs text-muted-foreground">
-                        By continuing you agree to our{" "}
+                        {uiText("By continuing you agree to our")}{" "}
                         <Link
                             href="/terms"
                             className="underline hover:text-foreground"
                         >
-                            Terms
+                            {uiText("Terms")}
                         </Link>{" "}
-                        and{" "}
+                        {uiText("and")}{" "}
                         <Link
                             href="/privacy"
                             className="underline hover:text-foreground"
                         >
-                            Privacy Policy
+                            {uiText("Privacy Policy")}
                         </Link>
                         .
                     </p>
@@ -210,7 +218,7 @@ function InstanceFooter() {
                     rel="noopener noreferrer"
                     className="hover:text-foreground"
                 >
-                    Docs
+                    {uiText("Docs")}
                 </Link>
                 <span aria-hidden className="text-muted-foreground/40">
                     ·

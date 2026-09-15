@@ -9,6 +9,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { uiText } from "@/lib/i18n";
 
 interface Props {
     isAdmin: boolean;
@@ -69,7 +70,7 @@ export function WorkstationHeader({
         <div className="sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
             <div className="flex min-w-0 items-baseline gap-3">
                 <h1 className="truncate text-xl font-semibold leading-tight sm:text-2xl md:text-3xl">
-                    Recordings
+                    {uiText("Recordings")}
                 </h1>
                 {/*
                   Recording count lives in the list pane's own meta row
@@ -86,17 +87,17 @@ export function WorkstationHeader({
                             variant="outline"
                             size="sm"
                             className="hidden h-9 md:inline-flex"
-                            aria-label="Open command palette"
+                            aria-label={uiText("Open command palette")}
                         >
                             <Command className="mr-2 size-4" />
-                            <span>Search</span>
+                            <span>{uiText("Search")}</span>
                             <kbd className="ml-2 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
                                 ⌘K
                             </kbd>
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
-                        Search recordings, transcripts, and actions
+                        {uiText("Search recordings, transcripts, and actions")}
                     </TooltipContent>
                 </Tooltip>
                 <SyncButton
@@ -122,17 +123,21 @@ export function WorkstationHeader({
                             size="sm"
                             className="h-9"
                             aria-label={
-                                isUploading ? "Uploading audio" : "Upload audio"
+                                isUploading
+                                    ? uiText("Uploading audio")
+                                    : uiText("Upload audio")
                             }
                         >
                             <Upload className="size-4 sm:mr-2" />
                             <span className="hidden sm:inline">
-                                {isUploading ? "Uploading…" : "Upload Audio"}
+                                {isUploading
+                                    ? uiText("Uploading…")
+                                    : uiText("Upload Audio")}
                             </span>
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
-                        Upload an audio file from your computer
+                        {uiText("Upload an audio file from your computer")}
                     </TooltipContent>
                 </Tooltip>
                 <UserMenu

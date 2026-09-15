@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 import { fetchLatestReleaseTag } from "@/lib/install-script";
 
 import { APP_VERSION, compareSemver, releaseUrlFor } from "@/lib/version";
@@ -44,10 +45,15 @@ export async function UpdateBadge() {
             target="_blank"
             rel="noopener noreferrer"
             className="text-[10px] text-primary/70 hover:text-primary transition-colors font-mono uppercase tracking-wider underline decoration-dotted underline-offset-2"
-            aria-label={`Update available: ${latestTag}`}
-            title={`Update available: ${latestTag} (running ${APP_VERSION})`}
+            aria-label={uiText("Update available: {version}", {
+                version: latestTag,
+            })}
+            title={uiText("Update available: {version} (running {current})", {
+                version: latestTag,
+                current: APP_VERSION,
+            })}
         >
-            {latestTag} available
+            {latestTag} {uiText("available")}
         </Link>
     );
 }

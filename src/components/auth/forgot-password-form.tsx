@@ -7,6 +7,8 @@ import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "@/lib/auth-client";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface ForgotPasswordFormProps {
     /**
@@ -47,8 +49,13 @@ export function ForgotPasswordForm({
             // "check your email" when no email was actually sent.
             if (result?.error?.status === 429) {
                 toast.error(
-                    result.error.message ||
-                        "Too many requests. Please wait a moment and try again.",
+                    uiError(
+                        result.error.message ||
+                            uiText(
+                                "Too many requests. Please wait a moment and try again.",
+                            ),
+                        result.error.code,
+                    ),
                 );
                 return;
             }
@@ -59,8 +66,8 @@ export function ForgotPasswordForm({
             const message =
                 error instanceof Error
                     ? error.message
-                    : "Could not send reset email. Please try again.";
-            toast.error(message);
+                    : uiText("Could not send reset email. Please try again.");
+            toast.error(uiError(message));
         } finally {
             setIsLoading(false);
         }
@@ -71,34 +78,38 @@ export function ForgotPasswordForm({
             {!smtpConfigured ? (
                 <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
                     <p className="font-medium">
-                        Password reset is unavailable on this instance.
+                        {uiText(
+                            "Password reset is unavailable on this instance.",
+                        )}
                     </p>
                     <p className="text-muted-foreground">
-                        The administrator hasn't configured SMTP, so reset
-                        emails can't be delivered. Set{" "}
+                        {uiText(
+                            "The administrator hasn't configured SMTP, so reset emails can't be delivered. Set",
+                        )}{" "}
                         <code className="font-mono text-xs">SMTP_HOST</code>,{" "}
-                        <code className="font-mono text-xs">SMTP_USER</code>,
-                        and{" "}
+                        <code className="font-mono text-xs">SMTP_USER</code>
+                        {uiText(", and")}{" "}
                         <code className="font-mono text-xs">SMTP_PASSWORD</code>{" "}
-                        in the server environment to enable it. In the meantime,
-                        ask your administrator to reset your password directly
-                        in the database.
+                        {uiText(
+                            "in the server environment to enable it. In the meantime, ask your administrator to reset your password directly in the database.",
+                        )}
                     </p>
                 </div>
             ) : submitted ? (
                 <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">Check your email.</p>
+                    <p className="font-medium">{uiText("Check your email.")}</p>
                     <p className="text-muted-foreground">
-                        If an account exists for{" "}
-                        <span className="font-mono text-xs">{email}</span>,
-                        we've sent a password reset link. The link expires in 1
-                        hour.
+                        {uiText("If an account exists for")}{" "}
+                        <span className="font-mono text-xs">{email}</span>
+                        {uiText(
+                            ", we've sent a password reset link. The link expires in 1 hour.",
+                        )}
                     </p>
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">{uiText("Email")}</Label>
                         <Input
                             id="email"
                             type="email"
@@ -117,7 +128,9 @@ export function ForgotPasswordForm({
                         variant="cyan"
                         disabled={isLoading}
                     >
-                        {isLoading ? "Sending..." : "Send reset link"}
+                        {isLoading
+                            ? uiText("Sending...")
+                            : uiText("Send reset link")}
                     </MetalButton>
                 </form>
             )}
@@ -127,7 +140,7 @@ export function ForgotPasswordForm({
                     href="/login"
                     className="text-accent-cyan hover:underline"
                 >
-                    Back to sign in
+                    {uiText("Back to sign in")}
                 </Link>
             </div>
         </div>

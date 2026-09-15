@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { uiText } from "@/lib/i18n";
 import {
     formatWebhookDate,
     type WebhookDelivery,
@@ -40,7 +41,7 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
             };
             setDeliveries(data.deliveries);
         } catch {
-            toast.error("Failed to load deliveries");
+            toast.error(uiText("Failed to load deliveries"));
         }
     }, [webhookId]);
 
@@ -62,10 +63,10 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                 { method: "POST" },
             );
             if (!response.ok) throw new Error("Failed to redeliver");
-            toast.success("Delivery queued");
+            toast.success(uiText("Delivery queued"));
             await refresh();
         } catch {
-            toast.error("Failed to queue delivery");
+            toast.error(uiText("Failed to queue delivery"));
         }
     };
 
@@ -77,11 +78,11 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
             }}
         >
             <DialogContent className="max-w-3xl">
-                <DialogTitle>Webhook Deliveries</DialogTitle>
+                <DialogTitle>{uiText("Webhook Deliveries")}</DialogTitle>
                 <div className="max-h-[420px] space-y-2 overflow-y-auto">
                     {deliveries.length === 0 ? (
                         <p className="py-8 text-center text-sm text-muted-foreground">
-                            No deliveries yet
+                            {uiText("No deliveries yet")}
                         </p>
                     ) : (
                         deliveries.map((delivery) => (
@@ -105,7 +106,8 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                                         )}
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Attempts: {delivery.attempts} · Last:{" "}
+                                        {uiText("Attempts:")}
+                                        {delivery.attempts} {uiText("· Last:")}{" "}
                                         {formatWebhookDate(
                                             delivery.lastAttemptAt,
                                         )}
@@ -123,7 +125,7 @@ export function WebhookDeliveriesDialog({ webhook, onClose }: Props) {
                                     onClick={() => redeliver(delivery.id)}
                                 >
                                     <RotateCcw className="size-4" />
-                                    Redeliver
+                                    {uiText("Redeliver")}
                                 </Button>
                             </div>
                         ))

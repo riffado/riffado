@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 type ActionKind = "transcribing" | "summarizing";
 
@@ -54,14 +56,19 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
                     { method: "POST" },
                 );
                 if (response.ok) {
-                    toast.success("Transcription complete");
+                    toast.success(uiText("Transcription complete"));
                     onTranscribeComplete();
                 } else {
                     const error = await response.json();
-                    toast.error(error.error || "Transcription failed");
+                    toast.error(
+                        uiError(
+                            error.error || uiText("Transcription failed"),
+                            error.code,
+                        ),
+                    );
                 }
             } catch {
-                toast.error("Failed to transcribe recording");
+                toast.error(uiText("Failed to transcribe recording"));
             } finally {
                 // Per-id clear only -- don't touch any global "is
                 // transcribing" flag (there isn't one), so a concurrent

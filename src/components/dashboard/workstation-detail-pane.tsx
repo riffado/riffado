@@ -5,6 +5,7 @@ import { RecordingPlayer } from "@/components/dashboard/recording-player";
 import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -78,7 +79,7 @@ export function WorkstationDetailPane({
                 className="-ml-2 h-9 gap-1 px-2 lg:hidden"
             >
                 <ArrowLeft className="size-4" />
-                Back to recordings
+                {uiText("Back to recordings")}
             </Button>
             {currentRecording ? (
                 <>
@@ -115,7 +116,9 @@ export function WorkstationDetailPane({
                 <Card>
                     <CardContent className="py-16 text-center">
                         <p className="text-muted-foreground">
-                            Select a recording to view details and transcription
+                            {uiText(
+                                "Select a recording to view details and transcription",
+                            )}
                         </p>
                     </CardContent>
                 </Card>

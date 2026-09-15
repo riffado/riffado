@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BREAKDOWN_COLORS } from "@/components/settings-sections/storage/breakdown-bar";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 
 interface LargestRecordingsProps {
     items: {
@@ -28,9 +29,11 @@ export function LargestRecordings({ items }: LargestRecordingsProps) {
     return (
         <div className="rounded-lg border bg-card">
             <div className="px-4 pt-3 pb-2">
-                <div className="text-sm font-medium">Largest recordings</div>
+                <div className="text-sm font-medium">
+                    {uiText("Largest recordings")}
+                </div>
                 <div className="text-xs text-muted-foreground">
-                    Open a recording to preview it before deleting
+                    {uiText("Open a recording to preview it before deleting")}
                 </div>
             </div>
             <ul className="divide-y">

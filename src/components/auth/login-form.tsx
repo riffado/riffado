@@ -9,6 +9,8 @@ import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn } from "@/lib/auth-client";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface LoginFormProps {
     /**
@@ -55,7 +57,11 @@ export function LoginForm({
 
             if (result.error) {
                 toast.error(
-                    result.error.message || "Invalid email or password",
+                    uiError(
+                        result.error.message ||
+                            uiText("Invalid email or password"),
+                        result.error.code,
+                    ),
                 );
                 return;
             }
@@ -66,15 +72,15 @@ export function LoginForm({
                 posthog.capture("user_signed_in");
             }
 
-            toast.success("Logged in successfully");
+            toast.success(uiText("Logged in successfully"));
             push("/dashboard");
             refresh();
         } catch (error) {
             const message =
                 error instanceof Error
                     ? error.message
-                    : "Invalid email or password";
-            toast.error(message);
+                    : uiText("Invalid email or password");
+            toast.error(uiError(message));
         } finally {
             setIsLoading(false);
         }
@@ -84,7 +90,7 @@ export function LoginForm({
         <div className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">{uiText("Email")}</Label>
                     <Input
                         id="email"
                         type="email"
@@ -99,13 +105,13 @@ export function LoginForm({
 
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password">{uiText("Password")}</Label>
                         {smtpConfigured ? (
                             <Link
                                 href="/forgot-password"
                                 className="text-xs text-muted-foreground hover:text-accent-cyan hover:underline"
                             >
-                                Forgot password?
+                                {uiText("Forgot password?")}
                             </Link>
                         ) : null}
                     </div>
@@ -127,20 +133,20 @@ export function LoginForm({
                     variant="cyan"
                     disabled={isLoading}
                 >
-                    {isLoading ? "Signing in..." : "Sign In"}
+                    {isLoading ? uiText("Signing in...") : uiText("Sign In")}
                 </MetalButton>
             </form>
 
             {registrationEnabled && (
                 <div className="text-center text-sm">
                     <span className="text-muted-foreground">
-                        Don't have an account?{" "}
+                        {uiText("Don't have an account?")}{" "}
                     </span>
                     <Link
                         href="/register"
                         className="text-accent-cyan hover:underline"
                     >
-                        Register
+                        {uiText("Register")}
                     </Link>
                 </div>
             )}

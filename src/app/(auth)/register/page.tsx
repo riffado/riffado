@@ -7,6 +7,7 @@ import { RegisterForm } from "@/components/auth/register-form";
 import { emailVerificationRequired } from "@/lib/auth";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 
 export default async function RegisterPage() {
     await redirectIfAuthenticated();
@@ -22,8 +23,10 @@ export default async function RegisterPage() {
     if (env.IS_HOSTED) {
         return (
             <HostedAuthChrome
-                title="Create your account"
-                subtitle="Free to start. Upgrade only when you outgrow it."
+                title={uiText("Create your account")}
+                subtitle={uiText(
+                    "Free to start. Upgrade only when you outgrow it.",
+                )}
             >
                 <RegisterForm
                     requireEmailVerification={emailVerificationRequired}
@@ -34,8 +37,10 @@ export default async function RegisterPage() {
 
     return (
         <SelfHostAuthChrome
-            title="Create your account"
-            subtitle="The first account on a new Riffado instance becomes the admin."
+            title={uiText("Create your account")}
+            subtitle={uiText(
+                "The first account on a new Riffado instance becomes the admin.",
+            )}
         >
             <RegisterForm
                 requireEmailVerification={emailVerificationRequired}

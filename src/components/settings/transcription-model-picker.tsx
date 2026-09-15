@@ -1,4 +1,5 @@
 "use client";
+import { uiText } from "@/lib/i18n";
 
 /**
  * Transcription model picker shared by the Add/Edit provider dialogs.
@@ -97,14 +98,14 @@ export function TranscriptionModelPicker({
                 if (!res.ok) {
                     setAudioModels([]);
                     setAudioModelsError(
-                        data?.error || "Couldn't load audio models.",
+                        data?.error || uiText("Couldn't load audio models."),
                     );
                     return;
                 }
                 setAudioModels(data?.models ?? []);
             } catch {
                 if (reqId !== requestId.current) return;
-                setAudioModelsError("Couldn't load audio models.");
+                setAudioModelsError(uiText("Couldn't load audio models."));
             } finally {
                 if (reqId === requestId.current) {
                     setAudioModelsLoading(false);
@@ -164,23 +165,25 @@ export function TranscriptionModelPicker({
     let helper: string | null = null;
     if (preset?.fetchAudioModels) {
         if (audioModelsLoading) {
-            helper = "Loading audio-capable models…";
+            helper = uiText("Loading audio-capable models…");
         } else if (audioModelsError) {
             helper = audioModelsError;
         } else if (hasOptions) {
-            helper =
-                "Only audio-input models are shown. Transcription uses chat-completions; mp3/wav recordings only.";
+            helper = uiText(
+                "Only audio-input models are shown. Transcription uses chat-completions; mp3/wav recordings only.",
+            );
         } else {
-            helper = "Enter your API key to load audio-capable models.";
+            helper = uiText("Enter your API key to load audio-capable models.");
         }
     } else if (preset?.knownTranscriptionModels?.length) {
-        helper =
-            "Pick a transcription model. Choose Custom… to type a model id we haven't shipped yet.";
+        helper = uiText(
+            "Pick a transcription model. Choose Custom… to type a model id we haven't shipped yet.",
+        );
     }
 
     return (
         <div className="space-y-2">
-            <Label htmlFor="defaultModel">Default Model</Label>
+            <Label htmlFor="defaultModel">{uiText("Default Model")}</Label>
             {hasOptions && !useCustom ? (
                 <Select
                     value={value || undefined}
@@ -188,7 +191,9 @@ export function TranscriptionModelPicker({
                     disabled={disabled}
                 >
                     <SelectTrigger>
-                        <SelectValue placeholder="Pick a transcription model" />
+                        <SelectValue
+                            placeholder={uiText("Pick a transcription model")}
+                        />
                     </SelectTrigger>
                     <SelectContent>
                         {options.map((m) => (
@@ -197,7 +202,7 @@ export function TranscriptionModelPicker({
                             </SelectItem>
                         ))}
                         <SelectItem value={CUSTOM_SENTINEL}>
-                            Custom (type model name)…
+                            {uiText("Custom (type model name)…")}
                         </SelectItem>
                     </SelectContent>
                 </Select>
@@ -205,7 +210,7 @@ export function TranscriptionModelPicker({
                 <Input
                     id="defaultModel"
                     type="text"
-                    placeholder="whisper-1, gpt-4o, etc."
+                    placeholder={uiText("whisper-1, gpt-4o, etc.")}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     disabled={disabled}
@@ -221,7 +226,7 @@ export function TranscriptionModelPicker({
                         onChange(options[0]?.id ?? "");
                     }}
                 >
-                    Back to suggested models
+                    {uiText("Back to suggested models")}
                 </button>
             )}
             {helper && (

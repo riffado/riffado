@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useSettings } from "@/hooks/use-settings";
+import { uiText } from "@/lib/i18n";
 
 const playbackSpeedOptions = [
     { label: "0.5x", value: 0.5 },
@@ -130,7 +131,9 @@ export function PlaybackSection() {
                         setPlayerScrubber(prev);
                     }
                 }
-                toast.error("Failed to save settings. Changes reverted.");
+                toast.error(
+                    uiText("Failed to save settings. Changes reverted."),
+                );
             }
         };
 
@@ -150,28 +153,30 @@ export function PlaybackSection() {
     }
 
     const shortcuts: { keys: string; description: string }[] = [
-        { keys: "Space", description: "Play / pause" },
-        { keys: "←", description: "Seek backward 5s" },
-        { keys: "→", description: "Seek forward 5s" },
-        { keys: "↑", description: "Increase volume" },
-        { keys: "↓", description: "Decrease volume" },
+        { keys: uiText("Space"), description: uiText("Play / pause") },
+        { keys: "←", description: uiText("Seek backward 5s") },
+        { keys: "→", description: uiText("Seek forward 5s") },
+        { keys: "↑", description: uiText("Increase volume") },
+        { keys: "↓", description: uiText("Decrease volume") },
     ];
 
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Playback"
-                description="Defaults applied to every recording when it loads in the player."
+                title={uiText("Playback")}
+                description={uiText(
+                    "Defaults applied to every recording when it loads in the player.",
+                )}
                 icon={Play}
             />
 
             <div className="space-y-3">
                 {/* Speed + volume defaults grouped — the audio knobs that
                     apply at the moment a recording is selected. */}
-                <SettingsCard title="Audio defaults">
+                <SettingsCard title={uiText("Audio defaults")}>
                     <div className="space-y-2">
                         <Label htmlFor="playback-speed">
-                            Default playback speed
+                            {uiText("Default playback speed")}
                         </Label>
                         <Select
                             value={defaultPlaybackSpeed.toString()}
@@ -211,7 +216,7 @@ export function PlaybackSection() {
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <Label htmlFor="default-volume">
-                                Default volume
+                                {uiText("Default volume")}
                             </Label>
                             <span className="font-mono text-xs tabular-nums text-muted-foreground">
                                 {defaultVolume}%
@@ -237,11 +242,13 @@ export function PlaybackSection() {
 
                 {/* Behavior toggles — things that change what the player
                     does, not what it sounds like. */}
-                <SettingsCard title="Behavior">
+                <SettingsCard title={uiText("Behavior")}>
                     <ToggleRow
                         id="auto-play-next"
-                        label="Auto-play next recording"
-                        description="Automatically play the next recording when the current one ends."
+                        label={uiText("Auto-play next recording")}
+                        description={uiText(
+                            "Automatically play the next recording when the current one ends.",
+                        )}
                         checked={autoPlayNext}
                         onCheckedChange={(checked) => {
                             setAutoPlayNext(checked);
@@ -254,14 +261,14 @@ export function PlaybackSection() {
                 </SettingsCard>
 
                 {/* Visual appearance of the player itself. */}
-                <SettingsCard title="Appearance">
+                <SettingsCard title={uiText("Appearance")}>
                     <div className="space-y-2">
                         <Label
                             htmlFor="player-scrubber"
                             className="flex items-center gap-2"
                         >
                             <AudioWaveform className="size-4 text-muted-foreground" />
-                            Scrubber style
+                            {uiText("Scrubber style")}
                         </Label>
                         <Select
                             value={playerScrubber}
@@ -282,17 +289,17 @@ export function PlaybackSection() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="waveform">
-                                    Waveform (default)
+                                    {uiText("Waveform (default)")}
                                 </SelectItem>
                                 <SelectItem value="slider">
-                                    Progress bar
+                                    {uiText("Progress bar")}
                                 </SelectItem>
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                            Waveform shows audio amplitude and decodes
-                            in-browser on first listen. Progress bar is the
-                            plain horizontal slider with no decoding cost.
+                            {uiText(
+                                "Waveform shows audio amplitude and decodes in-browser on first listen. Progress bar is the plain horizontal slider with no decoding cost.",
+                            )}
                         </p>
                     </div>
                 </SettingsCard>
@@ -306,10 +313,10 @@ export function PlaybackSection() {
                                 className="size-4 text-muted-foreground"
                                 aria-hidden="true"
                             />
-                            Keyboard shortcuts
+                            {uiText("Keyboard shortcuts")}
                         </span>
                     }
-                    description="Available when the player has focus."
+                    description={uiText("Available when the player has focus.")}
                 >
                     <ul className="space-y-1.5">
                         {shortcuts.map((s) => (

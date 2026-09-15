@@ -1,0 +1,88 @@
+{
+    "src/components/auth/auth-chrome.tsx": {
+        "Riffado": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "AGPL-3.0 ·": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "github.com/riffado/riffado": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "GitHub": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "Discord": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/auth/forgot-password-form.tsx": {
+        "SMTP_HOST": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "SMTP_USER": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "SMTP_PASSWORD": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "you@example.com": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/auth/login-form.tsx": {
+        "you@example.com": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/auth/register-form.tsx": {
+        "you@example.com": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/dashboard/command-palette-parts.tsx": {
+        "esc": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "⌘K": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/dashboard/command-palette.tsx": {
+        "⌘K": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/dashboard/workstation-header.tsx": {
+        "⌘K": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/footer.tsx": {
+        "Riffado ·": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "AGPL-3.0": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/plaud-connect-tabs.tsx": {
+        "Riffado Connector": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "you@example.com": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "#65&nbsp;→": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "https://api-xxx.plaud.ai": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "api*.plaud.ai": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "eyJhbGciOi…": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "web.plaud.ai": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "https://web.plaud.ai": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "pld_tokenstr": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "bearer&nbsp;": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "eyJ…": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "/device/list": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "/file/simple/web": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/recordings/recording-workstation.tsx": {
+        "MB": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings/add-provider-dialog.tsx": {
+        "https://api.example.com/v1": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "localhost": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "docker compose up": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings/api-keys-section.tsx": {
+        "Hermes Agent": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings/edit-provider-dialog.tsx": {
+        "docker compose up": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "https://api.example.com/v1": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "localhost": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings/webhook-deliveries-dialog.tsx": {
+        "HTTP": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings/webhook-editor-dialog.tsx": {
+        "URL": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "https://example.com/webhook": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings-sections/notifications-section.tsx": {
+        "https://api.day.app/your_key": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings-sections/prompt-manager.tsx": {
+        "{transcription}": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings-sections/summary-section.tsx": {
+        "{transcription}": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "summary": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "keyPoints": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim.",
+        "actionItems": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    },
+    "src/components/settings-sections/transcription-section.tsx": {
+        "Plaud": "Technical identifier, brand, shortcut, or literal configuration example; preserve verbatim."
+    }
+}

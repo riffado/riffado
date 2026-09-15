@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useSettingsNav } from "@/hooks/use-settings-nav";
+import { uiText } from "@/lib/i18n";
 import type { SettingsSection } from "@/types/settings";
 import { SettingsContent } from "./settings-content";
 
@@ -56,10 +57,13 @@ export function SettingsDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="overflow-hidden p-0 md:max-h-[600px] md:max-w-[800px] lg:max-w-[900px]">
-                <DialogTitle className="sr-only">Settings</DialogTitle>
+                <DialogTitle className="sr-only">
+                    {uiText("Settings")}
+                </DialogTitle>
                 <DialogDescription className="sr-only">
-                    Customize your settings here. Use arrow keys to navigate
-                    sections, Enter or Space to select, and Escape to close.
+                    {uiText(
+                        "Customize your settings here. Use arrow keys to navigate sections, Enter or Space to select, and Escape to close.",
+                    )}
                 </DialogDescription>
                 <SidebarProvider className="items-start">
                     <SettingsNavSidebar

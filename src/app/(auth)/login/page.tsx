@@ -5,6 +5,7 @@ import {
 import { LoginForm } from "@/components/auth/login-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 import { isSmtpConfigured } from "@/lib/smtp";
 
 export default async function LoginPage() {
@@ -18,8 +19,8 @@ export default async function LoginPage() {
     if (env.IS_HOSTED) {
         return (
             <HostedAuthChrome
-                title="Sign in"
-                subtitle="Welcome back to Riffado."
+                title={uiText("Sign in")}
+                subtitle={uiText("Welcome back to Riffado.")}
             >
                 <LoginForm {...formProps} />
             </HostedAuthChrome>
@@ -28,8 +29,8 @@ export default async function LoginPage() {
 
     return (
         <SelfHostAuthChrome
-            title="Sign in"
-            subtitle="Sign in to your Riffado instance."
+            title={uiText("Sign in")}
+            subtitle={uiText("Sign in to your Riffado instance.")}
         >
             <LoginForm {...formProps} />
         </SelfHostAuthChrome>

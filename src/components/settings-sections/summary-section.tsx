@@ -24,12 +24,15 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
-import {
-    AI_OUTPUT_LANGUAGES,
-    type CustomSummaryPrompt,
-    SUMMARY_PRESETS,
-    type SummaryPromptConfiguration,
+import type {
+    CustomSummaryPrompt,
+    SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
+import { uiText } from "@/lib/i18n";
+import {
+    UI_OUTPUT_LANGUAGES as AI_OUTPUT_LANGUAGES,
+    UI_SUMMARY_PRESETS as SUMMARY_PRESETS,
+} from "@/lib/i18n/presets";
 
 type EditingPrompt = {
     id?: string;
@@ -140,7 +143,7 @@ export function SummarySection() {
             // restoring `previous` here would resurrect an outdated value.
             if (promptAbortRef.current !== ctrl) return;
             setSelectedPrompt(previous);
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -169,22 +172,23 @@ export function SummarySection() {
                 selectedPrompt,
                 customPrompts: updatedPrompts,
             });
-            toast.success("Prompt saved");
+            toast.success(uiText("Prompt saved"));
         } catch {
             // Roll back the optimistic update -- otherwise a later save
             // (e.g. a preset change) would echo this rejected mutation
             // back to the server as if it had succeeded.
             setCustomPrompts(previousPrompts);
-            toast.error("Failed to save prompt. Changes reverted.");
+            toast.error(uiText("Failed to save prompt. Changes reverted."));
         }
     };
 
     const handleDeleteCustomPrompt = (id: string) => {
         void confirm({
-            title: "Delete this custom prompt?",
-            description:
+            title: uiText("Delete this custom prompt?"),
+            description: uiText(
                 "Recordings already summarized with this prompt keep their existing summaries, but you won't be able to apply it again.",
-            confirmLabel: "Delete",
+            ),
+            confirmLabel: uiText("Delete"),
             destructive: true,
             onConfirm: async () => {
                 const previousPrompts = customPrompts;
@@ -203,7 +207,9 @@ export function SummarySection() {
                     // Roll back both -- same reasoning as the save path above.
                     setCustomPrompts(previousPrompts);
                     setSelectedPrompt(previousSelectedPrompt);
-                    toast.error("Failed to delete prompt. Changes reverted.");
+                    toast.error(
+                        uiText("Failed to delete prompt. Changes reverted."),
+                    );
                 }
             },
         });
@@ -233,7 +239,7 @@ export function SummarySection() {
         } catch {
             if (languageAbortRef.current !== ctrl) return;
             setOutputLanguage(previous);
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -256,7 +262,7 @@ export function SummarySection() {
         } catch {
             if (autoSummarizeAbortRef.current !== ctrl) return;
             setAutoSummarize(previous);
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -280,7 +286,7 @@ export function SummarySection() {
         } catch {
             if (autoPresetAbortRef.current !== ctrl) return;
             setAutoSummarizePreset(previous);
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -301,23 +307,25 @@ export function SummarySection() {
         : viewingCustom?.prompt || "";
     const viewingName = viewingPreset
         ? viewingPreset.name
-        : viewingCustom?.name || "Prompt";
+        : viewingCustom?.name || uiText("Prompt");
     const viewingDescription = viewingPreset
         ? viewingPreset.description
-        : "Custom prompt";
+        : uiText("Custom prompt");
     const autoPresetValue = autoSummarizePreset ?? AUTO_PRESET_DEFAULT;
 
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Summary"
-                description="Prompt presets and provider used when generating recording summaries."
+                title={uiText("Summary")}
+                description={uiText(
+                    "Prompt presets and provider used when generating recording summaries.",
+                )}
                 icon={ListChecks}
             />
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="summary-preset">
-                        Default summary prompt
+                        {uiText("Default summary prompt")}
                     </Label>
                     <Select
                         value={selectedPrompt}
@@ -332,7 +340,7 @@ export function SummarySection() {
                                     customPrompts.find(
                                         (p) => p.id === selectedPrompt,
                                     )?.name ||
-                                    "General Summary"}
+                                    uiText("General Summary")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -351,7 +359,7 @@ export function SummarySection() {
                                     <div>
                                         <div>{prompt.name}</div>
                                         <div className="text-xs text-muted-foreground">
-                                            Custom prompt
+                                            {uiText("Custom prompt")}
                                         </div>
                                     </div>
                                 </SelectItem>
@@ -359,13 +367,14 @@ export function SummarySection() {
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                        The default prompt used when generating summaries. You
-                        can override this per-recording.
+                        {uiText(
+                            "The default prompt used when generating summaries. You can override this per-recording.",
+                        )}
                     </p>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="ai-output-language">
-                        AI output language
+                        {uiText("AI output language")}
                     </Label>
                     <Select
                         value={outputLanguage}
@@ -379,7 +388,7 @@ export function SummarySection() {
                             <SelectValue>
                                 {AI_OUTPUT_LANGUAGES.find(
                                     (l) => l.code === outputLanguage,
-                                )?.label ?? "Auto (match transcript)"}
+                                )?.label ?? uiText("Auto (match transcript)")}
                             </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
@@ -391,21 +400,22 @@ export function SummarySection() {
                         </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                        Applies to AI-generated summaries and titles. Auto lets
-                        the model match the transcript's language.
+                        {uiText(
+                            "Applies to AI-generated summaries and titles. Auto lets the model match the transcript's language.",
+                        )}
                     </p>
                 </div>
                 <div className="flex items-center justify-between pt-2">
                     <div className="space-y-0.5 flex-1">
                         <Label htmlFor="auto-summarize" className="text-base">
-                            Auto-generate summary after transcription
+                            {uiText(
+                                "Auto-generate summary after transcription",
+                            )}
                         </Label>
                         <p className="text-sm text-muted-foreground">
-                            Triggers after any successful transcription —
-                            manual, auto-sync, or re-transcribe. Enable
-                            Auto-transcribe to also cover newly synced
-                            recordings. Costs one extra AI provider call per
-                            generated summary.
+                            {uiText(
+                                "Triggers after any successful transcription — manual, auto-sync, or re-transcribe. Enable Auto-transcribe to also cover newly synced recordings. Costs one extra AI provider call per generated summary.",
+                            )}
                         </p>
                     </div>
                     <Switch
@@ -418,7 +428,7 @@ export function SummarySection() {
                 {autoSummarize && (
                     <div className="space-y-2">
                         <Label htmlFor="auto-summarize-preset">
-                            Preset for auto-summary
+                            {uiText("Preset for auto-summary")}
                         </Label>
                         <Select
                             value={autoPresetValue}
@@ -431,19 +441,25 @@ export function SummarySection() {
                             >
                                 <SelectValue>
                                     {autoPresetValue === AUTO_PRESET_DEFAULT
-                                        ? "Use default summary prompt"
+                                        ? uiText("Use default summary prompt")
                                         : SUMMARY_PRESETS[
                                               autoPresetValue as keyof typeof SUMMARY_PRESETS
                                           ]?.name ||
-                                          "Use default summary prompt"}
+                                          uiText("Use default summary prompt")}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value={AUTO_PRESET_DEFAULT}>
                                     <div>
-                                        <div>Use default summary prompt</div>
+                                        <div>
+                                            {uiText(
+                                                "Use default summary prompt",
+                                            )}
+                                        </div>
                                         <div className="text-xs text-muted-foreground">
-                                            Inherits the preset selected above
+                                            {uiText(
+                                                "Inherits the preset selected above",
+                                            )}
                                         </div>
                                     </div>
                                 </SelectItem>
@@ -465,9 +481,9 @@ export function SummarySection() {
                             </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                            Pick a different preset for the auto-mode (e.g.
-                            "Action Items" for meetings) without changing your
-                            manual default above.
+                            {uiText(
+                                'Pick a different preset for the auto-mode (e.g. "Action Items" for meetings) without changing your manual default above.',
+                            )}
                         </p>
                     </div>
                 )}
@@ -477,7 +493,7 @@ export function SummarySection() {
             <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold">
-                        Custom Summary Prompts
+                        {uiText("Custom Summary Prompts")}
                     </h3>
                     <Button
                         onClick={() =>
@@ -486,12 +502,14 @@ export function SummarySection() {
                         size="sm"
                     >
                         <Plus className="size-4 mr-2" />
-                        Add Custom Prompt
+                        {uiText("Add Custom Prompt")}
                     </Button>
                 </div>
                 {customPrompts.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                        No custom prompts yet. Create one to get started.
+                        {uiText(
+                            "No custom prompts yet. Create one to get started.",
+                        )}
                     </p>
                 ) : (
                     <div className="space-y-2">
@@ -508,7 +526,7 @@ export function SummarySection() {
                                             </h4>
                                             {selectedPrompt === prompt.id && (
                                                 <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                    Active
+                                                    {uiText("Active")}
                                                 </span>
                                             )}
                                         </div>
@@ -521,7 +539,7 @@ export function SummarySection() {
                                                 setViewingPromptId(prompt.id)
                                             }
                                         >
-                                            View
+                                            {uiText("View")}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -586,16 +604,19 @@ export function SummarySection() {
                     <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                         <DialogTitle>
                             {editingCustomPrompt.id
-                                ? "Edit Custom Prompt"
-                                : "Create Custom Prompt"}
+                                ? uiText("Edit Custom Prompt")
+                                : uiText("Create Custom Prompt")}
                         </DialogTitle>
                         <DialogDescription>
-                            Create a custom prompt for summary generation. Use{" "}
+                            {uiText(
+                                "Create a custom prompt for summary generation. Use",
+                            )}{" "}
                             <code className="px-1 py-0.5 bg-muted rounded">
                                 {"{transcription}"}
                             </code>{" "}
-                            as a placeholder for the transcription text. The
-                            model must respond with a JSON object containing{" "}
+                            {uiText(
+                                "as a placeholder for the transcription text. The model must respond with a JSON object containing",
+                            )}{" "}
                             <code className="px-1 py-0.5 bg-muted rounded">
                                 summary
                             </code>
@@ -603,16 +624,16 @@ export function SummarySection() {
                             <code className="px-1 py-0.5 bg-muted rounded">
                                 keyPoints
                             </code>
-                            , and{" "}
+                            {uiText(", and")}{" "}
                             <code className="px-1 py-0.5 bg-muted rounded">
                                 actionItems
                             </code>{" "}
-                            fields.
+                            {uiText("fields.")}
                         </DialogDescription>
                         <div className="space-y-4 mt-4">
                             <div className="space-y-2">
                                 <Label htmlFor="custom-summary-prompt-name">
-                                    Name
+                                    {uiText("Name")}
                                 </Label>
                                 <Input
                                     id="custom-summary-prompt-name"
@@ -627,12 +648,12 @@ export function SummarySection() {
                                                 : prev,
                                         )
                                     }
-                                    placeholder="My Custom Prompt"
+                                    placeholder={uiText("My Custom Prompt")}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="custom-summary-prompt-text">
-                                    Prompt
+                                    {uiText("Prompt")}
                                 </Label>
                                 <textarea
                                     id="custom-summary-prompt-text"
@@ -667,13 +688,15 @@ Transcription:
                                         "{transcription}",
                                     ) && (
                                         <p className="text-xs text-amber-600 dark:text-amber-500">
-                                            This prompt doesn&apos;t include{" "}
+                                            {uiText(
+                                                "This prompt doesn&apos;t include",
+                                            )}{" "}
                                             <code className="px-1 py-0.5 bg-muted rounded">
                                                 {"{transcription}"}
                                             </code>{" "}
-                                            -- the transcript won&apos;t be
-                                            inserted, and the model will only
-                                            see this literal text.
+                                            {uiText(
+                                                "-- the transcript won&apos;t be inserted, and the model will only see this literal text.",
+                                            )}
                                         </p>
                                     )}
                             </div>
@@ -682,7 +705,7 @@ Transcription:
                                     variant="outline"
                                     onClick={() => setEditingCustomPrompt(null)}
                                 >
-                                    Cancel
+                                    {uiText("Cancel")}
                                 </Button>
                                 <Button
                                     onClick={() => {
@@ -691,7 +714,9 @@ Transcription:
                                             !editingCustomPrompt.prompt
                                         ) {
                                             toast.error(
-                                                "Name and prompt are required",
+                                                uiText(
+                                                    "Name and prompt are required",
+                                                ),
                                             );
                                             return;
                                         }
@@ -704,7 +729,9 @@ Transcription:
                                         !editingCustomPrompt.prompt
                                     }
                                 >
-                                    {editingCustomPrompt.id ? "Save" : "Create"}
+                                    {editingCustomPrompt.id
+                                        ? uiText("Save")
+                                        : uiText("Create")}
                                 </Button>
                             </div>
                         </div>

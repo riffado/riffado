@@ -9,6 +9,8 @@ import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sendVerificationEmail, signUp } from "@/lib/auth-client";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 const RESEND_COOLDOWN_MS = 30_000;
 
@@ -42,12 +44,12 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
         e.preventDefault();
 
         if (password !== confirmPassword) {
-            toast.error("Passwords do not match");
+            toast.error(uiText("Passwords do not match"));
             return;
         }
 
         if (password.length < 8) {
-            toast.error("Password must be at least 8 characters");
+            toast.error(uiText("Password must be at least 8 characters"));
             return;
         }
 
@@ -67,7 +69,13 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
             });
 
             if (result.error) {
-                toast.error(result.error.message || "Failed to create account");
+                toast.error(
+                    uiError(
+                        result.error.message ||
+                            uiText("Failed to create account"),
+                        result.error.code,
+                    ),
+                );
                 return;
             }
 
@@ -83,15 +91,15 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                 posthog.capture("user_signed_up");
             }
 
-            toast.success("Account created successfully");
+            toast.success(uiText("Account created successfully"));
             push("/dashboard");
             refresh();
         } catch (error) {
             const message =
                 error instanceof Error
                     ? error.message
-                    : "Failed to create account";
-            toast.error(message);
+                    : uiText("Failed to create account");
+            toast.error(uiError(message));
         } finally {
             setIsLoading(false);
         }
@@ -103,7 +111,11 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
             const secs = Math.ceil(
                 (RESEND_COOLDOWN_MS - (now - lastResentAt)) / 1000,
             );
-            toast.error(`Please wait ${secs}s before resending`);
+            toast.error(
+                uiText("Please wait {seconds}s before resending", {
+                    seconds: secs,
+                }),
+            );
             return;
         }
 
@@ -116,20 +128,23 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
 
             if (result.error) {
                 toast.error(
-                    result.error.message ||
-                        "Failed to resend verification email",
+                    uiError(
+                        result.error.message ||
+                            uiText("Failed to resend verification email"),
+                        result.error.code,
+                    ),
                 );
                 return;
             }
 
             setLastResentAt(Date.now());
-            toast.success("Verification email resent");
+            toast.success(uiText("Verification email resent"));
         } catch (error) {
             const message =
                 error instanceof Error
                     ? error.message
-                    : "Failed to resend verification email";
-            toast.error(message);
+                    : uiText("Failed to resend verification email");
+            toast.error(uiError(message));
         } finally {
             setIsResending(false);
         }
@@ -139,12 +154,13 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
         <div className="space-y-6">
             {awaitingVerification ? (
                 <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">Check your email.</p>
+                    <p className="font-medium">{uiText("Check your email.")}</p>
                     <p className="text-muted-foreground">
-                        We sent a verification link to{" "}
-                        <span className="font-mono text-xs">{email}</span>.
-                        Click the link to activate your account -- you won't be
-                        able to sign in until it's verified.
+                        {uiText("We sent a verification link to")}{" "}
+                        <span className="font-mono text-xs">{email}</span>
+                        {uiText(
+                            ". Click the link to activate your account -- you won't be able to sign in until it's verified.",
+                        )}
                     </p>
                     <button
                         type="button"
@@ -152,17 +168,19 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                         disabled={isResending}
                         className="text-accent-cyan hover:underline disabled:opacity-50"
                     >
-                        {isResending ? "Resending..." : "Resend email"}
+                        {isResending
+                            ? uiText("Resending...")
+                            : uiText("Resend email")}
                     </button>
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="name">Name</Label>
+                        <Label htmlFor="name">{uiText("Name")}</Label>
                         <Input
                             id="name"
                             type="text"
-                            placeholder="John Doe"
+                            placeholder={uiText("John Doe")}
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             required
@@ -172,7 +190,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">{uiText("Email")}</Label>
                         <Input
                             id="email"
                             type="email"
@@ -186,7 +204,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password">{uiText("Password")}</Label>
                         <Input
                             id="password"
                             type="password"
@@ -202,7 +220,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
 
                     <div className="space-y-2">
                         <Label htmlFor="confirmPassword">
-                            Confirm Password
+                            {uiText("Confirm Password")}
                         </Label>
                         <Input
                             id="confirmPassword"
@@ -222,20 +240,22 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                         variant="cyan"
                         disabled={isLoading}
                     >
-                        {isLoading ? "Creating account..." : "Create Account"}
+                        {isLoading
+                            ? uiText("Creating account...")
+                            : uiText("Create Account")}
                     </MetalButton>
                 </form>
             )}
 
             <div className="text-center text-sm">
                 <span className="text-muted-foreground">
-                    Already have an account?{" "}
+                    {uiText("Already have an account?")}{" "}
                 </span>
                 <Link
                     href="/login"
                     className="text-accent-cyan hover:underline"
                 >
-                    Sign in
+                    {uiText("Sign in")}
                 </Link>
             </div>
         </div>

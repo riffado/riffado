@@ -22,6 +22,7 @@ import {
 import { RecordingRow } from "@/components/dashboard/recording-row";
 import { Card, CardContent } from "@/components/ui/card";
 import { dateGroupLabel } from "@/lib/format-date";
+import { uiText } from "@/lib/i18n";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
@@ -318,8 +319,8 @@ export function RecordingList({
                             <Mic className="mb-2 size-8 text-muted-foreground" />
                             <p className="text-sm text-muted-foreground">
                                 {query
-                                    ? "No recordings match your search."
-                                    : "No recordings yet."}
+                                    ? uiText("No recordings match your search.")
+                                    : uiText("No recordings yet.")}
                             </p>
                         </div>
                     )}

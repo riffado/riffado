@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { uiText } from "@/lib/i18n";
 
 interface UseAutoSyncOptions {
     interval?: number;
@@ -138,7 +139,9 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                         (MANUAL_MIN_INTERVAL_MS - timeSinceLastSync) / 1000,
                     );
                     onErrorRef.current?.(
-                        `Just synced. Try again in ${waitSeconds}s.`,
+                        uiText("Just synced. Try again in {seconds}s.", {
+                            seconds: waitSeconds,
+                        }),
                     );
                     return;
                 }
@@ -198,7 +201,7 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                 } else {
                     const errorMessage = await getApiErrorMessage(
                         response,
-                        "Sync failed",
+                        uiText("Sync failed"),
                     );
 
                     setStatus((prev) => ({
@@ -214,7 +217,7 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                     }
                 }
             } catch {
-                const errorMessage = "Failed to sync with Plaud device";
+                const errorMessage = uiText("Failed to sync with Plaud device");
                 setStatus((prev) => ({
                     ...prev,
                     lastSyncResult: {

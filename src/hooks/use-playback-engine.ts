@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { uiText } from "@/lib/i18n";
 import type { Recording } from "@/types/recording";
 
 export const PLAYBACK_SPEED_OPTIONS = [
@@ -137,7 +138,7 @@ export function usePlaybackEngine({
             audioRef.current.playbackRate = playbackSpeed;
             audioRef.current.play().catch((error) => {
                 console.error("Error playing audio:", error);
-                toast.error("Failed to play audio");
+                toast.error(uiText("Failed to play audio"));
             });
         }
         setIsPlaying(!isPlaying);

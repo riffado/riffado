@@ -3,6 +3,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export function ThemeToggle({ className }: { className?: string }) {
@@ -35,7 +36,9 @@ export function ThemeToggle({ className }: { className?: string }) {
     }
 
     const isDark = resolvedTheme === "dark";
-    const nextLabel = isDark ? "Switch to light theme" : "Switch to dark theme";
+    const nextLabel = isDark
+        ? uiText("Switch to light theme")
+        : uiText("Switch to dark theme");
 
     return (
         <button

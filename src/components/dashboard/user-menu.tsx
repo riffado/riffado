@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/hooks/use-theme";
 import { signOut } from "@/lib/auth-client";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
@@ -57,9 +58,9 @@ export function UserMenu({
     const { theme, setTheme } = useTheme(initialTheme);
 
     const themeOptions = [
-        { value: "light" as const, label: "Light", icon: Sun },
-        { value: "dark" as const, label: "Dark", icon: Moon },
-        { value: "system" as const, label: "Auto", icon: Monitor },
+        { value: "light" as const, label: uiText("Light"), icon: Sun },
+        { value: "dark" as const, label: uiText("Dark"), icon: Moon },
+        { value: "system" as const, label: uiText("Auto"), icon: Monitor },
     ];
 
     return (
@@ -68,7 +69,7 @@ export function UserMenu({
                 <Button
                     variant="outline"
                     size="icon"
-                    aria-label="Account menu"
+                    aria-label={uiText("Account menu")}
                     className="font-semibold"
                 >
                     {emailInitial(userEmail)}
@@ -84,10 +85,10 @@ export function UserMenu({
                     </div>
                     <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">
-                            {userEmail || "Signed in"}
+                            {userEmail || uiText("Signed in")}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            {isAdmin ? "Admin" : "Signed in"}
+                            {isAdmin ? uiText("Admin") : uiText("Signed in")}
                         </p>
                     </div>
                 </div>
@@ -95,29 +96,33 @@ export function UserMenu({
                 <div className="p-1">
                     <DropdownMenuItem onSelect={onOpenSettings}>
                         <Settings />
-                        <span className="flex-1">Settings</span>
+                        <span className="flex-1">{uiText("Settings")}</span>
                         <Kbd>,</Kbd>
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={onOpenShortcuts}>
                         <Keyboard />
-                        <span className="flex-1">Keyboard shortcuts</span>
+                        <span className="flex-1">
+                            {uiText("Keyboard shortcuts")}
+                        </span>
                         <Kbd>?</Kbd>
                     </DropdownMenuItem>
                     {isAdmin && (
                         <DropdownMenuItem onSelect={() => push("/admin")}>
                             <Shield />
-                            <span className="flex-1">Admin dashboard</span>
+                            <span className="flex-1">
+                                {uiText("Admin dashboard")}
+                            </span>
                         </DropdownMenuItem>
                     )}
                 </div>
 
                 <div className="border-t px-3 py-2">
                     <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-                        Theme
+                        {uiText("Theme")}
                     </div>
                     <div
                         role="radiogroup"
-                        aria-label="Theme"
+                        aria-label={uiText("Theme")}
                         className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-0.5"
                     >
                         {themeOptions.map((opt) => {
@@ -165,7 +170,7 @@ export function UserMenu({
                         }}
                     >
                         <LogOut />
-                        Log out
+                        {uiText("Log out")}
                     </DropdownMenuItem>
                 </div>
             </DropdownMenuContent>

@@ -21,6 +21,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { findPreset, getVisiblePresets } from "@/lib/ai/provider-presets";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface AddProviderDialogProps {
     open: boolean;
@@ -62,7 +64,7 @@ export function AddProviderDialog({
         e.preventDefault();
 
         if (!provider || !apiKey) {
-            toast.error("Provider and API key are required");
+            toast.error(uiText("Provider and API key are required"));
             return;
         }
 
@@ -86,7 +88,7 @@ export function AddProviderDialog({
                 throw new Error(data?.error || "Failed to add provider");
             }
 
-            toast.success("AI provider added successfully");
+            toast.success(uiText("AI provider added successfully"));
             onSuccess();
             onOpenChange(false);
 
@@ -98,9 +100,11 @@ export function AddProviderDialog({
             setIsDefaultEnhancement(false);
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to add AI provider",
+                uiError(
+                    error instanceof Error
+                        ? error.message
+                        : uiText("Failed to add AI provider"),
+                ),
             );
         } finally {
             setIsLoading(false);
@@ -113,18 +117,20 @@ export function AddProviderDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Add AI Provider</DialogTitle>
+                    <DialogTitle>{uiText("Add AI Provider")}</DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label>Provider</Label>
+                        <Label>{uiText("Provider")}</Label>
                         <Select
                             value={provider}
                             onValueChange={handleProviderChange}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Select a provider" />
+                                <SelectValue
+                                    placeholder={uiText("Select a provider")}
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 {visiblePresets.map((preset) => (
@@ -132,7 +138,7 @@ export function AddProviderDialog({
                                         key={preset.name}
                                         value={preset.name}
                                     >
-                                        {preset.name}
+                                        {uiText(preset.name)}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -140,12 +146,14 @@ export function AddProviderDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
+                        <Label htmlFor="apiKey">{uiText("API Key")}</Label>
                         <Input
                             id="apiKey"
                             type="password"
                             placeholder={
-                                selectedPreset?.placeholder || "Your API key"
+                                (selectedPreset?.placeholder
+                                    ? uiText(selectedPreset.placeholder)
+                                    : undefined) || uiText("Your API key")
                             }
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
@@ -155,7 +163,9 @@ export function AddProviderDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
+                        <Label htmlFor="baseUrl">
+                            {uiText("Base URL (Optional)")}
+                        </Label>
                         <Input
                             id="baseUrl"
                             type="text"
@@ -167,10 +177,11 @@ export function AddProviderDialog({
                         />
                         {isHosted && (
                             <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
+                                {uiText("We can&apos;t reach")}{" "}
+                                <code className="font-mono">localhost</code>{" "}
+                                {uiText(
+                                    "or other private addresses from the hosted app. To use LM Studio or Ollama, self-host Riffado (",
+                                )}
                                 <code className="font-mono">
                                     docker compose up
                                 </code>
@@ -198,7 +209,7 @@ export function AddProviderDialog({
                                 }
                                 disabled={isLoading}
                             />
-                            <span>Use for transcription</span>
+                            <span>{uiText("Use for transcription")}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -209,7 +220,7 @@ export function AddProviderDialog({
                                 }
                                 disabled={isLoading}
                             />
-                            <span>Use for AI enhancements</span>
+                            <span>{uiText("Use for AI enhancements")}</span>
                         </label>
                     </Panel>
 
@@ -220,7 +231,7 @@ export function AddProviderDialog({
                             disabled={isLoading}
                             className="flex-1"
                         >
-                            Cancel
+                            {uiText("Cancel")}
                         </MetalButton>
                         <MetalButton
                             type="submit"
@@ -228,7 +239,9 @@ export function AddProviderDialog({
                             disabled={isLoading}
                             className="flex-1"
                         >
-                            {isLoading ? "Adding..." : "Add Provider"}
+                            {isLoading
+                                ? uiText("Adding...")
+                                : uiText("Add Provider")}
                         </MetalButton>
                     </div>
                 </form>

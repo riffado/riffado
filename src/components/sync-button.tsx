@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
+import { zhCN } from "date-fns/locale";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,6 +9,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { uiText } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,19 +27,19 @@ function compactAgo(from: Date): string {
     const ts = from.getTime();
     if (!Number.isFinite(ts)) return "";
     const diffMs = Date.now() - ts;
-    if (diffMs < 0) return "just now";
+    if (diffMs < 0) return uiText("just now");
     const sec = Math.floor(diffMs / 1000);
     // Everything under a minute reads as "just now" — otherwise the
     // 45–59 s window renders "0m ago" because `min = floor(sec/60)`.
-    if (sec < 60) return "just now";
+    if (sec < 60) return uiText("just now");
     const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
+    if (min < 60) return uiText("{count} minutes ago", { count: min });
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h ago`;
+    if (hr < 24) return uiText("{count} hours ago", { count: hr });
     const day = Math.floor(hr / 24);
-    if (day < 7) return `${day}d ago`;
+    if (day < 7) return uiText("{count} days ago", { count: day });
     const wk = Math.floor(day / 7);
-    return `${wk}w ago`;
+    return uiText("{count} weeks ago", { count: wk });
 }
 
 /**
@@ -83,16 +85,18 @@ export function SyncButton({
     const failed = !isAutoSyncing && lastSyncResult?.success === false;
 
     const label = (() => {
-        if (isAutoSyncing) return "Syncing...";
-        if (failed) return "Retry sync";
+        if (isAutoSyncing) return uiText("Syncing...");
+        if (failed) return uiText("Retry sync");
         if (lastSyncTime) {
             try {
-                return `Synced ${compactAgo(lastSyncTime)}`;
+                return uiText("Synced {time}", {
+                    time: compactAgo(lastSyncTime),
+                });
             } catch {
-                return "Synced recently";
+                return uiText("Synced recently");
             }
         }
-        return "Sync device";
+        return uiText("Sync device");
     })();
 
     // Tooltip: secondary context for users who hover. We pack what the
@@ -108,27 +112,34 @@ export function SyncButton({
             try {
                 const diff = nextSyncTime.getTime() - Date.now();
                 if (diff < 60000) {
-                    parts.push("Next auto-sync soon");
+                    parts.push(uiText("Next auto-sync soon"));
                 } else {
                     parts.push(
-                        `Next auto-sync ${formatDistanceToNow(nextSyncTime, {
-                            addSuffix: true,
-                        })}`,
+                        uiText("Next auto-sync {time}", {
+                            time: formatDistanceToNow(nextSyncTime, {
+                                addSuffix: true,
+                                locale: zhCN,
+                            }),
+                        }),
                     );
                 }
             } catch {
                 // Ignore - we just won't include the next-sync line.
             }
         }
-        parts.push(isAutoSyncing ? "Sync in progress" : "Click to sync now");
+        parts.push(
+            isAutoSyncing
+                ? uiText("Sync in progress")
+                : uiText("Click to sync now"),
+        );
         return parts.join(" \u00b7 ");
     })();
 
     const ariaLabel = isAutoSyncing
-        ? "Syncing device"
+        ? uiText("Syncing device")
         : failed
-          ? "Retry sync"
-          : "Sync device";
+          ? uiText("Retry sync")
+          : uiText("Sync device");
 
     return (
         <Tooltip>

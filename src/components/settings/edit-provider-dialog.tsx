@@ -26,6 +26,8 @@ import {
     getVisiblePresets,
     isLocalPreset,
 } from "@/lib/ai/provider-presets";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface Provider {
     id: string;
@@ -106,12 +108,12 @@ export function EditProviderDialog({
         e.preventDefault();
 
         if (!providerName) {
-            toast.error("Provider name is required");
+            toast.error(uiText("Provider name is required"));
             return;
         }
 
         if (!provider?.id) {
-            toast.error("Provider ID is missing");
+            toast.error(uiText("Provider ID is missing"));
             return;
         }
 
@@ -148,7 +150,7 @@ export function EditProviderDialog({
                 throw new Error(error.error || "Failed to update provider");
             }
 
-            toast.success("AI provider updated successfully");
+            toast.success(uiText("AI provider updated successfully"));
             onSuccess();
             onOpenChange(false);
 
@@ -160,9 +162,11 @@ export function EditProviderDialog({
             setIsDefaultEnhancement(false);
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update AI provider",
+                uiError(
+                    error instanceof Error
+                        ? error.message
+                        : uiText("Failed to update AI provider"),
+                ),
             );
         } finally {
             setIsLoading(false);
@@ -177,19 +181,21 @@ export function EditProviderDialog({
         <Dialog open={open} onOpenChange={onOpenChange} key={provider.id}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Edit AI Provider</DialogTitle>
+                    <DialogTitle>{uiText("Edit AI Provider")}</DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <Label>Provider</Label>
+                        <Label>{uiText("Provider")}</Label>
                         <Select
                             value={providerName}
                             onValueChange={handleProviderChange}
                             disabled={isLoading}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Select a provider" />
+                                <SelectValue
+                                    placeholder={uiText("Select a provider")}
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 {visiblePresets.map((preset) => (
@@ -197,7 +203,7 @@ export function EditProviderDialog({
                                         key={preset.name}
                                         value={preset.name}
                                     >
-                                        {preset.name}
+                                        {uiText(preset.name)}
                                     </SelectItem>
                                 ))}
                                 {legacyLocalProvider && (
@@ -206,8 +212,8 @@ export function EditProviderDialog({
                                         value={legacyLocalProvider}
                                         disabled
                                     >
-                                        {legacyLocalProvider} (not available on
-                                        hosted)
+                                        {legacyLocalProvider}{" "}
+                                        {uiText("(not available on hosted)")}
                                     </SelectItem>
                                 )}
                             </SelectContent>
@@ -216,11 +222,10 @@ export function EditProviderDialog({
                             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
                                 <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
                                 <span>
-                                    {legacyLocalProvider} isn&apos;t usable on
-                                    the hosted app. We can&apos;t reach your
-                                    machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host Riffado
-                                    (
+                                    {legacyLocalProvider}{" "}
+                                    {uiText(
+                                        "isn&apos;t usable on the hosted app. We can&apos;t reach your machine. Delete this provider and re-add one with a public endpoint, or self-host Riffado (",
+                                    )}
                                     <code className="font-mono">
                                         docker compose up
                                     </code>
@@ -231,13 +236,17 @@ export function EditProviderDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
+                        <Label htmlFor="apiKey">{uiText("API Key")}</Label>
                         <Input
                             id="apiKey"
                             type="password"
                             placeholder={
-                                selectedPreset?.placeholder ||
-                                "Enter a new key to replace the current one"
+                                (selectedPreset?.placeholder
+                                    ? uiText(selectedPreset.placeholder)
+                                    : undefined) ||
+                                uiText(
+                                    "Enter a new key to replace the current one",
+                                )
                             }
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
@@ -247,15 +256,17 @@ export function EditProviderDialog({
                         <div className="text-xs text-muted-foreground flex items-center gap-2">
                             <Shield className="size-3.5 shrink-0" />
                             <span>
-                                For security, the saved API key is never shown.
-                                Leave this blank to keep your current key, or
-                                enter a new key to replace it.
+                                {uiText(
+                                    "For security, the saved API key is never shown. Leave this blank to keep your current key, or enter a new key to replace it.",
+                                )}
                             </span>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
+                        <Label htmlFor="baseUrl">
+                            {uiText("Base URL (Optional)")}
+                        </Label>
                         <Input
                             id="baseUrl"
                             type="text"
@@ -267,10 +278,11 @@ export function EditProviderDialog({
                         />
                         {isHosted && (
                             <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
+                                {uiText("We can&apos;t reach")}{" "}
+                                <code className="font-mono">localhost</code>{" "}
+                                {uiText(
+                                    "or other private addresses from the hosted app. To use LM Studio or Ollama, self-host Riffado (",
+                                )}
                                 <code className="font-mono">
                                     docker compose up
                                 </code>
@@ -298,7 +310,7 @@ export function EditProviderDialog({
                                 }
                                 disabled={isLoading}
                             />
-                            <span>Use for transcription</span>
+                            <span>{uiText("Use for transcription")}</span>
                         </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -309,7 +321,7 @@ export function EditProviderDialog({
                                 }
                                 disabled={isLoading}
                             />
-                            <span>Use for AI enhancements</span>
+                            <span>{uiText("Use for AI enhancements")}</span>
                         </label>
                     </Panel>
 
@@ -320,14 +332,16 @@ export function EditProviderDialog({
                             disabled={isLoading}
                             className="flex-1"
                         >
-                            Cancel
+                            {uiText("Cancel")}
                         </MetalButton>
                         <MetalButton
                             type="submit"
                             disabled={isLoading}
                             className="flex-1"
                         >
-                            {isLoading ? "Updating..." : "Update Provider"}
+                            {isLoading
+                                ? uiText("Updating...")
+                                : uiText("Update Provider")}
                         </MetalButton>
                     </div>
                 </form>

@@ -3,6 +3,7 @@
 import { Mic, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { uiText } from "@/lib/i18n";
 
 interface Props {
     isSyncing: boolean;
@@ -21,29 +22,30 @@ export function WorkstationEmptyState({ isSyncing, onSync, onUpload }: Props) {
             <CardContent className="flex flex-col items-center justify-center py-16">
                 <Mic className="mb-4 size-16 text-muted-foreground" />
                 <h3 className="mb-2 text-lg font-semibold">
-                    No recordings yet
+                    {uiText("No recordings yet")}
                 </h3>
                 <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
-                    Sync your Plaud device to import your recordings and start
-                    transcribing them.
+                    {uiText(
+                        "Sync your Plaud device to import your recordings and start transcribing them.",
+                    )}
                 </p>
                 <div className="flex gap-2">
                     <Button onClick={onSync} disabled={isSyncing}>
                         {isSyncing ? (
                             <>
                                 <RefreshCw className="mr-2 size-4 animate-spin" />
-                                Syncing…
+                                {uiText("Syncing…")}
                             </>
                         ) : (
                             <>
                                 <RefreshCw className="mr-2 size-4" />
-                                Sync Device
+                                {uiText("Sync Device")}
                             </>
                         )}
                     </Button>
                     <Button variant="outline" onClick={onUpload}>
                         <Upload className="mr-2 size-4" />
-                        Upload Audio
+                        {uiText("Upload Audio")}
                     </Button>
                 </div>
             </CardContent>

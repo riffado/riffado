@@ -4,6 +4,7 @@ import { Bot, CheckCircle2, Mic, Sparkles } from "lucide-react";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { uiText } from "@/lib/i18n";
 
 export function OnboardingStepWelcome() {
     return (
@@ -13,11 +14,12 @@ export function OnboardingStepWelcome() {
                     <Mic className="size-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold">
-                    Your AI-Powered Recording Hub
+                    {uiText("Your AI-Powered Recording Hub")}
                 </h3>
                 <p className="text-muted-foreground">
-                    Riffado helps you manage, transcribe, and enhance your Plaud
-                    recordings with AI. Let's set up your account.
+                    {uiText(
+                        "Riffado helps you manage, transcribe, and enhance your Plaud recordings with AI. Let's set up your account.",
+                    )}
                 </p>
             </div>
 
@@ -26,13 +28,14 @@ export function OnboardingStepWelcome() {
                     <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
                             <Mic className="size-4" />
-                            Connect Your Account
+                            {uiText("Connect Your Account")}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
-                            Sign in with your Plaud email to sync recordings
-                            automatically
+                            {uiText(
+                                "Sign in with your Plaud email to sync recordings automatically",
+                            )}
                         </p>
                     </CardContent>
                 </Card>
@@ -41,13 +44,14 @@ export function OnboardingStepWelcome() {
                     <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
                             <Bot className="size-4" />
-                            Set Up AI Provider
+                            {uiText("Set Up AI Provider")}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
-                            Configure an AI provider for automatic
-                            transcriptions
+                            {uiText(
+                                "Configure an AI provider for automatic transcriptions",
+                            )}
                         </p>
                     </CardContent>
                 </Card>
@@ -56,13 +60,14 @@ export function OnboardingStepWelcome() {
                     <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
                             <Sparkles className="size-4" />
-                            Start Recording
+                            {uiText("Start Recording")}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">
-                            You're all set! Start recording and let AI do the
-                            work
+                            {uiText(
+                                "You're all set! Start recording and let AI do the work",
+                            )}
                         </p>
                     </CardContent>
                 </Card>
@@ -87,11 +92,12 @@ export function OnboardingStepPlaud({
                     <Mic className="size-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-semibold">
-                    Connect Your Plaud Account
+                    {uiText("Connect Your Plaud Account")}
                 </h3>
                 <p className="text-muted-foreground">
-                    Sign in with your Plaud email to sync recordings
-                    automatically
+                    {uiText(
+                        "Sign in with your Plaud email to sync recordings automatically",
+                    )}
                 </p>
             </div>
 
@@ -101,9 +107,11 @@ export function OnboardingStepPlaud({
                         <div className="flex items-center gap-3">
                             <CheckCircle2 className="size-5 text-primary" />
                             <div className="flex-1">
-                                <p className="font-medium">Device Connected</p>
+                                <p className="font-medium">
+                                    {uiText("Device Connected")}
+                                </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Your Plaud account is connected
+                                    {uiText("Your Plaud account is connected")}
                                 </p>
                             </div>
                             <Button
@@ -111,7 +119,7 @@ export function OnboardingStepPlaud({
                                 size="sm"
                                 onClick={onReconnect}
                             >
-                                Reconnect
+                                {uiText("Reconnect")}
                             </Button>
                         </div>
                     </CardContent>
@@ -145,13 +153,17 @@ export function OnboardingStepAiProvider({
                 </div>
                 <h3 className="text-xl font-semibold">
                     {includedOnly
-                        ? "Transcription Included"
-                        : "Set Up AI Provider"}
+                        ? uiText("Transcription Included")
+                        : uiText("Set Up AI Provider")}
                 </h3>
                 <p className="text-muted-foreground">
                     {includedOnly
-                        ? "Mynah transcription comes with your plan. You're ready to go."
-                        : "Configure an AI provider to enable automatic transcriptions"}
+                        ? uiText(
+                              "Mynah transcription comes with your plan. You're ready to go.",
+                          )
+                        : uiText(
+                              "Configure an AI provider to enable automatic transcriptions",
+                          )}
                 </p>
             </div>
 
@@ -162,10 +174,12 @@ export function OnboardingStepAiProvider({
                             <CheckCircle2 className="size-5 text-primary" />
                             <div className="flex-1">
                                 <p className="font-medium">
-                                    AI Provider Configured
+                                    {uiText("AI Provider Configured")}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    You already have your own AI provider set up
+                                    {uiText(
+                                        "You already have your own AI provider set up",
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -178,14 +192,12 @@ export function OnboardingStepAiProvider({
                             <CheckCircle2 className="size-5 text-primary mt-0.5" />
                             <div className="flex-1">
                                 <p className="font-medium">
-                                    Mynah transcription is included
+                                    {uiText("Mynah transcription is included")}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Transcription works out of the box with your
-                                    plan. Adding your own AI provider is
-                                    optional. Use it for summaries or a
-                                    different transcription engine alongside
-                                    Mynah.
+                                    {uiText(
+                                        "Transcription works out of the box with your plan. Adding your own AI provider is optional. Use it for summaries or a different transcription engine alongside Mynah.",
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -194,7 +206,7 @@ export function OnboardingStepAiProvider({
                             variant="outline"
                             className="w-full"
                         >
-                            Add your own provider (optional)
+                            {uiText("Add your own provider (optional)")}
                         </Button>
                     </CardContent>
                 </Card>
@@ -202,16 +214,16 @@ export function OnboardingStepAiProvider({
                 <Card className="gap-0 py-4">
                     <CardContent className="pt-6 space-y-4">
                         <p className="text-sm text-muted-foreground">
-                            You can set up an AI provider later in Settings.
-                            This enables automatic transcription of your
-                            recordings.
+                            {uiText(
+                                "You can set up an AI provider later in Settings. This enables automatic transcription of your recordings.",
+                            )}
                         </p>
                         <Button
                             onClick={onGoToSettings}
                             variant="outline"
                             className="w-full"
                         >
-                            Go to Settings
+                            {uiText("Go to Settings")}
                         </Button>
                     </CardContent>
                 </Card>
@@ -231,9 +243,11 @@ export function OnboardingStepComplete({
                 <div className="size-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
                     <CheckCircle2 className="size-8 text-primary" />
                 </div>
-                <h3 className="text-xl font-semibold">You're All Set!</h3>
+                <h3 className="text-xl font-semibold">
+                    {uiText("You're All Set!")}
+                </h3>
                 <p className="text-muted-foreground">
-                    Start recording and let Riffado handle the rest
+                    {uiText("Start recording and let Riffado handle the rest")}
                 </p>
             </div>
 
@@ -244,11 +258,12 @@ export function OnboardingStepComplete({
                             <CheckCircle2 className="size-5 text-primary mt-0.5" />
                             <div>
                                 <p className="font-medium">
-                                    Recordings sync automatically
+                                    {uiText("Recordings sync automatically")}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Your Plaud device will sync recordings in
-                                    the background
+                                    {uiText(
+                                        "Your Plaud device will sync recordings in the background",
+                                    )}
                                 </p>
                             </div>
                         </div>
@@ -256,12 +271,16 @@ export function OnboardingStepComplete({
                             <CheckCircle2 className="size-5 text-primary mt-0.5" />
                             <div>
                                 <p className="font-medium">
-                                    AI-powered transcriptions
+                                    {uiText("AI-powered transcriptions")}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
                                     {hasIncludedProvider
-                                        ? "Mynah transcription is ready with your plan"
-                                        : "Set up an AI provider to transcribe recordings automatically"}
+                                        ? uiText(
+                                              "Mynah transcription is ready with your plan",
+                                          )
+                                        : uiText(
+                                              "Set up an AI provider to transcribe recordings automatically",
+                                          )}
                                 </p>
                             </div>
                         </div>
@@ -269,11 +288,12 @@ export function OnboardingStepComplete({
                             <CheckCircle2 className="size-5 text-primary mt-0.5" />
                             <div>
                                 <p className="font-medium">
-                                    Customize your experience
+                                    {uiText("Customize your experience")}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                    Adjust settings anytime from the Settings
-                                    menu
+                                    {uiText(
+                                        "Adjust settings anytime from the Settings menu",
+                                    )}
                                 </p>
                             </div>
                         </div>

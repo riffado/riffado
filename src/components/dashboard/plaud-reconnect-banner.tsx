@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { uiText } from "@/lib/i18n";
 
 interface PlaudReconnectBannerProps {
     /**
@@ -56,12 +57,14 @@ export function PlaudReconnectBanner({
                     <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-500" />
                     <div className="space-y-0.5">
                         <p className="text-sm font-medium text-foreground">
-                            Your Plaud connection needs to be reconnected
+                            {uiText(
+                                "Your Plaud connection needs to be reconnected",
+                            )}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                            Plaud stopped accepting your saved sign-in, so new
-                            recordings aren't syncing. Reconnect to resume —
-                            your existing recordings stay put.
+                            {uiText(
+                                "Plaud stopped accepting your saved sign-in, so new recordings aren't syncing. Reconnect to resume — your existing recordings stay put.",
+                            )}
                         </p>
                     </div>
                 </div>
@@ -69,17 +72,20 @@ export function PlaudReconnectBanner({
                     onClick={() => setOpen(true)}
                     className="shrink-0 self-start sm:self-auto"
                 >
-                    Reconnect
+                    {uiText("Reconnect")}
                 </Button>
             </div>
 
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>Reconnect your Plaud account</DialogTitle>
+                        <DialogTitle>
+                            {uiText("Reconnect your Plaud account")}
+                        </DialogTitle>
                         <DialogDescription>
-                            Sign back in to resume syncing. Your existing
-                            recordings and transcripts are unaffected.
+                            {uiText(
+                                "Sign back in to resume syncing. Your existing recordings and transcripts are unaffected.",
+                            )}
                         </DialogDescription>
                     </DialogHeader>
                     {open && (

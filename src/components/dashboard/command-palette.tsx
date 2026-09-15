@@ -14,6 +14,7 @@ import {
 } from "@/components/dashboard/command-palette-parts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { DateTimeFormat } from "@/lib/format-date";
+import { uiText } from "@/lib/i18n";
 import type { Recording } from "@/types/recording";
 import "@/components/dashboard/command-palette.css";
 
@@ -128,10 +129,12 @@ export function CommandPalette({
                 className="max-w-xl gap-0 overflow-hidden p-0"
                 showCloseButton={false}
             >
-                <DialogTitle className="sr-only">Command palette</DialogTitle>
+                <DialogTitle className="sr-only">
+                    {uiText("Command palette")}
+                </DialogTitle>
                 <Command
                     className="command-palette"
-                    label="Command palette"
+                    label={uiText("Command palette")}
                     value={activeValue}
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
@@ -141,15 +144,21 @@ export function CommandPalette({
                             className="cmd-input-icon size-4"
                             aria-hidden="true"
                         />
-                        <Command.Input placeholder="Search recordings, transcripts, or actions…" />
+                        <Command.Input
+                            placeholder={uiText(
+                                "Search recordings, transcripts, or actions…",
+                            )}
+                        />
                         <Kbd>⌘K</Kbd>
                     </div>
 
                     <Command.List className="max-h-[60vh] overflow-y-auto p-2">
                         <Command.Empty>
-                            No matches.
+                            {uiText("No matches.")}
                             <div className="cmd-empty-hint">
-                                Try searching by something you talked about.
+                                {uiText(
+                                    "Try searching by something you talked about.",
+                                )}
                             </div>
                         </Command.Empty>
 

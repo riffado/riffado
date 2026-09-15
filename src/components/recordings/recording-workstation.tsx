@@ -22,6 +22,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import type { Recording } from "@/types/recording";
 
 interface Transcription {
@@ -94,14 +96,19 @@ export function RecordingWorkstation({
             );
 
             if (response.ok) {
-                toast.success("Transcription complete");
+                toast.success(uiText("Transcription complete"));
                 refresh();
             } else {
                 const error = await response.json();
-                toast.error(error.error || "Transcription failed");
+                toast.error(
+                    uiError(
+                        error.error || uiText("Transcription failed"),
+                        error.code,
+                    ),
+                );
             }
         } catch {
-            toast.error("Failed to transcribe recording");
+            toast.error(uiText("Failed to transcribe recording"));
         } finally {
             setIsTranscribing(false);
         }
@@ -115,17 +122,22 @@ export function RecordingWorkstation({
             });
 
             if (response.ok) {
-                toast.success("Recording deleted");
+                toast.success(uiText("Recording deleted"));
                 setDeleteDialogOpen(false);
                 push("/dashboard");
                 refresh();
             } else {
                 const error = await response.json().catch(() => ({}));
-                toast.error(error.error || "Failed to delete recording");
+                toast.error(
+                    uiError(
+                        error.error || uiText("Failed to delete recording"),
+                        error.code,
+                    ),
+                );
                 setIsDeleting(false);
             }
         } catch {
-            toast.error("Failed to delete recording");
+            toast.error(uiText("Failed to delete recording"));
             setIsDeleting(false);
         }
     }, [recording.id, refresh, push]);
@@ -160,8 +172,8 @@ export function RecordingWorkstation({
                         onClick={() => setDeleteDialogOpen(true)}
                         variant="outline"
                         size="icon"
-                        aria-label="Delete recording"
-                        title="Delete recording"
+                        aria-label={uiText("Delete recording")}
+                        title={uiText("Delete recording")}
                     >
                         <Trash2 className="size-4" />
                     </Button>
@@ -189,13 +201,13 @@ export function RecordingWorkstation({
                     {/* Metadata */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Details</CardTitle>
+                            <CardTitle>{uiText("Details")}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 <div>
                                     <div className="text-muted-foreground text-xs mb-1">
-                                        Duration
+                                        {uiText("Duration")}
                                     </div>
                                     <div className="font-medium">
                                         {Math.floor(recording.duration / 60000)}
@@ -207,7 +219,7 @@ export function RecordingWorkstation({
                                 </div>
                                 <div>
                                     <div className="text-muted-foreground text-xs mb-1">
-                                        File Size
+                                        {uiText("File Size")}
                                     </div>
                                     <div className="font-medium">
                                         {(
@@ -219,7 +231,7 @@ export function RecordingWorkstation({
                                 </div>
                                 <div>
                                     <div className="text-muted-foreground text-xs mb-1">
-                                        Device
+                                        {uiText("Device")}
                                     </div>
                                     <div className="font-mono text-xs truncate">
                                         {recording.deviceSn}
@@ -227,7 +239,7 @@ export function RecordingWorkstation({
                                 </div>
                                 <div>
                                     <div className="text-muted-foreground text-xs mb-1">
-                                        Date
+                                        {uiText("Date")}
                                     </div>
                                     <div className="font-medium">
                                         <LocalTime
@@ -250,12 +262,13 @@ export function RecordingWorkstation({
             >
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete this recording?</DialogTitle>
+                        <DialogTitle>
+                            {uiText("Delete this recording?")}
+                        </DialogTitle>
                         <DialogDescription>
-                            This permanently removes the audio file,
-                            transcription, and AI summary from Riffado. The
-                            recording on your Plaud account is not affected, but
-                            it will not be re-synced to Riffado.
+                            {uiText(
+                                "This permanently removes the audio file, transcription, and AI summary from Riffado. The recording on your Plaud account is not affected, but it will not be re-synced to Riffado.",
+                            )}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -264,7 +277,7 @@ export function RecordingWorkstation({
                             onClick={() => setDeleteDialogOpen(false)}
                             disabled={isDeleting}
                         >
-                            Cancel
+                            {uiText("Cancel")}
                         </Button>
                         <Button
                             variant="destructive"
@@ -274,10 +287,10 @@ export function RecordingWorkstation({
                             {isDeleting ? (
                                 <>
                                     <Loader2 className="size-4 mr-2 animate-spin" />
-                                    Deleting…
+                                    {uiText("Deleting…")}
                                 </>
                             ) : (
-                                "Delete recording"
+                                uiText("Delete recording")
                             )}
                         </Button>
                     </DialogFooter>

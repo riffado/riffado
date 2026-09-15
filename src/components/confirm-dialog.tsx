@@ -19,6 +19,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import { cn } from "@/lib/utils";
 
 /**
@@ -127,8 +129,12 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
             closeWithResult(true);
         } catch (err) {
             toast.error(
-                entry.errorMessage ??
-                    (err instanceof Error ? err.message : "Action failed"),
+                uiError(
+                    entry.errorMessage ??
+                        (err instanceof Error
+                            ? err.message
+                            : uiText("Action failed")),
+                ),
             );
             // Stay open so the user can retry or cancel; just leave
             // the pending state.
@@ -162,7 +168,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isRunning}>
-                            {active?.cancelLabel ?? "Cancel"}
+                            {active?.cancelLabel ?? uiText("Cancel")}
                         </AlertDialogCancel>
                         <AlertDialogAction
                             disabled={isRunning}
@@ -181,8 +187,8 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                             {isRunning
                                 ? (active?.pendingLabel ??
                                   active?.confirmLabel ??
-                                  "Confirm")
-                                : (active?.confirmLabel ?? "Confirm")}
+                                  uiText("Confirm"))
+                                : (active?.confirmLabel ?? uiText("Confirm"))}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

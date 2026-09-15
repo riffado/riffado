@@ -14,6 +14,7 @@ import {
     Webhook,
     Wrench,
 } from "lucide-react";
+import { uiText } from "@/lib/i18n";
 import type { SettingsSection } from "@/types/settings";
 
 export type NavItem = {
@@ -34,47 +35,51 @@ const baseSettingsNavGroups: { label: string; items: NavItem[] }[] = [
     {
         label: "AI",
         items: [
-            { name: "Providers", id: "providers", icon: Bot },
-            { name: "Transcription", id: "transcription", icon: FileText },
-            { name: "Summary", id: "summary", icon: ListChecks },
+            { name: uiText("Providers"), id: "providers", icon: Bot },
+            {
+                name: uiText("Transcription"),
+                id: "transcription",
+                icon: FileText,
+            },
+            { name: uiText("Summary"), id: "summary", icon: ListChecks },
         ],
     },
     {
         label: "Plaud",
         items: [
-            { name: "Plaud Account", id: "plaud-account", icon: Mic },
-            { name: "Sync", id: "sync", icon: RefreshCw },
+            { name: uiText("Plaud Account"), id: "plaud-account", icon: Mic },
+            { name: uiText("Sync"), id: "sync", icon: RefreshCw },
         ],
     },
     {
-        label: "Personalize",
+        label: uiText("Personalize"),
         items: [
-            { name: "Playback", id: "playback", icon: Play },
-            { name: "Display", id: "display", icon: Monitor },
-            { name: "Notifications", id: "notifications", icon: Bell },
+            { name: uiText("Playback"), id: "playback", icon: Play },
+            { name: uiText("Display"), id: "display", icon: Monitor },
+            { name: uiText("Notifications"), id: "notifications", icon: Bell },
         ],
     },
     {
-        label: "Data",
+        label: uiText("Data"),
         items: [
-            { name: "Storage", id: "storage", icon: HardDrive },
-            { name: "Export/Backup", id: "export", icon: Download },
+            { name: uiText("Storage"), id: "storage", icon: HardDrive },
+            { name: uiText("Export/Backup"), id: "export", icon: Download },
         ],
     },
     {
-        label: "Integrations",
+        label: uiText("Integrations"),
         items: [
-            { name: "API Keys", id: "api-keys", icon: KeyRound },
-            { name: "Webhooks", id: "webhooks", icon: Webhook },
+            { name: uiText("API Keys"), id: "api-keys", icon: KeyRound },
+            { name: uiText("Webhooks"), id: "webhooks", icon: Webhook },
         ],
     },
     ...(process.env.NODE_ENV !== "production"
         ? [
               {
-                  label: "Advanced",
+                  label: uiText("Advanced"),
                   items: [
                       {
-                          name: "Developer Tools",
+                          name: uiText("Developer Tools"),
                           id: "dev" as SettingsSection,
                           icon: Wrench,
                       },
@@ -95,10 +100,10 @@ export function buildSettingsNavGroups(opts: {
         ...(opts.isHosted
             ? [
                   {
-                      label: "Account",
+                      label: uiText("Account"),
                       items: [
                           {
-                              name: "Billing",
+                              name: uiText("Billing"),
                               id: "billing" as SettingsSection,
                               icon: CreditCard,
                           },

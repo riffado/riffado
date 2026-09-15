@@ -9,6 +9,8 @@ import { EditProviderDialog } from "@/components/settings/edit-provider-dialog";
 import { SettingsSectionHeader } from "@/components/settings/section-header";
 import { PromptManager } from "@/components/settings-sections/prompt-manager";
 import { Button } from "@/components/ui/button";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 type AISubSection = "providers" | "prompts";
 
@@ -68,7 +70,7 @@ export function ProvidersSection({
             const data = (await response.json()) as { providers: Provider[] };
             setProviders(data.providers);
         } catch {
-            toast.error("Failed to refresh providers");
+            toast.error(uiText("Failed to refresh providers"));
         }
     };
 
@@ -94,11 +96,15 @@ export function ProvidersSection({
                     };
                     throw new Error(b.error ?? `HTTP ${res.status}`);
                 }
-                toast.success("Default transcription provider updated");
+                toast.success(uiText("Default transcription provider updated"));
                 await refreshProviders();
             } catch (e) {
                 toast.error(
-                    e instanceof Error ? e.message : "Failed to update default",
+                    uiError(
+                        e instanceof Error
+                            ? e.message
+                            : uiText("Failed to update default"),
+                    ),
                 );
             }
         })();
@@ -106,11 +112,12 @@ export function ProvidersSection({
 
     const handleDelete = (id: string) => {
         void confirm({
-            title: "Delete this provider?",
-            description:
+            title: uiText("Delete this provider?"),
+            description: uiText(
                 "Its API key will be removed from this account. Recordings transcribed or summarized through it keep their data, but you'll need to re-add the provider to use it again.",
-            confirmLabel: "Delete",
-            pendingLabel: "Deleting…",
+            ),
+            confirmLabel: uiText("Delete"),
+            pendingLabel: uiText("Deleting…"),
             destructive: true,
             onConfirm: async () => {
                 setDeletingId(id);
@@ -125,7 +132,7 @@ export function ProvidersSection({
                         };
                         throw new Error(error.error || "Failed to delete");
                     }
-                    toast.success("Provider deleted successfully");
+                    toast.success(uiText("Provider deleted successfully"));
                     await refreshProviders();
                 } finally {
                     setDeletingId(null);
@@ -139,8 +146,10 @@ export function ProvidersSection({
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <SettingsSectionHeader
-                        title="AI Providers"
-                        description="Connect transcription and summary providers. Anything OpenAI-compatible works."
+                        title={uiText("AI Providers")}
+                        description={uiText(
+                            "Connect transcription and summary providers. Anything OpenAI-compatible works.",
+                        )}
                         icon={Bot}
                     />
                     {aiSubSection === "providers" && (
@@ -149,7 +158,7 @@ export function ProvidersSection({
                             size="sm"
                         >
                             <Plus className="size-4 mr-2" />
-                            Add Provider
+                            {uiText("Add Provider")}
                         </Button>
                     )}
                 </div>
@@ -165,7 +174,7 @@ export function ProvidersSection({
                                 : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                     >
-                        Providers
+                        {uiText("Providers")}
                     </button>
                     <button
                         type="button"
@@ -177,7 +186,7 @@ export function ProvidersSection({
                         }`}
                     >
                         <Sparkles className="size-4 inline mr-2" />
-                        Prompts
+                        {uiText("Prompts")}
                     </button>
                 </div>
 
@@ -226,8 +235,10 @@ export function ProvidersSection({
 }
 
 function formatIncludedSeconds(seconds: number | undefined): string {
-    if (!seconds) return "Included with your subscription";
-    return `Up to ${Math.round(seconds / 3600)}h of transcription per month`;
+    if (!seconds) return uiText("Included with your subscription");
+    return uiText("Up to {hours}h of transcription per month", {
+        hours: Math.round(seconds / 3600),
+    });
 }
 
 /**
@@ -253,13 +264,15 @@ function ProvidersList({
         return (
             <div className="text-center py-12">
                 <Bot className="size-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="font-semibold mb-2">No providers configured</h3>
+                <h3 className="font-semibold mb-2">
+                    {uiText("No providers configured")}
+                </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                    Add an AI provider to enable transcription
+                    {uiText("Add an AI provider to enable transcription")}
                 </p>
                 <Button onClick={onAdd} size="sm">
                     <Plus className="size-4 mr-2" />
-                    Add Provider
+                    {uiText("Add Provider")}
                 </Button>
             </div>
         );
@@ -279,7 +292,7 @@ function ProvidersList({
                                         {provider.provider}
                                     </h3>
                                     <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Included with your plan
+                                        {uiText("Included with your plan")}
                                     </span>
                                 </div>
                                 <p className="text-sm text-muted-foreground">
@@ -291,7 +304,7 @@ function ProvidersList({
                             <div className="flex items-center gap-2 ml-4">
                                 {provider.isDefaultTranscription ? (
                                     <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Default
+                                        {uiText("Default")}
                                     </span>
                                 ) : (
                                     <Button
@@ -303,8 +316,8 @@ function ProvidersList({
                                         disabled={provider.available === false}
                                     >
                                         {provider.available === false
-                                            ? "Resubscribe to use"
-                                            : "Use for transcription"}
+                                            ? uiText("Resubscribe to use")
+                                            : uiText("Use for transcription")}
                                     </Button>
                                 )}
                             </div>
@@ -324,18 +337,19 @@ function ProvidersList({
                                 </h3>
                                 {provider.isDefaultTranscription && (
                                     <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Transcription
+                                        {uiText("Transcription")}
                                     </span>
                                 )}
                                 {provider.isDefaultEnhancement && (
                                     <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded border border-purple-500/20">
-                                        Enhancement
+                                        {uiText("Enhancement")}
                                     </span>
                                 )}
                             </div>
                             {provider.defaultModel && (
                                 <p className="text-sm text-muted-foreground">
-                                    Model: {provider.defaultModel}
+                                    {uiText("Model:")}
+                                    {provider.defaultModel}
                                 </p>
                             )}
                             {provider.baseUrl && (
@@ -351,7 +365,7 @@ function ProvidersList({
                                     variant="outline"
                                     size="sm"
                                 >
-                                    Use for transcription
+                                    {uiText("Use for transcription")}
                                 </Button>
                             )}
                             <Button

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { uiText } from "@/lib/i18n";
 
 interface StorageSectionProps {
     isHosted?: boolean;
@@ -190,7 +191,7 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                 if (typeof prev === "number" || prev === null)
                     setRetentionDays(prev);
             }
-            toast.error("Failed to save settings. Changes reverted.");
+            toast.error(uiText("Failed to save settings. Changes reverted."));
         }
     };
 
@@ -205,8 +206,10 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="Storage"
-                description="Where Riffado keeps the audio files behind your recordings."
+                title={uiText("Storage")}
+                description={uiText(
+                    "Where Riffado keeps the audio files behind your recordings.",
+                )}
                 icon={HardDrive}
             />
 
@@ -230,7 +233,9 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                 />
             ) : (
                 <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-                    Couldn't load storage usage. Refresh to try again.
+                    {uiText(
+                        "Couldn't load storage usage. Refresh to try again.",
+                    )}
                 </div>
             )}
 
@@ -250,21 +255,26 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
             {!isHosted && (
                 <div className="rounded-lg border bg-card/40 px-4 py-3 space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Backend</span>
+                        <span className="text-muted-foreground">
+                            {uiText("Backend")}
+                        </span>
                         <span className="font-medium capitalize">
                             {usage?.storageType ?? "local"}
                         </span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Storage backend is configured at the instance level via
-                        environment variables.
+                        {uiText(
+                            "Storage backend is configured at the instance level via environment variables.",
+                        )}
                     </p>
                 </div>
             )}
 
             <SettingsCard
-                title="Auto-delete old recordings"
-                description="Automatically delete recordings older than the retention period."
+                title={uiText("Auto-delete old recordings")}
+                description={uiText(
+                    "Automatically delete recordings older than the retention period.",
+                )}
                 action={
                     <Switch
                         id="auto-delete"
@@ -290,7 +300,7 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                 {autoDeleteRecordings && (
                     <div className="space-y-2">
                         <Label htmlFor="retention-days">
-                            Retention period (days)
+                            {uiText("Retention period (days)")}
                         </Label>
                         <Input
                             id="retention-days"
@@ -343,8 +353,9 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
                             placeholder="30"
                         />
                         <p className="text-xs text-muted-foreground">
-                            Recordings older than this will be automatically
-                            deleted (1-365 days)
+                            {uiText(
+                                "Recordings older than this will be automatically deleted (1-365 days)",
+                            )}
                         </p>
                     </div>
                 )}

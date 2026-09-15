@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { resetPasswordMode } from "@/lib/auth/reset-password-mode";
 import { resetPassword } from "@/lib/auth-client";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface ResetPasswordFormProps {
     /**
@@ -43,13 +45,15 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                 <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
                     {error?.toUpperCase() === "INVALID_TOKEN" ? (
                         <p>
-                            The reset link has expired or has already been used.
-                            Request a new one to continue.
+                            {uiText(
+                                "The reset link has expired or has already been used. Request a new one to continue.",
+                            )}
                         </p>
                     ) : (
                         <p>
-                            Open the most recent reset email and click the link
-                            from there, or request a new reset email.
+                            {uiText(
+                                "Open the most recent reset email and click the link from there, or request a new reset email.",
+                            )}
                         </p>
                     )}
                 </div>
@@ -59,7 +63,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                         href="/forgot-password"
                         className="text-accent-cyan hover:underline"
                     >
-                        Request a new link
+                        {uiText("Request a new link")}
                     </Link>
                 </div>
             </div>
@@ -70,12 +74,12 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
         e.preventDefault();
 
         if (password !== confirmPassword) {
-            toast.error("Passwords do not match");
+            toast.error(uiText("Passwords do not match"));
             return;
         }
 
         if (password.length < 8) {
-            toast.error("Password must be at least 8 characters");
+            toast.error(uiText("Password must be at least 8 characters"));
             return;
         }
 
@@ -89,21 +93,28 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
 
             if (result.error) {
                 toast.error(
-                    result.error.message ||
-                        "Could not reset password. The link may have expired.",
+                    uiError(
+                        result.error.message ||
+                            uiText(
+                                "Could not reset password. The link may have expired.",
+                            ),
+                        result.error.code,
+                    ),
                 );
                 return;
             }
 
-            toast.success("Password reset. You can sign in now.");
+            toast.success(uiText("Password reset. You can sign in now."));
             push("/login");
             refresh();
         } catch (err) {
             const message =
                 err instanceof Error
                     ? err.message
-                    : "Could not reset password. The link may have expired.";
-            toast.error(message);
+                    : uiText(
+                          "Could not reset password. The link may have expired.",
+                      );
+            toast.error(uiError(message));
         } finally {
             setIsLoading(false);
         }
@@ -113,7 +124,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
         <div className="space-y-6">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                    <Label htmlFor="password">New password</Label>
+                    <Label htmlFor="password">{uiText("New password")}</Label>
                     <Input
                         id="password"
                         type="password"
@@ -128,7 +139,9 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm password</Label>
+                    <Label htmlFor="confirmPassword">
+                        {uiText("Confirm password")}
+                    </Label>
                     <Input
                         id="confirmPassword"
                         type="password"
@@ -147,7 +160,9 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                     variant="cyan"
                     disabled={isLoading}
                 >
-                    {isLoading ? "Resetting..." : "Reset password"}
+                    {isLoading
+                        ? uiText("Resetting...")
+                        : uiText("Reset password")}
                 </MetalButton>
             </form>
 
@@ -156,7 +171,7 @@ export function ResetPasswordForm({ token, error }: ResetPasswordFormProps) {
                     href="/login"
                     className="text-accent-cyan hover:underline"
                 >
-                    Back to sign in
+                    {uiText("Back to sign in")}
                 </Link>
             </div>
         </div>

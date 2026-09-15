@@ -1,5 +1,7 @@
 import { toast } from "sonner";
 import type { ErrorCode } from "@/lib/errors";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import { buildReportBugUrl } from "@/lib/report-bug";
 
 export interface ApiErrorBody {
@@ -31,10 +33,10 @@ export async function parseApiError(response: Response): Promise<ApiErrorBody> {
 
 export async function getApiErrorMessage(
     response: Response,
-    fallback = "Request failed",
+    fallback = uiText("Request failed"),
 ): Promise<string> {
     const body = await parseApiError(response);
-    return body.error || fallback;
+    return uiError(body.error || fallback, body.code);
 }
 
 export interface ToastApiErrorOptions {
@@ -48,7 +50,10 @@ export async function toastApiError(
     opts: ToastApiErrorOptions = {},
 ): Promise<ApiErrorBody> {
     const body = await parseApiError(response);
-    const message = body.error || opts.fallback || "Request failed";
+    const message = uiError(
+        body.error || opts.fallback || uiText("Request failed"),
+        body.code,
+    );
     const errorId =
         typeof body.details?.errorId === "string"
             ? body.details.errorId
@@ -66,7 +71,7 @@ export async function toastApiError(
         toast.error(message, {
             description: errorId,
             action: {
-                label: "Report",
+                label: uiText("Report"),
                 onClick: () => {
                     window.open(url, "_blank", "noopener,noreferrer");
                 },

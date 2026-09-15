@@ -1,3 +1,4 @@
+import { uiText } from "@/lib/i18n";
 /**
  * Shared types for the webhooks settings UI.
  *
@@ -40,6 +41,6 @@ export const DEFAULT_WEBHOOK_EVENTS = [
 ];
 
 export function formatWebhookDate(value: string | null): string {
-    if (!value) return "Never";
-    return new Date(value).toLocaleString();
+    if (!value) return uiText("Never");
+    return new Date(value).toLocaleString("zh-CN");
 }

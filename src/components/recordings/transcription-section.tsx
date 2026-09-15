@@ -22,6 +22,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface TranscriptionSectionProps {
     recordingId: string;
@@ -74,10 +76,17 @@ export function TranscriptionSection({
                     errorData.error?.includes("No transcription API")
                 ) {
                     toast.error(
-                        "Please configure an AI provider in Settings first",
+                        uiText(
+                            "Please configure an AI provider in Settings first",
+                        ),
                     );
                 } else {
-                    toast.error(errorData.error || "Transcription failed");
+                    toast.error(
+                        uiError(
+                            errorData.error || uiText("Transcription failed"),
+                            errorData.code,
+                        ),
+                    );
                 }
                 return;
             }
@@ -92,9 +101,9 @@ export function TranscriptionSection({
             // explicitly because we own the transcription state and
             // know the moment it changes.
             refetchSummary();
-            toast.success("Transcription complete");
+            toast.success(uiText("Transcription complete"));
         } catch {
-            toast.error("Transcription failed. Please try again.");
+            toast.error(uiText("Transcription failed. Please try again."));
         } finally {
             setIsProcessing(false);
         }
@@ -108,7 +117,7 @@ export function TranscriptionSection({
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-3">
                             <h2 className="text-xl font-semibold">
-                                Transcription
+                                {uiText("Transcription")}
                             </h2>
                             {detectedLanguage && (
                                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-panel-inset">
@@ -118,7 +127,7 @@ export function TranscriptionSection({
                                         size="sm"
                                     />
                                     <span className="text-label text-xs">
-                                        Lang:{" "}
+                                        {uiText("Lang:")}{" "}
                                         <span className="font-mono uppercase text-accent-cyan">
                                             {detectedLanguage}
                                         </span>
@@ -138,10 +147,10 @@ export function TranscriptionSection({
                             className="w-full md:w-auto"
                         >
                             {isProcessing
-                                ? "Processing…"
+                                ? uiText("Processing…")
                                 : transcription
-                                  ? "Re-transcribe"
-                                  : "Transcribe"}
+                                  ? uiText("Re-transcribe")
+                                  : uiText("Transcribe")}
                         </MetalButton>
                     </div>
 
@@ -160,11 +169,12 @@ export function TranscriptionSection({
                                 className="mx-auto mb-4"
                             />
                             <p className="text-muted-foreground mb-2">
-                                No transcription yet
+                                {uiText("No transcription yet")}
                             </p>
                             <p className="text-sm text-text-muted">
-                                Click &quot;Transcribe&quot; to generate a
-                                transcription
+                                {uiText(
+                                    "Click &quot;Transcribe&quot; to generate a transcription",
+                                )}
                             </p>
                         </Panel>
                     )}
@@ -178,7 +188,7 @@ export function TranscriptionSection({
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                             <div className="flex items-center gap-3">
                                 <h2 className="text-xl font-semibold">
-                                    Summary
+                                    {uiText("Summary")}
                                 </h2>
                             </div>
                             <div className="flex items-center gap-2">
@@ -213,17 +223,17 @@ export function TranscriptionSection({
                                     {isSummarizing ? (
                                         <>
                                             <Loader2 className="size-4 mr-2 animate-spin inline" />
-                                            Generating…
+                                            {uiText("Generating…")}
                                         </>
                                     ) : summaryData ? (
                                         <>
                                             <RefreshCw className="size-4 mr-2 inline" />
-                                            Re-generate
+                                            {uiText("Re-generate")}
                                         </>
                                     ) : (
                                         <>
                                             <Sparkles className="size-4 mr-2 inline" />
-                                            Summarize
+                                            {uiText("Summarize")}
                                         </>
                                     )}
                                 </MetalButton>
@@ -234,7 +244,7 @@ export function TranscriptionSection({
                             <Panel variant="inset" className="text-center py-8">
                                 <Loader2 className="size-8 animate-spin text-accent-cyan mx-auto mb-4" />
                                 <p className="text-muted-foreground">
-                                    Generating summary…
+                                    {uiText("Generating summary…")}
                                 </p>
                             </Panel>
                         ) : summaryData?.summary ? (
@@ -252,8 +262,8 @@ export function TranscriptionSection({
                                         <ChevronDown className="size-4" />
                                     )}
                                     {summaryExpanded
-                                        ? "Collapse"
-                                        : "Expand summary"}
+                                        ? uiText("Collapse")
+                                        : uiText("Expand summary")}
                                 </button>
 
                                 {summaryExpanded && (
@@ -269,7 +279,7 @@ export function TranscriptionSection({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Key Points
+                                                        {uiText("Key Points")}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.keyPoints.map(
@@ -297,7 +307,7 @@ export function TranscriptionSection({
                                                 0 && (
                                                 <div>
                                                     <h4 className="text-sm font-medium mb-2">
-                                                        Action Items
+                                                        {uiText("Action Items")}
                                                     </h4>
                                                     <ul className="space-y-1">
                                                         {summaryData.actionItems.map(
@@ -339,7 +349,7 @@ export function TranscriptionSection({
                                                 className="text-xs"
                                             >
                                                 <Trash2 className="size-3.5 mr-1 inline" />
-                                                Delete
+                                                {uiText("Delete")}
                                             </MetalButton>
                                         </div>
                                     </div>
@@ -349,8 +359,9 @@ export function TranscriptionSection({
                             <Panel variant="inset" className="text-center py-8">
                                 <ListChecks className="size-10 text-muted-foreground mx-auto mb-3" />
                                 <p className="text-sm text-muted-foreground">
-                                    No summary yet. Click &quot;Summarize&quot;
-                                    to generate one.
+                                    {uiText(
+                                        "No summary yet. Click &quot;Summarize&quot; to generate one.",
+                                    )}
                                 </p>
                             </Panel>
                         )}

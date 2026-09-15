@@ -14,6 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 type ApiKey = {
     id: string;
@@ -28,8 +30,8 @@ type ApiKey = {
 };
 
 function formatDate(value: string | null): string {
-    if (!value) return "Never";
-    return new Date(value).toLocaleString();
+    if (!value) return uiText("Never");
+    return new Date(value).toLocaleString("zh-CN");
 }
 
 export function ApiKeysSection() {
@@ -55,7 +57,7 @@ export function ApiKeysSection() {
             const data = (await response.json()) as { apiKeys: ApiKey[] };
             setApiKeys(data.apiKeys);
         } catch {
-            toast.error("Failed to load API keys");
+            toast.error(uiText("Failed to load API keys"));
         } finally {
             setIsLoading(false);
         }
@@ -105,9 +107,11 @@ export function ApiKeysSection() {
             setExpiresAt("");
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to create API key",
+                uiError(
+                    error instanceof Error
+                        ? error.message
+                        : uiText("Failed to create API key"),
+                ),
             );
         } finally {
             setIsCreating(false);
@@ -127,13 +131,15 @@ export function ApiKeysSection() {
                     ),
                 );
             }
-            toast.success("API key revoked");
+            toast.success(uiText("API key revoked"));
             await refreshApiKeys();
         } catch (error) {
             toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to revoke API key",
+                uiError(
+                    error instanceof Error
+                        ? error.message
+                        : uiText("Failed to revoke API key"),
+                ),
             );
         }
     };
@@ -141,14 +147,16 @@ export function ApiKeysSection() {
     const copyCreatedKey = async () => {
         if (!createdKey) return;
         await navigator.clipboard.writeText(createdKey);
-        toast.success("API key copied");
+        toast.success(uiText("API key copied"));
     };
 
     return (
         <div className="space-y-6">
             <SettingsSectionHeader
-                title="API Keys"
-                description="Personal access tokens for the Riffado public API."
+                title={uiText("API Keys")}
+                description={uiText(
+                    "Personal access tokens for the Riffado public API.",
+                )}
                 icon={KeyRound}
                 action={
                     <Button
@@ -159,7 +167,7 @@ export function ApiKeysSection() {
                         }}
                     >
                         <Plus className="size-4" />
-                        Create Key
+                        {uiText("Create Key")}
                     </Button>
                 }
             />
@@ -171,10 +179,12 @@ export function ApiKeysSection() {
             ) : apiKeys.length === 0 ? (
                 <div className="text-center py-12 border rounded-lg">
                     <KeyRound className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No API keys</h3>
+                    <h3 className="font-semibold mb-2">
+                        {uiText("No API keys")}
+                    </h3>
                     <Button size="sm" onClick={() => setIsCreateOpen(true)}>
                         <Plus className="size-4" />
-                        Create Key
+                        {uiText("Create Key")}
                     </Button>
                 </div>
             ) : (
@@ -194,20 +204,22 @@ export function ApiKeysSection() {
                                     </span>
                                     {apiKey.revokedAt && (
                                         <span className="rounded border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-                                            Revoked
+                                            {uiText("Revoked")}
                                         </span>
                                     )}
                                 </div>
                                 <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
                                     <span>
-                                        Last used:{" "}
+                                        {uiText("Last used:")}{" "}
                                         {formatDate(apiKey.lastUsedAt)}
                                     </span>
                                     <span>
-                                        Expires: {formatDate(apiKey.expiresAt)}
+                                        {uiText("Expires:")}
+                                        {formatDate(apiKey.expiresAt)}
                                     </span>
                                     <span>
-                                        Created: {formatDate(apiKey.createdAt)}
+                                        {uiText("Created:")}
+                                        {formatDate(apiKey.createdAt)}
                                     </span>
                                 </div>
                             </div>
@@ -216,7 +228,9 @@ export function ApiKeysSection() {
                                 size="icon"
                                 onClick={() => handleRevoke(apiKey.id)}
                                 disabled={Boolean(apiKey.revokedAt)}
-                                aria-label={`Revoke ${apiKey.name}`}
+                                aria-label={uiText("Revoke {name}", {
+                                    name: apiKey.name,
+                                })}
                             >
                                 <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -227,11 +241,11 @@ export function ApiKeysSection() {
 
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
                 <DialogContent className="max-w-md">
-                    <DialogTitle>Create API Key</DialogTitle>
+                    <DialogTitle>{uiText("Create API Key")}</DialogTitle>
                     {createdKey ? (
                         <div className="space-y-4">
                             <DialogDescription>
-                                This key is shown once.
+                                {uiText("This key is shown once.")}
                             </DialogDescription>
                             <div className="rounded-md border bg-muted p-3 font-mono text-sm break-all">
                                 {createdKey}
@@ -244,7 +258,7 @@ export function ApiKeysSection() {
                                     onClick={copyCreatedKey}
                                 >
                                     <Clipboard className="size-4" />
-                                    Copy
+                                    {uiText("Copy")}
                                 </Button>
                                 <Button
                                     type="button"
@@ -255,14 +269,16 @@ export function ApiKeysSection() {
                                     }}
                                 >
                                     <Check className="size-4" />
-                                    Saved
+                                    {uiText("Saved")}
                                 </Button>
                             </div>
                         </div>
                     ) : (
                         <form onSubmit={handleCreate} className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="api-key-name">Name</Label>
+                                <Label htmlFor="api-key-name">
+                                    {uiText("Name")}
+                                </Label>
                                 <Input
                                     id="api-key-name"
                                     value={name}
@@ -275,7 +291,7 @@ export function ApiKeysSection() {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="api-key-expires">
-                                    Expiration
+                                    {uiText("Expiration")}
                                 </Label>
                                 <Input
                                     id="api-key-expires"
@@ -294,13 +310,13 @@ export function ApiKeysSection() {
                                     onClick={() => setIsCreateOpen(false)}
                                     disabled={isCreating}
                                 >
-                                    Cancel
+                                    {uiText("Cancel")}
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={!name.trim() || isCreating}
                                 >
-                                    Create
+                                    {uiText("Create")}
                                 </Button>
                             </div>
                         </form>

@@ -22,7 +22,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
-import { PROMPT_PRESETS } from "@/lib/ai/prompt-presets";
+import { uiText } from "@/lib/i18n";
+import { UI_TITLE_PRESETS as PROMPT_PRESETS } from "@/lib/i18n/presets";
 
 interface CustomPrompt {
     id: string;
@@ -105,9 +106,9 @@ export function PromptManager() {
             if (!response.ok) {
                 throw new Error("Failed to save prompt settings");
             }
-            toast.success("Prompt settings saved");
+            toast.success(uiText("Prompt settings saved"));
         } catch {
-            toast.error("Failed to save prompt settings");
+            toast.error(uiText("Failed to save prompt settings"));
         }
     };
 
@@ -138,10 +139,11 @@ export function PromptManager() {
 
     const handleDeleteCustomPrompt = (id: string) => {
         void confirm({
-            title: "Delete this custom prompt?",
-            description:
+            title: uiText("Delete this custom prompt?"),
+            description: uiText(
                 "Recordings already summarized with this prompt keep their existing summaries, but you won't be able to apply it again.",
-            confirmLabel: "Delete",
+            ),
+            confirmLabel: uiText("Delete"),
             destructive: true,
             onConfirm: async () => {
                 const updatedPrompts = customPrompts.filter((p) => p.id !== id);
@@ -176,19 +178,21 @@ export function PromptManager() {
         viewingPromptId &&
         (PROMPT_PRESETS[viewingPromptId as keyof typeof PROMPT_PRESETS]?.name ||
             customPrompts.find((p) => p.id === viewingPromptId)?.name ||
-            "Prompt");
+            uiText("Prompt"));
 
     const viewingDescription =
         viewingPromptId &&
         (PROMPT_PRESETS[viewingPromptId as keyof typeof PROMPT_PRESETS]
             ?.description ||
-            "Custom prompt");
+            uiText("Custom prompt"));
 
     return (
         <div className="space-y-6">
             {/* Active prompt selector */}
             <div className="space-y-2">
-                <Label htmlFor="selected-prompt">Active Prompt</Label>
+                <Label htmlFor="selected-prompt">
+                    {uiText("Active Prompt")}
+                </Label>
                 <Select
                     value={selectedPromptId}
                     onValueChange={(value) => {
@@ -206,25 +210,27 @@ export function PromptManager() {
                     <SelectContent>
                         {Object.values(PROMPT_PRESETS).map((preset) => (
                             <SelectItem key={preset.id} value={preset.id}>
-                                {preset.name} (Preset)
+                                {preset.name} {uiText("(Preset)")}
                             </SelectItem>
                         ))}
                         {customPrompts.map((prompt) => (
                             <SelectItem key={prompt.id} value={prompt.id}>
-                                {prompt.name} (Custom)
+                                {prompt.name} {uiText("(Custom)")}
                             </SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                    Select which prompt to use for title generation
+                    {uiText("Select which prompt to use for title generation")}
                 </p>
             </div>
 
             {/* Preset prompts (read-only) */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Preset Prompts</h3>
+                    <h3 className="text-sm font-semibold">
+                        {uiText("Preset Prompts")}
+                    </h3>
                 </div>
                 <div className="space-y-2">
                     {Object.values(PROMPT_PRESETS).map((preset) => (
@@ -237,7 +243,7 @@ export function PromptManager() {
                                         </h4>
                                         {selectedPromptId === preset.id && (
                                             <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                Active
+                                                {uiText("Active")}
                                             </span>
                                         )}
                                     </div>
@@ -252,7 +258,7 @@ export function PromptManager() {
                                         setViewingPromptId(preset.id)
                                     }
                                 >
-                                    View Prompt
+                                    {uiText("View Prompt")}
                                 </Button>
                             </div>
                         </div>
@@ -263,7 +269,9 @@ export function PromptManager() {
             {/* Custom prompts */}
             <div className="space-y-4 pt-4 border-t">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Custom Prompts</h3>
+                    <h3 className="text-sm font-semibold">
+                        {uiText("Custom Prompts")}
+                    </h3>
                     <Button
                         onClick={() =>
                             setEditingCustomPrompt({ name: "", prompt: "" })
@@ -271,12 +279,14 @@ export function PromptManager() {
                         size="sm"
                     >
                         <Plus className="size-4 mr-2" />
-                        Add Custom Prompt
+                        {uiText("Add Custom Prompt")}
                     </Button>
                 </div>
                 {customPrompts.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                        No custom prompts yet. Create one to get started.
+                        {uiText(
+                            "No custom prompts yet. Create one to get started.",
+                        )}
                     </p>
                 ) : (
                     <div className="space-y-2">
@@ -293,7 +303,7 @@ export function PromptManager() {
                                             </h4>
                                             {selectedPromptId === prompt.id && (
                                                 <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                    Active
+                                                    {uiText("Active")}
                                                 </span>
                                             )}
                                         </div>
@@ -306,7 +316,7 @@ export function PromptManager() {
                                                 setViewingPromptId(prompt.id)
                                             }
                                         >
-                                            View
+                                            {uiText("View")}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -371,19 +381,25 @@ export function PromptManager() {
                     <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
                         <DialogTitle>
                             {editingCustomPrompt.id
-                                ? "Edit Custom Prompt"
-                                : "Create Custom Prompt"}
+                                ? uiText("Edit Custom Prompt")
+                                : uiText("Create Custom Prompt")}
                         </DialogTitle>
                         <DialogDescription>
-                            Create a custom prompt for title generation. Use{" "}
+                            {uiText(
+                                "Create a custom prompt for title generation. Use",
+                            )}{" "}
                             <code className="px-1 py-0.5 bg-muted rounded">
                                 {"{transcription}"}
                             </code>{" "}
-                            as a placeholder for the transcription text.
+                            {uiText(
+                                "as a placeholder for the transcription text.",
+                            )}
                         </DialogDescription>
                         <div className="space-y-4 mt-4">
                             <div className="space-y-2">
-                                <Label htmlFor="custom-prompt-name">Name</Label>
+                                <Label htmlFor="custom-prompt-name">
+                                    {uiText("Name")}
+                                </Label>
                                 <Input
                                     id="custom-prompt-name"
                                     value={editingCustomPrompt.name}
@@ -397,12 +413,12 @@ export function PromptManager() {
                                                 : prev,
                                         )
                                     }
-                                    placeholder="My Custom Prompt"
+                                    placeholder={uiText("My Custom Prompt")}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="custom-prompt-text">
-                                    Prompt
+                                    {uiText("Prompt")}
                                 </Label>
                                 <textarea
                                     id="custom-prompt-text"
@@ -443,7 +459,7 @@ Generate the title now:`}
                                     variant="outline"
                                     onClick={() => setEditingCustomPrompt(null)}
                                 >
-                                    Cancel
+                                    {uiText("Cancel")}
                                 </Button>
                                 <Button
                                     onClick={() => {
@@ -452,7 +468,9 @@ Generate the title now:`}
                                             !editingCustomPrompt.prompt
                                         ) {
                                             toast.error(
-                                                "Name and prompt are required",
+                                                uiText(
+                                                    "Name and prompt are required",
+                                                ),
                                             );
                                             return;
                                         }
@@ -465,7 +483,9 @@ Generate the title now:`}
                                         !editingCustomPrompt.prompt
                                     }
                                 >
-                                    {editingCustomPrompt.id ? "Save" : "Create"}
+                                    {editingCustomPrompt.id
+                                        ? uiText("Save")
+                                        : uiText("Create")}
                                 </Button>
                             </div>
                         </div>

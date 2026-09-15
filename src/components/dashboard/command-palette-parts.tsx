@@ -17,6 +17,7 @@ import {
 import type { ReactNode } from "react";
 import { type DateTimeFormat, formatDateTime } from "@/lib/format-date";
 import { formatDurationMs } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 import type { Recording } from "@/types/recording";
 
 export const RECORDING_CAP = 200;
@@ -98,7 +99,7 @@ export function RecordingsGroup({
     const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
 
     return (
-        <Command.Group heading="Recent">
+        <Command.Group heading={uiText("Recent")}>
             {recordings.map((r) => {
                 const snippet = transcriptSnippet(
                     transcriptions.get(r.id)?.text,
@@ -114,21 +115,21 @@ export function RecordingsGroup({
                     );
                     stateLabel =
                         inFlight === "transcribing"
-                            ? "Transcribing"
-                            : "Summarizing";
+                            ? uiText("Transcribing")
+                            : uiText("Summarizing");
                 } else if (!r.hasTranscript) {
                     stateIcon = (
                         <Mic className="size-4 text-muted-foreground" />
                     );
-                    stateLabel = "Audio only";
+                    stateLabel = uiText("Audio only");
                 } else if (!r.hasSummary) {
                     stateIcon = (
                         <FileText className="size-4 text-foreground/70" />
                     );
-                    stateLabel = "Transcribed";
+                    stateLabel = uiText("Transcribed");
                 } else {
                     stateIcon = <Sparkles className="size-4 text-primary" />;
-                    stateLabel = "Transcribed & summarized";
+                    stateLabel = uiText("Transcribed & summarized");
                 }
 
                 const durationText =
@@ -147,14 +148,14 @@ export function RecordingsGroup({
                     accessory = (
                         <span className="cmd-pill">
                             <Loader2 className="size-3 animate-spin" />
-                            Transcribing
+                            {uiText("Transcribing")}
                         </span>
                     );
                 } else if (inFlight === "summarizing") {
                     accessory = (
                         <span className="cmd-pill">
                             <Loader2 className="size-3 animate-spin" />
-                            Summarizing
+                            {uiText("Summarizing")}
                         </span>
                     );
                 } else if (!r.hasTranscript) {
@@ -168,10 +169,12 @@ export function RecordingsGroup({
                                 e.stopPropagation();
                                 onTranscribeRecording(r.id);
                             }}
-                            aria-label={`Transcribe ${r.filename}`}
+                            aria-label={uiText("Transcribe {name}", {
+                                name: r.filename,
+                            })}
                         >
                             <Sparkles className="size-3" aria-hidden="true" />
-                            Transcribe
+                            {uiText("Transcribe")}
                         </button>
                     );
                 } else if (isCurrent) {
@@ -181,7 +184,7 @@ export function RecordingsGroup({
                                 aria-hidden="true"
                                 className="inline-block size-1.5 rounded-full bg-primary"
                             />
-                            Selected
+                            {uiText("Selected")}
                         </span>
                     );
                 }
@@ -207,8 +210,8 @@ export function RecordingsGroup({
             })}
             {overflowCount > 0 && (
                 <div className="cmd-more-hint">
-                    +{overflowCount} more · refine your search to narrow the
-                    list
+                    +{overflowCount}{" "}
+                    {uiText("more · refine your search to narrow the list")}
                 </div>
             )}
         </Command.Group>
@@ -229,32 +232,32 @@ export function ActionsGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <Command.Group heading="Actions">
+        <Command.Group heading={uiText("Actions")}>
             <Command.Item onSelect={runAction(onSync)}>
                 <Row
                     icon={
                         <RefreshCw className="size-4 text-muted-foreground" />
                     }
-                    title="Sync device"
+                    title={uiText("Sync device")}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onUpload)}>
                 <Row
                     icon={<Upload className="size-4 text-muted-foreground" />}
-                    title="Upload audio"
+                    title={uiText("Upload audio")}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onOpenSettings)}>
                 <Row
                     icon={<Settings className="size-4 text-muted-foreground" />}
-                    title="Open settings"
+                    title={uiText("Open settings")}
                     accessory={<Kbd>,</Kbd>}
                 />
             </Command.Item>
             <Command.Item onSelect={runAction(onOpenShortcuts)}>
                 <Row
                     icon={<Keyboard className="size-4 text-muted-foreground" />}
-                    title="Keyboard shortcuts"
+                    title={uiText("Keyboard shortcuts")}
                     accessory={<Kbd>?</Kbd>}
                 />
             </Command.Item>
@@ -272,14 +275,14 @@ export function ThemeGroup({
     runAction: (fn: () => void) => () => void;
 }) {
     return (
-        <Command.Group heading="Theme">
+        <Command.Group heading={uiText("Theme")}>
             <Command.Item onSelect={runAction(() => onSetTheme("light"))}>
                 <Row
                     icon={<Sun className="size-4 text-muted-foreground" />}
-                    title="Light"
+                    title={uiText("Light")}
                     accessory={
                         currentTheme === "light" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">{uiText("Active")}</span>
                         ) : null
                     }
                 />
@@ -287,10 +290,10 @@ export function ThemeGroup({
             <Command.Item onSelect={runAction(() => onSetTheme("dark"))}>
                 <Row
                     icon={<Moon className="size-4 text-muted-foreground" />}
-                    title="Dark"
+                    title={uiText("Dark")}
                     accessory={
                         currentTheme === "dark" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">{uiText("Active")}</span>
                         ) : null
                     }
                 />
@@ -298,10 +301,10 @@ export function ThemeGroup({
             <Command.Item onSelect={runAction(() => onSetTheme("system"))}>
                 <Row
                     icon={<Monitor className="size-4 text-muted-foreground" />}
-                    title="Auto"
+                    title={uiText("Auto")}
                     accessory={
                         currentTheme === "system" ? (
-                            <span className="cmd-pill">Active</span>
+                            <span className="cmd-pill">{uiText("Active")}</span>
                         ) : null
                     }
                 />
@@ -321,27 +324,27 @@ export function PaletteFooter({
                 <span className="cmd-footer-hint">
                     <Kbd>↑</Kbd>
                     <Kbd>↓</Kbd>
-                    navigate
+                    {uiText("navigate")}
                 </span>
                 <span className="cmd-footer-hint">
                     <Kbd>↵</Kbd>
-                    select
+                    {uiText("select")}
                 </span>
                 <span className="cmd-footer-hint">
                     <Kbd>esc</Kbd>
-                    close
+                    {uiText("close")}
                 </span>
                 {showTranscribeHint && (
                     <span className="cmd-footer-hint">
                         <Kbd>⌘</Kbd>
                         <Kbd>↵</Kbd>
-                        transcribe
+                        {uiText("transcribe")}
                     </span>
                 )}
             </div>
             <span className="cmd-footer-hint">
                 <Kbd>⌘K</Kbd>
-                toggle
+                {uiText("toggle")}
             </span>
         </div>
     );

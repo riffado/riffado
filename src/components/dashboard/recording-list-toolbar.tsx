@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { uiText } from "@/lib/i18n";
 
 export type SortOrder = "newest" | "oldest" | "name";
 export type ListDensity = "comfortable" | "compact";
@@ -53,15 +54,15 @@ export function RecordingListToolbar({
                             onEnterSelectFirst();
                         }
                     }}
-                    placeholder="Search recordings, transcripts..."
+                    placeholder={uiText("Search recordings, transcripts...")}
                     className="h-9 pl-8 pr-8"
-                    aria-label="Search recordings"
+                    aria-label={uiText("Search recordings")}
                 />
                 {query && (
                     <button
                         type="button"
                         onClick={() => onQueryChange("")}
-                        aria-label="Clear search"
+                        aria-label={uiText("Clear search")}
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
                     >
                         <X className="size-4" />
@@ -70,9 +71,12 @@ export function RecordingListToolbar({
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>
-                    {filteredCount}
-                    {query ? " matching" : ""} of {totalCount} recording
-                    {totalCount !== 1 ? "s" : ""}
+                    {query
+                        ? uiText("{matches} matching of {total} recordings", {
+                              matches: filteredCount,
+                              total: totalCount,
+                          })
+                        : uiText("{count} recordings", { count: totalCount })}
                 </span>
                 <div className="flex items-center gap-1">
                     <DropdownMenu>
@@ -81,20 +85,22 @@ export function RecordingListToolbar({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                aria-label="Sort"
+                                aria-label={uiText("Sort")}
                             >
                                 <ArrowDownAZ className="size-3.5" />
                                 <span>
                                     {sortOrder === "newest"
-                                        ? "Newest"
+                                        ? uiText("Newest")
                                         : sortOrder === "oldest"
-                                          ? "Oldest"
-                                          : "Name"}
+                                          ? uiText("Oldest")
+                                          : uiText("Name")}
                                 </span>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                            <DropdownMenuLabel>
+                                {uiText("Sort by")}
+                            </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={sortOrder}
                                 onValueChange={(v) =>
@@ -102,13 +108,13 @@ export function RecordingListToolbar({
                                 }
                             >
                                 <DropdownMenuRadioItem value="newest">
-                                    Newest first
+                                    {uiText("Newest first")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="oldest">
-                                    Oldest first
+                                    {uiText("Oldest first")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="name">
-                                    Name
+                                    {uiText("Name")}
                                 </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>
@@ -119,18 +125,20 @@ export function RecordingListToolbar({
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs"
-                                aria-label="Density"
+                                aria-label={uiText("Density")}
                             >
                                 <Rows3 className="size-3.5" />
                                 <span>
                                     {density === "compact"
-                                        ? "Compact"
-                                        : "Comfortable"}
+                                        ? uiText("Compact")
+                                        : uiText("Comfortable")}
                                 </span>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Density</DropdownMenuLabel>
+                            <DropdownMenuLabel>
+                                {uiText("Density")}
+                            </DropdownMenuLabel>
                             <DropdownMenuRadioGroup
                                 value={density}
                                 onValueChange={(v) =>
@@ -138,10 +146,10 @@ export function RecordingListToolbar({
                                 }
                             >
                                 <DropdownMenuRadioItem value="comfortable">
-                                    Comfortable
+                                    {uiText("Comfortable")}
                                 </DropdownMenuRadioItem>
                                 <DropdownMenuRadioItem value="compact">
-                                    Compact
+                                    {uiText("Compact")}
                                 </DropdownMenuRadioItem>
                             </DropdownMenuRadioGroup>
                         </DropdownMenuContent>

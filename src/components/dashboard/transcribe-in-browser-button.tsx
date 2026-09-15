@@ -4,6 +4,8 @@ import { Cpu, Loader2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 import { transcribeInBrowser } from "@/lib/transcription/browser-transcriber";
 import type { TranscriptionModel } from "@/types/transcription";
 
@@ -25,10 +27,10 @@ type Phase =
     | "transcribing";
 
 const PHASE_LABEL: Record<Exclude<Phase, "idle">, string> = {
-    "downloading-audio": "Downloading audio…",
-    "decoding-audio": "Decoding audio…",
-    "loading-model": "Loading Whisper (one-time download)…",
-    transcribing: "Transcribing locally…",
+    "downloading-audio": uiText("Downloading audio…"),
+    "decoding-audio": uiText("Decoding audio…"),
+    "loading-model": uiText("Loading Whisper (one-time download)…"),
+    transcribing: uiText("Transcribing locally…"),
 };
 
 /**
@@ -57,7 +59,11 @@ export function TranscribeInBrowserButton({
                 `/api/recordings/${recordingId}/audio`,
             );
             if (!audioRes.ok) {
-                throw new Error(`Failed to fetch audio (${audioRes.status})`);
+                throw new Error(
+                    uiText("Failed to fetch audio ({status})", {
+                        status: audioRes.status,
+                    }),
+                );
             }
             const blob = await audioRes.blob();
             const file = new File([blob], `recording-${recordingId}`, {
@@ -88,13 +94,15 @@ export function TranscribeInBrowserButton({
                 throw new Error(err.error ?? "Failed to save transcription");
             }
 
-            toast.success("Transcribed in browser");
+            toast.success(uiText("Transcribed in browser"));
             onComplete();
         } catch (err) {
             toast.error(
-                err instanceof Error
-                    ? err.message
-                    : "Browser transcription failed",
+                uiError(
+                    err instanceof Error
+                        ? err.message
+                        : uiText("Browser transcription failed"),
+                ),
             );
         } finally {
             setPhase("idle");
@@ -109,7 +117,9 @@ export function TranscribeInBrowserButton({
             size="sm"
             variant="outline"
             disabled={disabled || busy}
-            title="Run Whisper in your browser. No API key required; audio never leaves your machine."
+            title={uiText(
+                "Run Whisper in your browser. No API key required; audio never leaves your machine.",
+            )}
         >
             {busy ? (
                 <>
@@ -119,7 +129,7 @@ export function TranscribeInBrowserButton({
             ) : (
                 <>
                     <Cpu className="size-4 mr-2" />
-                    Transcribe in browser
+                    {uiText("Transcribe in browser")}
                 </>
             )}
         </Button>

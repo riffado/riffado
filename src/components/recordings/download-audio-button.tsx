@@ -7,6 +7,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { uiText } from "@/lib/i18n";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 
 export function DownloadAudioButton({ recordingId }: { recordingId: string }) {
@@ -18,14 +19,14 @@ export function DownloadAudioButton({ recordingId }: { recordingId: string }) {
                         href={recordingAudioDownloadPath(recordingId)}
                         download
                         rel="nofollow noreferrer"
-                        aria-label="Download original audio"
+                        aria-label={uiText("Download original audio")}
                     >
                         <Download className="size-4" />
                     </a>
                 </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-                Download original audio
+                {uiText("Download original audio")}
             </TooltipContent>
         </Tooltip>
     );

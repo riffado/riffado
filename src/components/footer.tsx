@@ -5,6 +5,7 @@ import { Logo } from "@/components/icons/logo";
 import { ReportBugButton } from "@/components/report-bug-dialog";
 import { UpdateBadge } from "@/components/update-badge";
 import { env } from "@/lib/env";
+import { uiText } from "@/lib/i18n";
 import { APP_RELEASE_URL, APP_VERSION_TAG } from "@/lib/version";
 
 /**
@@ -36,7 +37,7 @@ export function Footer() {
                     <div className="flex items-center gap-2">
                         <Logo className="size-4" />
                         <span>
-                            © {currentYear} Riffado · Licensed under{" "}
+                            © {currentYear} Riffado · {uiText("Licensed under")}{" "}
                             <Link
                                 href="https://www.gnu.org/licenses/agpl-3.0.html"
                                 target="_blank"
@@ -63,7 +64,10 @@ export function Footer() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"
-                            aria-label={`Release notes for Riffado ${APP_VERSION_TAG}`}
+                            aria-label={uiText(
+                                "Release notes for Riffado {version}",
+                                { version: APP_VERSION_TAG },
+                            )}
                         >
                             {APP_VERSION_TAG}
                         </Link>
@@ -77,14 +81,14 @@ export function Footer() {
                                 href="/changelog"
                                 className="hover:text-foreground transition-colors"
                             >
-                                What&apos;s new
+                                {uiText("What's new")}
                             </Link>
                         ) : null}
                         <Link
                             href="/docs"
                             className="hover:text-foreground transition-colors"
                         >
-                            Docs
+                            {uiText("Docs")}
                         </Link>
                         {/* Single bug-report entry point for both modes.
                             Self-host → GitHub-only dialog. Hosted →
@@ -103,7 +107,7 @@ export function Footer() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:text-foreground transition-colors"
-                            aria-label="View source code on GitHub"
+                            aria-label={uiText("View source code on GitHub")}
                         >
                             <Github className="size-4" />
                         </Link>

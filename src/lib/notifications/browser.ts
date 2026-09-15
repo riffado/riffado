@@ -1,6 +1,7 @@
 /**
  * Browser notification utilities
  */
+import { uiText } from "@/lib/i18n";
 
 export async function requestNotificationPermission(): Promise<boolean> {
     if (!("Notification" in window)) {
@@ -37,21 +38,20 @@ export function showBrowserNotification(
 }
 
 export function showNewRecordingNotification(count: number): void {
-    const title =
-        count === 1 ? "New recording synced" : `${count} new recordings synced`;
+    const title = uiText("Synced {count} new recordings", { count });
 
     showBrowserNotification(title, {
-        body:
-            count === 1
-                ? "A new recording has been synced from your Plaud device"
-                : `${count} new recordings have been synced from your Plaud device`,
+        body: uiText(
+            "{count} new recordings have been synced from your Plaud device",
+            { count },
+        ),
         tag: "new-recording",
     });
 }
 
 export function showSyncCompleteNotification(): void {
-    showBrowserNotification("Sync complete", {
-        body: "Your recordings have been synced successfully",
+    showBrowserNotification(uiText("Sync complete"), {
+        body: uiText("Your recordings have been synced successfully"),
         tag: "sync-complete",
     });
 }

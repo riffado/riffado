@@ -3,6 +3,8 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PendingUpload } from "@/components/dashboard/recording-list";
+import { uiText } from "@/lib/i18n";
+import { uiError } from "@/lib/i18n/errors";
 
 interface Options {
     /** Called after a successful upload so the parent can refresh data. */
@@ -57,14 +59,21 @@ export function useUploadQueue({ onUploadComplete }: Options) {
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    toast.success(`"${data.filename}" uploaded`);
+                    toast.success(
+                        uiText('"{name}" uploaded', { name: data.filename }),
+                    );
                     onUploadComplete();
                 } else {
                     const error = await response.json();
-                    toast.error(error.error || "Upload failed");
+                    toast.error(
+                        uiError(
+                            error.error || uiText("Upload failed"),
+                            error.code,
+                        ),
+                    );
                 }
             } catch {
-                toast.error("Failed to upload recording");
+                toast.error(uiText("Failed to upload recording"));
             } finally {
                 setIsUploading(false);
                 setPendingUploads((prev) =>

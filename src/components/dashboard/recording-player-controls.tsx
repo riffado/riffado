@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { PLAYBACK_SPEED_OPTIONS } from "@/hooks/use-playback-engine";
 import { formatTimeLike } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 
 interface Props {
     isPlaying: boolean;
@@ -63,7 +64,7 @@ export function RecordingPlayerControls({
             <Button
                 onClick={onTogglePlay}
                 size="lg"
-                aria-label={isPlaying ? "Pause" : "Play"}
+                aria-label={isPlaying ? uiText("Pause") : uiText("Play")}
                 className="size-12 shrink-0 rounded-full"
             >
                 {isPlaying ? (
@@ -127,8 +128,10 @@ export function RecordingPlayerControls({
                 variant="outline"
                 size="sm"
                 className="h-8 w-12 shrink-0 px-0 font-mono text-xs tabular-nums"
-                title="Click to cycle playback speed"
-                aria-label={`Playback speed ${speedLabel}. Click to change.`}
+                title={uiText("Click to cycle playback speed")}
+                aria-label={uiText("Playback speed {speed}. Click to change.", {
+                    speed: speedLabel,
+                })}
             >
                 {speedLabel}
             </Button>
@@ -138,8 +141,10 @@ export function RecordingPlayerControls({
                     type="button"
                     onClick={onToggleMute}
                     className="text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={volume === 0 ? "Unmute" : "Mute"}
-                    title={volume === 0 ? "Unmute" : "Mute"}
+                    aria-label={
+                        volume === 0 ? uiText("Unmute") : uiText("Mute")
+                    }
+                    title={volume === 0 ? uiText("Unmute") : uiText("Mute")}
                 >
                     {speakerIcon}
                 </button>
@@ -148,7 +153,7 @@ export function RecordingPlayerControls({
                     onValueChange={(value) => onVolumeChange(value[0] ?? 75)}
                     max={100}
                     className="w-20"
-                    aria-label="Volume"
+                    aria-label={uiText("Volume")}
                 />
             </div>
         </div>

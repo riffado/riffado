@@ -7,6 +7,7 @@ import { CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDateTime } from "@/lib/format-date";
 import { formatDuration } from "@/lib/format-duration";
+import { uiText } from "@/lib/i18n";
 import type { Recording } from "@/types/recording";
 
 interface Props {
@@ -74,7 +75,7 @@ export function RecordingPlayerHeader({
                                 ·
                             </span>
                             <Loader2 className="size-3 animate-spin" />
-                            Analyzing audio…
+                            {uiText("Analyzing audio…")}
                         </span>
                     )}
                 {scrubberStyle === "waveform" &&
@@ -83,13 +84,15 @@ export function RecordingPlayerHeader({
                             type="button"
                             onClick={onDecodeWaveform}
                             className="inline-flex items-center gap-1 underline-offset-2 hover:text-foreground hover:underline"
-                            title="Decode waveform in your browser (may take a few seconds)"
+                            title={uiText(
+                                "Decode waveform in your browser (may take a few seconds)",
+                            )}
                         >
                             <span aria-hidden="true" className="opacity-40">
                                 ·
                             </span>
                             <AudioWaveform className="size-3" />
-                            Generate waveform
+                            {uiText("Generate waveform")}
                         </button>
                     )}
                 {scrubberStyle === "waveform" && waveformStatus === "error" && (
@@ -102,7 +105,7 @@ export function RecordingPlayerHeader({
                             ·
                         </span>
                         <AudioWaveform className="size-3" />
-                        Retry waveform
+                        {uiText("Retry waveform")}
                     </button>
                 )}
             </div>
