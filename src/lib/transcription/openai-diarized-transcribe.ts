@@ -39,7 +39,8 @@ export async function transcribeOpenAIDiarized(
         Math.ceil(durationSeconds / MAX_CHUNK_SECONDS),
     );
     const chunkDuration = durationSeconds / chunkCount;
-    const responses: TranscriptionDiarized[] = [];
+    const formattedTurns: string[] = [];
+    let timeOffsetSeconds = 0;
 
     const transcribeChunk = async (
         mp3: Buffer,
@@ -56,7 +57,16 @@ export async function transcribeOpenAIDiarized(
             }),
             { timeout: timeoutMs },
         );
-        responses.push(response as TranscriptionDiarized);
+        const diarized = response as TranscriptionDiarized;
+        formattedTurns.push(
+            ...formatDiarizedResponse(
+                diarized,
+                index,
+                count,
+                timeOffsetSeconds,
+            ),
+        );
+        timeOffsetSeconds += diarized.duration;
     };
 
     if (chunkCount === 1) {
@@ -71,7 +81,7 @@ export async function transcribeOpenAIDiarized(
     }
 
     return {
-        text: formatDiarizedResponses(responses),
+        text: formattedTurns.join("\n\n"),
         detectedLanguage: null,
     };
 }
@@ -92,48 +102,46 @@ function buildMp3File(
     return new File([view], `${stem}${suffix}.mp3`, { type: "audio/mpeg" });
 }
 
-function formatDiarizedResponses(responses: TranscriptionDiarized[]): string {
-    const multipleParts = responses.length > 1;
+function formatDiarizedResponse(
+    response: TranscriptionDiarized,
+    partIndex: number,
+    partCount: number,
+    timeOffsetSeconds: number,
+): string[] {
     const formattedTurns: string[] = [];
-    let timeOffsetSeconds = 0;
+    const speakerNumbers = new Map<string, number>();
+    const turns: Array<{
+        speaker: string;
+        start: number;
+        text: string;
+    }> = [];
 
-    for (const [partIndex, response] of responses.entries()) {
-        const speakerNumbers = new Map<string, number>();
-        const turns: Array<{
-            speaker: string;
-            start: number;
-            text: string;
-        }> = [];
-
-        for (const segment of response.segments ?? []) {
-            const previous = turns.at(-1);
-            if (previous?.speaker === segment.speaker) {
-                previous.text = `${previous.text} ${segment.text.trim()}`;
-            } else {
-                turns.push({
-                    speaker: segment.speaker,
-                    start: segment.start,
-                    text: segment.text.trim(),
-                });
-            }
+    for (const segment of response.segments ?? []) {
+        const previous = turns.at(-1);
+        if (previous?.speaker === segment.speaker) {
+            previous.text = `${previous.text} ${segment.text.trim()}`;
+        } else {
+            turns.push({
+                speaker: segment.speaker,
+                start: segment.start,
+                text: segment.text.trim(),
+            });
         }
-
-        for (const turn of turns) {
-            let speakerNumber = speakerNumbers.get(turn.speaker);
-            if (speakerNumber === undefined) {
-                speakerNumber = speakerNumbers.size + 1;
-                speakerNumbers.set(turn.speaker, speakerNumber);
-            }
-            const partLabel = multipleParts ? ` · Part ${partIndex + 1}` : "";
-            formattedTurns.push(
-                `[${formatTimestamp(timeOffsetSeconds + turn.start)}] Speaker ${speakerNumber}${partLabel}\n${turn.text}`,
-            );
-        }
-
-        timeOffsetSeconds += response.duration;
     }
 
-    return formattedTurns.join("\n\n");
+    for (const turn of turns) {
+        let speakerNumber = speakerNumbers.get(turn.speaker);
+        if (speakerNumber === undefined) {
+            speakerNumber = speakerNumbers.size + 1;
+            speakerNumbers.set(turn.speaker, speakerNumber);
+        }
+        const partLabel = partCount > 1 ? ` · Part ${partIndex + 1}` : "";
+        formattedTurns.push(
+            `[${formatTimestamp(timeOffsetSeconds + turn.start)}] Speaker ${speakerNumber}${partLabel}\n${turn.text}`,
+        );
+    }
+
+    return formattedTurns;
 }
 
 function formatTimestamp(seconds: number): string {

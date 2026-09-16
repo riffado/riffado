@@ -94,9 +94,42 @@ import {
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "sample.mp3");
 
-function hasFfmpeg(): boolean {
-    const probe = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-    return probe.status === 0;
+interface AudioProbe {
+    streams?: Array<{
+        codec_name?: string;
+        sample_rate?: string;
+        channels?: number;
+        duration?: string;
+    }>;
+}
+
+function hasAudioTools(): boolean {
+    return ["ffmpeg", "ffprobe"].every(
+        (command) =>
+            spawnSync(command, ["-version"], { stdio: "ignore" }).status === 0,
+    );
+}
+
+function probeAudio(input: Buffer): AudioProbe {
+    const result = spawnSync(
+        "ffprobe",
+        [
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_name,sample_rate,channels,duration",
+            "-of",
+            "json",
+            "pipe:0",
+        ],
+        { input },
+    );
+    if (result.status !== 0) {
+        throw new Error(result.stderr.toString() || "ffprobe failed");
+    }
+    return JSON.parse(result.stdout.toString()) as AudioProbe;
 }
 
 function oggOpusBytes(): Buffer {
@@ -106,7 +139,7 @@ function oggOpusBytes(): Buffer {
     return buf;
 }
 
-const itIfFfmpeg = hasFfmpeg() ? it : it.skip;
+const itIfAudioTools = hasAudioTools() ? it : it.skip;
 
 describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
     it("buildAudioFile sniffs Ogg bytes even when the path is .mp3", () => {
@@ -356,7 +389,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         });
     });
 
-    itIfFfmpeg(
+    itIfAudioTools(
         "transcodes Ogg/Opus to mp3 before OpenRouter chat.completions",
         async () => {
             const fixture = await readFile(FIXTURE);
@@ -398,20 +431,27 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         20_000,
     );
 
-    itIfFfmpeg(
-        "transcodeToMp3 writes a real MPEG stream",
+    itIfAudioTools(
+        "transcodeToMp3 writes mono 16 kHz MPEG audio",
         async () => {
             const fixture = await readFile(FIXTURE);
             const ogg = await ffmpegToOpus(fixture, 16);
             const mp3 = await transcodeToMp3(ogg);
+            const stream = probeAudio(mp3).streams?.[0];
+
             expect(sniffAudio(mp3).container).toBe("mp3");
             expect(mp3.length).toBeGreaterThan(0);
+            expect(stream).toMatchObject({
+                codec_name: "mp3",
+                sample_rate: "16000",
+                channels: 1,
+            });
         },
         15_000,
     );
 
-    itIfFfmpeg(
-        "transcodeToMp3Segments writes multiple MPEG streams in one pass",
+    itIfAudioTools(
+        "transcodeToMp3Segments bounds mono 16 kHz MPEG segments",
         async () => {
             const fixture = await readFile(FIXTURE);
             const segments: Buffer[] = [];
@@ -421,8 +461,15 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
 
             expect(segments.length).toBeGreaterThan(1);
             for (const segment of segments) {
+                const stream = probeAudio(segment).streams?.[0];
                 expect(sniffAudio(segment).container).toBe("mp3");
                 expect(segment.length).toBeGreaterThan(0);
+                expect(stream).toMatchObject({
+                    codec_name: "mp3",
+                    sample_rate: "16000",
+                    channels: 1,
+                });
+                expect(Number(stream?.duration)).toBeLessThanOrEqual(0.5);
             }
         },
         15_000,

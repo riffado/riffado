@@ -240,7 +240,7 @@ export function buildDemoRecordings(now: Date): Recording[] {
     return SEEDS.map((seed) => ({
         id: seed.id,
         filename: seed.filename,
-        duration: seed.duration,
+        duration: seed.duration * 1000,
         filesize: seed.filesize,
         startTime: isoMinutesAgo(now, seed.minutesAgo),
         deviceSn: seed.deviceSn,
