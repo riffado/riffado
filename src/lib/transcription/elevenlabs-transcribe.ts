@@ -424,10 +424,7 @@ export async function elevenLabsTranscribe(
     if (file.size > ELEVENLABS_MAX_FILE_BYTES) {
         throw new ElevenLabsFileTooLargeError(file.size);
     }
-    if (
-        typeof model !== "string" ||
-        !/^[A-Za-z0-9._-]{1,128}$/.test(model)
-    ) {
+    if (typeof model !== "string" || !/^[A-Za-z0-9._-]{1,128}$/.test(model)) {
         throw new ElevenLabsTranscribeError(
             400,
             "Invalid ElevenLabs transcription model.",
@@ -441,9 +438,7 @@ export async function elevenLabsTranscribe(
     }
     if (
         numSpeakers !== undefined &&
-        (!Number.isInteger(numSpeakers) ||
-            numSpeakers < 1 ||
-            numSpeakers > 32)
+        (!Number.isInteger(numSpeakers) || numSpeakers < 1 || numSpeakers > 32)
     ) {
         throw new ElevenLabsTranscribeError(
             400,

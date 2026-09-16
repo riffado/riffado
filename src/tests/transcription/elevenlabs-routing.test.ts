@@ -297,10 +297,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
             detectedLanguage: null,
             speakerCount: 0,
         });
-        mockRecordingFlow(
-            {},
-            { credentialsOverrides: { defaultModel: null } },
-        );
+        mockRecordingFlow({}, { credentialsOverrides: { defaultModel: null } });
 
         await transcribeRecording(userId, recordingId);
 

@@ -10,10 +10,7 @@ import {
     userSettings,
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
-import {
-    findPreset,
-    getTranscriptionStyle,
-} from "@/lib/ai/provider-presets";
+import { findPreset, getTranscriptionStyle } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
