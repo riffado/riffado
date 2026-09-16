@@ -3,7 +3,15 @@
 import type { JSX, ReactNode } from "react";
 
 function isSafeImageSrc(src: string): boolean {
-    return src.startsWith("/api/plaud-assets/") || src.startsWith("https://");
+    if (src.startsWith("https://")) return true;
+    if (!src.startsWith("/api/plaud-assets/")) return false;
+
+    const base = "https://riffado.invalid";
+    const normalized = new URL(src, base);
+    return (
+        normalized.origin === base &&
+        normalized.pathname.startsWith("/api/plaud-assets/")
+    );
 }
 
 // Inline markdown: bold, italic, inline code, strikethrough, and links.
@@ -321,6 +329,8 @@ export function RichMarkdown({
 // `Question: ...` or `Action item: ...` as a speaker turn and wrongly switch a
 // non-diarized transcript out of its plain-text fallback.
 const SPEAKER_RE = /^(SPEAKER_\w+|Speaker\s+\w+|UNKNOWN):\s*(.*)$/;
+const TIMESTAMPED_SPEAKER_RE =
+    /^\[(\d{2}(?::\d{2}){1,2})\]\s+(Speaker\s+\w+)(\s+·\s+Part\s+\d+)?$/;
 
 const SPEAKER_COLORS = [
     "text-accent-cyan",
@@ -335,11 +345,10 @@ const SPEAKER_COLORS = [
  * Render a diarized transcript as one block per speaker turn, colouring
  * each speaker label consistently in order of first appearance.
  *
- * Plaud transcripts arrive as `SPEAKER_00: ...` / `Speaker 1: ...` lines,
- * one turn per line. A line with no recognised label is appended to the
- * preceding unlabelled turn. When no line carries a label at all (a plain
- * Whisper transcript, for example) the whole text is rendered as
- * pre-wrapped plain text, which is the previous behaviour.
+ * Plaud transcripts arrive as `SPEAKER_00: ...` / `Speaker 1: ...` lines.
+ * OpenAI diarization uses a timestamped speaker header followed by its text.
+ * Continuation lines are appended to the preceding turn. When no line carries
+ * a label at all, the whole text keeps the previous pre-wrapped rendering.
  */
 export function SpeakerTranscript({
     text,
@@ -354,13 +363,32 @@ export function SpeakerTranscript({
         .map((l) => l.trim())
         .filter(Boolean);
 
-    const turns: { speaker: string | null; text: string }[] = [];
+    const turns: {
+        speaker: string | null;
+        label: string | null;
+        text: string;
+    }[] = [];
     for (const line of lines) {
-        const m = line.match(SPEAKER_RE);
-        if (m) turns.push({ speaker: m[1], text: m[2] });
-        else if (turns.length && turns[turns.length - 1].speaker === null)
+        const labeled = line.match(SPEAKER_RE);
+        const timestamped = line.match(TIMESTAMPED_SPEAKER_RE);
+        if (labeled) {
+            turns.push({
+                speaker: labeled[1],
+                label: `${labeled[1]}:`,
+                text: labeled[2],
+            });
+        } else if (timestamped) {
+            const part = timestamped[3] ?? "";
+            turns.push({
+                speaker: `${timestamped[2]}${part}`,
+                label: `[${timestamped[1]}] ${timestamped[2]}${part}`,
+                text: "",
+            });
+        } else if (turns.length) {
             turns[turns.length - 1].text += ` ${line}`;
-        else turns.push({ speaker: null, text: line });
+        } else {
+            turns.push({ speaker: null, label: null, text: line });
+        }
     }
 
     const hasSpeakers = turns.some((t) => t.speaker !== null);
@@ -393,7 +421,7 @@ export function SpeakerTranscript({
                         <span
                             className={`font-semibold ${colorFor(t.speaker)} mr-2`}
                         >
-                            {t.speaker}:
+                            {t.label}
                         </span>
                     )}
                     <span>{t.text}</span>

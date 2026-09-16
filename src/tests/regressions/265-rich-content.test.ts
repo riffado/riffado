@@ -115,6 +115,8 @@ describe("RichMarkdown (#265)", () => {
                     "![data](data:image/png;base64,aaaa)",
                     "![vbscript](vbscript:msgbox(1))",
                     "![proto](//evil.example/x.png)",
+                    "![dot](/api/plaud-assets/../../api/private.png)",
+                    "![encoded](/api/plaud-assets/%2e%2e/%2e%2e/api/private.png)",
                 ].join("\n"),
             }),
         );
@@ -130,6 +132,12 @@ describe("RichMarkdown (#265)", () => {
             a.getAttribute("href"),
         );
         expect(hrefs).toEqual([]);
+        expect(container.textContent).toContain("js");
+        expect(container.textContent).toContain("data");
+        expect(container.textContent).toContain("vbscript");
+        expect(container.textContent).toContain("proto");
+        expect(container.textContent).toContain("dot");
+        expect(container.textContent).toContain("encoded");
     });
 
     it("escapes HTML instead of injecting it", () => {
@@ -175,6 +183,30 @@ describe("SpeakerTranscript (#265)", () => {
         expect(turns[1].querySelector("span")?.className).toContain(
             "text-emerald-400",
         );
+    });
+
+    it("groups timestamped OpenAI speaker headers with continuation text", () => {
+        const { container } = render(
+            createElement(SpeakerTranscript, {
+                text: [
+                    "[00:00] Speaker 1 · Part 1",
+                    "First turn",
+                    "[12:30] Speaker 2 · Part 1",
+                    "Second turn",
+                ].join("\n"),
+            }),
+        );
+
+        const turns = [...container.querySelectorAll(":scope > div > div")];
+        expect(turns).toHaveLength(2);
+        expect(turns[0].querySelector("span")?.textContent).toBe(
+            "[00:00] Speaker 1 · Part 1",
+        );
+        expect(turns[0].textContent).toContain("First turn");
+        expect(turns[1].querySelector("span")?.textContent).toBe(
+            "[12:30] Speaker 2 · Part 1",
+        );
+        expect(turns[1].textContent).toContain("Second turn");
     });
 
     it("keeps non-diarized transcripts pre-wrapped", () => {
