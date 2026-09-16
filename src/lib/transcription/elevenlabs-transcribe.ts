@@ -8,10 +8,15 @@
  * through `chat-transcribe.ts` / the OpenAI SDK.
  */
 
+import { z } from "zod";
+
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1";
 const MAX_RETRIES = 2;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
+const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
+const MAX_TRANSCRIPT_CHARS = 5_000_000;
+const MAX_WORDS = 500_000;
 
 // ElevenLabs advertises a 5 GB per-request limit, far beyond OpenAI's
 // 25 MiB. The whole buffer is still materialized in memory (same as every
@@ -21,7 +26,7 @@ const MAX_RETRY_DELAY_MS = 30_000;
 // aborts the download before the buffer is fully materialized; the check
 // below is a last-resort assertion for any caller that hands in an
 // already-materialized `File`.
-export const ELEVENLABS_MAX_FILE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+export const ELEVENLABS_MAX_FILE_BYTES = 128 * 1024 * 1024;
 
 function isTransientStatus(status: number): boolean {
     return (
@@ -114,18 +119,23 @@ export class ElevenLabsFileTooLargeError extends Error {
     }
 }
 
-interface ElevenLabsWord {
-    text: string;
-    type?: "word" | "spacing" | "audio_event";
-    speaker_id?: string | null;
-}
+const elevenLabsWordSchema = z.object({
+    text: z.string().max(1024),
+    type: z.enum(["word", "spacing", "audio_event"]).optional(),
+    speaker_id: z.string().max(128).nullable().optional(),
+});
 
-interface ElevenLabsTranscriptionResponse {
-    text?: string;
-    language_code?: string | null;
-    language_probability?: number | null;
-    words?: ElevenLabsWord[];
-}
+const elevenLabsTranscriptionResponseSchema = z.object({
+    text: z.string().max(MAX_TRANSCRIPT_CHARS).optional(),
+    language_code: z.string().max(16).nullable().optional(),
+    language_probability: z.number().min(0).max(1).nullable().optional(),
+    words: z.array(elevenLabsWordSchema).max(MAX_WORDS).optional(),
+});
+
+type ElevenLabsWord = z.infer<typeof elevenLabsWordSchema>;
+type ElevenLabsTranscriptionResponse = z.infer<
+    typeof elevenLabsTranscriptionResponseSchema
+>;
 
 export interface ElevenLabsTranscribeArgs {
     apiKey: string;
@@ -133,6 +143,8 @@ export interface ElevenLabsTranscribeArgs {
     file: File;
     /** Base URL from the stored credential; falls back to the public API. */
     baseUrl?: string | null;
+    /** Hosted mode only permits ElevenLabs' official API endpoint. */
+    isHosted?: boolean;
     /** ISO language code. Omit/undefined for auto-detect. */
     language?: string;
     diarize: boolean;
@@ -147,6 +159,38 @@ export interface ElevenLabsTranscribeResult {
     detectedLanguage: string | null;
     /** Distinct speakers found. 0 when diarization was off or none detected. */
     speakerCount: number;
+}
+
+export const ELEVENLABS_HOSTED_BASE_URL_MESSAGE =
+    "Hosted ElevenLabs transcription only supports https://api.elevenlabs.io/v1. Self-host Riffado to use a custom ElevenLabs proxy.";
+
+/** Validate the ElevenLabs endpoint without weakening self-host proxy support. */
+export function validateElevenLabsBaseUrl(
+    input: unknown,
+    { isHosted }: { isHosted: boolean },
+): { ok: true } | { ok: false; message: string } {
+    if (!isHosted || input == null || input === "") return { ok: true };
+    if (typeof input !== "string") {
+        return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
+    }
+
+    try {
+        const url = new URL(input.trim());
+        const pathname = url.pathname.replace(/\/+$/, "");
+        if (
+            url.origin === "https://api.elevenlabs.io" &&
+            pathname === "/v1" &&
+            !url.username &&
+            !url.password &&
+            !url.search &&
+            !url.hash
+        ) {
+            return { ok: true };
+        }
+    } catch {
+        return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
+    }
+    return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
 }
 
 /**
@@ -201,6 +245,66 @@ function formatDiarizedText(words: ElevenLabsWord[]): {
     return { text, speakerCount: speakerNumbers.size };
 }
 
+async function discardResponseBody(response: Response): Promise<void> {
+    if (response.body) {
+        await response.body.cancel().catch(() => undefined);
+    }
+}
+
+async function readResponseBody(response: Response): Promise<string> {
+    if (!response.body) return "";
+    const declaredBytes = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredBytes) && declaredBytes > MAX_RESPONSE_BYTES) {
+        await discardResponseBody(response);
+        throw new ElevenLabsTranscribeError(
+            502,
+            "ElevenLabs returned an oversized transcription response.",
+        );
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+        if (totalBytes > MAX_RESPONSE_BYTES) {
+            await reader.cancel().catch(() => undefined);
+            throw new ElevenLabsTranscribeError(
+                502,
+                "ElevenLabs returned an oversized transcription response.",
+            );
+        }
+        chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks, totalBytes).toString("utf8");
+}
+
+async function parseTranscriptionResponse(
+    response: Response,
+): Promise<ElevenLabsTranscriptionResponse> {
+    const body = await readResponseBody(response);
+    let json: unknown;
+    try {
+        json = JSON.parse(body);
+    } catch {
+        throw new ElevenLabsTranscribeError(
+            502,
+            "ElevenLabs returned an invalid transcription response.",
+        );
+    }
+
+    const parsed = elevenLabsTranscriptionResponseSchema.safeParse(json);
+    if (!parsed.success) {
+        throw new ElevenLabsTranscribeError(
+            502,
+            "ElevenLabs returned an invalid transcription response.",
+        );
+    }
+    return parsed.data;
+}
+
 async function postSpeechToText(args: {
     baseUrl: string;
     apiKey: string;
@@ -220,10 +324,11 @@ async function postSpeechToText(args: {
                 headers: { "xi-api-key": apiKey },
                 body: form,
                 signal: controller.signal,
+                redirect: "error",
             });
 
             if (response.ok) {
-                return (await response.json()) as ElevenLabsTranscriptionResponse;
+                return await parseTranscriptionResponse(response);
             }
 
             if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
@@ -233,7 +338,7 @@ async function postSpeechToText(args: {
                         INITIAL_RETRY_DELAY_MS * 2 ** attempt,
                         MAX_RETRY_DELAY_MS,
                     );
-                await response.text().catch(() => "");
+                await discardResponseBody(response);
                 attempt += 1;
                 console.warn(
                     `[elevenlabs] transcription request failed (${response.status}), retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`,
@@ -242,9 +347,9 @@ async function postSpeechToText(args: {
                 continue;
             }
 
-            const detail = await response.text().catch(() => "");
+            await discardResponseBody(response);
             console.error(
-                `[elevenlabs] transcription request failed (${response.status}): ${detail.slice(0, 2000)}`,
+                `[elevenlabs] transcription request failed (${response.status})`,
             );
 
             if (response.status === 401 || response.status === 403) {
@@ -309,6 +414,7 @@ export async function elevenLabsTranscribe(
         model,
         file,
         baseUrl,
+        isHosted = false,
         language,
         diarize,
         numSpeakers,
@@ -318,8 +424,50 @@ export async function elevenLabsTranscribe(
     if (file.size > ELEVENLABS_MAX_FILE_BYTES) {
         throw new ElevenLabsFileTooLargeError(file.size);
     }
+    if (
+        typeof model !== "string" ||
+        !/^[A-Za-z0-9._-]{1,128}$/.test(model)
+    ) {
+        throw new ElevenLabsTranscribeError(
+            400,
+            "Invalid ElevenLabs transcription model.",
+        );
+    }
+    if (typeof diarize !== "boolean") {
+        throw new ElevenLabsTranscribeError(
+            400,
+            "Invalid ElevenLabs diarization setting.",
+        );
+    }
+    if (
+        numSpeakers !== undefined &&
+        (!Number.isInteger(numSpeakers) ||
+            numSpeakers < 1 ||
+            numSpeakers > 32)
+    ) {
+        throw new ElevenLabsTranscribeError(
+            400,
+            "ElevenLabs speaker count must be between 1 and 32.",
+        );
+    }
+    if (
+        language !== undefined &&
+        !/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(language)
+    ) {
+        throw new ElevenLabsTranscribeError(
+            400,
+            "Invalid ElevenLabs language code.",
+        );
+    }
 
-    const effectiveBaseUrl = (baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "");
+    const baseUrlCheck = validateElevenLabsBaseUrl(baseUrl, { isHosted });
+    if (!baseUrlCheck.ok) {
+        throw new ElevenLabsTranscribeError(400, baseUrlCheck.message);
+    }
+    const effectiveBaseUrl =
+        typeof baseUrl === "string" && baseUrl.trim()
+            ? baseUrl.trim().replace(/\/+$/, "")
+            : DEFAULT_BASE_URL;
 
     const form = new FormData();
     form.append("file", file);
@@ -330,13 +478,7 @@ export async function elevenLabsTranscribe(
     if (language) {
         form.append("language_code", language);
     }
-    if (
-        diarize &&
-        numSpeakers !== undefined &&
-        Number.isInteger(numSpeakers) &&
-        numSpeakers >= 1 &&
-        numSpeakers <= 32
-    ) {
+    if (diarize && numSpeakers !== undefined) {
         form.append("num_speakers", String(numSpeakers));
     }
 

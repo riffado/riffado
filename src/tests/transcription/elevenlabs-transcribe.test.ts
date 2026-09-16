@@ -30,6 +30,7 @@ async function readForm(body: unknown): Promise<FormData> {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.useRealTimers();
 });
 
@@ -46,6 +47,7 @@ describe("elevenLabsTranscribe -- request shape", () => {
             apiKey: "sk_test",
             model: "scribe_v2",
             file: fakeFile(),
+            isHosted: true,
             diarize: false,
             timeoutMs: 5000,
         });
@@ -57,6 +59,7 @@ describe("elevenLabsTranscribe -- request shape", () => {
         expect(init.headers["xi-api-key"]).toBe("sk_test");
         expect(init.headers.Authorization).toBeUndefined();
         expect(init.headers.authorization).toBeUndefined();
+        expect(init.redirect).toBe("error");
     });
 
     it("strips a trailing slash from a custom base URL", async () => {
@@ -78,6 +81,24 @@ describe("elevenLabsTranscribe -- request shape", () => {
 
         const [url] = fetchSpy.mock.calls[0];
         expect(url).toBe("https://proxy.example.com/v1/speech-to-text");
+    });
+
+    it("rejects custom base URLs in hosted mode before sending the API key", async () => {
+        const fetchSpy = vi.fn();
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(
+            elevenLabsTranscribe({
+                apiKey: "secret",
+                model: "scribe_v2",
+                file: fakeFile(),
+                baseUrl: "https://proxy.example.com/v1",
+                isHosted: true,
+                diarize: false,
+                timeoutMs: 5000,
+            }),
+        ).rejects.toThrow(/official API endpoint|only supports/i);
+        expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     it("includes model_id, diarize, and timestamps_granularity in the form", async () => {
@@ -174,20 +195,17 @@ describe("elevenLabsTranscribe -- request shape", () => {
             ),
         ).toBe("4");
 
-        // diarize on, out-of-range hint dropped.
-        await elevenLabsTranscribe({
-            apiKey: "k",
-            model: "scribe_v2",
-            file: fakeFile(),
-            diarize: true,
-            numSpeakers: 33,
-            timeoutMs: 5000,
-        });
-        expect(
-            (await readForm(fetchSpy.mock.calls[2][1].body)).get(
-                "num_speakers",
-            ),
-        ).toBeNull();
+        await expect(
+            elevenLabsTranscribe({
+                apiKey: "k",
+                model: "scribe_v2",
+                file: fakeFile(),
+                diarize: true,
+                numSpeakers: 33,
+                timeoutMs: 5000,
+            }),
+        ).rejects.toThrow(/between 1 and 32/i);
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -396,6 +414,9 @@ describe("elevenLabsTranscribe -- language normalization", () => {
 
 describe("elevenLabsTranscribe -- errors and retries", () => {
     it("maps 401 to a clear message without leaking the response body", async () => {
+        const consoleError = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => undefined);
         const fetchSpy = vi
             .fn()
             .mockResolvedValue(
@@ -415,6 +436,52 @@ describe("elevenLabsTranscribe -- errors and retries", () => {
         await expect(promise).rejects.toThrow(/rejected the API key/i);
         await expect(promise).rejects.not.toThrow(/internal diagnostic/i);
         expect(fetchSpy).toHaveBeenCalledOnce();
+        expect(JSON.stringify(consoleError.mock.calls)).not.toContain(
+            "internal diagnostic detail",
+        );
+    });
+
+    it("rejects malformed successful responses", async () => {
+        const fetchSpy = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    text: 123,
+                    words: [{ text: false, speaker_id: "speaker_1" }],
+                }),
+                { status: 200 },
+            ),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(
+            elevenLabsTranscribe({
+                apiKey: "k",
+                model: "scribe_v2",
+                file: fakeFile(),
+                diarize: true,
+                timeoutMs: 5000,
+            }),
+        ).rejects.toThrow(/invalid transcription response/i);
+    });
+
+    it("rejects oversized successful responses before parsing JSON", async () => {
+        const fetchSpy = vi.fn().mockResolvedValue(
+            new Response("{}", {
+                status: 200,
+                headers: { "content-length": String(33 * 1024 * 1024) },
+            }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(
+            elevenLabsTranscribe({
+                apiKey: "k",
+                model: "scribe_v2",
+                file: fakeFile(),
+                diarize: false,
+                timeoutMs: 5000,
+            }),
+        ).rejects.toThrow(/oversized transcription response/i);
     });
 
     it("maps 422 to an invalid-parameters message", async () => {

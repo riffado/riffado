@@ -105,6 +105,7 @@ vi.mock("@/lib/env", () => ({
         WHISPER_MAX_BYTES: 24 * 1024 * 1024,
         WHISPER_COMPRESS_BITRATE_KBPS: 12,
         WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000,
+        IS_HOSTED: false,
     },
 }));
 
@@ -134,6 +135,7 @@ function mockRecordingFlow(
     opts: {
         rawSettingsRow?: Record<string, unknown>;
         recordingOverrides?: Record<string, unknown>;
+        credentialsOverrides?: Record<string, unknown>;
     } = {},
 ) {
     const recordingRow = {
@@ -152,6 +154,7 @@ function mockRecordingFlow(
         apiKey: "encrypted-key",
         baseUrl: null,
         defaultModel: "scribe_v2",
+        ...opts.credentialsOverrides,
     };
 
     const settingsRow = opts.rawSettingsRow ?? {
@@ -285,6 +288,25 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
         expect(args.diarize).toBe(true);
         expect(args.language).toBeUndefined();
         expect(args.model).toBe("scribe_v2");
+        expect(args.isHosted).toBe(false);
+    });
+
+    it("uses the ElevenLabs preset model when the credential has no default", async () => {
+        elevenLabsTranscribeMock.mockResolvedValue({
+            text: "plain",
+            detectedLanguage: null,
+            speakerCount: 0,
+        });
+        mockRecordingFlow(
+            {},
+            { credentialsOverrides: { defaultModel: null } },
+        );
+
+        await transcribeRecording(userId, recordingId);
+
+        expect(elevenLabsTranscribeMock.mock.calls[0][0].model).toBe(
+            "scribe_v2",
+        );
     });
 
     it("forwards an explicitly selected language", async () => {

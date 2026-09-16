@@ -9,6 +9,7 @@ import { requireApiSession } from "@/lib/auth-server";
 import { encrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import { validateElevenLabsBaseUrl } from "@/lib/transcription/elevenlabs-transcribe";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -60,6 +61,19 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
         throw new AppError(ErrorCode.INVALID_INPUT, baseUrlCheck.message, 400, {
             field: "baseUrl",
         });
+    }
+    if (existing.provider === "ElevenLabs") {
+        const elevenLabsBaseUrlCheck = validateElevenLabsBaseUrl(baseUrl, {
+            isHosted: env.IS_HOSTED,
+        });
+        if (!elevenLabsBaseUrlCheck.ok) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                elevenLabsBaseUrlCheck.message,
+                400,
+                { field: "baseUrl" },
+            );
+        }
     }
 
     // Use a transaction to ensure atomic update of default providers

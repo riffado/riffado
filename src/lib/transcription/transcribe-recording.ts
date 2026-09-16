@@ -10,7 +10,10 @@ import {
     userSettings,
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
-import { getTranscriptionStyle } from "@/lib/ai/provider-presets";
+import {
+    findPreset,
+    getTranscriptionStyle,
+} from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
@@ -477,7 +480,11 @@ async function transcribeRecordingInner(
                 decryptedFilename,
             );
 
-            const model = opts.model || credentials.defaultModel || "whisper-1";
+            const model =
+                opts.model ||
+                credentials.defaultModel ||
+                findPreset(credentials.provider)?.defaultModel ||
+                "whisper-1";
             persistProvider = credentials.provider;
             persistModel = model;
 
@@ -499,6 +506,7 @@ async function transcribeRecordingInner(
                     model,
                     file: audioFile,
                     baseUrl: credentials.baseUrl,
+                    isHosted: env.IS_HOSTED,
                     language: defaultLanguage,
                     diarize,
                     numSpeakers,

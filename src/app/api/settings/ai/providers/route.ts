@@ -11,6 +11,7 @@ import { encrypt } from "@/lib/encryption";
 import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { captureServerEvent } from "@/lib/posthog-server";
+import { validateElevenLabsBaseUrl } from "@/lib/transcription/elevenlabs-transcribe";
 
 // GET - List all AI providers for the user
 export const GET = apiHandler(async (request: Request) => {
@@ -61,6 +62,19 @@ export const POST = apiHandler(async (request: Request) => {
         throw new AppError(ErrorCode.INVALID_INPUT, baseUrlCheck.message, 400, {
             field: "baseUrl",
         });
+    }
+    if (provider === "ElevenLabs") {
+        const elevenLabsBaseUrlCheck = validateElevenLabsBaseUrl(baseUrl, {
+            isHosted: env.IS_HOSTED,
+        });
+        if (!elevenLabsBaseUrlCheck.ok) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                elevenLabsBaseUrlCheck.message,
+                400,
+                { field: "baseUrl" },
+            );
+        }
     }
 
     // Encrypt the API key
