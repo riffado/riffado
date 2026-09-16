@@ -100,7 +100,6 @@ interface AudioProbe {
         sample_rate?: string;
         channels?: number;
     }>;
-    format?: { duration?: string };
 }
 
 function hasAudioTools(): boolean {
@@ -119,7 +118,7 @@ function probeAudio(input: Buffer): AudioProbe {
             "-select_streams",
             "a:0",
             "-show_entries",
-            "stream=codec_name,sample_rate,channels:format=duration",
+            "stream=codec_name,sample_rate,channels",
             "-of",
             "json",
             "pipe:0",
@@ -130,6 +129,31 @@ function probeAudio(input: Buffer): AudioProbe {
         throw new Error(result.stderr.toString() || "ffprobe failed");
     }
     return JSON.parse(result.stdout.toString()) as AudioProbe;
+}
+
+function decodedDurationSeconds(input: Buffer): number {
+    const result = spawnSync(
+        "ffmpeg",
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            "pipe:0",
+            "-f",
+            "s16le",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "pipe:1",
+        ],
+        { input },
+    );
+    if (result.status !== 0) {
+        throw new Error(result.stderr.toString() || "ffmpeg decode failed");
+    }
+    return result.stdout.length / (2 * 16_000);
 }
 
 function oggOpusBytes(): Buffer {
@@ -470,7 +494,9 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                     sample_rate: "16000",
                     channels: 1,
                 });
-                expect(Number(probe.format?.duration)).toBeLessThanOrEqual(0.5);
+                expect(decodedDurationSeconds(segment)).toBeLessThanOrEqual(
+                    0.5,
+                );
             }
         },
         15_000,
