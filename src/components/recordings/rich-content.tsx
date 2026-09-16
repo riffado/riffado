@@ -1,9 +1,10 @@
 "use client";
 
 import type { JSX, ReactNode } from "react";
+import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
 
 function isSafeImageSrc(src: string): boolean {
-    if (src.startsWith("https://")) return true;
+    if (isValidPlaudApiUrl(src)) return true;
     if (!src.startsWith("/api/plaud-assets/")) return false;
 
     const base = "https://riffado.invalid";
@@ -82,7 +83,7 @@ const IMG_RE = /^!\[([^\]]*)\]\(([^)]+)\)\s*$/;
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const BULLET_RE = /^\s*[-*]\s+(.*)$/;
 const CHECK_RE = /^\s*[-*]\s+\[([ xX])\]\s+(.*)$/;
-const ORDERED_RE = /^\s*\d+[.)]\s+(.*)$/;
+const ORDERED_RE = /^\s*(\d+)[.)]\s+(.*)$/;
 const QUOTE_RE = /^\s*>\s?(.*)$/;
 
 /**
@@ -108,6 +109,7 @@ export function RichMarkdown({
     let para: string[] = [];
     let list: {
         ordered: boolean;
+        start?: number;
         items: { text: string; check?: boolean }[];
     } | null = null;
     let quote: string[] = [];
@@ -166,7 +168,11 @@ export function RichMarkdown({
             });
             blocks.push(
                 ordered ? (
-                    <ol key={key} className="my-2 space-y-1 list-decimal pl-5">
+                    <ol
+                        key={key}
+                        start={list.start}
+                        className="my-2 space-y-1 list-decimal pl-5"
+                    >
                         {items}
                     </ol>
                 ) : (
@@ -317,9 +323,13 @@ export function RichMarkdown({
             flushPara();
             if (!list || !list.ordered) {
                 flushList();
-                list = { ordered: true, items: [] };
+                list = {
+                    ordered: true,
+                    start: Number.parseInt(ord[1], 10),
+                    items: [],
+                };
             }
-            list.items.push({ text: ord[1] });
+            list.items.push({ text: ord[2] });
             continue;
         }
 

@@ -78,6 +78,16 @@ describe("RichMarkdown (#265)", () => {
         expect(container.querySelector("hr")).not.toBeNull();
     });
 
+    it("preserves the first number of an ordered list", () => {
+        const { container } = render(
+            createElement(RichMarkdown, {
+                content: "3. Third\n4. Fourth",
+            }),
+        );
+
+        expect(container.querySelector("ol")?.start).toBe(3);
+    });
+
     it("allowlists https and same-origin hrefs and rejects the rest", () => {
         const { container } = render(
             createElement(RichMarkdown, {
@@ -109,8 +119,9 @@ describe("RichMarkdown (#265)", () => {
         const { container } = render(
             createElement(RichMarkdown, {
                 content: [
-                    "![safe](https://cdn.example/img.png)",
+                    "![safe](https://resource.plaud.ai/img.png)",
                     "![asset](/api/plaud-assets/x.png)",
+                    "![external](https://attacker.invalid/pixel.png)",
                     "![js](javascript:alert(1))",
                     "![data](data:image/png;base64,aaaa)",
                     "![vbscript](vbscript:msgbox(1))",
@@ -125,13 +136,14 @@ describe("RichMarkdown (#265)", () => {
             img.getAttribute("src"),
         );
         expect(srcs).toEqual([
-            "https://cdn.example/img.png",
+            "https://resource.plaud.ai/img.png",
             "/api/plaud-assets/x.png",
         ]);
         const hrefs = [...container.querySelectorAll("a")].map((a) =>
             a.getAttribute("href"),
         );
         expect(hrefs).toEqual([]);
+        expect(container.textContent).toContain("external");
         expect(container.textContent).toContain("js");
         expect(container.textContent).toContain("data");
         expect(container.textContent).toContain("vbscript");
