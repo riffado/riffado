@@ -6,13 +6,18 @@ export interface BuildAudioFileResult {
     contentType: string;
 }
 
-/** Build the `File` passed to `openai.audio.transcriptions.create`. */
-export function buildAudioFile(
-    audioBuffer: Buffer,
+export interface AudioFileMetadata {
+    filename: string;
+    contentType: string;
+}
+
+/** Resolve a provider filename and MIME type from an audio header. */
+export function getAudioFileMetadata(
+    audioHeader: Buffer,
     storagePath: string,
     decryptedFilename: string,
-): BuildAudioFileResult {
-    const sniffed = sniffAudio(audioBuffer);
+): AudioFileMetadata {
+    const sniffed = sniffAudio(audioHeader);
     const known = sniffed.container !== "unknown";
     const ext = known
         ? sniffed.extension
@@ -21,7 +26,23 @@ export function buildAudioFile(
         ? sniffed.contentType
         : getAudioMimeType(storagePath);
 
-    const filename = withAudioExtension(decryptedFilename, ext);
+    return {
+        filename: withAudioExtension(decryptedFilename, ext),
+        contentType,
+    };
+}
+
+/** Build the `File` passed to `openai.audio.transcriptions.create`. */
+export function buildAudioFile(
+    audioBuffer: Buffer,
+    storagePath: string,
+    decryptedFilename: string,
+): BuildAudioFileResult {
+    const { filename, contentType } = getAudioFileMetadata(
+        audioBuffer,
+        storagePath,
+        decryptedFilename,
+    );
 
     const view = new Uint8Array(
         audioBuffer.buffer as ArrayBuffer,

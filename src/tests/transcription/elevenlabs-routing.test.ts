@@ -48,12 +48,12 @@ const {
     openaiConstructed,
     elevenLabsTranscribeMock,
     compressMock,
-    downloadFileWithLimitMock,
+    withDownloadedBlobWithLimitMock,
 } = vi.hoisted(() => ({
     openaiConstructed: vi.fn(),
     elevenLabsTranscribeMock: vi.fn(),
     compressMock: vi.fn(),
-    downloadFileWithLimitMock: vi.fn(),
+    withDownloadedBlobWithLimitMock: vi.fn(),
 }));
 
 vi.mock("openai", () => {
@@ -85,10 +85,12 @@ vi.mock("@/lib/transcription/compress-audio", () => ({
 vi.mock("@/lib/storage/download-limited", async (importOriginal) => {
     const actual =
         await importOriginal<typeof import("@/lib/storage/download-limited")>();
-    downloadFileWithLimitMock.mockImplementation(actual.downloadFileWithLimit);
+    withDownloadedBlobWithLimitMock.mockImplementation(
+        actual.withDownloadedBlobWithLimit,
+    );
     return {
         ...actual,
-        downloadFileWithLimit: downloadFileWithLimitMock,
+        withDownloadedBlobWithLimit: withDownloadedBlobWithLimitMock,
     };
 });
 
@@ -425,7 +427,7 @@ describe("transcribeRecording -- ElevenLabs routing", () => {
     });
 
     it("uses a size-independent message when the stream exceeds the cap despite a small recorded filesize", async () => {
-        downloadFileWithLimitMock.mockRejectedValueOnce(
+        withDownloadedBlobWithLimitMock.mockRejectedValueOnce(
             new DownloadSizeLimitError(ELEVENLABS_MAX_FILE_BYTES),
         );
         mockRecordingFlow(

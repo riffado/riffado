@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     DownloadSizeLimitError,
     downloadFileWithLimit,
+    withDownloadedBlobWithLimit,
 } from "@/lib/storage/download-limited";
 import type { StorageProvider } from "@/lib/storage/types";
 
@@ -145,5 +146,37 @@ describe("downloadFileWithLimit", () => {
                 downloadFileWithLimit(storage, "key", 100),
             ).rejects.toBeInstanceOf(DownloadSizeLimitError);
         });
+    });
+});
+
+describe("withDownloadedBlobWithLimit", () => {
+    it("spools the object to a file-backed Blob with a sniffing header", async () => {
+        const source = Buffer.from("OggS-audio-data");
+        const storage = fakeStorage(Readable.from([source]));
+
+        const result = await withDownloadedBlobWithLimit(
+            storage,
+            "key",
+            1024,
+            async ({ blob, header, size }) => ({
+                body: Buffer.from(await blob.arrayBuffer()),
+                header,
+                size,
+            }),
+        );
+
+        expect(result.body.equals(source)).toBe(true);
+        expect(result.header.equals(source)).toBe(true);
+        expect(result.size).toBe(source.length);
+    });
+
+    it("rejects before invoking the consumer when the stream exceeds the cap", async () => {
+        const consume = vi.fn();
+        const storage = fakeStorage(Readable.from([Buffer.alloc(101)]));
+
+        await expect(
+            withDownloadedBlobWithLimit(storage, "key", 100, consume),
+        ).rejects.toBeInstanceOf(DownloadSizeLimitError);
+        expect(consume).not.toHaveBeenCalled();
     });
 });

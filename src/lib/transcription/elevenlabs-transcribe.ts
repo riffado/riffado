@@ -18,14 +18,10 @@ const MAX_RESPONSE_BYTES = 32 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 5_000_000;
 const MAX_WORDS = 500_000;
 
-// ElevenLabs advertises a 5 GB per-request limit, far beyond OpenAI's
-// 25 MiB. The whole buffer is still materialized in memory (same as every
-// other provider path today), so cap well under that to avoid OOMing the
-// transcription worker on a pathological upload. The real enforcement
-// point is `downloadFileWithLimit` in `transcribe-recording.ts`, which
-// aborts the download before the buffer is fully materialized; the check
-// below is a last-resort assertion for any caller that hands in an
-// already-materialized `File`.
+// ElevenLabs advertises a 5 GB request limit. Riffado uses a much lower cap
+// for predictable disk, network, and provider-cost exposure. The storage path
+// is spooled to a bounded temporary file; this check also protects direct
+// callers that hand in an already-created File.
 export const ELEVENLABS_MAX_FILE_BYTES = 128 * 1024 * 1024;
 
 function isTransientStatus(status: number): boolean {

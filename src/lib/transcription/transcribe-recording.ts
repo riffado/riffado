@@ -27,11 +27,14 @@ import {
 import { consumeRateLimitBucket } from "@/lib/rate-limit";
 import {
     DownloadSizeLimitError,
-    downloadFileWithLimit,
+    withDownloadedBlobWithLimit,
 } from "@/lib/storage/download-limited";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
-import { buildAudioFile } from "@/lib/transcription/audio-file";
+import {
+    buildAudioFile,
+    getAudioFileMetadata,
+} from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 import {
@@ -447,36 +450,7 @@ async function transcribeRecordingInner(
             }
 
             const storage = await createUserStorageProvider(userId);
-            let audioBuffer: Buffer;
-            if (transcriptionStyle === "elevenlabs") {
-                // Streamed so the cap is enforced before the whole buffer
-                // is materialized; the recorded filesize can understate
-                // the stored object, so the stream guard still applies.
-                try {
-                    audioBuffer = await downloadFileWithLimit(
-                        storage,
-                        recording.storagePath,
-                        ELEVENLABS_MAX_FILE_BYTES,
-                    );
-                } catch (err) {
-                    if (err instanceof DownloadSizeLimitError) {
-                        throw new ElevenLabsFileTooLargeError();
-                    }
-                    throw err;
-                }
-            } else {
-                audioBuffer = await storage.downloadFile(recording.storagePath);
-            }
-
-            // `recording.filename` is encrypted at rest; decrypt before
-            // passing to the transcription provider as a filename hint.
             const decryptedFilename = decryptText(recording.filename);
-            const { file: audioFile, contentType } = buildAudioFile(
-                audioBuffer,
-                recording.storagePath,
-                decryptedFilename,
-            );
-
             const model =
                 opts.model ||
                 credentials.defaultModel ||
@@ -485,42 +459,55 @@ async function transcribeRecordingInner(
             persistProvider = credentials.provider;
             persistModel = model;
 
-            if (transcriptionStyle === "gemini") {
-                const result = await geminiTranscribe({
-                    apiKey,
-                    model,
-                    audioBuffer,
-                    contentType,
-                    language: defaultLanguage,
-                });
-                transcriptionText = result.text;
-                detectedLanguage = result.detectedLanguage;
-            } else if (transcriptionStyle === "elevenlabs") {
-                // ElevenLabs has no 25 MiB request cap, so the Whisper
-                // compression step (below) is skipped for this style.
-                const result = await elevenLabsTranscribe({
-                    apiKey,
-                    model,
-                    file: audioFile,
-                    baseUrl: credentials.baseUrl,
-                    isHosted: env.IS_HOSTED,
-                    language: defaultLanguage,
-                    diarize,
-                    numSpeakers,
-                    timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
-                });
-                transcriptionText = result.text;
-                detectedLanguage = result.detectedLanguage;
+            if (transcriptionStyle === "elevenlabs") {
+                try {
+                    const result = await withDownloadedBlobWithLimit(
+                        storage,
+                        recording.storagePath,
+                        ELEVENLABS_MAX_FILE_BYTES,
+                        async ({ blob, header }) => {
+                            const metadata = getAudioFileMetadata(
+                                header,
+                                recording.storagePath,
+                                decryptedFilename,
+                            );
+                            const file = new File([blob], metadata.filename, {
+                                type: metadata.contentType,
+                            });
+                            return elevenLabsTranscribe({
+                                apiKey,
+                                model,
+                                file,
+                                baseUrl: credentials.baseUrl,
+                                isHosted: env.IS_HOSTED,
+                                language: defaultLanguage,
+                                diarize,
+                                numSpeakers,
+                                timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
+                            });
+                        },
+                    );
+                    transcriptionText = result.text;
+                    detectedLanguage = result.detectedLanguage;
+                } catch (err) {
+                    if (err instanceof DownloadSizeLimitError) {
+                        throw new ElevenLabsFileTooLargeError();
+                    }
+                    throw err;
+                }
             } else {
-                const openai = new OpenAI({
-                    apiKey,
-                    baseURL: credentials.baseUrl || undefined,
-                    timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
-                });
+                const audioBuffer = await storage.downloadFile(
+                    recording.storagePath,
+                );
+                const { file: audioFile, contentType } = buildAudioFile(
+                    audioBuffer,
+                    recording.storagePath,
+                    decryptedFilename,
+                );
 
-                if (transcriptionStyle === "chat") {
-                    const result = await chatTranscribe({
-                        client: openai,
+                if (transcriptionStyle === "gemini") {
+                    const result = await geminiTranscribe({
+                        apiKey,
                         model,
                         audioBuffer,
                         contentType,
@@ -529,58 +516,67 @@ async function transcribeRecordingInner(
                     transcriptionText = result.text;
                     detectedLanguage = result.detectedLanguage;
                 } else {
-                    const responseFormat = getResponseFormat(model);
+                    const openai = new OpenAI({
+                        apiKey,
+                        baseURL: credentials.baseUrl || undefined,
+                        timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                    });
 
-                    if (responseFormat === "diarized_json") {
-                        const parsed = await transcribeOpenAIDiarized({
+                    if (transcriptionStyle === "chat") {
+                        const result = await chatTranscribe({
                             client: openai,
                             model,
                             audioBuffer,
-                            durationMs: recording.duration,
-                            filename: decryptedFilename,
-                            language: defaultLanguage,
-                            timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
-                        });
-                        transcriptionText = parsed.text;
-                        detectedLanguage = parsed.detectedLanguage;
-                    } else {
-                        // OpenAI's /v1/audio/transcriptions endpoint has a hard
-                        // 25 MiB per-request limit. For meeting-length recordings
-                        // that limit is the common case, not the edge case -- fall
-                        // back to a mono Opus re-encode so 3 h+ uploads don't get
-                        // rejected with a 413.
-                        const compressed = await maybeCompressForWhisper(
-                            audioBuffer,
                             contentType,
-                        );
-                        const fileToSend = compressed.compressed
-                            ? buildAudioFile(
-                                  compressed.buffer,
-                                  recording.storagePath,
-                                  decryptedFilename,
-                              ).file
-                            : audioFile;
+                            language: defaultLanguage,
+                        });
+                        transcriptionText = result.text;
+                        detectedLanguage = result.detectedLanguage;
+                    } else {
+                        const responseFormat = getResponseFormat(model);
 
-                        // Whisper-1 runs ~0.1-0.3x realtime, so a 3 h recording
-                        // can keep the request open 20-40 min. The SDK default
-                        // (10 min) times out long before that; override
-                        // per-request so other OpenAI calls keep the default.
-                        const transcription =
-                            await openai.audio.transcriptions.create(
-                                buildTranscriptionParams({
-                                    file: fileToSend,
-                                    model,
-                                    responseFormat,
-                                    language: defaultLanguage,
-                                }),
-                                { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
+                        if (responseFormat === "diarized_json") {
+                            const parsed = await transcribeOpenAIDiarized({
+                                client: openai,
+                                model,
+                                audioBuffer,
+                                durationMs: recording.duration,
+                                filename: decryptedFilename,
+                                language: defaultLanguage,
+                                timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
+                            });
+                            transcriptionText = parsed.text;
+                            detectedLanguage = parsed.detectedLanguage;
+                        } else {
+                            const compressed = await maybeCompressForWhisper(
+                                audioBuffer,
+                                contentType,
                             );
-                        const parsed = parseTranscriptionResponse(
-                            transcription,
-                            responseFormat,
-                        );
-                        transcriptionText = parsed.text;
-                        detectedLanguage = parsed.detectedLanguage;
+                            const fileToSend = compressed.compressed
+                                ? buildAudioFile(
+                                      compressed.buffer,
+                                      recording.storagePath,
+                                      decryptedFilename,
+                                  ).file
+                                : audioFile;
+
+                            const transcription =
+                                await openai.audio.transcriptions.create(
+                                    buildTranscriptionParams({
+                                        file: fileToSend,
+                                        model,
+                                        responseFormat,
+                                        language: defaultLanguage,
+                                    }),
+                                    { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
+                                );
+                            const parsed = parseTranscriptionResponse(
+                                transcription,
+                                responseFormat,
+                            );
+                            transcriptionText = parsed.text;
+                            detectedLanguage = parsed.detectedLanguage;
+                        }
                     }
                 }
             }

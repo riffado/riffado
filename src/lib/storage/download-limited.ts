@@ -1,4 +1,9 @@
-import type { Readable } from "node:stream";
+import { createWriteStream, openAsBlob } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type Readable, Transform, type TransformCallback } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { StorageProvider } from "@/lib/storage/types";
 
 /** Thrown by `downloadFileWithLimit` when the stream exceeds `limitBytes`. */
@@ -10,6 +15,68 @@ export class DownloadSizeLimitError extends Error {
 }
 
 const INITIAL_CAPACITY_BYTES = 64 * 1024;
+const SNIFF_HEADER_BYTES = 4096;
+
+export interface DownloadedBlob {
+    blob: Blob;
+    header: Buffer;
+    size: number;
+}
+
+/**
+ * Spools a bounded storage object to a private temporary file and exposes a
+ * file-backed Blob only for the duration of `consume`.
+ */
+export async function withDownloadedBlobWithLimit<T>(
+    storage: StorageProvider,
+    key: string,
+    maxBytes: number,
+    consume: (download: DownloadedBlob) => Promise<T>,
+): Promise<T> {
+    const workDir = await mkdtemp(join(tmpdir(), "riffado-upload-"));
+    const filePath = join(workDir, "audio");
+    let size = 0;
+    const headerChunks: Buffer[] = [];
+    let headerBytes = 0;
+
+    const limiter = new Transform({
+        transform(
+            chunk: Buffer,
+            _encoding: BufferEncoding,
+            callback: TransformCallback,
+        ) {
+            size += chunk.length;
+            if (size > maxBytes) {
+                callback(new DownloadSizeLimitError(maxBytes));
+                return;
+            }
+            if (headerBytes < SNIFF_HEADER_BYTES) {
+                const needed = SNIFF_HEADER_BYTES - headerBytes;
+                const headerChunk = chunk.subarray(0, needed);
+                headerChunks.push(headerChunk);
+                headerBytes += headerChunk.length;
+            }
+            callback(null, chunk);
+        },
+    });
+
+    try {
+        const source: Readable = await storage.downloadStream(key);
+        await pipeline(
+            source,
+            limiter,
+            createWriteStream(filePath, { flags: "wx", mode: 0o600 }),
+        );
+        const blob = await openAsBlob(filePath);
+        return await consume({
+            blob,
+            header: Buffer.concat(headerChunks, headerBytes),
+            size,
+        });
+    } finally {
+        await rm(workDir, { recursive: true, force: true });
+    }
+}
 
 /**
  * Downloads `key` from `storage` into a `Buffer`, aborting as soon as the
