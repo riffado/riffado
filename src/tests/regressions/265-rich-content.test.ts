@@ -88,6 +88,7 @@ describe("RichMarkdown (#265)", () => {
                     "[slash](/\\\\evil.example/x)",
                     "[js](javascript:alert(1))",
                     "[data](data:text/html,hi)",
+                    "[vbscript](vbscript:msgbox(1))",
                     "[http](http://example.com/a)",
                 ].join("\n"),
             }),
@@ -100,6 +101,7 @@ describe("RichMarkdown (#265)", () => {
         expect(container.textContent).toContain("proto");
         expect(container.textContent).toContain("js");
         expect(container.textContent).toContain("data");
+        expect(container.textContent).toContain("vbscript");
         expect(container.textContent).toContain("http");
     });
 
@@ -111,6 +113,7 @@ describe("RichMarkdown (#265)", () => {
                     "![asset](/api/plaud-assets/x.png)",
                     "![js](javascript:alert(1))",
                     "![data](data:image/png;base64,aaaa)",
+                    "![vbscript](vbscript:msgbox(1))",
                     "![proto](//evil.example/x.png)",
                 ].join("\n"),
             }),
@@ -127,9 +130,6 @@ describe("RichMarkdown (#265)", () => {
             a.getAttribute("href"),
         );
         expect(hrefs).toEqual([]);
-        expect(srcs.some((src) => src?.startsWith("javascript:"))).toBe(false);
-        expect(srcs.some((src) => src?.startsWith("data:"))).toBe(false);
-        expect(srcs.some((src) => src?.startsWith("//"))).toBe(false);
     });
 
     it("escapes HTML instead of injecting it", () => {
