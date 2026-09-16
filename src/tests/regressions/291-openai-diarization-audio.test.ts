@@ -31,10 +31,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         transcodeToMp3.mockResolvedValue(Buffer.from("normalized-mp3"));
-        mockSegments([
-            Buffer.from("chunk-1"),
-            Buffer.from("chunk-2"),
-        ]);
+        mockSegments([Buffer.from("chunk-1"), Buffer.from("chunk-2")]);
     });
 
     it("normalizes a short recording to MP3 before transcription", async () => {

@@ -66,11 +66,7 @@ export async function transcribeOpenAIDiarized(
             audioBuffer,
             chunkDuration,
         )) {
-            await transcribeChunk(
-                segment.buffer,
-                segment.index,
-                segment.count,
-            );
+            await transcribeChunk(segment.buffer, segment.index, segment.count);
         }
     }
 
