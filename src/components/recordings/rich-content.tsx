@@ -206,18 +206,26 @@ export function RichMarkdown({
         }
 
         const img = line.match(IMG_RE);
-        if (img && isSafeImageSrc(img[2])) {
+        if (img) {
             flushAll();
-            blocks.push(
-                // biome-ignore lint/performance/noImgElement: remote object-storage asset behind an auth-gated route, not a bundled static asset next/image can optimize
-                <img
-                    key={`img${b++}`}
-                    src={img[2]}
-                    alt={img[1] || "summary graphic"}
-                    className="my-3 max-w-full rounded-lg border border-border"
-                    loading="lazy"
-                />,
-            );
+            if (isSafeImageSrc(img[2])) {
+                blocks.push(
+                    // biome-ignore lint/performance/noImgElement: remote object-storage asset behind an auth-gated route, not a bundled static asset next/image can optimize
+                    <img
+                        key={`img${b++}`}
+                        src={img[2]}
+                        alt={img[1] || "summary graphic"}
+                        className="my-3 max-w-full rounded-lg border border-border"
+                        loading="lazy"
+                    />,
+                );
+            } else {
+                blocks.push(
+                    <p key={`p${b++}`} className="leading-relaxed my-2">
+                        {line}
+                    </p>,
+                );
+            }
             continue;
         }
 
