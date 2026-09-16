@@ -99,8 +99,8 @@ interface AudioProbe {
         codec_name?: string;
         sample_rate?: string;
         channels?: number;
-        duration?: string;
     }>;
+    format?: { duration?: string };
 }
 
 function hasAudioTools(): boolean {
@@ -119,7 +119,7 @@ function probeAudio(input: Buffer): AudioProbe {
             "-select_streams",
             "a:0",
             "-show_entries",
-            "stream=codec_name,sample_rate,channels,duration",
+            "stream=codec_name,sample_rate,channels:format=duration",
             "-of",
             "json",
             "pipe:0",
@@ -461,7 +461,8 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
 
             expect(segments.length).toBeGreaterThan(1);
             for (const segment of segments) {
-                const stream = probeAudio(segment).streams?.[0];
+                const probe = probeAudio(segment);
+                const stream = probe.streams?.[0];
                 expect(sniffAudio(segment).container).toBe("mp3");
                 expect(segment.length).toBeGreaterThan(0);
                 expect(stream).toMatchObject({
@@ -469,7 +470,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                     sample_rate: "16000",
                     channels: 1,
                 });
-                expect(Number(stream?.duration)).toBeLessThanOrEqual(0.5);
+                expect(Number(probe.format?.duration)).toBeLessThanOrEqual(0.5);
             }
         },
         15_000,
