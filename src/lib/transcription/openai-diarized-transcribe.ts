@@ -39,14 +39,14 @@ export async function transcribeOpenAIDiarized(
         Math.ceil(durationSeconds / MAX_CHUNK_SECONDS),
     );
     const chunkDuration = durationSeconds / chunkCount;
-    const mp3Chunks =
-        chunkCount === 1
-            ? [await transcodeToMp3(audioBuffer)]
-            : await transcodeToMp3Segments(audioBuffer, chunkDuration);
     const responses: TranscriptionDiarized[] = [];
 
-    for (const [index, mp3] of mp3Chunks.entries()) {
-        const file = buildMp3File(mp3, filename, index, mp3Chunks.length);
+    const transcribeChunk = async (
+        mp3: Buffer,
+        index: number,
+        count: number,
+    ) => {
+        const file = buildMp3File(mp3, filename, index, count);
         const response = await client.audio.transcriptions.create(
             buildTranscriptionParams({
                 file,
@@ -57,6 +57,21 @@ export async function transcribeOpenAIDiarized(
             { timeout: timeoutMs },
         );
         responses.push(response as TranscriptionDiarized);
+    };
+
+    if (chunkCount === 1) {
+        await transcribeChunk(await transcodeToMp3(audioBuffer), 0, 1);
+    } else {
+        for await (const segment of transcodeToMp3Segments(
+            audioBuffer,
+            chunkDuration,
+        )) {
+            await transcribeChunk(
+                segment.buffer,
+                segment.index,
+                segment.count,
+            );
+        }
     }
 
     return {

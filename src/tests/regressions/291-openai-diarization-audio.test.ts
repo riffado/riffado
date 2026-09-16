@@ -31,7 +31,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         transcodeToMp3.mockResolvedValue(Buffer.from("normalized-mp3"));
-        transcodeToMp3Segments.mockResolvedValue([
+        mockSegments([
             Buffer.from("chunk-1"),
             Buffer.from("chunk-2"),
         ]);
@@ -111,7 +111,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
     });
 
     it("keeps every generated chunk at or below 20 minutes", async () => {
-        transcodeToMp3Segments.mockResolvedValue([
+        mockSegments([
             Buffer.from("chunk-1"),
             Buffer.from("chunk-2"),
             Buffer.from("chunk-3"),
@@ -134,4 +134,14 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
         );
         expect(create).toHaveBeenCalledTimes(4);
     });
+
+    function mockSegments(buffers: Buffer[]) {
+        transcodeToMp3Segments.mockReturnValue(
+            (async function* () {
+                for (const [index, buffer] of buffers.entries()) {
+                    yield { buffer, index, count: buffers.length };
+                }
+            })(),
+        );
+    }
 });

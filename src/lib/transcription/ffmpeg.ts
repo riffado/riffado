@@ -90,11 +90,11 @@ export function transcodeToMp3(input: Buffer): Promise<Buffer> {
     return runFfmpeg(input, mp3Args());
 }
 
-/** Encode audio into mono 16 kHz MP3 segments in one ffmpeg pass. */
-export async function transcodeToMp3Segments(
+/** Encode and yield mono 16 kHz MP3 segments from one ffmpeg pass. */
+export async function* transcodeToMp3Segments(
     input: Buffer,
     segmentSeconds: number,
-): Promise<Buffer[]> {
+): AsyncGenerator<{ buffer: Buffer; index: number; count: number }> {
     const workDir = await mkdtemp(join(tmpdir(), "riffado-diarize-"));
     try {
         const outputPattern = join(workDir, "part-%06d.mp3");
@@ -115,9 +115,13 @@ export async function transcodeToMp3Segments(
         if (filenames.length === 0) {
             throw new Error("ffmpeg produced no MP3 segments");
         }
-        return Promise.all(
-            filenames.map((name) => readFile(join(workDir, name))),
-        );
+        for (const [index, name] of filenames.entries()) {
+            yield {
+                buffer: await readFile(join(workDir, name)),
+                index,
+                count: filenames.length,
+            };
+        }
     } finally {
         await rm(workDir, { recursive: true, force: true });
     }

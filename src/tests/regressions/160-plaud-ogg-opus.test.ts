@@ -414,7 +414,10 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         "transcodeToMp3Segments writes multiple MPEG streams in one pass",
         async () => {
             const fixture = await readFile(FIXTURE);
-            const segments = await transcodeToMp3Segments(fixture, 0.4);
+            const segments: Buffer[] = [];
+            for await (const segment of transcodeToMp3Segments(fixture, 0.4)) {
+                segments.push(segment.buffer);
+            }
 
             expect(segments.length).toBeGreaterThan(1);
             for (const segment of segments) {
