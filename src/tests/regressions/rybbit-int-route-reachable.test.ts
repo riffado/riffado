@@ -1,28 +1,11 @@
 /**
- * Regression test for the Rybbit analytics proxy 404 bug that survived
- * #127 and #144:
- *   https://riffado.com/api/_int/script.js (and every other path under
- *   /api/_int/*) returned 404 in production even though IS_HOSTED +
- *   RYBBIT_HOST + RYBBIT_SITE_ID were set.
+ * Guards a class of App Router bug: any folder under `src/app/` whose
+ * name starts with `_` is a private folder and is silently excluded
+ * from the route manifest. A `route.ts` inside one of those folders
+ * compiles but is unreachable over HTTP.
  *
- * Root cause: the route folder was named `_int`. In the Next.js App Router,
- * any folder prefixed with `_` is a "private folder" and is silently
- * excluded from the route manifest. The handler files compiled fine and
- * `rybbit-proxy-runtime.test.ts` passed (because that suite imports the
- * route module directly and calls `GET`/`POST` as functions — bypassing
- * the router entirely). The URL just wasn't reachable. Requests fell
- * through to the prerendered App Router 404 page, which is why
- * production responses came back with `x-nextjs-prerender: 1, 1` and
- * `x-nextjs-cache: HIT` instead of the plain text 404 that `gated()` in
- * `src/lib/rybbit/proxy.ts` actually emits.
- *
- * Fix: rename `src/app/api/_int/` -> `src/app/api/int/` and update every
- * caller (component, middleware, tests, docs).
- *
- * This test guards the *class* of bug, not just this specific path: it
- * walks `src/app/` and fails if any folder whose name starts with `_`
- * contains a `route.ts` (or `route.tsx`/`route.js`) descendant. Such a
- * file is unreachable by HTTP and almost certainly a mistake.
+ * Originally caught when the Rybbit analytics proxy lived at
+ * `src/app/api/_int/` and 404'd in production.
  */
 
 import { readdirSync, statSync } from "node:fs";
@@ -95,8 +78,6 @@ describe("App Router private folders never contain route files", () => {
             const route = hasRouteFileDescendant(dir);
             if (route) offenders.push(route);
         }
-        // Helpful failure message so the next person hitting this knows
-        // exactly why their route is 404'ing.
         expect(
             offenders,
             offenders.length === 0
@@ -106,37 +87,5 @@ describe("App Router private folders never contain route files", () => {
                       `Rename the folder so it does not start with an underscore.\n` +
                       offenders.map((p) => `  - ${p}`).join("\n"),
         ).toEqual([]);
-    });
-});
-
-/**
- * Belt and braces: pin the specific path that regressed in production.
- * If someone reintroduces `app/api/_int/` (e.g., via a bad rebase), this
- * fails with an obvious message before deploy.
- */
-describe("Rybbit proxy route folder is not `_int`", () => {
-    it("uses `src/app/api/int/`, not `src/app/api/_int/`", () => {
-        const bad = join(APP_DIR, "api", "_int");
-        let exists = false;
-        try {
-            exists = statSync(bad).isDirectory();
-        } catch {
-            exists = false;
-        }
-        expect(
-            exists,
-            "src/app/api/_int/ exists — App Router treats `_`-prefixed folders as private, so /api/_int/* is unreachable. Rename to src/app/api/int/.",
-        ).toBe(false);
-    });
-
-    it("`src/app/api/int/script.js/route.ts` exists", () => {
-        const route = join(APP_DIR, "api", "int", "script.js", "route.ts");
-        let exists = false;
-        try {
-            exists = statSync(route).isFile();
-        } catch {
-            exists = false;
-        }
-        expect(exists).toBe(true);
     });
 });

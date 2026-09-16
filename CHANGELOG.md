@@ -12,6 +12,13 @@
 
 ### Changed
 - Migration `0036_wide_raider` upgrades `stripe_webhook_events` to a durable Stripe event inbox. Inert on self-host unless hosted billing is configured.
+- Removes optional `RYBBIT_SITE_ID` / `RYBBIT_HOST` and the `/api/int/*` analytics proxy. Adds optional `.env.example` vars `OA_TRACKING_KEY` / `OA_HOST` for hosted-only cookieless Open Analytics. Inert unless `IS_HOSTED=true`.
+
+### Security
+- Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
+- `scripts/install.sh` now generates `POSTGRES_PASSWORD` (`openssl rand -hex 24`) and writes it to `.env` with the other secrets. The compose default remains `postgres` so existing volumes still start.
+- Startup warning when `DATABASE_URL` uses the known default password `postgres`.
+- Existing stacks can rotate in place: `ALTER USER postgres WITH PASSWORD '…'`, write the same value to `.env` as `POSTGRES_PASSWORD`, then recreate the app. Recreating the `db` volume is not required.
 
 ## [0.6.4] - 2026-07-24
 
@@ -159,11 +166,11 @@
 - Switch and disconnect Plaud account from Settings — new "Plaud Account" section shows the connected email + region, with **Switch account** (clears the connection and reopens the connect dialog) and **Disconnect** actions. Legacy connections without a stored email render as "Connected (email unknown)". Recordings are unaffected by either action ([#63](https://github.com/riffado/riffado/issues/63)).
 - Hosted-only admin dashboard at `/admin` with cost-attribution views (per-user storage, server transcription minutes, Plaud sync freshness, signup timeseries, pricing-snapshot CDFs) and a small set of audited operator actions (suspend / unsuspend user, force-disconnect Plaud, soft-delete recording). Gated by `IS_HOSTED=true` + `ADMIN_EMAILS` allowlist + signed elevated-session cookie (password reprompt) + optional `ADMIN_IP_ALLOWLIST`. Self-host instances 404 every admin route. Reads logged to `admin_audit_log`; mutations logged to `admin_action_log` with required reason text. Admins never see transcript text, summary text, audio, or decrypted secrets.
 - `users.suspendedAt` / `users.suspendedReason` columns supporting cooperative account suspension. Suspended users are redirected to `/suspended` on next request and skipped by the sync worker on next claim. Set/cleared exclusively by the admin suspend action; unused on self-host.
-- One-line self-host installer: `curl -fsSL https://riffado.com/install.sh | sh`. Detects OS, verifies Docker + Compose v2, downloads `docker-compose.yml` and `env.example` from the matching GitHub release, generates `BETTER_AUTH_SECRET` / `ENCRYPTION_KEY` / `POSTGRES_PASSWORD`, starts the stack, and waits on `/api/health`. Version-pinned form available at `https://riffado.com/vX.Y.Z/install.sh`. Source: [`scripts/install.sh`](scripts/install.sh) ([#95](https://github.com/riffado/riffado/issues/95)).
+- One-line self-host installer: `curl -fsSL https://riffado.com/install.sh | sh`. Detects OS, verifies Docker + Compose v2, downloads `docker-compose.yml` and `env.example` from the matching GitHub release, generates `BETTER_AUTH_SECRET` / `ENCRYPTION_KEY`, starts the stack, and waits on `/api/health`. Version-pinned form available at `https://riffado.com/vX.Y.Z/install.sh`. Source: [`scripts/install.sh`](scripts/install.sh) ([#95](https://github.com/riffado/riffado/issues/95)).
 
 ### Changed
 - `requireAuth()` now performs a suspension check on every authenticated server-component render, and a new `requireApiSession()` helper applies the same check (plus the unified `AppError` envelope) on all user-data API routes. Self-host fast-path: column is always null so the check is a single PK lookup with no behavioral change.
-- `docker-compose.yml` now reads `POSTGRES_PASSWORD` from the environment (default `postgres`, preserving existing deploys). The new installer generates a random value; existing self-host operators can rotate by setting `POSTGRES_PASSWORD` in `.env`, recreating the `db` volume, and restoring from a backup ([#95](https://github.com/riffado/riffado/issues/95)).
+- `docker-compose.yml` now reads `POSTGRES_PASSWORD` from the environment (default `postgres`, preserving existing deploys) ([#95](https://github.com/riffado/riffado/issues/95)).
 
 ### Security
 - User content is now encrypted at rest with AES-256-GCM keyed off `ENCRYPTION_KEY`. Covers `recordings.filename`, `transcriptions.text`, `ai_enhancements.{summary, key_points, action_items}`, and `user_settings.{summary_prompt, title_generation_prompt}`. Defends against database-only compromise (stolen backups, snapshot leaks, read-replica access). Does **not** make hosted operators unable to read content — the server still decrypts at request time to run transcription and summarization. Self-host with browser/local AI for true zero-knowledge. Pre-existing rows stay plaintext until rewritten or backfilled; run `bun scripts/encrypt-backfill.ts` once after upgrading to encrypt history. Full threat model in [docs/encryption-at-rest.md](docs/encryption-at-rest.md).
