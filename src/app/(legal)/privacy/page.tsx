@@ -98,7 +98,8 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                     <strong>Usage analytics</strong>: privacy-friendly,
-                    aggregate usage data collected with a cookieless tracker. It
+                    aggregate usage data collected with a cookieless tracker
+                    operated as a service provider (see the table below). It
                     does not use advertising cookies and is not gated on a
                     consent banner.
                 </li>
