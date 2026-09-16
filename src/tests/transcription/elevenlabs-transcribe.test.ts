@@ -484,6 +484,31 @@ describe("elevenLabsTranscribe -- errors and retries", () => {
         ).rejects.toThrow(/oversized transcription response/i);
     });
 
+    it("rejects an oversized chunked response with no content-length header", async () => {
+        const chunkBytes = 20 * 1024 * 1024;
+        const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new Uint8Array(chunkBytes));
+                controller.enqueue(new Uint8Array(chunkBytes));
+                controller.close();
+            },
+        });
+        const fetchSpy = vi
+            .fn()
+            .mockResolvedValue(new Response(stream, { status: 200 }));
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(
+            elevenLabsTranscribe({
+                apiKey: "k",
+                model: "scribe_v2",
+                file: fakeFile(),
+                diarize: false,
+                timeoutMs: 5000,
+            }),
+        ).rejects.toThrow(/oversized transcription response/i);
+    });
+
     it("maps 422 to an invalid-parameters message", async () => {
         const fetchSpy = vi
             .fn()
