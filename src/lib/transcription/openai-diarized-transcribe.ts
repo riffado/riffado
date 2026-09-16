@@ -8,7 +8,7 @@ import { buildTranscriptionParams } from "@/lib/transcription/format";
 
 // OpenAI currently rejects diarization chunks over 1,400 seconds. Leave a
 // margin for container timestamps and provider-side chunk boundary changes.
-const MAX_CHUNK_SECONDS = 20 * 60;
+const MAX_CHUNK_SECONDS = 20 * 60 - 1;
 
 interface DiarizedTranscriptionOptions {
     client: OpenAI;
@@ -40,7 +40,6 @@ export async function transcribeOpenAIDiarized(
     );
     const chunkDuration = durationSeconds / chunkCount;
     const formattedTurns: string[] = [];
-    let timeOffsetSeconds = 0;
 
     const transcribeChunk = async (
         mp3: Buffer,
@@ -63,10 +62,9 @@ export async function transcribeOpenAIDiarized(
                 diarized,
                 index,
                 count,
-                timeOffsetSeconds,
+                index * chunkDuration,
             ),
         );
-        timeOffsetSeconds += diarized.duration;
     };
 
     if (chunkCount === 1) {

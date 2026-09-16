@@ -71,7 +71,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
     it("splits a 1,483 second recording into balanced sub-limit chunks", async () => {
         create
             .mockResolvedValueOnce({
-                duration: 741.96,
+                duration: 740,
                 segments: [{ speaker: "A", start: 0, text: "First" }],
             })
             .mockResolvedValueOnce({
@@ -126,7 +126,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
         });
 
         expect(transcodeToMp3Segments).toHaveBeenCalledOnce();
-        expect(transcodeToMp3Segments.mock.calls[0]?.[1]).toBeLessThanOrEqual(
+        expect(transcodeToMp3Segments.mock.calls[0]?.[1]).toBeLessThan(
             20 * 60,
         );
         expect(create).toHaveBeenCalledTimes(4);

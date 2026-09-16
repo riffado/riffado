@@ -102,10 +102,9 @@ interface AudioProbe {
     }>;
 }
 
-function hasAudioTools(): boolean {
-    return ["ffmpeg", "ffprobe"].every(
-        (command) =>
-            spawnSync(command, ["-version"], { stdio: "ignore" }).status === 0,
+function hasCommand(command: string): boolean {
+    return (
+        spawnSync(command, ["-version"], { stdio: "ignore" }).status === 0
     );
 }
 
@@ -163,7 +162,9 @@ function oggOpusBytes(): Buffer {
     return buf;
 }
 
-const itIfAudioTools = hasAudioTools() ? it : it.skip;
+const itIfFfmpeg = hasCommand("ffmpeg") ? it : it.skip;
+const itIfAudioTools =
+    hasCommand("ffmpeg") && hasCommand("ffprobe") ? it : it.skip;
 
 describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
     it("buildAudioFile sniffs Ogg bytes even when the path is .mp3", () => {
@@ -413,7 +414,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
         });
     });
 
-    itIfAudioTools(
+    itIfFfmpeg(
         "transcodes Ogg/Opus to mp3 before OpenRouter chat.completions",
         async () => {
             const fixture = await readFile(FIXTURE);
