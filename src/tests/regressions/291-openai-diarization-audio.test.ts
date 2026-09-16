@@ -126,9 +126,7 @@ describe("issue #291 — OpenAI diarization audio preparation", () => {
         });
 
         expect(transcodeToMp3Segments).toHaveBeenCalledOnce();
-        expect(transcodeToMp3Segments.mock.calls[0]?.[1]).toBeLessThan(
-            20 * 60,
-        );
+        expect(transcodeToMp3Segments.mock.calls[0]?.[1]).toBeLessThan(20 * 60);
         expect(create).toHaveBeenCalledTimes(4);
     });
 

@@ -103,9 +103,7 @@ interface AudioProbe {
 }
 
 function hasCommand(command: string): boolean {
-    return (
-        spawnSync(command, ["-version"], { stdio: "ignore" }).status === 0
-    );
+    return spawnSync(command, ["-version"], { stdio: "ignore" }).status === 0;
 }
 
 function probeAudio(input: Buffer): AudioProbe {
