@@ -56,15 +56,14 @@ openssl rand -hex 24
 Create `.env` file:
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
 Edit `.env` with your values:
 
 ```env
-# Database (use the service name from docker-compose.yml)
+# Database (docker-compose.yml derives DATABASE_URL from this value)
 POSTGRES_PASSWORD=<generated-db-password>
-DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@db:5432/riffado
 
 # Auth
 BETTER_AUTH_SECRET=<generated-secret>
@@ -387,7 +386,7 @@ mkdir -p $BACKUP_DIR
 docker compose exec db pg_dump -U postgres riffado | gzip > $BACKUP_DIR/db.sql.gz
 
 # Environment config
-cp .env.local $BACKUP_DIR/env.backup
+cp .env $BACKUP_DIR/env.backup
 
 # Docker volumes (if using local storage)
 docker run --rm -v riffado_audio:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/audio.tar.gz /data
