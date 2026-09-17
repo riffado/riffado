@@ -4,31 +4,7 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { MetalButton } from "@/components/metal-button";
-
-/**
- * Rybbit `window.rybbit.event(name, props?)` shape. The script is loaded
- * via `<Script strategy="afterInteractive">` (see `RybbitAnalytics`), so
- * the global may not exist yet at first render -- always guard.
- *
- * Mirrors the declaration in `hero-reveal.tsx`; TS merges the two
- * `Window` augmentations at the type level so duplication is safe.
- */
-declare global {
-    interface Window {
-        rybbit?: {
-            event?: (name: string, props?: Record<string, unknown>) => void;
-        };
-    }
-}
-
-function track(name: string, props?: Record<string, unknown>) {
-    if (typeof window === "undefined") return;
-    try {
-        window.rybbit?.event?.(name, props);
-    } catch {
-        // Analytics must never break the page.
-    }
-}
+import { track } from "@/lib/analytics/track";
 
 /**
  * Client island for the page-closer CTA pair. Parallels `HeroReveal`

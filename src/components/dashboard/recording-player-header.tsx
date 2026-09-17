@@ -1,9 +1,11 @@
 "use client";
 
 import { AudioWaveform, Loader2 } from "lucide-react";
-import { CardHeader, CardTitle } from "@/components/ui/card";
+import { LocalTimeRange } from "@/components/local-time";
+import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
+import { RecordingTitle } from "@/components/recordings/recording-title";
+import { CardAction, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format-bytes";
-import { formatDateTime } from "@/lib/format-date";
 import { formatDuration } from "@/lib/format-duration";
 import type { Recording } from "@/types/recording";
 
@@ -14,6 +16,7 @@ interface Props {
     scrubberStyle: "waveform" | "slider";
     waveformStatus: "idle" | "ready" | "decoding" | "skipped" | "error";
     onDecodeWaveform: () => void;
+    onRenamed?: (filename: string) => void;
 }
 
 /**
@@ -21,8 +24,8 @@ interface Props {
  * RecordingPlayer card. Lifted out so the parent's render reads as
  * "header + controls + audio element" instead of a 100-line JSX block.
  *
- * The metadata order is information-density-first: when (relative
- * date), then how long (duration), then how big (file size). Falls
+ * The metadata order is information-density-first: recorded date and
+ * start–end time, then how long (duration), then how big (file size). Falls
  * back to recording.duration / 1000 before the audio element reports
  * a real duration so the line doesn't flicker on first paint.
  */
@@ -32,26 +35,39 @@ export function RecordingPlayerHeader({
     scrubberStyle,
     waveformStatus,
     onDecodeWaveform,
+    onRenamed,
 }: Props) {
     const metaParts: string[] = [
-        formatDateTime(recording.startTime, "relative"),
         formatDuration(duration || recording.duration / 1000),
         formatBytes(recording.filesize),
     ];
 
     return (
         <CardHeader className="gap-1">
-            <CardTitle className="truncate text-lg">
-                {recording.filename}
+            <CardTitle className="min-w-0 text-lg">
+                <RecordingTitle
+                    recordingId={recording.id}
+                    filename={recording.filename}
+                    onRenamed={onRenamed}
+                    className="text-lg"
+                />
             </CardTitle>
+            <CardAction>
+                <DownloadAudioButton recordingId={recording.id} />
+            </CardAction>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                {metaParts.map((part, i) => (
+                <span>
+                    Recorded{" "}
+                    <LocalTimeRange
+                        start={recording.startTime}
+                        durationMs={recording.duration}
+                    />
+                </span>
+                {metaParts.map((part) => (
                     <span key={part} className="inline-flex items-center gap-2">
-                        {i > 0 && (
-                            <span aria-hidden="true" className="opacity-40">
-                                ·
-                            </span>
-                        )}
+                        <span aria-hidden="true" className="opacity-40">
+                            ·
+                        </span>
                         <span>{part}</span>
                     </span>
                 ))}

@@ -3,8 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { requireApiSession } from "@/lib/auth-server";
+import { decryptText } from "@/lib/encryption/fields";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
+import {
+    buildDownloadFilename,
+    contentDispositionAttachment,
+    isAudioDownloadRequest,
+} from "@/lib/recordings/filename";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { getAudioMimeType } from "@/lib/utils";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -33,32 +40,32 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         );
     }
 
-    // Get storage provider
     const storage = await createUserStorageProvider(session.user.id);
-
-    // Download file
     const audioBuffer = await storage.downloadFile(recording.storagePath);
-
-    // Determine content type from file extension
-    const getContentType = (path: string): string => {
-        if (path.endsWith(".mp3")) return "audio/mpeg";
-        if (path.endsWith(".opus")) return "audio/opus";
-        if (path.endsWith(".wav")) return "audio/wav";
-        if (path.endsWith(".m4a")) return "audio/mp4";
-        if (path.endsWith(".ogg")) return "audio/ogg";
-        if (path.endsWith(".webm")) return "audio/webm";
-        // Default to mpeg for unknown types (as most Plaud recordings are MP3)
-        return "audio/mpeg";
-    };
-
-    const contentType = getContentType(recording.storagePath);
+    const contentType = getAudioMimeType(recording.storagePath);
     const fileSize = audioBuffer.length;
+    const wantsDownload = isAudioDownloadRequest(request);
 
-    // Parse Range header for seeking support
-    const rangeHeader = request.headers.get("range");
+    const downloadHeaders: Record<string, string> = wantsDownload
+        ? {
+              "Content-Disposition": contentDispositionAttachment(
+                  buildDownloadFilename(
+                      decryptText(recording.filename),
+                      recording.storagePath,
+                      recording.id,
+                  ),
+              ),
+              "Cache-Control": "private, no-store",
+          }
+        : {
+              "Cache-Control": "public, max-age=31536000, immutable",
+          };
+
+    // Attachment downloads always return the full file so the saved
+    // copy is complete. Range is still honored for in-app playback.
+    const rangeHeader = wantsDownload ? null : request.headers.get("range");
 
     if (rangeHeader) {
-        // Parse range header (e.g., "bytes=0-1023" or "bytes=1024-")
         const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
 
         if (rangeMatch) {
@@ -67,9 +74,6 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                 ? Number.parseInt(rangeMatch[2], 10)
                 : fileSize - 1;
 
-            // Validate range values. We return raw 416 (without our error
-            // envelope) because `Content-Range: bytes */N` is the contract
-            // browsers parse, and they don't read JSON on a 416.
             if (
                 start < 0 ||
                 start >= fileSize ||
@@ -86,11 +90,8 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
             }
 
             const chunkSize = end - start + 1;
-
-            // Extract the requested chunk
             const chunk = audioBuffer.slice(start, end + 1);
 
-            // Return 206 Partial Content
             return new NextResponse(new Uint8Array(chunk), {
                 status: 206,
                 headers: {
@@ -98,19 +99,18 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
                     "Content-Length": chunkSize.toString(),
                     "Content-Range": `bytes ${start}-${end}/${fileSize}`,
                     "Accept-Ranges": "bytes",
-                    "Cache-Control": "public, max-age=31536000, immutable",
+                    ...downloadHeaders,
                 },
             });
         }
     }
 
-    // No range requested - return full file
     return new NextResponse(new Uint8Array(audioBuffer), {
         headers: {
             "Content-Type": contentType,
             "Content-Length": fileSize.toString(),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=31536000, immutable",
+            ...downloadHeaders,
         },
     });
 });

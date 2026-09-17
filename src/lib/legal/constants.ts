@@ -91,14 +91,12 @@ export type RecipientCategory = {
  * guidelines: what kind of provider, what it does, where it processes,
  * and the transfer safeguard.
  *
- * Self-hosted analytics (Rybbit) runs on the operator's own
- * infrastructure and is intentionally NOT a third-party recipient.
- * User-configured AI providers are not the operator's processors either
- * -- the user contracts with them directly.
+ * User-configured AI providers are not the operator's processors --
+ * the user contracts with them directly.
  *
- * When error monitoring (PostHog EU) ships, add an "error monitoring
- * provider" category here; being EU-hosted it introduces no new
- * international-transfer concern.
+ * Cookieless usage analytics (Open Analytics, configured via OA_HOST)
+ * is a processor of aggregate usage data. It does not use advertising
+ * cookies and is not gated on a consent banner.
  */
 export const RECIPIENT_CATEGORIES: RecipientCategory[] = [
     {
@@ -136,6 +134,12 @@ export const RECIPIENT_CATEGORIES: RecipientCategory[] = [
         location: "USA",
         safeguard:
             "Data Processing Addendum and EU Standard Contractual Clauses",
+    },
+    {
+        category: "Usage analytics provider",
+        purpose: "Cookieless aggregate usage analytics for the hosted service",
+        location: "EEA",
+        safeguard: "Processed within the EEA",
     },
 ];
 

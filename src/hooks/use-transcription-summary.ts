@@ -7,6 +7,16 @@ import {
     getDefaultSummaryPromptConfig,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
+import {
+    addSummarizingId,
+    bumpContentGeneration,
+    contentGenerationFor,
+    isSummarizingForView,
+    rememberTranscriptionText,
+    removeSummarizingId,
+    shouldApplyFetchedSummary,
+    shouldApplySummaryToView,
+} from "@/lib/summary/job-scope";
 
 export interface SummaryPromptOption {
     id: string;
@@ -57,7 +67,11 @@ export function useTranscriptionSummary({
     transcriptionText,
 }: UseTranscriptionSummaryOptions) {
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
-    const [isSummarizing, setIsSummarizing] = useState(false);
+    const [summarizingIds, setSummarizingIds] = useState(
+        () => new Set<string>(),
+    );
+    const summarizingIdsRef = useRef(summarizingIds);
+    const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
     const [summaryExpanded, setSummaryExpanded] = useState(true);
     const [summaryPreset, setSummaryPresetState] = useState("general");
     // Set the moment the caller (the per-recording dropdown) makes an
@@ -113,6 +127,18 @@ export function useTranscriptionSummary({
         return () => controller.abort();
     }, []);
 
+    const recordingIdRef = useRef(recordingId);
+    const fetchGenerationRef = useRef(0);
+    const contentGenByIdRef = useRef(new Map<string, number>());
+    const lastTextByIdRef = useRef(
+        new Map<string, string | null | undefined>(),
+    );
+    const getAbortRef = useRef<AbortController | null>(null);
+    if (recordingId !== recordingIdRef.current) {
+        recordingIdRef.current = recordingId;
+        setSummaryData(null);
+    }
+
     // Detect when transcription text actually changes -> invalidate
     // the cached summary so the next fetch lands fresh. We compare
     // through a ref because the dashboard variant receives the text
@@ -124,20 +150,46 @@ export function useTranscriptionSummary({
         setSummaryFetchKey((k) => k + 1);
         setSummaryData(null);
     }
+    if (
+        recordingId &&
+        rememberTranscriptionText(
+            lastTextByIdRef.current,
+            recordingId,
+            transcriptionText,
+        )
+    ) {
+        bumpContentGeneration(contentGenByIdRef.current, recordingId);
+    }
 
     // Fetch when recording id changes or the re-fetch key bumps.
+    // Abort on cleanup is an optimization; apply only if this fetch's
+    // generation is still current so a late A GET cannot overwrite a
+    // newer A GET (A → B → A) or a just-finished POST.
     // biome-ignore lint/correctness/useExhaustiveDependencies: summaryFetchKey is an intentional re-fetch trigger
     useEffect(() => {
         if (!recordingId) {
             setSummaryData(null);
             return;
         }
+        const requestedId = recordingId;
+        const generation = ++fetchGenerationRef.current;
         const controller = new AbortController();
-        fetch(`/api/recordings/${recordingId}/summary`, {
+        getAbortRef.current = controller;
+        fetch(`/api/recordings/${requestedId}/summary`, {
             signal: controller.signal,
         })
             .then((res) => res.json())
             .then((data) => {
+                if (
+                    !shouldApplyFetchedSummary(
+                        recordingIdRef.current,
+                        requestedId,
+                        fetchGenerationRef.current,
+                        generation,
+                    )
+                ) {
+                    return;
+                }
                 if (data.summary) {
                     setSummaryData(data);
                 } else {
@@ -145,15 +197,39 @@ export function useTranscriptionSummary({
                 }
             })
             .catch(() => {});
-        return () => controller.abort();
+        return () => {
+            controller.abort();
+            if (getAbortRef.current === controller) {
+                getAbortRef.current = null;
+            }
+        };
     }, [recordingId, summaryFetchKey]);
 
     const handleSummarize = useCallback(async () => {
         if (!recordingId) return;
-        setIsSummarizing(true);
+        if (summarizingIdsRef.current.has(recordingId)) return;
+        const targetId = recordingId;
+        const postGeneration = contentGenerationFor(
+            contentGenByIdRef.current,
+            targetId,
+        );
+        const postIsCurrent = () =>
+            shouldApplyFetchedSummary(
+                recordingIdRef.current,
+                targetId,
+                contentGenerationFor(contentGenByIdRef.current, targetId),
+                postGeneration,
+            );
+        getAbortRef.current?.abort();
+        fetchGenerationRef.current += 1;
+        summarizingIdsRef.current = addSummarizingId(
+            summarizingIdsRef.current,
+            targetId,
+        );
+        setSummarizingIds(summarizingIdsRef.current);
         try {
             const response = await fetch(
-                `/api/recordings/${recordingId}/summary`,
+                `/api/recordings/${targetId}/summary`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -162,46 +238,66 @@ export function useTranscriptionSummary({
             );
             if (response.ok) {
                 const data = (await response.json()) as SummaryData;
-                setSummaryData(data);
-                if (data.promptFallback) {
-                    toast.warning(
-                        "Selected summary prompt is no longer available -- used your default prompt instead.",
-                    );
-                } else {
-                    toast.success("Summary generated");
+                if (postIsCurrent()) {
+                    fetchGenerationRef.current += 1;
+                    setSummaryData(data);
+                    if (data.promptFallback) {
+                        toast.warning(
+                            "Selected summary prompt is no longer available -- used your default prompt instead.",
+                        );
+                    } else {
+                        toast.success("Summary generated");
+                    }
                 }
             } else {
                 const error = await response.json().catch(() => ({}));
-                toast.error(error.error || "Summary generation failed");
+                if (postIsCurrent()) {
+                    toast.error(error.error || "Summary generation failed");
+                }
             }
         } catch {
-            toast.error("Failed to generate summary");
+            if (postIsCurrent()) {
+                toast.error("Failed to generate summary");
+            }
         } finally {
-            setIsSummarizing(false);
+            summarizingIdsRef.current = removeSummarizingId(
+                summarizingIdsRef.current,
+                targetId,
+            );
+            setSummarizingIds(summarizingIdsRef.current);
         }
     }, [recordingId, summaryPreset]);
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
+        const targetId = recordingId;
         // Optimistic delete -- the summary disappears immediately and
         // only comes back if the server rejects the request.
         const previous = summaryData;
         setSummaryData(null);
+        const deleteIsCurrent = () =>
+            shouldApplySummaryToView(recordingIdRef.current, targetId);
 
         try {
             const response = await fetch(
-                `/api/recordings/${recordingId}/summary`,
+                `/api/recordings/${targetId}/summary`,
                 { method: "DELETE" },
             );
             if (response.ok) {
-                toast.success("Summary deleted");
+                if (deleteIsCurrent()) {
+                    toast.success("Summary deleted");
+                }
             } else {
+                if (deleteIsCurrent()) {
+                    setSummaryData(previous);
+                    toast.error("Failed to delete summary");
+                }
+            }
+        } catch {
+            if (deleteIsCurrent()) {
                 setSummaryData(previous);
                 toast.error("Failed to delete summary");
             }
-        } catch {
-            setSummaryData(previous);
-            toast.error("Failed to delete summary");
         }
     }, [recordingId, summaryData]);
 
@@ -211,6 +307,10 @@ export function useTranscriptionSummary({
      * key forces a GET without changing recordingId.
      */
     const refetchSummary = useCallback(() => {
+        const id = recordingIdRef.current;
+        if (id) {
+            bumpContentGeneration(contentGenByIdRef.current, id);
+        }
         setSummaryData(null);
         setSummaryFetchKey((k) => k + 1);
     }, []);

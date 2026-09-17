@@ -51,10 +51,7 @@ export function usePlaybackEngine({
     const isSeekingRef = useRef(false);
 
     // Reset transport state and re-point src whenever the recording
-    // changes. The src swap is duplicated in the listener-wiring
-    // effect below for the case where the element wasn't mounted yet
-    // when this effect ran -- both branches guard with the `audio.src
-    // !==` check so the swap is idempotent.
+    // *id* changes. Filename edits must not remount playback.
     useEffect(() => {
         setCurrentTime(0);
         setDuration(0);
@@ -64,7 +61,7 @@ export function usePlaybackEngine({
             audioRef.current.src = `/api/recordings/${recording.id}/audio`;
             audioRef.current.load();
         }
-    }, [recording]);
+    }, [recording.id]);
 
     useEffect(() => {
         if (audioRef.current) {
@@ -130,7 +127,7 @@ export function usePlaybackEngine({
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("seeked", handleSeeked);
         };
-    }, [recording, autoPlayNext, onEnded]);
+    }, [recording.id, autoPlayNext, onEnded]);
 
     const togglePlayPause = useCallback(() => {
         if (!audioRef.current) return;

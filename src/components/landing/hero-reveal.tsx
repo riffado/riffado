@@ -4,29 +4,8 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { MetalButton } from "@/components/metal-button";
+import { track } from "@/lib/analytics/track";
 import { cn } from "@/lib/utils";
-
-/**
- * Rybbit `window.rybbit.event(name, props?)` shape. The script is loaded
- * via `<Script strategy="afterInteractive">` (see `RybbitAnalytics`), so
- * the global may not exist yet at first render -- always guard.
- */
-declare global {
-    interface Window {
-        rybbit?: {
-            event?: (name: string, props?: Record<string, unknown>) => void;
-        };
-    }
-}
-
-function track(name: string, props?: Record<string, unknown>) {
-    if (typeof window === "undefined") return;
-    try {
-        window.rybbit?.event?.(name, props);
-    } catch {
-        // Analytics must never break the page.
-    }
-}
 
 /**
  * Client-only wrapper for the hero interactive region.

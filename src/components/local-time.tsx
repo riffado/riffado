@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatRecordingDateTimeRange } from "@/lib/format-date";
 
 interface Props {
     /** Date object or anything `new Date(...)` accepts (ISO string, ms). */
@@ -40,6 +41,37 @@ export function LocalTime({ value, variant = "datetime", className }: Props) {
 
     return (
         <time dateTime={iso} className={className}>
+            {text}
+        </time>
+    );
+}
+
+interface LocalTimeRangeProps {
+    start: Date | string | number;
+    durationMs: number;
+    className?: string;
+}
+
+/** Render a recording's absolute local date and start–end time. */
+export function LocalTimeRange({
+    start,
+    durationMs,
+    className,
+}: LocalTimeRangeProps) {
+    const startMs =
+        start instanceof Date ? start.getTime() : new Date(start).getTime();
+    const startDate = new Date(startMs);
+    const endDate = new Date(startDate.getTime() + durationMs);
+    const [text, setText] = useState(
+        `${startDate.toISOString()}–${endDate.toISOString()}`,
+    );
+
+    useEffect(() => {
+        setText(formatRecordingDateTimeRange(new Date(startMs), durationMs));
+    }, [startMs, durationMs]);
+
+    return (
+        <time dateTime={startDate.toISOString()} className={className}>
             {text}
         </time>
     );

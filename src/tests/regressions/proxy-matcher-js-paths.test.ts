@@ -8,21 +8,15 @@ vi.mock("@/lib/hosted/hostname-gate", () => ({
 import { config } from "@/proxy";
 
 /**
- * regression: the middleware matcher previously excluded all `.js`
- * paths from the extension-exclusion list, so /api/int/script.js and
- * /api/int/replay.js (the Rybbit analytics proxy paths) never reached
- * the middleware at all -- skipping both admin-host isolation
- * (decideHostnameGate) and the auth-header stripping for those routes.
+ * Middleware matcher should skip static assets while still matching
+ * ordinary app/API routes and the PostHog same-origin JS handlers
+ * (`/psthg/static/*`, `/psthg/array/*`) so ADMIN_HOSTNAME isolation
+ * still runs for those paths.
  */
 describe("proxy middleware matcher", () => {
     const pattern = new RegExp(`^${config.matcher[0]}$`);
 
-    it("still matches .js paths under /api/int/ (must stay gated)", () => {
-        expect(pattern.test("/api/int/script.js")).toBe(true);
-        expect(pattern.test("/api/int/replay.js")).toBe(true);
-    });
-
-    it("still excludes real static assets", () => {
+    it("excludes real static assets", () => {
         expect(pattern.test("/favicon.ico")).toBe(false);
         expect(pattern.test("/robots.txt")).toBe(false);
         expect(pattern.test("/sitemap.xml")).toBe(false);
@@ -31,9 +25,11 @@ describe("proxy middleware matcher", () => {
         expect(pattern.test("/_next/static/chunk.js")).toBe(false);
     });
 
-    it("still matches ordinary app/API routes", () => {
+    it("still matches PostHog JS proxy routes and ordinary app/API routes", () => {
+        expect(pattern.test("/psthg/static/array.js")).toBe(true);
+        expect(pattern.test("/psthg/array/recorder.js")).toBe(true);
         expect(pattern.test("/admin/billing")).toBe(true);
-        expect(pattern.test("/api/int/collect")).toBe(true);
+        expect(pattern.test("/api/health")).toBe(true);
         expect(pattern.test("/dashboard")).toBe(true);
     });
 });

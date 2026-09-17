@@ -2,6 +2,7 @@ import {
     differenceInDays,
     format,
     formatDistanceToNow,
+    isSameDay,
     isThisYear,
     isToday,
     isYesterday,
@@ -26,6 +27,21 @@ export function formatDateTime(
         default:
             return formatDistanceToNow(dateObj, { addSuffix: true });
     }
+}
+
+/** Absolute local date and start–end time for a recording. */
+export function formatRecordingDateTimeRange(
+    start: Date | string,
+    durationMs: number,
+): string {
+    const startDate = typeof start === "string" ? new Date(start) : start;
+    const endDate = new Date(startDate.getTime() + durationMs);
+
+    if (isSameDay(startDate, endDate)) {
+        return `${format(startDate, "MMM d, yyyy · h:mm a")}–${format(endDate, "h:mm a")}`;
+    }
+
+    return `${format(startDate, "MMM d, yyyy · h:mm a")}–${format(endDate, "MMM d, yyyy · h:mm a")}`;
 }
 
 /** Recording-list group label: Today / Yesterday / This week / month / Month YYYY. */

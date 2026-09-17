@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { TranscribeInBrowserButton } from "@/components/dashboard/transcribe-in-browser-button";
+import {
+    RichMarkdown,
+    SpeakerTranscript,
+} from "@/components/recordings/rich-content";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -184,10 +188,10 @@ export function TranscriptionPanel({
                                     ))}
                                 </div>
                             )}
-                            <div className="bg-muted rounded-lg p-4 max-h-96 overflow-y-auto">
-                                <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                                    {activeTranscript.text}
-                                </p>
+                            <div className="bg-muted rounded-lg p-4 max-h-96 overflow-y-auto text-sm">
+                                <SpeakerTranscript
+                                    text={activeTranscript.text}
+                                />
                             </div>
                             <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
                                 <span className="px-2 py-0.5 rounded bg-muted font-medium">
@@ -319,10 +323,10 @@ export function TranscriptionPanel({
                                 {summaryExpanded && (
                                     <div className="space-y-4">
                                         {/* Summary text */}
-                                        <div className="bg-muted rounded-lg p-4">
-                                            <p className="text-sm leading-relaxed">
-                                                {summaryData.summary}
-                                            </p>
+                                        <div className="bg-muted rounded-lg p-4 text-sm">
+                                            <RichMarkdown
+                                                content={summaryData.summary}
+                                            />
                                         </div>
 
                                         {/* Key points */}

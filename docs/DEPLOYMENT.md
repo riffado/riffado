@@ -46,6 +46,9 @@ openssl rand -hex 32
 
 # Generate ENCRYPTION_KEY
 openssl rand -hex 32
+
+# Generate POSTGRES_PASSWORD (bundled db service)
+openssl rand -hex 24
 ```
 
 ### 3. Configure Environment
@@ -53,14 +56,14 @@ openssl rand -hex 32
 Create `.env` file:
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
 Edit `.env` with your values:
 
 ```env
-# Database (use the service name from docker-compose.yml)
-DATABASE_URL=postgresql://postgres:YOUR_DB_PASSWORD@db:5432/riffado
+# Database (docker-compose.yml derives DATABASE_URL from this value)
+POSTGRES_PASSWORD=<generated-db-password>
 
 # Auth
 BETTER_AUTH_SECRET=<generated-secret>
@@ -194,6 +197,21 @@ pm2 startup
 | `SMTP_FROM` | From email address | - |
 
 ## Database Setup
+
+Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
+The app reaches it over the Compose network (`db:5432`).
+
+### Rotating the bundled Postgres password
+
+Postgres applies `POSTGRES_PASSWORD` only on first init. Changing `.env`
+and recreating the `db` volume is not required and would wipe data.
+
+```bash
+NEW_PW="$(openssl rand -hex 24)"
+docker compose exec db psql -U postgres -c "ALTER USER postgres WITH PASSWORD '${NEW_PW}'"
+# Write the same value to .env as POSTGRES_PASSWORD=<value>
+docker compose up -d --force-recreate app
+```
 
 ### PostgreSQL Configuration
 
@@ -368,7 +386,7 @@ mkdir -p $BACKUP_DIR
 docker compose exec db pg_dump -U postgres riffado | gzip > $BACKUP_DIR/db.sql.gz
 
 # Environment config
-cp .env.local $BACKUP_DIR/env.backup
+cp .env $BACKUP_DIR/env.backup
 
 # Docker volumes (if using local storage)
 docker run --rm -v riffado_audio:/data -v $BACKUP_DIR:/backup alpine tar czf /backup/audio.tar.gz /data

@@ -1,16 +1,22 @@
-# Base image with Bun
-FROM oven/bun:1 AS base
+# Pin bun. `oven/bun:1` floated to 1.4.0, which migrates `pnpm-lock.yaml`
+# and then fails `--frozen-lockfile` ("lockfile had changes").
+FROM oven/bun:1.4.0 AS base
 WORKDIR /app
 
-# Install dependencies
+# Install with pnpm, same pin as hosted CI (`.github/workflows/ci.yml`).
+# bun 1.4.0 cannot consume this repo's pnpm lock under `--frozen-lockfile`.
 # `--ignore-scripts` skips the `fumadocs-mdx` postinstall (declared in
 # package.json by PR #131). That hook needs `source.config.ts` and
 # `content/docs/`, which aren't present in this hermetic deps stage --
-# only `package.json` + the lockfile are. We regenerate fumadocs sources
-# explicitly in the builder stage below, where the full tree is available.
-FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
-RUN bun install --frozen-lockfile --ignore-scripts
+# only `package.json` + the lockfile + workspace file are. We regenerate
+# fumadocs sources explicitly in the builder stage below, where the full
+# tree is available.
+FROM node:22.20.0-bookworm-slim AS deps
+WORKDIR /app
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build Next.js
 FROM base AS builder
@@ -36,9 +42,9 @@ ENV POSTHOG_CLI_HOST=$POSTHOG_CLI_HOST
 
 # `fumadocs-mdx`'s `lastModified` plugin shells out to `git log` for every
 # MDX page (see source.config.ts). `curl` installs `posthog-cli` for the
-# guarded source-map step below. The base `oven/bun:1` image is Debian slim
-# and ships without either, so install them here. Builder-stage only -- the
-# `runner` stage below does not inherit this layer.
+# guarded source-map step below. The pinned `oven/bun:1.4.0` image is
+# Debian slim and ships without either, so install them here.
+# Builder-stage only -- the `runner` stage below does not inherit this layer.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl \
     && rm -rf /var/lib/apt/lists/*

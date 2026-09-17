@@ -3,8 +3,8 @@ import { env } from "@/lib/env";
 
 /**
  * Same-origin reverse proxy for the client PostHog SDK (`api_host: "/psthg"`
- * in `posthog-init.tsx`). Mirrors `src/lib/rybbit/proxy.ts`'s pattern:
- * a route handler, not a `next.config.ts` static rewrite, specifically
+ * in `posthog-init.tsx`). Uses a route handler, not a `next.config.ts`
+ * static rewrite, specifically
  * because rewrites are resolved once at `next build` time and baked into
  * the shared standalone image -- they can't gate on `IS_HOSTED` at
  * container runtime. A route handler runs per-request, so the hosted

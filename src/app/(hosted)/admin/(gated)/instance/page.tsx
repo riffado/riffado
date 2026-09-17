@@ -32,8 +32,8 @@ export default async function AdminInstancePage() {
         },
         { k: "SMTP", v: env.SMTP_HOST ? `set: ${env.SMTP_HOST}` : "unset" },
         {
-            k: "Rybbit",
-            v: env.RYBBIT_SITE_ID ? "configured" : "off",
+            k: "Open Analytics",
+            v: env.OA_TRACKING_KEY && env.OA_HOST ? "configured" : "off",
         },
         { k: "Encryption key fingerprint", v: keyFp },
         { k: "Auth secret fingerprint", v: authFp },

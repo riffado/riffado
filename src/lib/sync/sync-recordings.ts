@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -8,6 +8,7 @@ import {
     userSettings,
     users,
 } from "@/db/schema";
+import { sniffAudio } from "@/lib/audio/sniff";
 import { encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
@@ -28,6 +29,12 @@ import {
     captureServerException,
 } from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import {
+    claimAutoTranscribeIds,
+    listAutoTranscribeRetryIds,
+    noteAutoTranscribeOutcome,
+    releaseAutoTranscribeIds,
+} from "@/lib/sync/auto-transcribe-state";
 import {
     upsertEnhancement,
     upsertTranscription,
@@ -91,14 +98,32 @@ interface ImportCandidate {
     isSummary: boolean;
 }
 
-async function uniqueStorageKey(
+async function storagePathHeldByOtherRecording(
     userId: string,
-    baseName: string,
-    ext: string,
+    storagePath: string,
+    exceptRecordingId: string,
+): Promise<boolean> {
+    const [other] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .where(
+            and(
+                eq(recordings.userId, userId),
+                eq(recordings.storagePath, storagePath),
+                ne(recordings.id, exceptRecordingId),
+            ),
+        )
+        .limit(1);
+    return Boolean(other);
+}
+
+async function allocateStorageKey(
+    userId: string,
     plaudFileId: string,
+    ext: string,
 ): Promise<string> {
     const candidate = (suffix: string) =>
-        `${userId}/${baseName}${suffix}.${ext}`;
+        `${userId}/${plaudFileId}${suffix}.${ext}`;
 
     for (let i = 0; i < 100; i++) {
         const suffix = i === 0 ? "" : ` (${i + 1})`;
@@ -116,7 +141,26 @@ async function uniqueStorageKey(
             .limit(1);
         if (!existing) return key;
     }
-    return `${userId}/${plaudFileId}.${ext}`;
+    throw new Error(
+        "Unable to allocate a unique storage key for Plaud recording",
+    );
+}
+
+async function resolveStorageKey(
+    userId: string,
+    existingRecording: { id: string; storagePath: string | null } | undefined,
+    fileExtension: string,
+    plaudFileId: string,
+): Promise<string> {
+    if (existingRecording?.storagePath) {
+        const shared = await storagePathHeldByOtherRecording(
+            userId,
+            existingRecording.storagePath,
+            existingRecording.id,
+        );
+        if (!shared) return existingRecording.storagePath;
+    }
+    return allocateStorageKey(userId, plaudFileId, fileExtension);
 }
 
 /**
@@ -140,6 +184,89 @@ function buildImportCandidate(
     };
 }
 
+async function loadPlaudContentGaps(
+    userId: string,
+    recordingId: string,
+    flags: { isTrans: boolean; isSummary: boolean },
+): Promise<{
+    needsTranscript: boolean;
+    needsSummary: boolean;
+    hasPlaudTranscript: boolean;
+}> {
+    let needsTranscript = false;
+    let hasPlaudTranscript = false;
+    if (flags.isTrans) {
+        const [existing] = await db
+            .select({ id: transcriptions.id })
+            .from(transcriptions)
+            .where(
+                and(
+                    eq(transcriptions.recordingId, recordingId),
+                    eq(transcriptions.userId, userId),
+                    eq(transcriptions.source, "plaud"),
+                ),
+            )
+            .limit(1);
+        if (existing) hasPlaudTranscript = true;
+        else needsTranscript = true;
+    }
+
+    let needsSummary = false;
+    if (flags.isSummary) {
+        const [existing] = await db
+            .select({ id: aiEnhancements.id })
+            .from(aiEnhancements)
+            .where(
+                and(
+                    eq(aiEnhancements.recordingId, recordingId),
+                    eq(aiEnhancements.userId, userId),
+                ),
+            )
+            .limit(1);
+        if (!existing) needsSummary = true;
+    }
+
+    return { needsTranscript, needsSummary, hasPlaudTranscript };
+}
+
+async function hasUnseenPlaudContentGaps(
+    userId: string,
+    seenRecordingIds: Set<string>,
+): Promise<boolean> {
+    const conditions = [
+        eq(recordings.userId, userId),
+        isNull(recordings.deletedAt),
+        ne(recordings.deviceSn, "local"),
+        or(isNull(transcriptions.id), isNull(aiEnhancements.id)),
+    ];
+    if (seenRecordingIds.size > 0) {
+        conditions.push(notInArray(recordings.id, [...seenRecordingIds]));
+    }
+
+    const [row] = await db
+        .select({ id: recordings.id })
+        .from(recordings)
+        .leftJoin(
+            transcriptions,
+            and(
+                eq(transcriptions.recordingId, recordings.id),
+                eq(transcriptions.userId, userId),
+                eq(transcriptions.source, "plaud"),
+            ),
+        )
+        .leftJoin(
+            aiEnhancements,
+            and(
+                eq(aiEnhancements.recordingId, recordings.id),
+                eq(aiEnhancements.userId, userId),
+            ),
+        )
+        .where(and(...conditions))
+        .limit(1);
+
+    return Boolean(row);
+}
+
 /**
  * Mutable per-sync-run flag. Once a new recording is blocked by the
  * storage cap, every subsequent new recording in the same run is skipped
@@ -156,6 +283,7 @@ async function processRecording(
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     capState: CapState,
+    seenRecordingIds: Set<string>,
 ): Promise<{
     status: "new" | "updated" | "skipped" | "error";
     recordingId?: string;
@@ -176,12 +304,37 @@ async function processRecording(
             )
             .limit(1);
 
+        if (existingRecording) seenRecordingIds.add(existingRecording.id);
+
         const versionKey = plaudRecording.version_ms.toString();
 
         if (
             existingRecording &&
             existingRecording.plaudVersion === versionKey
         ) {
+            if (context.importPlaudContent && !existingRecording.deletedAt) {
+                const importCandidate = buildImportCandidate(
+                    existingRecording.id,
+                    plaudRecording,
+                );
+                if (importCandidate) {
+                    const gaps = await loadPlaudContentGaps(
+                        context.userId,
+                        existingRecording.id,
+                        {
+                            isTrans: importCandidate.isTrans,
+                            isSummary: importCandidate.isSummary,
+                        },
+                    );
+                    if (gaps.needsTranscript || gaps.needsSummary) {
+                        return {
+                            status: "skipped",
+                            recordingId: existingRecording.id,
+                            importCandidate,
+                        };
+                    }
+                }
+            }
             return { status: "skipped" };
         }
 
@@ -212,17 +365,15 @@ async function processRecording(
             false,
         );
 
-        const fileExtension = "mp3";
-        const safeName =
-            plaudRecording.filename.replace(/[/\\:*?"<>|]/g, "-").trim() ||
-            plaudRecording.id;
-        const storageKey = await uniqueStorageKey(
+        const sniffed = sniffAudio(audioBuffer);
+        const fileExtension = sniffed.extension;
+        const storageKey = await resolveStorageKey(
             context.userId,
-            safeName,
+            existingRecording,
             fileExtension,
             plaudRecording.id,
         );
-        const contentType = "audio/mpeg";
+        const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
         const recordingData = {
@@ -309,6 +460,8 @@ async function processRecording(
             .values(recordingData)
             .returning({ id: recordings.id });
 
+        seenRecordingIds.add(newRecording.id);
+
         await emitEvent("recording.synced", context.userId, newRecording.id);
 
         return {
@@ -334,6 +487,7 @@ async function processBatch(
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     capState: CapState,
+    seenRecordingIds: Set<string>,
 ): Promise<{
     newCount: number;
     updatedCount: number;
@@ -345,7 +499,14 @@ async function processBatch(
 }> {
     const results = await Promise.allSettled(
         batch.map((rec) =>
-            processRecording(rec, context, plaudClient, storage, capState),
+            processRecording(
+                rec,
+                context,
+                plaudClient,
+                storage,
+                capState,
+                seenRecordingIds,
+            ),
         ),
     );
 
@@ -529,6 +690,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
         const capState: CapState = { blocked: false };
+        const seenRecordingIds = new Set<string>();
 
         let page = 0;
         let hasMore = true;
@@ -550,6 +712,10 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 break;
             }
 
+            let pageNew = 0;
+            let pageUpdated = 0;
+            let pageCandidateCount = 0;
+
             for (
                 let i = 0;
                 i < plaudRecordings.length;
@@ -565,8 +731,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     plaudClient,
                     storage,
                     capState,
+                    seenRecordingIds,
                 );
 
+                pageNew += batchResult.newCount;
+                pageUpdated += batchResult.updatedCount;
+                pageCandidateCount += batchResult.importCandidates.length;
                 result.newRecordings += batchResult.newCount;
                 result.updatedRecordings += batchResult.updatedCount;
                 result.errors.push(...batchResult.errors);
@@ -584,12 +754,27 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             } else if (plaudRecordings.length < SYNC_CONFIG.PAGE_SIZE) {
                 hasMore = false;
             } else if (
-                result.newRecordings === 0 &&
-                result.updatedRecordings === 0
+                pageNew === 0 &&
+                pageUpdated === 0 &&
+                pageCandidateCount === 0
             ) {
                 consecutiveEmptyPages++;
                 if (consecutiveEmptyPages >= 2) {
-                    hasMore = false;
+                    if (context.importPlaudContent) {
+                        if (
+                            !(await hasUnseenPlaudContentGaps(
+                                userId,
+                                seenRecordingIds,
+                            ))
+                        ) {
+                            hasMore = false;
+                        }
+                    } else if (
+                        result.newRecordings === 0 &&
+                        result.updatedRecordings === 0
+                    ) {
+                        hasMore = false;
+                    }
                 }
             } else {
                 consecutiveEmptyPages = 0;
@@ -680,17 +865,31 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         // recordings that received a Plaud transcript (saves AI credits);
         // 'keep_both' runs anyway so both coexist. Recordings whose Plaud
         // transcript wasn't ready/failed fall back here naturally.
-        const idsToTranscribe =
-            context.transcriptMode === "keep_both"
-                ? result.pendingTranscriptionIds
-                : result.pendingTranscriptionIds.filter(
-                      (id) => !plaudTranscriptImported.has(id),
-                  );
+        if (context.autoTranscribe) {
+            let retryIds: string[] = [];
+            try {
+                retryIds = await listAutoTranscribeRetryIds(userId, {
+                    transcriptMode: context.transcriptMode,
+                });
+            } catch (error) {
+                console.error("Auto-transcribe retry lookup failed:", error);
+            }
+            const mergedIds = [
+                ...new Set([...result.pendingTranscriptionIds, ...retryIds]),
+            ];
+            const eligibleIds =
+                context.transcriptMode === "keep_both"
+                    ? mergedIds
+                    : mergedIds.filter(
+                          (id) => !plaudTranscriptImported.has(id),
+                      );
+            const idsToTranscribe = claimAutoTranscribeIds(eligibleIds);
 
-        if (context.autoTranscribe && idsToTranscribe.length > 0) {
-            queueTranscriptions(userId, idsToTranscribe).catch((error) => {
-                console.error("Background transcription failed:", error);
-            });
+            if (idsToTranscribe.length > 0) {
+                queueTranscriptions(userId, idsToTranscribe).catch((error) => {
+                    console.error("Background transcription failed:", error);
+                });
+            }
         }
 
         return result;
@@ -734,15 +933,23 @@ async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
-    for (const recordingId of recordingIds) {
-        try {
-            await transcribeRecording(userId, recordingId, { trigger: "sync" });
-        } catch (error) {
-            console.error(
-                `Auto-transcription failed for recording ${recordingId}:`,
-                error,
-            );
+    try {
+        for (const recordingId of recordingIds) {
+            try {
+                const outcome = await transcribeRecording(userId, recordingId, {
+                    trigger: "sync",
+                });
+                noteAutoTranscribeOutcome(userId, recordingId, outcome.success);
+            } catch (error) {
+                noteAutoTranscribeOutcome(userId, recordingId, false);
+                console.error(
+                    `Auto-transcription failed for recording ${recordingId}:`,
+                    error,
+                );
+            }
         }
+    } finally {
+        releaseAutoTranscribeIds(recordingIds);
     }
 }
 
@@ -770,6 +977,19 @@ async function importPlaudContent(
     for (const candidate of candidates) {
         if (tokenDead) break;
         try {
+            const gaps = await loadPlaudContentGaps(
+                context.userId,
+                candidate.recordingId,
+                {
+                    isTrans: candidate.isTrans,
+                    isSummary: candidate.isSummary,
+                },
+            );
+            if (gaps.hasPlaudTranscript) {
+                transcriptImported.add(candidate.recordingId);
+            }
+            if (!gaps.needsTranscript && !gaps.needsSummary) continue;
+
             const detail = await plaudClient.getFileDetail(
                 candidate.plaudFileId,
             );
@@ -777,89 +997,51 @@ async function importPlaudContent(
 
             // --- Transcript (coexists with the user's own; gap-fill only) ---
             const transcriptLink = transcript?.data_link;
-            if (candidate.isTrans && isReady(transcript) && transcriptLink) {
-                const [existing] = await db
-                    .select({ id: transcriptions.id })
-                    .from(transcriptions)
-                    .where(
-                        and(
-                            eq(
-                                transcriptions.recordingId,
-                                candidate.recordingId,
-                            ),
-                            eq(transcriptions.userId, context.userId),
-                            eq(transcriptions.source, "plaud"),
-                        ),
-                    )
-                    .limit(1);
-
-                if (existing) {
-                    // Already imported on a prior sync. Treat as present so
-                    // 'plaud_only' still suppresses re-transcription.
-                    transcriptImported.add(candidate.recordingId);
-                } else {
-                    const parsed = parseTranscript(
-                        await plaudClient.fetchContentLink(transcriptLink),
-                    );
-                    if (parsed.text.trim()) {
-                        const { committed } = await upsertTranscription({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            text: parsed.text,
-                            detectedLanguage: parsed.language,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
-                        if (committed) {
-                            transcriptImported.add(candidate.recordingId);
-                            await emitEvent(
-                                "transcription.completed",
-                                context.userId,
-                                candidate.recordingId,
-                            );
-                        }
+            if (gaps.needsTranscript && isReady(transcript) && transcriptLink) {
+                const parsed = parseTranscript(
+                    await plaudClient.fetchContentLink(transcriptLink),
+                );
+                if (parsed.text.trim()) {
+                    const { committed } = await upsertTranscription({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        text: parsed.text,
+                        detectedLanguage: parsed.language,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
+                    if (committed) {
+                        transcriptImported.add(candidate.recordingId);
+                        await emitEvent(
+                            "transcription.completed",
+                            context.userId,
+                            candidate.recordingId,
+                        );
                     }
                 }
             }
 
             // --- Summary (single per recording; gap-fill only) ---
             const summaryLink = summary?.data_link;
-            if (candidate.isSummary && isReady(summary) && summaryLink) {
-                const [existing] = await db
-                    .select({ id: aiEnhancements.id })
-                    .from(aiEnhancements)
-                    .where(
-                        and(
-                            eq(
-                                aiEnhancements.recordingId,
-                                candidate.recordingId,
-                            ),
-                            eq(aiEnhancements.userId, context.userId),
-                        ),
-                    )
-                    .limit(1);
-
-                if (!existing) {
-                    // Prefer the inline copy (no S3 round-trip, no presign
-                    // expiry, #203); fall back to the presigned link.
-                    const inline = findInlineContent(detail, summary?.data_id);
-                    const parsed = parseSummary(
-                        inline ??
-                            (await plaudClient.fetchContentLink(summaryLink)),
-                    );
-                    if (parsed.summary.trim()) {
-                        await upsertEnhancement({
-                            userId: context.userId,
-                            recordingId: candidate.recordingId,
-                            summary: parsed.summary,
-                            keyPoints: parsed.keyPoints,
-                            actionItems: parsed.actionItems,
-                            source: "plaud",
-                            provider: "plaud",
-                            model: "plaud-native",
-                        });
-                    }
+            if (gaps.needsSummary && isReady(summary) && summaryLink) {
+                // Prefer the inline copy (no S3 round-trip, no presign
+                // expiry, #203); fall back to the presigned link.
+                const inline = findInlineContent(detail, summary?.data_id);
+                const parsed = parseSummary(
+                    inline ?? (await plaudClient.fetchContentLink(summaryLink)),
+                );
+                if (parsed.summary.trim()) {
+                    await upsertEnhancement({
+                        userId: context.userId,
+                        recordingId: candidate.recordingId,
+                        summary: parsed.summary,
+                        keyPoints: parsed.keyPoints,
+                        actionItems: parsed.actionItems,
+                        source: "plaud",
+                        provider: "plaud",
+                        model: "plaud-native",
+                    });
                 }
             }
         } catch (error) {

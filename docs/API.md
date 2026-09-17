@@ -207,14 +207,36 @@ Get single recording by ID.
 
 #### GET `/recordings/[id]/audio`
 
-Stream audio file.
+Stream audio file, or download the original when `download=1` is set.
+
+**Query Parameters:**
+- `download` (optional): `1` / `true` / `yes` returns `Content-Disposition: attachment` with a filename derived from the recording title and the stored file extension. Range requests are ignored so the saved file is complete.
 
 **Headers:**
-- `Range`: Optional byte range (e.g., `bytes=0-1023`)
+- `Range`: Optional byte range (e.g., `bytes=0-1023`). Ignored when `download` is set.
 
 **Response:**
-- Content-Type: audio/mpeg, audio/opus, etc.
-- Supports HTTP range requests (206 Partial Content)
+- Content-Type: audio/mpeg, audio/mp4, audio/wav, etc.
+- Supports HTTP range requests (206 Partial Content) for playback
+- `Content-Disposition: attachment` when downloading
+
+#### PATCH `/recordings/[id]`
+
+Rename a recording. The new title is encrypted at rest. Does not rename the file on Plaud.
+
+**Body:**
+```json
+{
+  "filename": "Q4 planning"
+}
+```
+
+**Response:**
+```json
+{
+  "filename": "Q4 planning"
+}
+```
 
 #### POST `/recordings/[id]/transcribe`
 
