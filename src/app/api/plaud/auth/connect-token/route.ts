@@ -94,7 +94,7 @@ export const POST = apiHandler(async (request: Request) => {
         );
     }
 
-    // SSRF guard: apiBase is user-supplied. Restrict to plaud.ai hosts.
+    // SSRF guard: apiBase is user-supplied. Restrict to plaud.ai / plaud.cn hosts.
     // Default to global if the client didn't pick a region; the paste
     // flow has no -302 redirect path so the user picks via a region
     // selector in the UI.

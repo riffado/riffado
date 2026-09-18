@@ -40,9 +40,9 @@ export const POST = apiHandler(async (request: Request) => {
     }
 
     // SSRF guard: the client sends apiBase back to us (originally obtained
-    // via the regional -302 redirect in send-code). Restrict to plaud.ai
-    // hosts so a tampered client cannot point the server at an arbitrary
-    // URL and coerce it into an internal-network request.
+    // via the regional -302 redirect in send-code). Restrict to plaud.ai /
+    // plaud.cn hosts so a tampered client cannot point the server at an
+    // arbitrary URL and coerce it into an internal-network request.
     if (!isValidPlaudApiUrl(apiBase)) {
         throw new AppError(
             ErrorCode.PLAUD_INVALID_API_BASE,
