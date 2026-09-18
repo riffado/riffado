@@ -48,6 +48,25 @@ const ISSUE_URL = "https://github.com/riffado/riffado/issues/65";
 const TOKEN_GRAB_SNIPPET =
     'copy(JSON.parse(localStorage.pld_tokenstr).replace(/^bearer /i,""))';
 
+function pasteGuideHosts(serverKey: PlaudServerKey): {
+    webHost: string;
+    webOrigin: string;
+    apiHint: string;
+} {
+    if (serverKey === "cn") {
+        return {
+            webHost: "web.plaud.cn",
+            webOrigin: "https://web.plaud.cn",
+            apiHint: "api*.plaud.cn",
+        };
+    }
+    return {
+        webHost: "web.plaud.ai",
+        webOrigin: "https://web.plaud.ai",
+        apiHint: "api*.plaud.ai",
+    };
+}
+
 function regionLabel(base: string): string {
     if (base.includes("euc1")) return "EU (Frankfurt)";
     if (base.includes("apse1")) return "Asia Pacific (Singapore)";
@@ -484,9 +503,11 @@ function EmailCodePane({ onConnected, onSwitchToToken }: EmailCodePaneProps) {
 // "paste into your browser console," not "run in a terminal."
 function ConsoleSnippet({
     snippet,
+    consoleHost,
     ariaLabel,
 }: {
     snippet: string;
+    consoleHost: string;
     ariaLabel?: string;
 }) {
     const [copied, setCopied] = useState(false);
@@ -514,7 +535,7 @@ function ConsoleSnippet({
         <div className="rounded-md border border-input bg-muted/40 overflow-hidden">
             <div className="flex items-center px-3 py-1.5 border-b border-input/60 bg-muted">
                 <span className="text-[11px] font-mono text-muted-foreground">
-                    web.plaud.ai console
+                    {consoleHost} console
                 </span>
             </div>
             <div className="flex items-center gap-2 p-2.5 font-mono text-xs">
@@ -560,6 +581,8 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
         serverKey === "custom"
             ? customApiBase.trim()
             : PLAUD_SERVERS[serverKey].apiBase;
+    const { webHost, webOrigin, apiHint } = pasteGuideHosts(serverKey);
+    const isChina = serverKey === "cn";
 
     const handleSubmit = useCallback(async () => {
         const trimmed = token.trim().replace(/^Bearer\s+/i, "");
@@ -602,26 +625,29 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5 space-y-1">
-                <p className="text-xs font-medium text-foreground">
-                    Recommended: use the connector instead
-                </p>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    The Riffado Connector signs you in and captures the right
-                    long-lived token automatically — no copying, and it won't
-                    stop working after a day.{" "}
-                    <button
-                        type="button"
-                        onClick={onUseConnector}
-                        className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
-                    >
-                        Use the connector&nbsp;→
-                    </button>
-                </p>
-            </div>
+            {!isChina && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2.5 space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                        Recommended: use the connector instead
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                        The Riffado Connector signs you in and captures the
+                        right long-lived token automatically — no copying, and
+                        it won't stop working after a day.{" "}
+                        <button
+                            type="button"
+                            onClick={onUseConnector}
+                            className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                        >
+                            Use the connector&nbsp;→
+                        </button>
+                    </p>
+                </div>
+            )}
             <p className="text-xs text-muted-foreground leading-relaxed">
-                Prefer to paste manually? Grab your account token from a
-                logged-in web.plaud.ai session.{" "}
+                {isChina
+                    ? `Grab your account token from a logged-in ${webHost} session.`
+                    : `Prefer to paste manually? Grab your account token from a logged-in ${webHost} session.`}{" "}
                 <a
                     href={ISSUE_URL}
                     target="_blank"
@@ -663,8 +689,8 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                 )}
                 <p className="text-xs text-muted-foreground">
                     Look at the host of any{" "}
-                    <span className="font-mono">api*.plaud.ai</span> request in
-                    your devtools Network tab to find the region.
+                    <span className="font-mono">{apiHint}</span> request in your
+                    devtools Network tab to find the region.
                 </p>
             </div>
 
@@ -697,22 +723,35 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                     How do I get my token?
                 </summary>
                 <div className="mt-3 space-y-4 text-xs text-muted-foreground leading-relaxed">
-                    <div className="space-y-1">
-                        <p className="font-medium text-foreground">
-                            Easiest — the connector
-                        </p>
-                        <p>
-                            Skip the copying entirely.{" "}
-                            <button
-                                type="button"
-                                onClick={onUseConnector}
-                                className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
-                            >
-                                Use the Riffado Connector
-                            </button>{" "}
-                            and it captures the right token for you.
-                        </p>
-                    </div>
+                    {isChina ? (
+                        <div className="space-y-1">
+                            <p className="font-medium text-foreground">
+                                China mainland accounts
+                            </p>
+                            <p>
+                                Sign in at {webHost}. The browser connector does
+                                not cover this region yet, so paste the token
+                                from that session.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            <p className="font-medium text-foreground">
+                                Easiest — the connector
+                            </p>
+                            <p>
+                                Skip the copying entirely.{" "}
+                                <button
+                                    type="button"
+                                    onClick={onUseConnector}
+                                    className="underline decoration-dotted underline-offset-2 hover:text-foreground transition-colors"
+                                >
+                                    Use the Riffado Connector
+                                </button>{" "}
+                                and it captures the right token for you.
+                            </p>
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <p className="font-medium text-foreground">
@@ -722,12 +761,12 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                             <li>
                                 Open{" "}
                                 <a
-                                    href="https://web.plaud.ai"
+                                    href={webOrigin}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="underline decoration-dotted underline-offset-2"
                                 >
-                                    web.plaud.ai
+                                    {webHost}
                                 </a>{" "}
                                 and sign in (Google, Apple, or email).
                             </li>
@@ -742,6 +781,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                         </ol>
                         <ConsoleSnippet
                             snippet={TOKEN_GRAB_SNIPPET}
+                            consoleHost={webHost}
                             ariaLabel="Copy the token-grab snippet"
                         />
                         <p>
@@ -757,16 +797,13 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                         </p>
                         <ol className="ml-4 list-decimal space-y-1">
                             <li>
-                                On web.plaud.ai, open devtools (F12) →{" "}
+                                On {webHost}, open devtools (F12) →{" "}
                                 <span className="font-medium">Application</span>{" "}
                                 →{" "}
                                 <span className="font-medium">
                                     Local Storage
                                 </span>{" "}
-                                →{" "}
-                                <span className="font-mono">
-                                    https://web.plaud.ai
-                                </span>
+                                → <span className="font-mono">{webOrigin}</span>
                                 .
                             </li>
                             <li>
@@ -780,7 +817,7 @@ function PasteTokenPane({ onConnected, onUseConnector }: PasteTokenPaneProps) {
                                 Paste the remaining{" "}
                                 <span className="font-mono">eyJ…</span> token
                                 above, and pick the region matching the{" "}
-                                <span className="font-mono">api*.plaud.ai</span>{" "}
+                                <span className="font-mono">{apiHint}</span>{" "}
                                 host you see in the Network tab.
                             </li>
                         </ol>
