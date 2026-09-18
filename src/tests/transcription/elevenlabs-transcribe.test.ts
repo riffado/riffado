@@ -305,6 +305,17 @@ describe("elevenLabsTranscribe -- request shape", () => {
             }),
         ).rejects.toThrow(/between 1 and 32/i);
         expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+        // diarize off -- out-of-range hint is ignored, not rejected.
+        await elevenLabsTranscribe({
+            apiKey: "k",
+            model: "scribe_v2",
+            file: fakeFile(),
+            diarize: false,
+            numSpeakers: 33,
+            timeoutMs: 5000,
+        });
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
     });
 });
 

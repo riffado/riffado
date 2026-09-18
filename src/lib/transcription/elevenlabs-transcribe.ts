@@ -498,6 +498,7 @@ export async function elevenLabsTranscribe(
         );
     }
     if (
+        diarize &&
         numSpeakers !== undefined &&
         (!Number.isInteger(numSpeakers) || numSpeakers < 1 || numSpeakers > 32)
     ) {
