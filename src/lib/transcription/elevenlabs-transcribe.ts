@@ -11,6 +11,10 @@
 import { z } from "zod";
 
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1";
+const OFFICIAL_ELEVENLABS_ORIGINS = [
+    "https://api.elevenlabs.io",
+    "https://api.eu.elevenlabs.io",
+] as const;
 const MAX_RETRIES = 2;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
@@ -158,35 +162,97 @@ export interface ElevenLabsTranscribeResult {
 }
 
 export const ELEVENLABS_HOSTED_BASE_URL_MESSAGE =
-    "Hosted ElevenLabs transcription only supports https://api.elevenlabs.io/v1. Self-host Riffado to use a custom ElevenLabs proxy.";
+    "Hosted ElevenLabs transcription only supports ElevenLabs' official API (https://api.elevenlabs.io/v1 or https://api.eu.elevenlabs.io/v1). Self-host Riffado to use a custom proxy.";
+
+export const ELEVENLABS_BASE_URL_MESSAGE =
+    "ElevenLabs base URL must be an http(s) URL without credentials.";
+
+type ParsedElevenLabsBaseUrl =
+    | { kind: "default" }
+    | { kind: "url"; url: URL }
+    | { kind: "invalid" };
+
+function parseOptionalElevenLabsBaseUrl(
+    input: unknown,
+): ParsedElevenLabsBaseUrl {
+    if (input == null) return { kind: "default" };
+    if (typeof input !== "string") return { kind: "invalid" };
+    const trimmed = input.trim();
+    if (!trimmed) return { kind: "default" };
+    try {
+        return { kind: "url", url: new URL(trimmed) };
+    } catch {
+        return { kind: "invalid" };
+    }
+}
+
+function isOfficialElevenLabsBaseUrl(url: URL): boolean {
+    const pathname = url.pathname.replace(/\/+$/, "");
+    return (
+        (OFFICIAL_ELEVENLABS_ORIGINS as readonly string[]).includes(
+            url.origin,
+        ) &&
+        pathname === "/v1" &&
+        url.username === "" &&
+        url.password === "" &&
+        url.search === "" &&
+        url.hash === ""
+    );
+}
+
+function isAllowedSelfHostElevenLabsBaseUrl(url: URL): boolean {
+    return (
+        (url.protocol === "https:" || url.protocol === "http:") &&
+        url.username === "" &&
+        url.password === ""
+    );
+}
+
+function normalizeElevenLabsBaseUrl(url: URL): string {
+    return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+}
+
+function speechToTextUrl(baseUrl: string): string {
+    return new URL("speech-to-text", `${baseUrl}/`).href;
+}
+
+export function resolveElevenLabsBaseUrl(
+    input: unknown,
+    { isHosted }: { isHosted: boolean },
+): { ok: true; baseUrl: string } | { ok: false; message: string } {
+    const parsed = parseOptionalElevenLabsBaseUrl(input);
+    if (parsed.kind === "invalid") {
+        return {
+            ok: false,
+            message: isHosted
+                ? ELEVENLABS_HOSTED_BASE_URL_MESSAGE
+                : ELEVENLABS_BASE_URL_MESSAGE,
+        };
+    }
+    if (parsed.kind === "default") {
+        return { ok: true, baseUrl: DEFAULT_BASE_URL };
+    }
+    if (isHosted) {
+        return isOfficialElevenLabsBaseUrl(parsed.url)
+            ? { ok: true, baseUrl: normalizeElevenLabsBaseUrl(parsed.url) }
+            : { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
+    }
+    return isAllowedSelfHostElevenLabsBaseUrl(parsed.url)
+        ? { ok: true, baseUrl: normalizeElevenLabsBaseUrl(parsed.url) }
+        : { ok: false, message: ELEVENLABS_BASE_URL_MESSAGE };
+}
 
 /** Validate the ElevenLabs endpoint without weakening self-host proxy support. */
 export function validateElevenLabsBaseUrl(
     input: unknown,
     { isHosted }: { isHosted: boolean },
 ): { ok: true } | { ok: false; message: string } {
-    if (!isHosted || input == null || input === "") return { ok: true };
-    if (typeof input !== "string") {
-        return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
-    }
+    const resolved = resolveElevenLabsBaseUrl(input, { isHosted });
+    return resolved.ok ? { ok: true } : resolved;
+}
 
-    try {
-        const url = new URL(input.trim());
-        const pathname = url.pathname.replace(/\/+$/, "");
-        if (
-            url.origin === "https://api.elevenlabs.io" &&
-            pathname === "/v1" &&
-            !url.username &&
-            !url.password &&
-            !url.search &&
-            !url.hash
-        ) {
-            return { ok: true };
-        }
-    } catch {
-        return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
-    }
-    return { ok: false, message: ELEVENLABS_HOSTED_BASE_URL_MESSAGE };
+function flattenWordText(text: string): string {
+    return text.replace(/[\r\n]+/g, " ");
 }
 
 /**
@@ -206,13 +272,12 @@ function formatDiarizedText(words: ElevenLabsWord[]): {
     for (const word of words) {
         if (word.type === "audio_event") continue;
         const speakerId = word.speaker_id;
+        const wordText = flattenWordText(word.text);
         if (!speakerId) {
-            // No speaker attribution on this word -- fall back to plain
-            // concatenation below.
             return {
                 text: words
                     .filter((w) => w.type !== "audio_event")
-                    .map((w) => w.text)
+                    .map((w) => flattenWordText(w.text))
                     .join("")
                     .trim(),
                 speakerCount: 0,
@@ -227,9 +292,9 @@ function formatDiarizedText(words: ElevenLabsWord[]): {
 
         const last = lines.at(-1);
         if (last && last.speaker === speakerNumber) {
-            last.text += word.text;
+            last.text += wordText;
         } else {
-            lines.push({ speaker: speakerNumber, text: word.text });
+            lines.push({ speaker: speakerNumber, text: wordText });
         }
     }
 
@@ -308,7 +373,7 @@ async function postSpeechToText(args: {
     timeoutMs: number;
 }): Promise<ElevenLabsTranscriptionResponse> {
     const { baseUrl, apiKey, form, timeoutMs } = args;
-    const url = `${baseUrl}/speech-to-text`;
+    const url = speechToTextUrl(baseUrl);
 
     let attempt = 0;
     for (;;) {
@@ -451,14 +516,11 @@ export async function elevenLabsTranscribe(
         );
     }
 
-    const baseUrlCheck = validateElevenLabsBaseUrl(baseUrl, { isHosted });
-    if (!baseUrlCheck.ok) {
-        throw new ElevenLabsTranscribeError(400, baseUrlCheck.message);
+    const resolvedBaseUrl = resolveElevenLabsBaseUrl(baseUrl, { isHosted });
+    if (!resolvedBaseUrl.ok) {
+        throw new ElevenLabsTranscribeError(400, resolvedBaseUrl.message);
     }
-    const effectiveBaseUrl =
-        typeof baseUrl === "string" && baseUrl.trim()
-            ? baseUrl.trim().replace(/\/+$/, "")
-            : DEFAULT_BASE_URL;
+    const effectiveBaseUrl = resolvedBaseUrl.baseUrl;
 
     const form = new FormData();
     form.append("file", file);

@@ -138,6 +138,14 @@ describe("generateSummaryForRecording -- enhancement provider exclusion", () => 
         expect(result.provider).toBe("OpenAI");
         expect(result.summary).toBe("A summary");
         expect(chatCompletionsCreate).toHaveBeenCalledOnce();
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            messages: { role: string; content: string }[];
+        };
+        expect(payload.messages[0]?.role).toBe("system");
+        expect(payload.messages[0]?.content).toMatch(/untrusted/i);
+        expect(payload.messages[0]?.content).not.toContain("raw transcript");
+        expect(payload.messages[1]?.role).toBe("user");
+        expect(payload.messages[1]?.content).toContain("raw transcript");
     });
 
     it("throws AI_PROVIDER_NOT_CONFIGURED when ElevenLabs is the only credential", async () => {

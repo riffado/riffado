@@ -98,6 +98,16 @@ describe("generateTitleFromTranscription -- enhancement provider exclusion", () 
 
         expect(title).toBe("Generated Title");
         expect(chatCompletionsCreate).toHaveBeenCalledOnce();
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            messages: { role: string; content: string }[];
+        };
+        expect(payload.messages[0]?.role).toBe("system");
+        expect(payload.messages[0]?.content).toMatch(/untrusted/i);
+        expect(payload.messages[0]?.content).not.toContain(
+            "some transcript text",
+        );
+        expect(payload.messages[1]?.role).toBe("user");
+        expect(payload.messages[1]?.content).toContain("some transcript text");
     });
 
     it("returns null (no-provider behavior) when ElevenLabs is the only credential", async () => {
