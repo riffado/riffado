@@ -9,7 +9,6 @@ const {
     foundingReservationsMock,
     reconcileMock,
     webhookInboxMock,
-    grandfatherMock,
 } = vi.hoisted(() => ({
     cycleCloseMock: { closeDueCycles: vi.fn() },
     lapseMock: { processExpiredTrials: vi.fn() },
@@ -19,7 +18,6 @@ const {
     foundingReservationsMock: { reconcileExpiredFoundingReservations: vi.fn() },
     reconcileMock: { reconcileStaleSubscriptions: vi.fn() },
     webhookInboxMock: { processStripeWebhookInbox: vi.fn() },
-    grandfatherMock: { processExpiredTransitions: vi.fn() },
 }));
 
 vi.mock("@/lib/hosted/billing/cycle-close", () => cycleCloseMock);
@@ -32,7 +30,6 @@ vi.mock(
     () => foundingReservationsMock,
 );
 vi.mock("@/lib/hosted/billing/reconcile", () => reconcileMock);
-vi.mock("@/lib/hosted/billing/grandfather", () => grandfatherMock);
 vi.mock("@/lib/hosted/billing/webhook-inbox", () => webhookInboxMock);
 vi.mock("@/lib/env", () => ({
     env: { IS_HOSTED: true, BILLING_ENABLED: true },
@@ -80,10 +77,6 @@ function zeroResults() {
         retried: 0,
         failed: 0,
     });
-    grandfatherMock.processExpiredTransitions.mockResolvedValue({
-        scheduled: 0,
-        errors: 0,
-    });
 }
 
 describe("billing worker tick", () => {
@@ -122,20 +115,6 @@ describe("billing worker tick", () => {
                 .invocationCallOrder[0],
         ).toBeLessThan(
             transitionMock.processTransitionEmails.mock.invocationCallOrder[0],
-        );
-    });
-
-    it("starts the grandfathered deletion clock after their read-only notice", async () => {
-        // The claim requires a logged `transition_ended` email, so running
-        // this before transition-emails would defer every account by a full
-        // tick and widen the gap between the notice and the clock it names.
-        await tick();
-
-        expect(
-            transitionMock.processTransitionEmails.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-            grandfatherMock.processExpiredTransitions.mock
-                .invocationCallOrder[0],
         );
     });
 

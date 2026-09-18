@@ -2,7 +2,6 @@ import { and, desc, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
 import {
     billingCustomers,
-    emailLog,
     foundingMemberReservations,
     recordings,
     stripeWebhookEvents,
@@ -786,70 +785,6 @@ export async function claimUsersWithExpiredTrials(limit: number): Promise<
         where u.plan = 'hosted_pro'
           and u.plan_transition_until is not null
           and u.plan_transition_until <= now()
-          and not exists (
-            select 1 from ${subscriptions} s
-            where s.user_id = u.id
-              and s.status in ('active', 'trialing', 'past_due')
-          )
-        order by u.plan_transition_until asc
-        limit ${limit}
-        for update of u skip locked
-    `);
-    const rows = Array.isArray(result)
-        ? result
-        : ((result as { rows: typeof result }).rows ?? []);
-    return rows.map((r) => ({
-        id: r.id,
-        createdAt: asDate(r.created_at),
-        everPaidAt: asDateOrNull(r.ever_paid_at),
-        planTransitionUntil: asDateOrNull(r.plan_transition_until),
-    }));
-}
-
-/**
- * Find grandfathered pre-launch users whose transition window has closed
- * and who never subscribed. They are already `hosted_free` (the backfill
- * put them there), so unlike the trial path there is no plan to demote --
- * `getEntitlements` locks them out the moment `planTransitionUntil`
- * elapses. All that is missing is the deletion clock.
- *
- * Three filters carry the correctness of this claim:
- *
- *  - `account_deletion_scheduled_at is null` makes it idempotent. Without
- *    it the entire cohort is re-claimed every tick, forever, and every
- *    downstream side effect repeats with it.
- *  - the `email_log` check requires the `transition_ended` notice to have
- *    gone out first, so nobody gets a deletion date before being told
- *    their window closed. `processTransitionEmails` skips users that
- *    already have a deletion scheduled, so this ordering is also what
- *    keeps that email from being cancelled by this claim.
- *  - the subscription check keeps anyone who converted out of it.
- */
-export async function claimUsersWithExpiredTransition(limit: number): Promise<
-    {
-        id: string;
-        createdAt: Date;
-        everPaidAt: Date | null;
-        planTransitionUntil: Date | null;
-    }[]
-> {
-    const result = await db.execute<{
-        id: string;
-        created_at: Date | string;
-        ever_paid_at: Date | string | null;
-        plan_transition_until: Date | string | null;
-    }>(sql`
-        select u.id, u.created_at, u.ever_paid_at, u.plan_transition_until
-        from ${users} u
-        where u.plan = 'hosted_free'
-          and u.plan_transition_until is not null
-          and u.plan_transition_until <= now()
-          and u.account_deletion_scheduled_at is null
-          and exists (
-            select 1 from ${emailLog} e
-            where e.user_id = u.id
-              and e.kind = 'transition_ended'
-          )
           and not exists (
             select 1 from ${subscriptions} s
             where s.user_id = u.id

@@ -1,26 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { dbMock, emailMock, envMock, queriesMock } = vi.hoisted(() => ({
-    dbMock: { select: vi.fn() },
-    emailMock: { sendGraceStartedEmail: vi.fn() },
-    envMock: {
-        BILLING_TRIAL_GRACE_DAYS: 7,
-        BILLING_PAID_GRACE_DAYS: 30,
-        BILLING_LAUNCH_DATE: undefined as string | undefined,
-        APP_URL: "https://app.example.com",
-    },
-    queriesMock: {
-        claimUsersWithExpiredTrials: vi.fn(),
-        scheduleAccountDeletion: vi.fn(),
-        setUserPlan: vi.fn(),
-    },
-}));
+const { dbMock, emailMock, envMock, queriesMock, posthogMock } = vi.hoisted(
+    () => ({
+        dbMock: { select: vi.fn() },
+        emailMock: { sendGraceStartedEmail: vi.fn() },
+        envMock: {
+            BILLING_TRIAL_GRACE_DAYS: 7,
+            BILLING_PAID_GRACE_DAYS: 30,
+            BILLING_LAUNCH_DATE: undefined as string | undefined,
+            APP_URL: "https://app.example.com",
+        },
+        queriesMock: {
+            claimUsersWithExpiredTrials: vi.fn(),
+            scheduleAccountDeletion: vi.fn(),
+            setUserPlan: vi.fn(),
+        },
+        posthogMock: { captureServerException: vi.fn() },
+    }),
+);
 
 vi.mock("@/db", () => ({ db: dbMock }));
 vi.mock("@/db/schema", () => ({ users: { id: "id", email: "email" } }));
 vi.mock("@/lib/env", () => ({ env: envMock }));
 vi.mock("@/db/queries/billing", () => queriesMock);
 vi.mock("@/lib/notifications/email", () => emailMock);
+vi.mock("@/lib/posthog-server", () => posthogMock);
 
 function stubEmailLookup(email: string | null) {
     dbMock.select.mockReturnValue({
@@ -237,6 +241,14 @@ describe("processExpiredTrials", () => {
         errorSpy.mockRestore();
 
         expect(result).toEqual({ lapsed: 1, errors: 1 });
+        expect(posthogMock.captureServerException).toHaveBeenCalledWith(
+            expect.any(Error),
+            {
+                source: "worker:billing",
+                phase: "trial-lapse",
+                distinctId: "b",
+            },
+        );
     });
 
     it("forwards an explicit limit to the claim query", async () => {
