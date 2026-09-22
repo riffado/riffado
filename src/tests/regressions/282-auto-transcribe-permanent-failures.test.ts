@@ -198,6 +198,26 @@ describe("classifyTranscribeError", () => {
         );
     });
 
+    it.each([
+        401, 403,
+    ])("leaves HTTP %i unclassified so settings fixes resume retries", (status) => {
+        expect(
+            classifyTranscribeError(
+                APIError.generate(status, undefined, "x", new Headers()),
+            ),
+        ).toEqual({ status });
+    });
+
+    it("classifies a Mynah status-carrying error", () => {
+        expect(
+            classifyTranscribeError(
+                Object.assign(new Error("Mynah transcription failed (422)"), {
+                    status: 422,
+                }),
+            ),
+        ).toEqual({ kind: "permanent", status: 422 });
+    });
+
     it("treats the ElevenLabs local size check as permanent", () => {
         expect(
             classifyTranscribeError(new ElevenLabsFileTooLargeError(1)).kind,

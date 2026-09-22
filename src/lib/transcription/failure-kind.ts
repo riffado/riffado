@@ -13,12 +13,14 @@ import {
 export type TranscribeFailureKind = "permanent" | "transient";
 
 export interface TranscribeFailureClass {
-    kind: TranscribeFailureKind;
+    /** Absent when the failure is account-level and the user can resolve it. */
+    kind?: TranscribeFailureKind;
     /** Upstream HTTP status, when the provider returned one. */
     status?: number;
 }
 
 const PERMANENT_STATUSES = new Set([400, 413, 415, 422]);
+const ACCOUNT_STATUSES = new Set([401, 403]);
 
 function providerStatus(error: unknown): number | undefined {
     if (typeof error !== "object" || error === null) return undefined;
@@ -33,6 +35,9 @@ function providerStatus(error: unknown): number | undefined {
  * Classify a provider-call error. Request-shape rejections (400, 413,
  * 415, 422) and local size/format checks are permanent; network errors,
  * timeouts, 408, 429, 5xx and anything unrecognised are transient.
+ * Credential rejections (401, 403) are left unclassified, like the other
+ * account-level failures: the user fixes them in settings, and auto
+ * retries must resume on their own once they do.
  */
 export function classifyTranscribeError(
     error: unknown,
@@ -46,6 +51,9 @@ export function classifyTranscribeError(
         return { kind: "permanent" };
     }
     const status = providerStatus(error);
+    if (status !== undefined && ACCOUNT_STATUSES.has(status)) {
+        return { status };
+    }
     if (status !== undefined && PERMANENT_STATUSES.has(status)) {
         return { kind: "permanent", status };
     }
