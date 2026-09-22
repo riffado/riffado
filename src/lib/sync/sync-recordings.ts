@@ -939,9 +939,24 @@ async function queueTranscriptions(
                 const outcome = await transcribeRecording(userId, recordingId, {
                     trigger: "sync",
                 });
-                noteAutoTranscribeOutcome(userId, recordingId, outcome.success);
+                const stopped = noteAutoTranscribeOutcome(
+                    userId,
+                    recordingId,
+                    outcome.success,
+                    outcome.failureKind,
+                );
+                if (stopped) {
+                    console.warn(
+                        `Auto-transcribe stopped for recording ${recordingId} (${outcome.failureKind}, status ${outcome.providerStatus ?? "none"}): ${(outcome.error ?? "unknown error").slice(0, 200)}. Use Re-transcribe to retry.`,
+                    );
+                }
             } catch (error) {
-                noteAutoTranscribeOutcome(userId, recordingId, false);
+                noteAutoTranscribeOutcome(
+                    userId,
+                    recordingId,
+                    false,
+                    "transient",
+                );
                 console.error(
                     `Auto-transcription failed for recording ${recordingId}:`,
                     error,
