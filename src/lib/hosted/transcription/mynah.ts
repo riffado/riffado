@@ -75,7 +75,9 @@ interface PostTranscriptionRequestInput {
  * POST the transcription request to Mynah, retrying transient gateway
  * failures (502/503/504/524) with exponential backoff before giving up.
  * Non-transient failures (4xx, or 5xx after retries are exhausted) throw
- * a status-only `Error` -- the upstream body can contain internal Mynah
+ * a status-only `Error` carrying `status`, so callers can tell a
+ * permanent rejection from a transient one -- the upstream body can
+ * contain internal Mynah
  * diagnostics, so the detail is logged server-side only, not propagated
  * to the client.
  *
@@ -137,8 +139,9 @@ async function postTranscriptionRequest(
         console.error(
             `[mynah] transcription request failed (${res.status}) for user ${userId}: ${detail.slice(0, 2000)}`,
         );
-        const upstreamError = new Error(
-            `Mynah transcription failed (${res.status})`,
+        const upstreamError = Object.assign(
+            new Error(`Mynah transcription failed (${res.status})`),
+            { status: res.status },
         );
         captureServerException(upstreamError, {
             source: "mynah",

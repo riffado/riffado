@@ -43,6 +43,10 @@ import {
     elevenLabsTranscribe,
 } from "@/lib/transcription/elevenlabs-transcribe";
 import {
+    classifyTranscribeError,
+    type TranscribeFailureKind,
+} from "@/lib/transcription/failure-kind";
+import {
     buildTranscriptionParams,
     getResponseFormat,
     parseTranscriptionResponse,
@@ -237,6 +241,13 @@ export interface TranscribeResult {
     success: boolean;
     error?: string;
     errorCode?: TranscribeErrorCode;
+    /**
+     * Present when the provider call itself failed. Unset for account-level
+     * failures (no provider, lockout, budget) that the user resolves.
+     */
+    failureKind?: TranscribeFailureKind;
+    /** Upstream HTTP status of a failed provider call, when known. */
+    providerStatus?: number;
     /** Present on success. Plaintext transcript. */
     text?: string;
     /** Present on success when the provider returned a language. */
@@ -797,6 +808,7 @@ async function transcribeRecordingInner(
                 errorCode: "MYNAH_BUDGET_EXHAUSTED",
             };
         }
+        const failure = classifyTranscribeError(error);
         if (error instanceof ElevenLabsFileTooLargeError) {
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: error.message,
@@ -805,6 +817,7 @@ async function transcribeRecordingInner(
                 success: false,
                 error: error.message,
                 errorCode: "FILE_TOO_LARGE",
+                failureKind: failure.kind,
             };
         }
         captureServerException(error, {
@@ -820,6 +833,8 @@ async function transcribeRecordingInner(
             error:
                 error instanceof Error ? error.message : "Transcription failed",
             errorCode: "TRANSCRIPTION_FAILED",
+            failureKind: failure.kind,
+            providerStatus: failure.status,
         };
     }
 }
