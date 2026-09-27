@@ -50,6 +50,23 @@ function runProbe(host: string, port: number): Promise<number> {
 
 const servers: Server[] = [];
 
+/**
+ * Bind an ephemeral port, then release it, and report the number. That
+ * gives a port nothing is listening on. A hardcoded number cannot promise
+ * that: 59999 sits inside the ephemeral range on both Linux and macOS, so
+ * anything answering there would turn a correct healthcheck into a failing
+ * test.
+ */
+function closedPort(): Promise<number> {
+    return new Promise((resolve) => {
+        const probe = createServer();
+        probe.listen(0, "127.0.0.1", () => {
+            const { port } = probe.address() as { port: number };
+            probe.close(() => resolve(port));
+        });
+    });
+}
+
 function listen(handler: (status: number) => number): Promise<number> {
     return new Promise((resolve) => {
         const server = createServer((_req, res) => {
@@ -80,8 +97,7 @@ describe("issue #307: the compose healthcheck must be able to fail", () => {
 
     it("exits non-zero when nothing is listening", async () => {
         // The original defect: a refused connection reported healthy.
-        const port = 59_999;
-        expect(await runProbe("127.0.0.1", port)).not.toBe(0);
+        expect(await runProbe("127.0.0.1", await closedPort())).not.toBe(0);
     });
 
     it("handles the request error event", () => {
