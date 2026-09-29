@@ -1,4 +1,9 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+    FinishReason,
+    type GenerateContentResponse,
+    GoogleGenerativeAIResponseError,
+} from "@google/generative-ai";
+import { fetchTranscription } from "@/lib/transcription/fetch";
 
 export interface GeminiTranscribeArgs {
     apiKey: string;
@@ -6,6 +11,7 @@ export interface GeminiTranscribeArgs {
     audioBuffer: Buffer;
     contentType: string;
     language?: string;
+    timeoutMs: number;
 }
 
 export interface GeminiTranscribeResult {
@@ -55,12 +61,63 @@ export class GeminiTranscribeSizeError extends Error {
     }
 }
 
+function responseText(response: GenerateContentResponse): string {
+    const candidate = response.candidates?.[0];
+    if (!candidate) {
+        const feedback = response.promptFeedback;
+        if (feedback) {
+            const reason = feedback.blockReason
+                ? ` due to ${feedback.blockReason}`
+                : "";
+            const detail = feedback.blockReasonMessage
+                ? `: ${feedback.blockReasonMessage}`
+                : "";
+            throw new GoogleGenerativeAIResponseError(
+                `Text not available. Response was blocked${reason}${detail}`,
+                response,
+            );
+        }
+        return "";
+    }
+
+    if (
+        candidate.finishReason === FinishReason.RECITATION ||
+        candidate.finishReason === FinishReason.SAFETY ||
+        candidate.finishReason === FinishReason.LANGUAGE
+    ) {
+        const detail = candidate.finishMessage
+            ? `: ${candidate.finishMessage}`
+            : "";
+        throw new GoogleGenerativeAIResponseError(
+            `Candidate was blocked due to ${candidate.finishReason}${detail}`,
+            response,
+        );
+    }
+
+    const texts: string[] = [];
+    for (const part of candidate.content?.parts ?? []) {
+        if (part.text) texts.push(part.text);
+        if (part.executableCode) {
+            texts.push(
+                `\n\`\`\`${part.executableCode.language}\n${part.executableCode.code}\n\`\`\`\n`,
+            );
+        }
+        if (part.codeExecutionResult) {
+            texts.push(
+                `\n\`\`\`\n${part.codeExecutionResult.output}\n\`\`\`\n`,
+            );
+        }
+    }
+    return texts.join("");
+}
+
 export async function geminiTranscribe({
     apiKey,
     model,
     audioBuffer,
     contentType,
     language,
+    timeoutMs,
 }: GeminiTranscribeArgs): Promise<GeminiTranscribeResult> {
     const mimeType = MIME_TYPE_MAP[contentType.toLowerCase()];
     if (!mimeType) {
@@ -71,31 +128,47 @@ export async function geminiTranscribe({
         throw new GeminiTranscribeSizeError(audioBuffer.byteLength);
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const geminiModel = genAI.getGenerativeModel({ model });
-
     const prompt = language
         ? `${TRANSCRIBE_INSTRUCTION} The audio language is ${language}.`
         : TRANSCRIBE_INSTRUCTION;
-
-    const response = await geminiModel.generateContent({
-        contents: [
-            {
-                role: "user",
-                parts: [
-                    { text: prompt },
+    const modelPath = (model.includes("/") ? model : `models/${model}`)
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/");
+    const response = await fetchTranscription(
+        `https://generativelanguage.googleapis.com/v1beta/${modelPath}:generateContent`,
+        {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "x-goog-api-key": apiKey,
+            },
+            body: JSON.stringify({
+                contents: [
                     {
-                        inlineData: {
-                            mimeType,
-                            data: audioBuffer.toString("base64"),
-                        },
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType,
+                                    data: audioBuffer.toString("base64"),
+                                },
+                            },
+                        ],
                     },
                 ],
-            },
-        ],
-    });
-
-    const text = response.response.text();
+            }),
+        },
+        timeoutMs,
+    );
+    if (!response.ok) {
+        throw new Error(
+            `Google Gemini transcription failed (${response.status}).`,
+        );
+    }
+    const result = (await response.json()) as GenerateContentResponse;
+    const text = responseText(result);
     if (!text || text.trim() === "") {
         throw new Error(
             "Google Gemini returned an empty transcription. The audio may be silent or the model may not have recognised the content.",

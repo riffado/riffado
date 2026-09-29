@@ -47,6 +47,9 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-}
 
+      # Maximum duration of each server transcription request, including its response body.
+      WHISPER_REQUEST_TIMEOUT_MS: ${WHISPER_REQUEST_TIMEOUT_MS:-3600000}
+
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
 
