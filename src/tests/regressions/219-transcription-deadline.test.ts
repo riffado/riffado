@@ -1,6 +1,7 @@
 import { createServer, type RequestListener, type Server } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchTranscription } from "@/lib/transcription/fetch";
+import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { createTranscriptionClient } from "@/lib/transcription/openai-client";
 
 const servers: Server[] = [];
@@ -21,6 +22,7 @@ async function serve(handler: RequestListener): Promise<string> {
 }
 
 afterEach(async () => {
+    vi.unstubAllGlobals();
     for (const timer of timers.splice(0)) clearTimeout(timer);
     await Promise.all(
         servers.splice(0).map(
@@ -36,6 +38,32 @@ afterEach(async () => {
 });
 
 describe("transcription request deadlines over HTTP", () => {
+    it("preserves a Gemini deadline after receiving an incomplete HTTP error", async () => {
+        const url = await serve((request, response) => {
+            request.resume();
+            response.writeHead(503, { "content-type": "application/json" });
+            response.write('{"error":');
+        });
+        const nativeFetch = globalThis.fetch;
+        let receivedErrorResponse = false;
+        vi.stubGlobal("fetch", async (_input: unknown, init: RequestInit) => {
+            const response = await nativeFetch(url, init);
+            receivedErrorResponse = response.status === 503;
+            return response;
+        });
+
+        await expect(
+            geminiTranscribe({
+                apiKey: "test-key",
+                model: "gemini-2.5-flash",
+                audioBuffer: Buffer.from("audio"),
+                contentType: "audio/mpeg",
+                timeoutMs: 500,
+            }),
+        ).rejects.toMatchObject({ name: "TimeoutError" });
+        expect(receivedErrorResponse).toBe(true);
+    });
+
     it("aborts a provider that never sends response headers", async () => {
         const url = await serve((request) => request.resume());
 

@@ -183,7 +183,16 @@ export async function geminiTranscribe({
                     : body;
                 return errorResponseSchema.safeParse(JSON.parse(sanitized));
             })
-            .catch(() => undefined);
+            .catch((error: unknown) => {
+                if (
+                    error instanceof Error &&
+                    (error.name === "AbortError" ||
+                        error.name === "TimeoutError")
+                ) {
+                    throw error;
+                }
+                return undefined;
+            });
         const message = parsed?.success
             ? (parsed.data.error.message?.slice(0, 500) ?? "")
             : "";

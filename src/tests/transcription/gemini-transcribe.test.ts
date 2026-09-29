@@ -90,6 +90,18 @@ describe("Gemini HTTP errors", () => {
         });
     });
 
+    it.each([
+        "TimeoutError",
+        "AbortError",
+    ])("preserves %s while reading a provider error response", async (name) => {
+        const reason = new DOMException("Request interrupted", name);
+        const response = new Response("", { status: 503 });
+        vi.spyOn(response, "text").mockRejectedValue(reason);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+        await expect(geminiTranscribe(args)).rejects.toBe(reason);
+    });
+
     it("bounds the displayed message and redacts an echoed API key from diagnostics", async () => {
         vi.stubGlobal(
             "fetch",
