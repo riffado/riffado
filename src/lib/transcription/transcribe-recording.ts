@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -49,6 +48,7 @@ import {
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
+import { createTranscriptionClient } from "@/lib/transcription/openai-client";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -512,14 +512,15 @@ async function transcribeRecordingInner(
                         audioBuffer,
                         contentType,
                         language: defaultLanguage,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
                     transcriptionText = result.text;
                     detectedLanguage = result.detectedLanguage;
                 } else {
-                    const openai = new OpenAI({
+                    const openai = createTranscriptionClient({
                         apiKey,
                         baseURL: credentials.baseUrl || undefined,
-                        timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
 
                     if (transcriptionStyle === "chat") {
