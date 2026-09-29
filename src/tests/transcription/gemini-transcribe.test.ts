@@ -1,4 +1,7 @@
-import { GoogleGenerativeAIResponseError } from "@google/generative-ai";
+import {
+    GoogleGenerativeAIFetchError,
+    GoogleGenerativeAIResponseError,
+} from "@google/generative-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 
@@ -22,6 +25,122 @@ function mockResponse(body: unknown) {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+});
+
+describe("Gemini HTTP errors", () => {
+    it.each([
+        [400, "API key not valid"],
+        [429, "Quota exceeded"],
+        [404, "Model not found"],
+    ])("preserves provider diagnostics for HTTP %s", async (status, message) => {
+        const details = [
+            {
+                "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+                reason: "PROVIDER_REASON",
+            },
+        ];
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(
+                        JSON.stringify({ error: { message, details } }),
+                        { status },
+                    ),
+                ),
+        );
+        const error = await geminiTranscribe(args).catch(
+            (error: unknown) => error,
+        );
+        expect(error).toBeInstanceOf(GoogleGenerativeAIFetchError);
+        expect(error).toMatchObject({
+            status,
+            errorDetails: details,
+            message: expect.stringContaining(message),
+        });
+    });
+
+    it.each([
+        "<html>Bad gateway</html>",
+        "",
+        "null",
+        '{"error":{"message":42}}',
+    ])("falls back to HTTP status for malformed error body %s", async (body) => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(new Response(body, { status: 502 })),
+        );
+        await expect(geminiTranscribe(args)).rejects.toMatchObject({
+            status: 502,
+            message: expect.stringContaining(
+                "Google Gemini transcription failed (502).",
+            ),
+        });
+    });
+
+    it("retains the HTTP error when its body cannot be read", async () => {
+        const response = new Response("", { status: 503 });
+        vi.spyOn(response, "text").mockRejectedValue(
+            new Error("connection lost"),
+        );
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+        await expect(geminiTranscribe(args)).rejects.toMatchObject({
+            status: 503,
+        });
+    });
+
+    it("bounds the displayed message and redacts an echoed API key from diagnostics", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        error: {
+                            message: `Invalid ${args.apiKey}: ${"x".repeat(1000)}`,
+                            details: [
+                                { metadata: { credential: args.apiKey } },
+                            ],
+                        },
+                    }),
+                    { status: 400 },
+                ),
+            ),
+        );
+        const error = await geminiTranscribe(args).catch(
+            (error: unknown) => error,
+        );
+        expect(error).toBeInstanceOf(GoogleGenerativeAIFetchError);
+        if (!(error instanceof GoogleGenerativeAIFetchError)) throw error;
+        expect(error.message).toContain("[redacted]");
+        expect(error.message.length).toBeLessThan(600);
+        expect(error.message).not.toContain(args.apiKey);
+        expect(error.errorDetails).toEqual([
+            { metadata: { credential: "[redacted]" } },
+        ]);
+    });
+
+    it("preserves the message even if optional details are malformed", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        error: {
+                            message: "Quota exceeded",
+                            details: "unexpected shape",
+                        },
+                    }),
+                    { status: 429 },
+                ),
+            ),
+        );
+        await expect(geminiTranscribe(args)).rejects.toMatchObject({
+            status: 429,
+            message: expect.stringContaining("Quota exceeded"),
+            errorDetails: undefined,
+        });
+    });
 });
 
 describe("Gemini transcription response handling", () => {

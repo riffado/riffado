@@ -104,6 +104,17 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
 
+      - name: Setup Bun for transport regression
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Test native Bun transcription transport
+        run: bun src/tests/regressions/219-bun-transcription-transport.ts
+        timeout-minutes: 1
+        env:
+          BUN_CONFIG_HTTP_IDLE_TIMEOUT: '1'
+
   build:
     name: Build
     runs-on: ubuntu-latest

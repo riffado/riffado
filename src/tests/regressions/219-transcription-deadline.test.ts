@@ -39,7 +39,9 @@ describe("transcription request deadlines over HTTP", () => {
     it("aborts a provider that never sends response headers", async () => {
         const url = await serve((request) => request.resume());
 
-        await expect(fetchTranscription(url, {}, 100)).rejects.toThrow();
+        await expect(fetchTranscription(url, {}, 100)).rejects.toMatchObject({
+            name: "TimeoutError",
+        });
     });
 
     it("keeps the deadline active after response headers arrive", async () => {
@@ -50,7 +52,9 @@ describe("transcription request deadlines over HTTP", () => {
 
         const response = await fetchTranscription(url, {}, 200);
         expect(response.status).toBe(200);
-        await expect(response.json()).rejects.toThrow();
+        await expect(response.json()).rejects.toMatchObject({
+            name: "TimeoutError",
+        });
     });
 
     it("allows a delayed complete body within the deadline", async () => {
@@ -77,7 +81,9 @@ describe("transcription request deadlines over HTTP", () => {
         );
 
         controller.abort();
-        await expect(response.json()).rejects.toThrow();
+        await expect(response.json()).rejects.toMatchObject({
+            name: "AbortError",
+        });
     });
 
     it("preserves cancellation embedded in a Request", async () => {
@@ -86,7 +92,9 @@ describe("transcription request deadlines over HTTP", () => {
         const request = new Request(url, { signal: controller.signal });
         controller.abort();
 
-        await expect(fetchTranscription(request, {}, 2000)).rejects.toThrow();
+        await expect(
+            fetchTranscription(request, {}, 2000),
+        ).rejects.toMatchObject({ name: "AbortError" });
     });
 
     it("aborts an OpenAI-compatible response body without resending audio", async () => {
@@ -112,7 +120,7 @@ describe("transcription request deadlines over HTTP", () => {
                 file: new File(["audio"], "sample.wav", { type: "audio/wav" }),
                 model: "whisper-1",
             }),
-        ).rejects.toThrow();
+        ).rejects.toMatchObject({ name: "TimeoutError" });
         expect(transcriptionRequests).toBe(1);
     });
 });

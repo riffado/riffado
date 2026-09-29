@@ -1,8 +1,10 @@
 import {
     FinishReason,
     type GenerateContentResponse,
+    GoogleGenerativeAIFetchError,
     GoogleGenerativeAIResponseError,
 } from "@google/generative-ai";
+import { z } from "zod";
 import { fetchTranscription } from "@/lib/transcription/fetch";
 
 export interface GeminiTranscribeArgs {
@@ -36,6 +38,16 @@ const MIME_TYPE_MAP: Record<string, string> = {
 };
 
 const INLINE_DATA_LIMIT_BYTES = 20 * 1024 * 1024; // 20 MB
+
+const errorResponseSchema = z.object({
+    error: z.object({
+        message: z.string().optional(),
+        details: z
+            .array(z.record(z.string(), z.unknown()))
+            .optional()
+            .catch(undefined),
+    }),
+});
 
 const TRANSCRIBE_INSTRUCTION =
     "Transcribe the attached audio verbatim. Output only the transcript text — no preamble, no summary, no timestamps, no speaker labels, no markdown.";
@@ -163,8 +175,26 @@ export async function geminiTranscribe({
         timeoutMs,
     );
     if (!response.ok) {
-        throw new Error(
-            `Google Gemini transcription failed (${response.status}).`,
+        const parsed = await response
+            .text()
+            .then((body) => {
+                const sanitized = apiKey
+                    ? body.replaceAll(apiKey, "[redacted]")
+                    : body;
+                return errorResponseSchema.safeParse(JSON.parse(sanitized));
+            })
+            .catch(() => undefined);
+        const message = parsed?.success
+            ? (parsed.data.error.message?.slice(0, 500) ?? "")
+            : "";
+        const errorDetails = parsed?.success
+            ? parsed.data.error.details
+            : undefined;
+        throw new GoogleGenerativeAIFetchError(
+            `Google Gemini transcription failed (${response.status})${message ? `: ${message}` : "."}`,
+            response.status,
+            response.statusText,
+            errorDetails,
         );
     }
     const result = (await response.json()) as GenerateContentResponse;
