@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
+import { chatGptAccountEmail } from "@/lib/ai/chatgpt/connect";
+import { isChatGptProvider } from "@/lib/ai/chatgpt/shared";
 import {
     getManagedTranscriptionProvider,
     isRiffadoIncludedProviderId,
@@ -20,6 +22,8 @@ export interface ProviderListItem {
     includedSeconds?: number;
     /** Managed only: whether the current plan can use it right now. */
     available?: boolean;
+    /** ChatGPT plan usage only: the signed-in ChatGPT account email. */
+    accountEmail?: string | null;
 }
 
 /**
@@ -50,13 +54,19 @@ export async function listUserProviders(
             defaultModel: apiCredentials.defaultModel,
             isDefaultEnhancement: apiCredentials.isDefaultEnhancement,
             createdAt: apiCredentials.createdAt,
+            apiKey: apiCredentials.apiKey,
         })
         .from(apiCredentials)
         .where(eq(apiCredentials.userId, userId));
 
-    const credentials: ProviderListItem[] = rows.map((row) => ({
+    // Never return the encrypted key; for ChatGPT rows expose only the
+    // signed-in account email so the UI can show which account is linked.
+    const credentials: ProviderListItem[] = rows.map(({ apiKey, ...row }) => ({
         ...row,
         isDefaultTranscription: row.id === pointer,
+        ...(isChatGptProvider(row.provider)
+            ? { accountEmail: chatGptAccountEmail(apiKey) }
+            : {}),
     }));
 
     const managed = await getManagedTranscriptionProvider(

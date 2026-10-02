@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
+import { ChatGptConnectPanel } from "@/components/settings/chatgpt-connect-panel";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
 import {
     Dialog,
@@ -26,6 +27,8 @@ import {
     getVisiblePresets,
     isLocalPreset,
     supportsEnhancement,
+    supportsTranscription,
+    usesChatGptSignIn,
 } from "@/lib/ai/provider-presets";
 
 interface Provider {
@@ -35,6 +38,12 @@ interface Provider {
     defaultModel: string | null;
     isDefaultTranscription: boolean;
     isDefaultEnhancement: boolean;
+    accountEmail?: string | null;
+}
+
+interface ChatGptModelOption {
+    slug: string;
+    displayName: string;
 }
 
 interface EditProviderDialogProps {
@@ -75,6 +84,54 @@ export function EditProviderDialog({
     const [isDefaultTranscription, setIsDefaultTranscription] = useState(false);
     const [isDefaultEnhancement, setIsDefaultEnhancement] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const isChatGpt = provider != null && usesChatGptSignIn(provider.provider);
+    const [chatGptModels, setChatGptModels] = useState<
+        ChatGptModelOption[] | null
+    >(null);
+    const [chatGptModelsError, setChatGptModelsError] = useState<string | null>(
+        null,
+    );
+    const [showReconnect, setShowReconnect] = useState(false);
+
+    // ChatGPT rows: the model list comes from the user's plan, not a
+    // preset, so fetch it when the dialog opens.
+    useEffect(() => {
+        if (!open || !isChatGpt) return;
+        let cancelled = false;
+        setChatGptModels(null);
+        setChatGptModelsError(null);
+        fetch("/api/settings/ai/chatgpt/models")
+            .then(async (res) => {
+                const data = await res.json().catch(() => null);
+                if (!res.ok) {
+                    throw new Error(data?.error || "Couldn't load models");
+                }
+                const models = (data?.models ?? []) as ChatGptModelOption[];
+                if (!cancelled) {
+                    setChatGptModels(models);
+                    // A saved slug the plan no longer offers would leave
+                    // the select blank while still being submitted; snap
+                    // to the first available model instead.
+                    setDefaultModel((current) =>
+                        current && models.some((m) => m.slug === current)
+                            ? current
+                            : (models[0]?.slug ?? ""),
+                    );
+                }
+            })
+            .catch((error: unknown) => {
+                if (!cancelled) {
+                    setChatGptModelsError(
+                        error instanceof Error
+                            ? error.message
+                            : "Couldn't load models",
+                    );
+                }
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, isChatGpt]);
 
     useEffect(() => {
         if (open && provider) {
@@ -88,6 +145,7 @@ export function EditProviderDialog({
             );
             setApiKey("");
         } else if (!open) {
+            setShowReconnect(false);
             setProviderName("");
             setApiKey("");
             setBaseUrl("");
@@ -190,20 +248,26 @@ export function EditProviderDialog({
                         <Select
                             value={providerName}
                             onValueChange={handleProviderChange}
-                            disabled={isLoading}
+                            disabled={isLoading || isChatGpt}
                         >
                             <SelectTrigger>
                                 <SelectValue placeholder="Select a provider" />
                             </SelectTrigger>
                             <SelectContent>
-                                {visiblePresets.map((preset) => (
-                                    <SelectItem
-                                        key={preset.name}
-                                        value={preset.name}
-                                    >
-                                        {preset.name}
-                                    </SelectItem>
-                                ))}
+                                {visiblePresets
+                                    .filter(
+                                        (preset) =>
+                                            isChatGpt ===
+                                            Boolean(preset.usesChatGptSignIn),
+                                    )
+                                    .map((preset) => (
+                                        <SelectItem
+                                            key={preset.name}
+                                            value={preset.name}
+                                        >
+                                            {preset.name}
+                                        </SelectItem>
+                                    ))}
                                 {legacyLocalProvider && (
                                     <SelectItem
                                         key={legacyLocalProvider}
@@ -234,76 +298,138 @@ export function EditProviderDialog({
                         )}
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
-                        <Input
-                            id="apiKey"
-                            type="password"
-                            placeholder={
-                                selectedPreset?.placeholder ||
-                                "Enter a new key to replace the current one"
-                            }
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Shield className="size-3.5 shrink-0" />
-                            <span>
-                                For security, the saved API key is never shown.
-                                Leave this blank to keep your current key, or
-                                enter a new key to replace it.
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
-                        <Input
-                            id="baseUrl"
-                            type="text"
-                            placeholder="https://api.example.com/v1"
-                            value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                        {isHosted && (
+                    {isChatGpt ? (
+                        <div className="space-y-2">
+                            <Label>Model</Label>
+                            {chatGptModelsError ? (
+                                <p className="text-xs text-destructive">
+                                    {chatGptModelsError}
+                                </p>
+                            ) : chatGptModels === null ? (
+                                <p className="text-xs text-muted-foreground">
+                                    Loading models from your ChatGPT plan...
+                                </p>
+                            ) : (
+                                <Select
+                                    value={defaultModel}
+                                    onValueChange={setDefaultModel}
+                                    disabled={isLoading}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a model" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {chatGptModels.map((m) => (
+                                            <SelectItem
+                                                key={m.slug}
+                                                value={m.slug}
+                                            >
+                                                {m.displayName}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                             <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
-                                <code className="font-mono">
-                                    docker compose up
-                                </code>
-                                ).
+                                {provider.accountEmail
+                                    ? `Signed in as ${provider.accountEmail}. `
+                                    : ""}
+                                <button
+                                    type="button"
+                                    className="underline"
+                                    onClick={() => setShowReconnect((v) => !v)}
+                                    disabled={isLoading}
+                                >
+                                    {showReconnect
+                                        ? "Hide reconnect"
+                                        : "Reconnect ChatGPT"}
+                                </button>
                             </p>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="apiKey">API Key</Label>
+                                <Input
+                                    id="apiKey"
+                                    type="password"
+                                    placeholder={
+                                        selectedPreset?.placeholder ||
+                                        "Enter a new key to replace the current one"
+                                    }
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    disabled={isLoading}
+                                    className="font-mono text-sm"
+                                />
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <Shield className="size-3.5 shrink-0" />
+                                    <span>
+                                        For security, the saved API key is never
+                                        shown. Leave this blank to keep your
+                                        current key, or enter a new key to
+                                        replace it.
+                                    </span>
+                                </div>
+                            </div>
 
-                    <TranscriptionModelPicker
-                        preset={selectedPreset}
-                        apiKey={apiKey}
-                        baseUrl={baseUrl}
-                        value={defaultModel}
-                        onChange={setDefaultModel}
-                        disabled={isLoading}
-                    />
+                            <div className="space-y-2">
+                                <Label htmlFor="baseUrl">
+                                    Base URL (Optional)
+                                </Label>
+                                <Input
+                                    id="baseUrl"
+                                    type="text"
+                                    placeholder="https://api.example.com/v1"
+                                    value={baseUrl}
+                                    onChange={(e) => setBaseUrl(e.target.value)}
+                                    disabled={isLoading}
+                                    className="font-mono text-sm"
+                                />
+                                {isHosted && (
+                                    <p className="text-xs text-muted-foreground">
+                                        We can&apos;t reach{" "}
+                                        <code className="font-mono">
+                                            localhost
+                                        </code>{" "}
+                                        or other private addresses from the
+                                        hosted app. To use LM Studio or Ollama,
+                                        self-host Riffado (
+                                        <code className="font-mono">
+                                            docker compose up
+                                        </code>
+                                        ).
+                                    </p>
+                                )}
+                            </div>
 
-                    <Panel variant="inset" className="space-y-2 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultTranscription}
-                                onChange={(e) =>
-                                    setIsDefaultTranscription(e.target.checked)
-                                }
+                            <TranscriptionModelPicker
+                                preset={selectedPreset}
+                                apiKey={apiKey}
+                                baseUrl={baseUrl}
+                                value={defaultModel}
+                                onChange={setDefaultModel}
                                 disabled={isLoading}
                             />
-                            <span>Use for transcription</span>
-                        </label>
+                        </>
+                    )}
+
+                    <Panel variant="inset" className="space-y-2 text-sm">
+                        {supportsTranscription(provider.provider) && (
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={isDefaultTranscription}
+                                    onChange={(e) =>
+                                        setIsDefaultTranscription(
+                                            e.target.checked,
+                                        )
+                                    }
+                                    disabled={isLoading}
+                                />
+                                <span>Use for transcription</span>
+                            </label>
+                        )}
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -343,6 +469,17 @@ export function EditProviderDialog({
                         </MetalButton>
                     </div>
                 </form>
+
+                {isChatGpt && showReconnect && (
+                    <ChatGptConnectPanel
+                        reconnect
+                        onConnected={() => {
+                            setShowReconnect(false);
+                            onSuccess();
+                            onOpenChange(false);
+                        }}
+                    />
+                )}
             </DialogContent>
         </Dialog>
     );

@@ -7,17 +7,28 @@ import {
     LOCAL_PRESET_NAMES,
     PROVIDER_PRESETS,
     supportsEnhancement,
+    supportsTranscription,
+    usesChatGptSignIn,
 } from "@/lib/ai/provider-presets";
 
 describe("provider-presets", () => {
     describe("visibility", () => {
-        it("shows all presets on self-host and only non-local presets on hosted", () => {
+        it("shows all presets on self-host and hides local + self-host-only presets on hosted", () => {
             expect(getVisiblePresets({ isHosted: false })).toEqual(
                 PROVIDER_PRESETS,
             );
             expect(getVisiblePresets({ isHosted: true })).toEqual(
-                PROVIDER_PRESETS.filter((p) => !LOCAL_PRESET_NAMES.has(p.name)),
+                PROVIDER_PRESETS.filter(
+                    (p) => !LOCAL_PRESET_NAMES.has(p.name) && !p.selfHostOnly,
+                ),
             );
+        });
+
+        it("never offers ChatGPT plan usage on hosted", () => {
+            const hosted = getVisiblePresets({ isHosted: true });
+            expect(hosted.some((p) => p.name === "ChatGPT")).toBe(false);
+            const selfHost = getVisiblePresets({ isHosted: false });
+            expect(selfHost.some((p) => p.name === "ChatGPT")).toBe(true);
         });
     });
 
@@ -112,6 +123,23 @@ describe("provider-presets", () => {
 
         it("is true for an unknown/custom provider name", () => {
             expect(supportsEnhancement("Nope")).toBe(true);
+        });
+    });
+
+    describe("ChatGPT plan usage preset", () => {
+        it("is enhancement-only and signs in with ChatGPT", () => {
+            expect(supportsEnhancement("ChatGPT")).toBe(true);
+            expect(supportsTranscription("ChatGPT")).toBe(false);
+            expect(usesChatGptSignIn("ChatGPT")).toBe(true);
+        });
+
+        it("leaves other providers able to transcribe", () => {
+            for (const preset of PROVIDER_PRESETS) {
+                if (preset.name === "ChatGPT") continue;
+                expect(supportsTranscription(preset.name)).toBe(true);
+                expect(usesChatGptSignIn(preset.name)).toBe(false);
+            }
+            expect(supportsTranscription("Some Custom Name")).toBe(true);
         });
     });
 });

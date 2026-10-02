@@ -10,7 +10,11 @@ import {
     userSettings,
 } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
-import { findPreset, getTranscriptionStyle } from "@/lib/ai/provider-presets";
+import {
+    findPreset,
+    getTranscriptionStyle,
+    supportsTranscription,
+} from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
@@ -428,6 +432,18 @@ async function transcribeRecordingInner(
             detectedLanguage = result.detectedLanguage;
             persistProvider = result.provider;
             persistModel = result.model;
+        } else if (
+            credentials &&
+            !supportsTranscription(credentials.provider)
+        ) {
+            // Enhancement-only providers (ChatGPT plan usage) can't take
+            // audio. The settings API refuses to make them the default, but
+            // a per-request providerId could still point at one.
+            return {
+                success: false,
+                error: `${credentials.provider} can't transcribe audio. Choose a different transcription provider in Settings → Providers.`,
+                errorCode: "NO_TRANSCRIPTION_PROVIDER",
+            };
         } else if (credentials) {
             const apiKey = decrypt(credentials.apiKey);
 

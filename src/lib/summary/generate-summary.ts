@@ -8,6 +8,8 @@ import {
     userSettings,
 } from "@/db/schema";
 import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
+import { runChatGptCompletion } from "@/lib/ai/chatgpt/connect";
+import { isChatGptProvider } from "@/lib/ai/chatgpt/shared";
 import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import {
     getAiOutputLanguageDirective,
@@ -187,13 +189,6 @@ export async function generateSummaryForRecording(
         );
     }
 
-    const apiKey = decrypt(credentials.apiKey);
-
-    const openai = new OpenAI({
-        apiKey,
-        baseURL: credentials.baseUrl || undefined,
-    });
-
     // The configured "default model" on apiCredentials can be a Whisper
     // (transcription-only) id when the user only set up a transcription
     // provider. Pick a sane lightweight chat model per provider in that
@@ -242,19 +237,38 @@ export async function generateSummaryForRecording(
         ? `${baseSystem} ${languageDirective}`
         : baseSystem;
 
-    const response = await openai.chat.completions.create(
-        buildChatCompletionParams({
-            model,
-            messages: [
-                { role: "system", content: systemContent },
-                { role: "user", content: prompt },
-            ],
-            temperature: 0.5,
-            maxTokens: 2000,
-        }),
-    );
+    let rawContent: string;
+    if (isChatGptProvider(credentials.provider)) {
+        // ChatGPT plan usage: Responses API on the user's subscription.
+        // The provider's default model is a plan model slug, so skip the
+        // Whisper fallback above (it never applies) and pass it through.
+        const result = await runChatGptCompletion(credentials, {
+            model: credentials.defaultModel,
+            instructions: systemContent,
+            input: prompt,
+        });
+        rawContent = result.text.trim();
+        model = result.model;
+    } else {
+        const openai = new OpenAI({
+            apiKey: decrypt(credentials.apiKey),
+            baseURL: credentials.baseUrl || undefined,
+        });
 
-    const rawContent = response.choices[0]?.message?.content?.trim() || "";
+        const response = await openai.chat.completions.create(
+            buildChatCompletionParams({
+                model,
+                messages: [
+                    { role: "system", content: systemContent },
+                    { role: "user", content: prompt },
+                ],
+                temperature: 0.5,
+                maxTokens: 2000,
+            }),
+        );
+
+        rawContent = response.choices[0]?.message?.content?.trim() || "";
+    }
 
     let summary = "";
     let keyPoints: string[] = [];

@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
 import { listUserProviders } from "@/lib/ai/list-providers";
-import { supportsEnhancement } from "@/lib/ai/provider-presets";
+import {
+    supportsEnhancement,
+    supportsTranscription,
+    usesChatGptSignIn,
+} from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
@@ -40,6 +44,24 @@ export const POST = apiHandler(async (request: Request) => {
             ErrorCode.MISSING_REQUIRED_FIELD,
             "Provider and API key are required",
             400,
+        );
+    }
+
+    if (usesChatGptSignIn(provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${provider} is connected with “Sign in with ChatGPT”, not an API key`,
+            400,
+            { field: "provider" },
+        );
+    }
+
+    if (isDefaultTranscription && !supportsTranscription(provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${provider} can't transcribe audio (AI enhancements only)`,
+            400,
+            { field: "isDefaultTranscription" },
         );
     }
 

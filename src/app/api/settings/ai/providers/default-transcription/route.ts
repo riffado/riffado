@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { apiCredentials } from "@/db/schema";
+import { supportsTranscription } from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { requireApiSession } from "@/lib/auth-server";
 import { getEntitlements } from "@/lib/entitlements";
@@ -52,7 +53,10 @@ export const PUT = apiHandler(async (request: Request) => {
         }
     } else {
         const [provider] = await db
-            .select({ id: apiCredentials.id })
+            .select({
+                id: apiCredentials.id,
+                provider: apiCredentials.provider,
+            })
             .from(apiCredentials)
             .where(
                 and(
@@ -64,6 +68,14 @@ export const PUT = apiHandler(async (request: Request) => {
 
         if (!provider) {
             throw new AppError(ErrorCode.NOT_FOUND, "Provider not found", 404);
+        }
+
+        if (!supportsTranscription(provider.provider)) {
+            throw new AppError(
+                ErrorCode.INVALID_INPUT,
+                `${provider.provider} can't transcribe audio (AI enhancements only)`,
+                400,
+            );
         }
     }
 

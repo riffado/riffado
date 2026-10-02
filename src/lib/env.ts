@@ -29,6 +29,15 @@ const baseEnvSchema = z.object({
         .optional()
         .transform((val) => val === "true"),
 
+    /**
+     * Opt in to "Sign in with ChatGPT" plan usage for summaries and titles
+     * (self-host only). Off by default: when on, transcript text for
+     * summaries/titles goes to OpenAI for users who connect ChatGPT.
+     * Strict: anything but "true"/"false"/unset fails startup, so a typo
+     * like "TRUE" or "1" can't silently leave it off.
+     */
+    ENABLE_CHATGPT_PLAN_USAGE: optionalStrictBoolean,
+
     /** Disable the self-host update-available check. */
     DISABLE_UPDATE_CHECK: z
         .string()
@@ -740,6 +749,7 @@ function validateEnv(): Env {
             IS_HOSTED: process.env.IS_HOSTED,
             DISABLE_REGISTRATION: process.env.DISABLE_REGISTRATION,
             DISABLE_UPDATE_CHECK: process.env.DISABLE_UPDATE_CHECK,
+            ENABLE_CHATGPT_PLAN_USAGE: process.env.ENABLE_CHATGPT_PLAN_USAGE,
             DATABASE_URL: process.env.DATABASE_URL,
             BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
             API_TOKEN_HASH_SECRET: process.env.API_TOKEN_HASH_SECRET,

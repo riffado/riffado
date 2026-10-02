@@ -15,12 +15,24 @@ vi.mock("@/db", () => ({
     },
 }));
 
+// The ChatGPT feature gate reads validated env; not under test here.
+vi.mock("@/lib/ai/chatgpt/feature", () => ({
+    isChatGptPlanUsageEnabled: () => false,
+    assertChatGptPlanUsageEnabled: vi.fn(),
+}));
+
 vi.mock("@/lib/encryption", () => ({
     decrypt: vi.fn().mockReturnValue("fake-api-key"),
 }));
 
 vi.mock("@/lib/encryption/fields", () => ({
     decryptJsonField: vi.fn().mockReturnValue(null),
+}));
+
+// `@/lib/errors` reports 5xx to PostHog, which pulls in env validation.
+vi.mock("@/lib/posthog-server", () => ({
+    captureServerEvent: vi.fn().mockResolvedValue(undefined),
+    captureServerException: vi.fn(),
 }));
 
 const { chatCompletionsCreate } = vi.hoisted(() => ({
