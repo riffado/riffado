@@ -62,6 +62,28 @@ describe("elevenLabsTranscribe -- request shape", () => {
         expect(init.redirect).toBe("error");
     });
 
+    it("disables Bun's 300 s default fetch timeout so timeoutMs applies", async () => {
+        const fetchSpy = vi.fn().mockResolvedValue(
+            new Response(JSON.stringify({ text: "hello" }), {
+                status: 200,
+            }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await elevenLabsTranscribe({
+            apiKey: "sk_test",
+            model: "scribe_v2",
+            file: fakeFile(),
+            isHosted: true,
+            diarize: false,
+            timeoutMs: 5000,
+        });
+
+        const [, init] = fetchSpy.mock.calls[0];
+        expect(init.timeout).toBe(false);
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
     it("strips a trailing slash from a custom base URL", async () => {
         const fetchSpy = vi
             .fn()

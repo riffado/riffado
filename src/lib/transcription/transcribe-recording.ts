@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { ClientOptions } from "openai";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
@@ -35,6 +36,7 @@ import {
     buildAudioFile,
     getAudioFileMetadata,
 } from "@/lib/transcription/audio-file";
+import { BUN_NO_FETCH_TIMEOUT } from "@/lib/transcription/bun-fetch";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 import {
@@ -520,6 +522,14 @@ async function transcribeRecordingInner(
                         apiKey,
                         baseURL: credentials.baseUrl || undefined,
                         timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                        // Bun's fetch has its own 300 s default timeout, which
+                        // overrides the SDK timeout above: any transcription
+                        // taking longer than 5 minutes failed with "Request
+                        // timed out" and was retried twice. `timeout: false`
+                        // is a Bun-only fetch option (ignored elsewhere), so
+                        // WHISPER_REQUEST_TIMEOUT_MS stays in charge.
+                        fetchOptions:
+                            BUN_NO_FETCH_TIMEOUT as ClientOptions["fetchOptions"],
                     });
 
                     if (transcriptionStyle === "chat") {

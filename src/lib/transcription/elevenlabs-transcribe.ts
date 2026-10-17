@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { BUN_NO_FETCH_TIMEOUT } from "@/lib/transcription/bun-fetch";
 
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1";
 const OFFICIAL_ELEVENLABS_ORIGINS = [
@@ -386,6 +387,9 @@ async function postSpeechToText(args: {
                 body: form,
                 signal: controller.signal,
                 redirect: "error",
+                // Bun's fetch would otherwise cut the request at its 300 s
+                // default, ignoring timeoutMs (see bun-fetch.ts).
+                ...BUN_NO_FETCH_TIMEOUT,
             });
 
             if (response.ok) {
