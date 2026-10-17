@@ -157,6 +157,14 @@ const baseEnvSchema = z.object({
                 .max(25 * 1024 * 1024),
         ),
 
+    /**
+     * `auto` (default) re-encodes OpenAI-style transcription inputs above
+     * WHISPER_MAX_BYTES; `off` always sends the original file. Use `off` with a
+     * self-hosted Whisper-compatible server that has no 25 MiB request cap, where
+     * the re-encode only costs accuracy and CPU.
+     */
+    WHISPER_COMPRESS: z.enum(["auto", "off"]).optional().default("auto"),
+
     /** Starting mono Opus bitrate for oversized transcription inputs. */
     WHISPER_COMPRESS_BITRATE_KBPS: z
         .string()
@@ -764,6 +772,7 @@ function validateEnv(): Env {
             BACKGROUND_SYNC_INTERVAL_MS:
                 process.env.BACKGROUND_SYNC_INTERVAL_MS,
             WHISPER_MAX_BYTES: process.env.WHISPER_MAX_BYTES,
+            WHISPER_COMPRESS: process.env.WHISPER_COMPRESS,
             WHISPER_COMPRESS_BITRATE_KBPS:
                 process.env.WHISPER_COMPRESS_BITRATE_KBPS,
             WHISPER_REQUEST_TIMEOUT_MS: process.env.WHISPER_REQUEST_TIMEOUT_MS,

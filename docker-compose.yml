@@ -68,6 +68,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_MARKETING_FROM: ${SMTP_MARKETING_FROM:-}
       SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+
+      # Transcription (optional): `off` sends original audio to self-hosted
+      # Whisper-compatible servers instead of re-encoding above 25 MiB.
+      WHISPER_COMPRESS: ${WHISPER_COMPRESS:-auto}
     volumes:
       # Official compose defaults LOCAL_STORAGE_PATH to /app/audio.
       # The app default without that override is ./storage → /app/storage
