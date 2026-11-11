@@ -2,7 +2,10 @@ import { eq } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
-import { supportsEnhancement } from "@/lib/ai/provider-presets";
+import {
+    getEnhancementModel,
+    supportsEnhancement,
+} from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
 import { buildChatCompletionParams } from "./chat-completion-params";
@@ -90,15 +93,12 @@ export async function generateTitleFromTranscription(
             baseURL: credentials.baseUrl || undefined,
         });
 
-        // Use a lightweight model for title generation
-        // Prefer chat models (gpt-4o-mini, gpt-3.5-turbo) over Whisper models
-        // Fallback to default model if no specific model is set
-        let model = credentials.defaultModel || "gpt-4o-mini";
-
-        // If the model is a Whisper model (for transcription), use a chat model instead
-        if (model.includes("whisper") || model.includes("whisper-")) {
-            model = "gpt-4o-mini";
-        }
+        // The credential's model is usually a Whisper id, which no
+        // `chat.completions` endpoint accepts: use the provider's chat model.
+        const model = getEnhancementModel(
+            credentials.provider,
+            credentials.defaultModel,
+        );
 
         // Truncate transcription if too long (to save tokens)
         const maxTranscriptionLength = 2000;

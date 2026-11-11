@@ -133,3 +133,55 @@ describe("generateTitleFromTranscription -- enhancement provider exclusion", () 
         expect(chatCompletionsCreate).not.toHaveBeenCalled();
     });
 });
+
+describe("generateTitleFromTranscription -- model selection", () => {
+    it("uses the provider chat model when the credential model is a Whisper id", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        const title = await generateTitleFromTranscription(
+            "user-1",
+            "some transcript text",
+        );
+
+        expect(title).toBe("Generated Title");
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            model: string;
+        };
+        expect(payload.model).toBe("qwen/qwen3.8-27b");
+        expect(payload.model).not.toContain("whisper");
+        expect(payload.model).not.toBe("gpt-4o-mini");
+    });
+
+    it("keeps an explicit chat model from the credential", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "openai/gpt-oss-120b",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateTitleFromTranscription("user-1", "some transcript text");
+
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            model: string;
+        };
+        expect(payload.model).toBe("openai/gpt-oss-120b");
+    });
+});

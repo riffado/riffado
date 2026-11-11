@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     findPreset,
+    getEnhancementModel,
     getTranscriptionStyle,
     getVisiblePresets,
     isLocalPreset,
@@ -112,6 +113,45 @@ describe("provider-presets", () => {
 
         it("is true for an unknown/custom provider name", () => {
             expect(supportsEnhancement("Nope")).toBe(true);
+        });
+    });
+
+    describe("getEnhancementModel", () => {
+        it("swaps a Groq Whisper default for a chat model Groq serves", () => {
+            expect(getEnhancementModel("Groq", "whisper-large-v3-turbo")).toBe(
+                "qwen/qwen3.8-27b",
+            );
+            expect(getEnhancementModel("Groq", "whisper-large-v3")).not.toBe(
+                "gpt-4o-mini",
+            );
+        });
+
+        it("swaps an unset or transcription model for every curated preset", () => {
+            for (const preset of PROVIDER_PRESETS) {
+                if (!preset.enhancementModel) continue;
+                expect(getEnhancementModel(preset.name, null)).toBe(
+                    preset.enhancementModel,
+                );
+                expect(
+                    getEnhancementModel(preset.name, preset.defaultModel),
+                ).toBe(preset.enhancementModel);
+            }
+        });
+
+        it("keeps a chat model that is not a transcription id", () => {
+            expect(getEnhancementModel("Groq", "openai/gpt-oss-120b")).toBe(
+                "openai/gpt-oss-120b",
+            );
+            expect(getEnhancementModel("OpenAI", "gpt-4o-mini")).toBe(
+                "gpt-4o-mini",
+            );
+        });
+
+        it("falls back to gpt-4o-mini for unknown providers with no model", () => {
+            expect(getEnhancementModel("Nope", null)).toBe("gpt-4o-mini");
+            expect(getEnhancementModel("Nope", "whisper-1")).toBe(
+                "gpt-4o-mini",
+            );
         });
     });
 });

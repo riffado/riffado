@@ -15,6 +15,14 @@ export interface ProviderPreset {
      * to `false`.
      */
     supportsEnhancement?: boolean;
+    /**
+     * Chat model for enhancements when the credential's model is a
+     * transcription id (or unset). Needed wherever the provider serves
+     * neither `defaultModel` nor `gpt-4o-mini` on `chat.completions` --
+     * Groq, for one, rejects both. `gpt-4o-mini` is the fallback when a
+     * provider leaves this unset.
+     */
+    enhancementModel?: string;
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -24,6 +32,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "sk-...",
         defaultModel: "whisper-1",
         transcriptionStyle: "whisper",
+        enhancementModel: "gpt-4o-mini",
         knownTranscriptionModels: [
             "whisper-1",
             "gpt-4o-transcribe",
@@ -37,6 +46,10 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "gsk_...",
         defaultModel: "whisper-large-v3-turbo",
         transcriptionStyle: "whisper",
+        // Groq serves neither llama-3.x nor gpt-4o-mini on chat.completions
+        // any more; qwen3.8-27b returns plain text, gpt-oss-20b spends its
+        // budget on reasoning and yields an empty completion.
+        enhancementModel: "qwen/qwen3.8-27b",
         knownTranscriptionModels: [
             "whisper-large-v3-turbo",
             "whisper-large-v3",
@@ -48,6 +61,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "...",
         defaultModel: "openai/whisper-large-v3",
         transcriptionStyle: "whisper",
+        enhancementModel: "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         knownTranscriptionModels: [
             "openai/whisper-large-v3",
             "nvidia/parakeet-tdt-0.6b-v3",
@@ -59,6 +73,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "sk-or-...",
         defaultModel: "google/gemini-2.5-flash-lite",
         transcriptionStyle: "chat",
+        enhancementModel: "google/gemini-2.5-flash-lite",
         fetchAudioModels: true,
     },
     {
@@ -141,4 +156,24 @@ export function getTranscriptionStyle(
  */
 export function supportsEnhancement(providerName: string): boolean {
     return findPreset(providerName)?.supportsEnhancement ?? true;
+}
+
+/**
+ * Model to call `chat.completions` with for summaries and titles. A stored
+ * credential model is often a transcription id (Whisper, Parakeet, Scribe)
+ * or unset, neither of which any provider accepts for chat; in that case use
+ * the provider's enhancement model, falling back to `gpt-4o-mini` for
+ * OpenAI-compatible proxies and custom endpoints.
+ */
+export function getEnhancementModel(
+    providerName: string,
+    model: string | null | undefined,
+): string {
+    const preset = findPreset(providerName);
+    const isTranscriptionModel =
+        !model ||
+        /whisper|parakeet|scribe/.test(model) ||
+        preset?.knownTranscriptionModels?.includes(model) === true;
+    if (!isTranscriptionModel) return model;
+    return preset?.enhancementModel ?? "gpt-4o-mini";
 }
