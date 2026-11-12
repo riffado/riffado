@@ -197,11 +197,16 @@ export function supportsEnhancement(providerName: string): boolean {
     return findPresetLoose(providerName)?.supportsEnhancement ?? true;
 }
 
-const TRANSCRIPTION_MODEL_PATTERN = /whisper|parakeet|scribe|transcribe/i;
+// `scribe` only at a word start, so a chat fine-tune such as
+// `ft:gpt-4o-mini:acme:describe-v1` is not taken for ElevenLabs Scribe.
+const TRANSCRIPTION_MODEL_PATTERN =
+    /whisper|parakeet|transcribe|(?<![a-z])scribe/i;
 
-// Substrings the summary path matched before preset lookup existed. They
-// still catch other domains and gateway URLs (for example a Cloudflare AI
-// Gateway path ending in `/groq`).
+// Service names the summary path matched in the URL before preset lookup
+// existed. For a `Custom` or unknown provider name they still catch other
+// domains and gateway URLs (for example a Cloudflare AI Gateway path ending
+// in `/groq`). They match whole host labels or path segments only, so
+// `worktogether.example.com` is not Together AI.
 const URL_KEYWORDS: readonly (readonly [string, string])[] = [
     ["groq", "Groq"],
     ["together", "Together AI"],
@@ -217,6 +222,22 @@ function hostOf(url: string | null | undefined): string | undefined {
     }
 }
 
+/** Host labels and path segments of a URL, split on `.`, `/`, `-`, `_`. */
+function urlWords(url: string | null | undefined): Set<string> {
+    if (typeof url !== "string" || !url.trim()) return new Set();
+    try {
+        const { host, pathname } = new URL(url.trim());
+        return new Set(
+            `${host}${pathname}`
+                .toLowerCase()
+                .split(/[./_-]+/)
+                .filter(Boolean),
+        );
+    } catch {
+        return new Set();
+    }
+}
+
 /**
  * Preset for a credential with a base URL: the requests go there. Order:
  * 1. A preset whose endpoint host equals the URL host. The edit dialog can
@@ -225,7 +246,8 @@ function hostOf(url: string | null | undefined): string | undefined {
  * 2. The provider name. An unknown endpoint, such as a proxy, keeps the
  *    named provider's defaults. `Custom` has no endpoint and no model, so it
  *    is skipped here.
- * 3. A service keyword in the URL, as the summary path matched before.
+ * 3. A service name in the URL (`URL_KEYWORDS`), as the summary path
+ *    matched before. Only for a `Custom` or unknown provider name.
  */
 function resolvePreset(
     providerName: string,
@@ -242,9 +264,8 @@ function resolvePreset(
     }
     const byName = findPresetLoose(providerName);
     if (byName && (byName.baseUrl || byName.defaultModel)) return byName;
-    if (typeof baseUrl !== "string") return undefined;
-    const url = baseUrl.toLowerCase();
-    const keyword = URL_KEYWORDS.find(([word]) => url.includes(word));
+    const words = urlWords(baseUrl);
+    const keyword = URL_KEYWORDS.find(([word]) => words.has(word));
     return keyword ? findPreset(keyword[1]) : undefined;
 }
 

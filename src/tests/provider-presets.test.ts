@@ -356,7 +356,30 @@ describe("provider-presets", () => {
                     "https://gateway.ai.cloudflare.com/v1/acct/gw/groq",
                 ),
             ).toBe("qwen/qwen3.8-27b");
-            // A named provider at an unknown proxy keeps its own defaults.
+            // Whole labels or segments only.
+            expect(
+                getEnhancementModel(
+                    "Custom",
+                    "whisper-1",
+                    "https://worktogether.example.com/v1",
+                ),
+            ).toBe("gpt-4o-mini");
+            expect(
+                getEnhancementModel(
+                    "Custom",
+                    "whisper-1",
+                    "https://my-groq-proxy.example.com/v1",
+                ),
+            ).toBe("qwen/qwen3.8-27b");
+            // A named provider at an unknown proxy keeps its own defaults,
+            // even when the URL names another service.
+            expect(
+                getEnhancementModel(
+                    "OpenAI",
+                    "whisper-1",
+                    "https://gateway.ai.cloudflare.com/v1/acct/gw/groq",
+                ),
+            ).toBe("gpt-4o-mini");
             expect(
                 getEnhancementModel(
                     "OpenAI",
@@ -387,6 +410,18 @@ describe("provider-presets", () => {
                     "https://generativelanguage.googleapis.com/v1beta/openai/",
                 ),
             ).toBe("gemini-2.5-flash-lite");
+        });
+
+        it("keeps a chat fine-tune whose name contains 'scribe'", () => {
+            expect(
+                getEnhancementModel(
+                    "OpenAI",
+                    "ft:gpt-4o-mini:acme:describe-v1",
+                ),
+            ).toBe("ft:gpt-4o-mini:acme:describe-v1");
+            expect(getEnhancementModel("Custom", "elevenlabs/scribe_v2")).toBe(
+                "gpt-4o-mini",
+            );
         });
 
         it("never returns a transcription id", () => {

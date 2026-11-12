@@ -223,11 +223,11 @@ describe("generateTitleFromTranscription -- model selection", () => {
                 createdAt: new Date("2026-01-01"),
             },
             {
-                id: "creds-openai",
-                provider: "OpenAI",
+                id: "creds-groq",
+                provider: "Groq",
                 apiKey: "enc-2",
-                baseUrl: null,
-                defaultModel: "whisper-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
                 isDefaultEnhancement: false,
                 createdAt: new Date("2026-01-02"),
             },
@@ -235,10 +235,15 @@ describe("generateTitleFromTranscription -- model selection", () => {
 
         await generateTitleFromTranscription("user-1", "some transcript text");
 
+        // Only the Groq row can give this endpoint and model.
+        const options = (OpenAI as unknown as Mock).mock.calls[0][0] as {
+            baseURL?: string;
+        };
+        expect(options.baseURL).toBe("https://api.groq.com/openai/v1");
         const payload = chatCompletionsCreate.mock.calls[0][0] as {
             model: string;
         };
-        expect(payload.model).toBe("gpt-4o-mini");
+        expect(payload.model).toBe("qwen/qwen3.8-27b");
     });
 
     it("sends a Gemini credential without a URL to Google's OpenAI-compatible endpoint", async () => {

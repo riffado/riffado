@@ -257,6 +257,15 @@ export async function generateSummaryForRecording(
     );
 
     const rawContent = stripReasoning(response.choices[0]?.message?.content);
+    // No answer (empty content, or only reasoning that used up the budget):
+    // fail instead of saving an empty summary over the existing one.
+    if (!rawContent) {
+        throw new AppError(
+            ErrorCode.UPSTREAM_BAD_RESPONSE,
+            "The AI provider returned no summary. Please try again.",
+            502,
+        );
+    }
 
     let summary = "";
     let keyPoints: string[] = [];

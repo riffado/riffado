@@ -50,6 +50,7 @@ import { OpenAI } from "openai";
 import { db } from "@/db";
 import { ErrorCode } from "@/lib/errors";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
+import { upsertEnhancement } from "@/lib/transcription/persist";
 
 const userId = "user-1";
 const recordingId = "rec-1";
@@ -256,5 +257,31 @@ describe("generateSummaryForRecording -- model and endpoint", () => {
         const result = await generateSummaryForRecording(userId, recordingId);
 
         expect(result.summary).toBe("Clean summary");
+    });
+
+    it.each([
+        ["only unfinished reasoning", "<think>Long reasoning that ran out"],
+        ["empty content", ""],
+        ["null content", null],
+    ])("fails without saving when the reply has %s", async (_label, content) => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [{ message: { content } }],
+        });
+        mockLookups([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await expect(
+            generateSummaryForRecording(userId, recordingId),
+        ).rejects.toMatchObject({ code: ErrorCode.UPSTREAM_BAD_RESPONSE });
+        expect(upsertEnhancement).not.toHaveBeenCalled();
     });
 });

@@ -50,18 +50,36 @@ export function buildChatCompletionParams(args: {
 
 // Reasoning models (Qwen3 on Groq, DeepSeek R1, some proxies) can return
 // their reasoning inline as `<think>...</think>` before the answer.
-const REASONING_BLOCK = /<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi;
+const REASONING_OPEN_AT_START = /^<think(?:ing)?>/i;
 const REASONING_OPEN = /<think(?:ing)?>/i;
+const REASONING_CLOSE = /<\/think(?:ing)?>/i;
+const REASONING_CLOSE_ALL = /<\/think(?:ing)?>/gi;
 
 /**
- * Answer text of a chat completion without inline reasoning blocks. An
- * opening tag with no closing tag means the token budget ran out during the
- * reasoning, so everything from that tag on is dropped.
+ * Answer text of a chat completion without leading inline reasoning.
+ * Reasoning comes before the answer, so only these shapes are stripped:
+ * - The reply starts with an opening tag: drop that block. Repeat while the
+ *   rest starts with another block. An opening tag with no closing tag means
+ *   the token budget ran out during the reasoning: there is no answer.
+ * - A closing tag comes before any opening tag: the reply started inside
+ *   the reasoning (some chat templates put the opening tag in the prompt),
+ *   so drop everything up to the last such closing tag.
+ * Tag text in the middle of an answer (a transcript about this markup) is
+ * left as it is.
  */
 export function stripReasoning(content: string | null | undefined): string {
     if (typeof content !== "string") return "";
-    let text = content.replace(REASONING_BLOCK, "");
-    const open = text.search(REASONING_OPEN);
-    if (open !== -1) text = text.slice(0, open);
-    return text.trim();
+    let text = content.trim();
+    while (REASONING_OPEN_AT_START.test(text)) {
+        const close = REASONING_CLOSE.exec(text);
+        if (!close) return "";
+        text = text.slice(close.index + close[0].length).trim();
+    }
+    const firstOpen = text.search(REASONING_OPEN);
+    let answerStart = -1;
+    for (const match of text.matchAll(REASONING_CLOSE_ALL)) {
+        if (firstOpen !== -1 && match.index > firstOpen) break;
+        answerStart = match.index + match[0].length;
+    }
+    return answerStart === -1 ? text : text.slice(answerStart).trim();
 }
