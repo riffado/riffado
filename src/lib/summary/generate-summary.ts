@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
 import {
+    getEnhancementBaseUrl,
     getEnhancementModel,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
@@ -194,7 +195,10 @@ export async function generateSummaryForRecording(
 
     const openai = new OpenAI({
         apiKey,
-        baseURL: credentials.baseUrl || undefined,
+        baseURL: getEnhancementBaseUrl(
+            credentials.provider,
+            credentials.baseUrl,
+        ),
     });
 
     // The configured "default model" on apiCredentials can be a Whisper

@@ -23,6 +23,13 @@ export interface ProviderPreset {
      * provider leaves this unset.
      */
     enhancementModel?: string;
+    /**
+     * OpenAI-compatible endpoint for enhancements when the credential has no
+     * base URL. Needed where `baseUrl` is empty because transcription uses a
+     * native client: without it, `chat.completions` would go to OpenAI with
+     * the provider's key.
+     */
+    enhancementBaseUrl?: string;
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -96,6 +103,10 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         placeholder: "AIza...",
         defaultModel: "gemini-2.0-flash",
         transcriptionStyle: "gemini",
+        // Transcription uses the native SDK, so `baseUrl` stays empty; titles
+        // and summaries go through Google's OpenAI-compatible endpoint.
+        enhancementBaseUrl:
+            "https://generativelanguage.googleapis.com/v1beta/openai",
         knownTranscriptionModels: [
             "gemini-2.0-flash",
             "gemini-2.5-flash",
@@ -155,7 +166,9 @@ export function getTranscriptionStyle(
  * `chat.completions`. Unknown/custom provider names default to `true`.
  */
 export function supportsEnhancement(providerName: string): boolean {
-    return findPreset(providerName)?.supportsEnhancement ?? true;
+    // Same case-insensitive lookup as `getEnhancementModel`, so a legacy
+    // `elevenlabs` row is not accepted as an enhancement provider.
+    return resolvePreset(providerName)?.supportsEnhancement ?? true;
 }
 
 /**
@@ -208,4 +221,17 @@ export function getEnhancementModel(
         !model || /whisper|parakeet|scribe|transcribe/i.test(model);
     if (!isTranscriptionModel) return model;
     return preset?.enhancementModel || preset?.defaultModel || "gpt-4o-mini";
+}
+
+/**
+ * Base URL for the enhancement `chat.completions` client: the credential's
+ * own URL, else the preset's `enhancementBaseUrl`, else `undefined` (the
+ * OpenAI SDK default).
+ */
+export function getEnhancementBaseUrl(
+    providerName: string,
+    baseUrl: string | null | undefined,
+): string | undefined {
+    if (baseUrl) return baseUrl;
+    return resolvePreset(providerName)?.enhancementBaseUrl || undefined;
 }

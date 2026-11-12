@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     findPreset,
+    getEnhancementBaseUrl,
     getEnhancementModel,
     getTranscriptionStyle,
     getVisiblePresets,
@@ -113,6 +114,40 @@ describe("provider-presets", () => {
 
         it("is true for an unknown/custom provider name", () => {
             expect(supportsEnhancement("Nope")).toBe(true);
+        });
+
+        it("matches preset names case-insensitively", () => {
+            expect(supportsEnhancement("elevenlabs")).toBe(false);
+            expect(supportsEnhancement(" ELEVENLABS ")).toBe(false);
+        });
+    });
+
+    describe("getEnhancementBaseUrl", () => {
+        const GEMINI_OPENAI_URL =
+            "https://generativelanguage.googleapis.com/v1beta/openai";
+
+        it("routes a Gemini credential without a URL to Google's OpenAI-compatible endpoint", () => {
+            expect(getEnhancementBaseUrl("Google Gemini", null)).toBe(
+                GEMINI_OPENAI_URL,
+            );
+            expect(getEnhancementBaseUrl("google gemini", "")).toBe(
+                GEMINI_OPENAI_URL,
+            );
+        });
+
+        it("keeps the credential's own URL", () => {
+            expect(
+                getEnhancementBaseUrl("Google Gemini", "https://proxy.test/v1"),
+            ).toBe("https://proxy.test/v1");
+            expect(
+                getEnhancementBaseUrl("Groq", "https://api.groq.com/openai/v1"),
+            ).toBe("https://api.groq.com/openai/v1");
+        });
+
+        it("leaves the SDK default for presets without an enhancement endpoint", () => {
+            expect(getEnhancementBaseUrl("OpenAI", null)).toBeUndefined();
+            expect(getEnhancementBaseUrl("Custom", null)).toBeUndefined();
+            expect(getEnhancementBaseUrl("Nope", undefined)).toBeUndefined();
         });
     });
 

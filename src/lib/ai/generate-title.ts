@@ -3,6 +3,7 @@ import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
 import {
+    getEnhancementBaseUrl,
     getEnhancementModel,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
@@ -90,7 +91,10 @@ export async function generateTitleFromTranscription(
         // Create OpenAI client
         const openai = new OpenAI({
             apiKey,
-            baseURL: credentials.baseUrl || undefined,
+            baseURL: getEnhancementBaseUrl(
+                credentials.provider,
+                credentials.baseUrl,
+            ),
         });
 
         // The credential's model is usually a Whisper id, which no

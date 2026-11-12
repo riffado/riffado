@@ -37,6 +37,7 @@ vi.mock("openai", () => {
     return { OpenAI: MockOpenAI };
 });
 
+import { OpenAI } from "openai";
 import { db } from "@/db";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 
@@ -207,5 +208,64 @@ describe("generateTitleFromTranscription -- model selection", () => {
         expect(payload.model).toBe(
             "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
         );
+    });
+
+    it("skips a legacy lowercase elevenlabs credential", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-eleven",
+                provider: "elevenlabs",
+                apiKey: "enc-1",
+                baseUrl: null,
+                defaultModel: "scribe_v2",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+            {
+                id: "creds-openai",
+                provider: "OpenAI",
+                apiKey: "enc-2",
+                baseUrl: null,
+                defaultModel: "whisper-1",
+                isDefaultEnhancement: false,
+                createdAt: new Date("2026-01-02"),
+            },
+        ]);
+
+        await generateTitleFromTranscription("user-1", "some transcript text");
+
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            model: string;
+        };
+        expect(payload.model).toBe("gpt-4o-mini");
+    });
+
+    it("sends a Gemini credential without a URL to Google's OpenAI-compatible endpoint", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-gemini",
+                provider: "Google Gemini",
+                apiKey: "enc-1",
+                baseUrl: null,
+                defaultModel: "gemini-2.5-flash",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateTitleFromTranscription("user-1", "some transcript text");
+
+        const options = (OpenAI as unknown as Mock).mock.calls[0][0] as {
+            baseURL?: string;
+        };
+        expect(options.baseURL).toBe(
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+        );
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            model: string;
+        };
+        expect(payload.model).toBe("gemini-2.5-flash");
     });
 });
