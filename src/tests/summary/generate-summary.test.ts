@@ -46,6 +46,7 @@ vi.mock("openai", () => {
     return { OpenAI: MockOpenAI };
 });
 
+import { OpenAI } from "openai";
 import { db } from "@/db";
 import { ErrorCode } from "@/lib/errors";
 import { generateSummaryForRecording } from "@/lib/summary/generate-summary";
@@ -167,5 +168,93 @@ describe("generateSummaryForRecording -- enhancement provider exclusion", () => 
             code: ErrorCode.AI_PROVIDER_NOT_CONFIGURED,
         });
         expect(chatCompletionsCreate).not.toHaveBeenCalled();
+    });
+});
+
+describe("generateSummaryForRecording -- model and endpoint", () => {
+    function openAiOptions() {
+        return (OpenAI as unknown as Mock).mock.calls[0][0] as {
+            baseURL?: string;
+        };
+    }
+
+    function requestedModel() {
+        return (chatCompletionsCreate.mock.calls[0][0] as { model: string })
+            .model;
+    }
+
+    it("uses the endpoint's chat model when the provider name conflicts", async () => {
+        mockLookups([
+            {
+                id: "creds-edited",
+                provider: "OpenAI",
+                apiKey: "enc-1",
+                baseUrl: "https://api.together.xyz/v1",
+                defaultModel: "openai/whisper-large-v3",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateSummaryForRecording(userId, recordingId);
+
+        expect(openAiOptions().baseURL).toBe("https://api.together.xyz/v1");
+        expect(requestedModel()).toBe(
+            "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        );
+    });
+
+    it("sends a Gemini credential without a URL to Google's endpoint", async () => {
+        mockLookups([
+            {
+                id: "creds-gemini",
+                provider: "Google Gemini",
+                apiKey: "enc-1",
+                baseUrl: null,
+                defaultModel: null,
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateSummaryForRecording(userId, recordingId);
+
+        expect(openAiOptions().baseURL).toBe(
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+        );
+        expect(requestedModel()).toBe("gemini-2.5-flash-lite");
+    });
+
+    it("parses the JSON after an inline reasoning block", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [
+                {
+                    message: {
+                        content: `<think>Summarize it.</think>\n${JSON.stringify(
+                            {
+                                summary: "Clean summary",
+                                keyPoints: ["a"],
+                                actionItems: [],
+                            },
+                        )}`,
+                    },
+                },
+            ],
+        });
+        mockLookups([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        const result = await generateSummaryForRecording(userId, recordingId);
+
+        expect(result.summary).toBe("Clean summary");
     });
 });

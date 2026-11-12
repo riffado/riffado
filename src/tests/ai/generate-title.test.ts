@@ -249,7 +249,8 @@ describe("generateTitleFromTranscription -- model selection", () => {
                 provider: "Google Gemini",
                 apiKey: "enc-1",
                 baseUrl: null,
-                defaultModel: "gemini-2.5-flash",
+                // The old preset default, which Google shut down.
+                defaultModel: "gemini-2.0-flash",
                 isDefaultEnhancement: true,
                 createdAt: new Date("2026-01-01"),
             },
@@ -266,6 +267,60 @@ describe("generateTitleFromTranscription -- model selection", () => {
         const payload = chatCompletionsCreate.mock.calls[0][0] as {
             model: string;
         };
-        expect(payload.model).toBe("gemini-2.5-flash");
+        expect(payload.model).toBe("gemini-2.5-flash-lite");
+    });
+
+    it("drops inline reasoning from a reasoning model's reply", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [
+                {
+                    message: {
+                        content:
+                            "<think>Pick a short title.</think>\nTeam sync",
+                    },
+                },
+            ],
+        });
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        const title = await generateTitleFromTranscription(
+            "user-1",
+            "some transcript text",
+        );
+
+        expect(title).toBe("Team sync");
+    });
+
+    it("returns null when the reply is only unfinished reasoning", async () => {
+        chatCompletionsCreate.mockResolvedValueOnce({
+            choices: [{ message: { content: "<think>Still thinking" } }],
+        });
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-groq",
+                provider: "Groq",
+                apiKey: "enc-1",
+                baseUrl: "https://api.groq.com/openai/v1",
+                defaultModel: "whisper-large-v3-turbo",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        expect(
+            await generateTitleFromTranscription("user-1", "some transcript"),
+        ).toBeNull();
     });
 });

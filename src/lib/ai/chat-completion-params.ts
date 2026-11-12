@@ -47,3 +47,21 @@ export function buildChatCompletionParams(args: {
     }
     return { ...base, max_tokens: maxTokens };
 }
+
+// Reasoning models (Qwen3 on Groq, DeepSeek R1, some proxies) can return
+// their reasoning inline as `<think>...</think>` before the answer.
+const REASONING_BLOCK = /<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi;
+const REASONING_OPEN = /<think(?:ing)?>/i;
+
+/**
+ * Answer text of a chat completion without inline reasoning blocks. An
+ * opening tag with no closing tag means the token budget ran out during the
+ * reasoning, so everything from that tag on is dropped.
+ */
+export function stripReasoning(content: string | null | undefined): string {
+    if (typeof content !== "string") return "";
+    let text = content.replace(REASONING_BLOCK, "");
+    const open = text.search(REASONING_OPEN);
+    if (open !== -1) text = text.slice(0, open);
+    return text.trim();
+}

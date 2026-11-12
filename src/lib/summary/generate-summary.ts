@@ -7,7 +7,10 @@ import {
     transcriptions,
     userSettings,
 } from "@/db/schema";
-import { buildChatCompletionParams } from "@/lib/ai/chat-completion-params";
+import {
+    buildChatCompletionParams,
+    stripReasoning,
+} from "@/lib/ai/chat-completion-params";
 import {
     getEnhancementBaseUrl,
     getEnhancementModel,
@@ -253,7 +256,7 @@ export async function generateSummaryForRecording(
         }),
     );
 
-    const rawContent = response.choices[0]?.message?.content?.trim() || "";
+    const rawContent = stripReasoning(response.choices[0]?.message?.content);
 
     let summary = "";
     let keyPoints: string[] = [];

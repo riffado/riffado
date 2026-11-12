@@ -9,7 +9,10 @@ import {
 } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
-import { buildChatCompletionParams } from "./chat-completion-params";
+import {
+    buildChatCompletionParams,
+    stripReasoning,
+} from "./chat-completion-params";
 import {
     getDefaultPromptConfig,
     getPromptById,
@@ -151,7 +154,8 @@ export async function generateTitleFromTranscription(
             }),
         );
 
-        const title = response.choices[0]?.message?.content?.trim() || null;
+        const title =
+            stripReasoning(response.choices[0]?.message?.content) || null;
 
         if (!title) {
             return null;

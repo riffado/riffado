@@ -30,6 +30,12 @@ export interface ProviderPreset {
      * the provider's key.
      */
     enhancementBaseUrl?: string;
+    /**
+     * Model ids the provider has shut down. Enhancements replace them with
+     * `enhancementModel`. Older credentials still store them, because
+     * `defaultModel` used to prefill them.
+     */
+    retiredModels?: readonly string[];
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -107,6 +113,17 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         // and summaries go through Google's OpenAI-compatible endpoint.
         enhancementBaseUrl:
             "https://generativelanguage.googleapis.com/v1beta/openai",
+        // Google shut down gemini-2.0-flash on 2026-06-01. 2.5 Flash-Lite has
+        // no announced shutdown date.
+        enhancementModel: "gemini-2.5-flash-lite",
+        retiredModels: [
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-001",
+            "gemini-2.0-flash-lite",
+            "gemini-2.0-flash-lite-001",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+        ],
         knownTranscriptionModels: [
             "gemini-2.0-flash",
             "gemini-2.5-flash",
@@ -151,6 +168,17 @@ export function findPreset(name: string): ProviderPreset | undefined {
     return PROVIDER_PRESETS.find((p) => p.name === name);
 }
 
+/**
+ * Case-insensitive preset lookup for enhancements only: older rows can store
+ * names such as `groq` or `elevenlabs`. Transcription keeps the exact match
+ * in `findPreset`. A non-string name (bad API input) matches nothing.
+ */
+function findPresetLoose(name: unknown): ProviderPreset | undefined {
+    if (typeof name !== "string") return undefined;
+    const wanted = name.trim().toLowerCase();
+    return PROVIDER_PRESETS.find((p) => p.name.toLowerCase() === wanted);
+}
+
 export function isLocalPreset(name: string): boolean {
     return LOCAL_PRESET_NAMES.has(name);
 }
@@ -166,41 +194,58 @@ export function getTranscriptionStyle(
  * `chat.completions`. Unknown/custom provider names default to `true`.
  */
 export function supportsEnhancement(providerName: string): boolean {
-    // Same case-insensitive lookup as `getEnhancementModel`, so a legacy
-    // `elevenlabs` row is not accepted as an enhancement provider.
-    return resolvePreset(providerName)?.supportsEnhancement ?? true;
+    return findPresetLoose(providerName)?.supportsEnhancement ?? true;
+}
+
+const TRANSCRIPTION_MODEL_PATTERN = /whisper|parakeet|scribe|transcribe/i;
+
+// Substrings the summary path matched before preset lookup existed. They
+// still catch other domains and gateway URLs (for example a Cloudflare AI
+// Gateway path ending in `/groq`).
+const URL_KEYWORDS: readonly (readonly [string, string])[] = [
+    ["groq", "Groq"],
+    ["together", "Together AI"],
+    ["openrouter", "OpenRouter"],
+];
+
+function hostOf(url: string | null | undefined): string | undefined {
+    if (typeof url !== "string" || !url.trim()) return undefined;
+    try {
+        return new URL(url.trim()).host;
+    } catch {
+        return undefined;
+    }
 }
 
 /**
- * Preset for a credential: by name (case-insensitive, since older rows store
- * provider names verbatim), else by the endpoint a `Custom` credential points
- * at, so a known service configured under `Custom` keeps its chat model.
+ * Preset for a credential with a base URL: the requests go there. Order:
+ * 1. A preset whose endpoint host equals the URL host. The edit dialog can
+ *    point a credential at another service and keep the old provider name,
+ *    so a known endpoint wins over the name.
+ * 2. The provider name. An unknown endpoint, such as a proxy, keeps the
+ *    named provider's defaults. `Custom` has no endpoint and no model, so it
+ *    is skipped here.
+ * 3. A service keyword in the URL, as the summary path matched before.
  */
 function resolvePreset(
     providerName: string,
     baseUrl?: string | null,
 ): ProviderPreset | undefined {
-    const name = providerName.trim().toLowerCase();
-    const byName = PROVIDER_PRESETS.find(
-        (preset) => preset.name.toLowerCase() === name,
-    );
-    // `Custom` has no endpoint and no default model: resolve those by URL so a
-    // known service configured under Custom keeps its chat model.
-    if (byName && (byName.baseUrl || byName.defaultModel)) return byName;
-    if (!baseUrl) return undefined;
-    try {
-        const { host } = new URL(baseUrl);
-        return PROVIDER_PRESETS.find((preset) => {
-            if (!preset.baseUrl) return false;
-            try {
-                return new URL(preset.baseUrl).host === host;
-            } catch {
-                return false;
-            }
-        });
-    } catch {
-        return undefined;
+    const host = hostOf(baseUrl);
+    if (host) {
+        const byHost = PROVIDER_PRESETS.find(
+            (preset) =>
+                hostOf(preset.baseUrl) === host ||
+                hostOf(preset.enhancementBaseUrl) === host,
+        );
+        if (byHost) return byHost;
     }
+    const byName = findPresetLoose(providerName);
+    if (byName && (byName.baseUrl || byName.defaultModel)) return byName;
+    if (typeof baseUrl !== "string") return undefined;
+    const url = baseUrl.toLowerCase();
+    const keyword = URL_KEYWORDS.find(([word]) => url.includes(word));
+    return keyword ? findPreset(keyword[1]) : undefined;
 }
 
 /**
@@ -209,7 +254,9 @@ function resolvePreset(
  * `gpt-4o-transcribe`) or unset, none of which any provider accepts for chat;
  * in that case use the provider's chat model. Dual-use models such as
  * Gemini's chat models are listed as known transcription models but work on
- * `chat.completions`, so only the id patterns above are swapped.
+ * `chat.completions`, so only the id patterns above are swapped, plus ids
+ * the provider has shut down (`retiredModels`). The fallback is never an id
+ * that matches the transcription pattern.
  */
 export function getEnhancementModel(
     providerName: string,
@@ -217,21 +264,32 @@ export function getEnhancementModel(
     baseUrl?: string | null,
 ): string {
     const preset = resolvePreset(providerName, baseUrl);
-    const isTranscriptionModel =
-        !model || /whisper|parakeet|scribe|transcribe/i.test(model);
-    if (!isTranscriptionModel) return model;
-    return preset?.enhancementModel || preset?.defaultModel || "gpt-4o-mini";
+    const stored = typeof model === "string" ? model.trim() : "";
+    if (
+        stored &&
+        !TRANSCRIPTION_MODEL_PATTERN.test(stored) &&
+        !preset?.retiredModels?.includes(stored)
+    ) {
+        return stored;
+    }
+    const fallback = preset?.enhancementModel || preset?.defaultModel;
+    return fallback && !TRANSCRIPTION_MODEL_PATTERN.test(fallback)
+        ? fallback
+        : "gpt-4o-mini";
 }
 
 /**
  * Base URL for the enhancement `chat.completions` client: the credential's
- * own URL, else the preset's `enhancementBaseUrl`, else `undefined` (the
- * OpenAI SDK default).
+ * own URL, else the named preset's `enhancementBaseUrl`, else `undefined`
+ * (the OpenAI SDK default). With no URL, the stored provider name is the
+ * only signal, so a credential whose name no longer matches its service
+ * (see `resolvePreset`) is not corrected here.
  */
 export function getEnhancementBaseUrl(
     providerName: string,
     baseUrl: string | null | undefined,
 ): string | undefined {
-    if (baseUrl) return baseUrl;
-    return resolvePreset(providerName)?.enhancementBaseUrl || undefined;
+    const own = typeof baseUrl === "string" ? baseUrl.trim() : "";
+    if (own) return own;
+    return findPresetLoose(providerName)?.enhancementBaseUrl || undefined;
 }
