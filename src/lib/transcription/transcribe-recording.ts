@@ -36,6 +36,10 @@ import {
     getAudioFileMetadata,
 } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
+import {
+    type AudioChunk,
+    chunkAudioForProvider,
+} from "@/lib/transcription/chunk-audio";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 import {
     ELEVENLABS_MAX_FILE_BYTES,
@@ -49,6 +53,16 @@ import {
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
+import {
+    isMiniMaxCredentials,
+    MINIMAX_DEFAULT_MODEL,
+    MiniMaxTranscriptionError,
+    transcribeMinimax,
+} from "@/lib/transcription/minimax";
+import {
+    type MergedTranscriptionSegment,
+    transcribeMinimaxChunked,
+} from "@/lib/transcription/minimax-chunked";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -412,6 +426,10 @@ async function transcribeRecordingInner(
 
         let transcriptionText: string;
         let detectedLanguage: string | null;
+        // Structured speaker segments (MiniMax diarization) with raw
+        // chunk-local speaker IDs; handed to the persist layer so a UI can
+        // build a global mapping later.
+        let diarizedSegments: MergedTranscriptionSegment[] | null = null;
         let persistProvider: string;
         let persistModel: string;
 
@@ -437,10 +455,16 @@ async function transcribeRecordingInner(
             //   diarized words[] response)
             // - "chat": OpenAI-compatible chat completions with input_audio
             //   (OpenRouter today; #122 -- /v1/audio/transcriptions 404s there)
+            // - "minimax": MiniMax speech_to_text — dedicated endpoint,
+            //   verbose_json with diarization; also detected on custom rows
+            //   carrying a MiniMax base_url
             // - "whisper": OpenAI-compatible /v1/audio/transcriptions
-            const transcriptionStyle = getTranscriptionStyle(
+            const transcriptionStyle = isMiniMaxCredentials(
                 credentials.provider,
-            );
+                credentials.baseUrl,
+            )
+                ? "minimax"
+                : getTranscriptionStyle(credentials.provider);
 
             if (
                 transcriptionStyle === "elevenlabs" &&
@@ -499,85 +523,196 @@ async function transcribeRecordingInner(
                 const audioBuffer = await storage.downloadFile(
                     recording.storagePath,
                 );
-                const { file: audioFile, contentType } = buildAudioFile(
+                const { contentType } = buildAudioFile(
                     audioBuffer,
                     recording.storagePath,
                     decryptedFilename,
                 );
 
-                if (transcriptionStyle === "gemini") {
-                    const result = await geminiTranscribe({
-                        apiKey,
-                        model,
-                        audioBuffer,
-                        contentType,
-                        language: defaultLanguage,
-                    });
-                    transcriptionText = result.text;
-                    detectedLanguage = result.detectedLanguage;
-                } else {
-                    const openai = new OpenAI({
-                        apiKey,
-                        baseURL: credentials.baseUrl || undefined,
-                        timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
-                    });
+                // Chunking for providers without `supportsFullAudio`:
+                // segments of <=480 s / <=45 MB (safety margins below
+                // MiniMax's hard 500 s / 50 MB request limits, see
+                // chunk-audio.ts). Small recordings pass through as a
+                // single chunk without an ffmpeg call. The global
+                // "auto chunk transcriptions" user setting can turn
+                // chunking off — every provider then gets the whole
+                // recording in one request (full-audio rows are never
+                // chunked anyway); the limit risk is the user's.
+                const autoChunk = settings?.autoChunkTranscriptions ?? true;
+                const chunks: AudioChunk[] = !autoChunk
+                    ? [{ buffer: audioBuffer, contentType, index: 0 }]
+                    : await chunkAudioForProvider({
+                          audioBuffer,
+                          contentType,
+                          provider: credentials.provider,
+                          model,
+                          durationMs: recording.duration,
+                      });
 
-                    if (transcriptionStyle === "chat") {
-                        const result = await chatTranscribe({
+                const openai = new OpenAI({
+                    apiKey,
+                    baseURL: credentials.baseUrl || undefined,
+                    timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                });
+
+                // One whisper-style request per chunk; the parts are merged
+                // in chunk order with blank lines. This is the fallback
+                // path for MiniMax errors (4xx/5xx/timeout) and the
+                // regular path for whisper-style providers without
+                // `supportsFullAudio` (e.g. Groq).
+                const transcribeWhisperStyleChunks = async (): Promise<{
+                    text: string;
+                    detectedLanguage: string | null;
+                }> => {
+                    const responseFormat = getResponseFormat(model);
+
+                    // Diarization models (gpt-4o-*-diarize) chunk
+                    // internally (20-minute segments) — keep passing the
+                    // full audio, as before.
+                    if (responseFormat === "diarized_json") {
+                        return await transcribeOpenAIDiarized({
                             client: openai,
                             model,
                             audioBuffer,
-                            contentType,
+                            durationMs: recording.duration,
+                            filename: decryptedFilename,
+                            language: defaultLanguage,
+                            timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
+                        });
+                    }
+
+                    const parts: string[] = [];
+                    let language: string | null = null;
+                    for (const chunk of chunks) {
+                        const compressed = await maybeCompressForWhisper(
+                            chunk.buffer,
+                            chunk.contentType,
+                        );
+                        const { file } = buildAudioFile(
+                            compressed.compressed
+                                ? compressed.buffer
+                                : chunk.buffer,
+                            recording.storagePath,
+                            chunkFilename(
+                                decryptedFilename,
+                                chunk.index,
+                                chunks.length,
+                            ),
+                        );
+                        const transcription =
+                            await openai.audio.transcriptions.create(
+                                buildTranscriptionParams({
+                                    file,
+                                    model,
+                                    responseFormat,
+                                    language: defaultLanguage,
+                                }),
+                                { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
+                            );
+                        const parsed = parseTranscriptionResponse(
+                            transcription,
+                            responseFormat,
+                        );
+                        if (parsed.text.trim()) {
+                            parts.push(parsed.text);
+                        }
+                        language ??= parsed.detectedLanguage;
+                    }
+                    return {
+                        text: parts.join("\n\n"),
+                        detectedLanguage: language,
+                    };
+                };
+
+                if (transcriptionStyle === "gemini") {
+                    const parts: string[] = [];
+                    let language: string | null = null;
+                    for (const chunk of chunks) {
+                        const result = await geminiTranscribe({
+                            apiKey,
+                            model,
+                            audioBuffer: chunk.buffer,
+                            contentType: chunk.contentType,
                             language: defaultLanguage,
                         });
-                        transcriptionText = result.text;
-                        detectedLanguage = result.detectedLanguage;
-                    } else {
-                        const responseFormat = getResponseFormat(model);
-
-                        if (responseFormat === "diarized_json") {
-                            const parsed = await transcribeOpenAIDiarized({
-                                client: openai,
-                                model,
-                                audioBuffer,
-                                durationMs: recording.duration,
-                                filename: decryptedFilename,
-                                language: defaultLanguage,
-                                timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
-                            });
-                            transcriptionText = parsed.text;
-                            detectedLanguage = parsed.detectedLanguage;
-                        } else {
-                            const compressed = await maybeCompressForWhisper(
-                                audioBuffer,
-                                contentType,
-                            );
-                            const fileToSend = compressed.compressed
-                                ? buildAudioFile(
-                                      compressed.buffer,
-                                      recording.storagePath,
-                                      decryptedFilename,
-                                  ).file
-                                : audioFile;
-
-                            const transcription =
-                                await openai.audio.transcriptions.create(
-                                    buildTranscriptionParams({
-                                        file: fileToSend,
-                                        model,
-                                        responseFormat,
-                                        language: defaultLanguage,
-                                    }),
-                                    { timeout: env.WHISPER_REQUEST_TIMEOUT_MS },
-                                );
-                            const parsed = parseTranscriptionResponse(
-                                transcription,
-                                responseFormat,
-                            );
-                            transcriptionText = parsed.text;
-                            detectedLanguage = parsed.detectedLanguage;
+                        if (result.text.trim()) {
+                            parts.push(result.text);
                         }
+                        language ??= result.detectedLanguage;
                     }
+                    transcriptionText = parts.join("\n\n");
+                    detectedLanguage = language;
+                } else if (transcriptionStyle === "minimax") {
+                    // MiniMax speech_to_text, segments transcribed
+                    // sequentially, with diarization merging. If ALL
+                    // segments fail (4xx/5xx/timeout), the chain falls back
+                    // to the whisper-style path above — same segments, same
+                    // credentials.
+                    const minimaxModel =
+                        model === "whisper-1" ? MINIMAX_DEFAULT_MODEL : model;
+                    const chunkDurationSeconds =
+                        recording.duration > 0
+                            ? recording.duration / 1000 / chunks.length
+                            : 480;
+                    try {
+                        const merged = await transcribeMinimaxChunked({
+                            chunkCount: chunks.length,
+                            chunkDurationSeconds,
+                            language: defaultLanguage,
+                            transcribeChunk: async (index) => {
+                                const chunk = chunks[index];
+                                return await transcribeMinimax({
+                                    apiKey,
+                                    baseUrl: credentials.baseUrl,
+                                    model: minimaxModel,
+                                    audioBuffer: chunk.buffer,
+                                    contentType: chunk.contentType,
+                                    filename: chunkFilename(
+                                        decryptedFilename,
+                                        chunk.index,
+                                        chunks.length,
+                                    ),
+                                    language: defaultLanguage,
+                                    timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
+                                });
+                            },
+                        });
+                        transcriptionText = merged.text;
+                        detectedLanguage = merged.detectedLanguage;
+                        diarizedSegments = merged.segments;
+                    } catch (error) {
+                        if (!(error instanceof MiniMaxTranscriptionError)) {
+                            throw error;
+                        }
+                        console.warn(
+                            `[minimax] chunked transcription failed (${error.message}) — falling back to whisper style`,
+                        );
+                        const fallback = await transcribeWhisperStyleChunks();
+                        transcriptionText = fallback.text;
+                        detectedLanguage = fallback.detectedLanguage;
+                    }
+                } else if (transcriptionStyle === "chat") {
+                    const parts: string[] = [];
+                    let language: string | null = null;
+                    for (const chunk of chunks) {
+                        const result = await chatTranscribe({
+                            client: openai,
+                            model,
+                            audioBuffer: chunk.buffer,
+                            contentType: chunk.contentType,
+                            language: defaultLanguage,
+                        });
+                        if (result.text.trim()) {
+                            parts.push(result.text);
+                        }
+                        language ??= result.detectedLanguage;
+                    }
+                    transcriptionText = parts.join("\n\n");
+                    detectedLanguage = language;
+                } else {
+                    const result = await transcribeWhisperStyleChunks();
+                    transcriptionText = result.text;
+                    detectedLanguage = result.detectedLanguage;
                 }
             }
         } else {
@@ -607,6 +742,7 @@ async function transcribeRecordingInner(
             source: "riffado",
             provider: persistProvider,
             model: persistModel,
+            segments: diarizedSegments ?? undefined,
         });
 
         if (!committed) {
@@ -826,4 +962,16 @@ async function transcribeRecordingInner(
 
 function isMynahBudgetExhausted(error: unknown): boolean {
     return error instanceof Error && error.name === "MynahBudgetExhaustedError";
+}
+
+/**
+ * Filename for a chunk. A single chunk keeps the original name; with
+ * multiple chunks each gets a `-part-N` suffix (1-based) so provider logs
+ * and multipart uploads stay distinguishable.
+ */
+function chunkFilename(filename: string, index: number, count: number): string {
+    if (count <= 1) return filename;
+    const stem = filename.replace(/\.[^.]+$/, "");
+    const extension = filename.match(/\.[^.]+$/)?.[0] ?? "";
+    return `${stem}-part-${index + 1}${extension}`;
 }

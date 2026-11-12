@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
+import { ProviderTestButton } from "@/components/settings/provider-test-button";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
 import {
     Dialog,
@@ -226,6 +227,14 @@ export function AddProviderDialog({
                             </p>
                         )}
                     </Panel>
+
+                    <ProviderTestButton
+                        provider={provider}
+                        apiKey={apiKey}
+                        baseUrl={baseUrl}
+                        defaultModel={defaultModel}
+                        disabled={isLoading}
+                    />
 
                     <div className="flex gap-2">
                         <MetalButton

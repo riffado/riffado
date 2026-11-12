@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
+import { ProviderTestButton } from "@/components/settings/provider-test-button";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
 import {
     Dialog,
@@ -324,6 +325,14 @@ export function EditProviderDialog({
                             </p>
                         )}
                     </Panel>
+
+                    <ProviderTestButton
+                        provider={provider.provider}
+                        baseUrl={provider.baseUrl ?? ""}
+                        defaultModel={provider.defaultModel ?? ""}
+                        providerId={provider.id}
+                        disabled={isLoading}
+                    />
 
                     <div className="flex gap-2">
                         <MetalButton
