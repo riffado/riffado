@@ -127,8 +127,8 @@ export function sortPlaudRecordings(
     sortBy: string,
     isDesc: boolean,
 ): PlaudRecording[] {
-    const key = (r: PlaudRecording) =>
-        sortBy === "start_time" ? r.start_time : r.edit_time;
+    const byStart = sortBy === "start_time" || sortBy === "create_time";
+    const key = (r: PlaudRecording) => (byStart ? r.start_time : r.edit_time);
     const dir = isDesc ? -1 : 1;
     return [...recordings].sort(
         (a, b) =>
@@ -148,6 +148,25 @@ function readyObject(
     );
 }
 
+const AUDIO_OBJECT_TYPES = ["AUDIO_TRANSCODED", "AUDIO"];
+
+/**
+ * The audio object riffado downloads from a v4 file detail. `AUDIO_TRANSCODED`
+ * (the MP3 the Plaud player streams) wins over `AUDIO` (the recorder upload,
+ * not always a playable container); objects carrying a content URL or id win
+ * over those that do not.
+ */
+export function selectPlaudV4Audio(
+    detail: PlaudV4FileDetail | undefined,
+): PlaudV4FileObject | undefined {
+    const rank = (o: PlaudV4FileObject) =>
+        (o.content_url || o.content_id ? 0 : AUDIO_OBJECT_TYPES.length) +
+        AUDIO_OBJECT_TYPES.indexOf(o.object_type ?? "");
+    return (detail?.objects ?? [])
+        .filter((o) => AUDIO_OBJECT_TYPES.includes(o.object_type ?? ""))
+        .sort((a, b) => rank(a) - rank(b))[0];
+}
+
 /** Fill device, size, timezone and content flags from a v4 file detail. */
 export function applyPlaudV4Detail(
     recording: PlaudRecording,
@@ -155,14 +174,16 @@ export function applyPlaudV4Detail(
 ): PlaudRecording {
     if (!detail) return recording;
     const meta = detail.meta ?? {};
-    const audio = detail.objects?.find((o) => o.object_type === "AUDIO");
+    const audio = selectPlaudV4Audio(detail);
+    const metaSize =
+        audio?.object_type === "AUDIO_TRANSCODED" ? undefined : meta.size_bytes;
     const start = meta.start_time ?? recording.start_time;
     const duration = meta.duration ?? recording.duration;
     const offset = timeZoneOffsetMinutes(meta.timezone_iana, start);
     return {
         ...recording,
         serial_number: meta.serial_number || recording.serial_number,
-        filesize: audio?.object_size || meta.size_bytes || recording.filesize,
+        filesize: audio?.object_size || metaSize || recording.filesize,
         start_time: start,
         end_time: start + duration,
         duration,

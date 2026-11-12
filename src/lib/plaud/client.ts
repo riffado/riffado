@@ -24,6 +24,7 @@ import {
     PLAUD_V4_VERSION_CONFLICT_STATUS,
     plaudV4DetailToLegacy,
     recordingIdToPlaudV4FileId,
+    selectPlaudV4Audio,
     sortPlaudRecordings,
 } from "./v4";
 import { resolveWorkspaceToken } from "./workspace";
@@ -363,10 +364,10 @@ export class PlaudClient {
         return applyPlaudV4Detail(recording, detail);
     }
 
-    /** Presigned audio URL of a v4 file (object URL or content/url). */
+    /** Presigned audio URL of a v4 file (transcoded first, then the upload). */
     private async getAudioUrlV4(recordingId: string): Promise<string> {
         const detail = await this.getFileDetailV4(recordingId);
-        const audio = detail.objects?.find((o) => o.object_type === "AUDIO");
+        const audio = selectPlaudV4Audio(detail);
         if (audio?.content_url) return audio.content_url;
 
         if (audio?.content_id) {

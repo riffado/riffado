@@ -63,7 +63,7 @@ export interface PlaudV4RecordingsResponse {
 
 export interface PlaudV4FileObject {
     object_id?: string;
-    object_type?: string; // 'AUDIO' | 'TRANSCRIPT' | 'SUMMARY' | ...
+    object_type?: string; // 'AUDIO' | 'AUDIO_TRANSCODED' | 'TRANSCRIPT' | 'SUMMARY' | ...
     content_id?: string;
     content_url?: string | null; // presigned
     mime_type?: string;

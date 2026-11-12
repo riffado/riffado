@@ -272,10 +272,35 @@ async function hasUnseenPlaudContentGaps(
  * Mutable per-sync-run flag. Once a new recording is blocked by the
  * storage cap, every subsequent new recording in the same run is skipped
  * without re-querying the user's byte total (new recordings only grow
- * storage, so once over cap it stays over within the run).
+ * storage, so once over cap it stays over within the run). `pendingBytes`
+ * counts new recordings admitted by the cap but not yet persisted, so the
+ * concurrent recordings of a batch cannot all pass against the same total.
  */
 interface CapState {
     blocked: boolean;
+    pendingBytes: number;
+}
+
+/**
+ * Reserve `bytes` for a new recording, then check the cap against the
+ * persisted total plus every reservation still in flight. The reservation
+ * is taken before the check awaits, so concurrent callers see each other.
+ * Returns false, releasing the reservation, when over cap.
+ */
+async function reserveStorageBytes(
+    capState: CapState,
+    userId: string,
+    bytes: number,
+): Promise<boolean> {
+    capState.pendingBytes += bytes;
+    const cap = await enforceStorageCap({
+        userId,
+        additionalBytes: capState.pendingBytes,
+    });
+    if (cap.allowed) return true;
+    capState.pendingBytes -= bytes;
+    capState.blocked = true;
+    return false;
 }
 
 async function processRecording(
@@ -294,6 +319,7 @@ async function processRecording(
     capExceeded?: boolean;
 }> {
     let plaudRecording = listedRecording;
+    let reservedBytes = 0;
     try {
         const [existingRecording] = await db
             .select()
@@ -354,14 +380,16 @@ async function processRecording(
             if (capState.blocked) {
                 return { status: "skipped", capExceeded: true };
             }
-            const cap = await enforceStorageCap({
-                userId: context.userId,
-                additionalBytes: plaudRecording.filesize,
-            });
-            if (!cap.allowed) {
-                capState.blocked = true;
+            if (
+                !(await reserveStorageBytes(
+                    capState,
+                    context.userId,
+                    plaudRecording.filesize,
+                ))
+            ) {
                 return { status: "skipped", capExceeded: true };
             }
+            reservedBytes += plaudRecording.filesize;
         }
 
         const audioBuffer = await plaudClient.downloadRecording(
@@ -370,14 +398,16 @@ async function processRecording(
         );
 
         if (!existingRecording && !plaudRecording.filesize) {
-            const cap = await enforceStorageCap({
-                userId: context.userId,
-                additionalBytes: audioBuffer.length,
-            });
-            if (!cap.allowed) {
-                capState.blocked = true;
+            if (
+                !(await reserveStorageBytes(
+                    capState,
+                    context.userId,
+                    audioBuffer.length,
+                ))
+            ) {
                 return { status: "skipped", capExceeded: true };
             }
+            reservedBytes += audioBuffer.length;
         }
 
         const sniffed = sniffAudio(audioBuffer);
@@ -495,6 +525,8 @@ async function processRecording(
             status: "error",
             error: `Failed to sync ${plaudRecording.filename}: ${error}`,
         };
+    } finally {
+        capState.pendingBytes -= reservedBytes;
     }
 }
 
@@ -706,7 +738,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
-        const capState: CapState = { blocked: false };
+        const capState: CapState = { blocked: false, pendingBytes: 0 };
         const seenRecordingIds = new Set<string>();
 
         let page = 0;

@@ -3,7 +3,9 @@
  *
  * Plaud 4.0 listings carry no file size. When the v4 detail has no size
  * either, the pre-download storage check sees 0 bytes, so the downloaded
- * size must be checked against the cap before the upload.
+ * size must be checked against the cap before the upload. Recordings of a
+ * batch are processed concurrently, so each check must also count the bytes
+ * of recordings admitted but not yet persisted.
  */
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -74,10 +76,12 @@ import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 const USER = "user-327";
 const CAP_BYTES = 100;
 const audio = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(196)]);
+// Bytes persisted through db.insert, seen by the mocked cap check.
+let storedBytes = 0;
 
-function v4Recording(filesize: number) {
+function v4Recording(filesize: number, id = "f_new") {
     return {
-        id: "f_new",
+        id,
         filename: "2026-10-28 11:43:10",
         duration: 1000,
         start_time: Date.UTC(2026, 9, 28, 10, 43, 10),
@@ -97,13 +101,17 @@ function v4Recording(filesize: number) {
     };
 }
 
-function stubPlaud(filesize: number) {
+function stubPlaud(
+    filesize: number,
+    ids: string[] = ["f_new"],
+    buffer: Buffer = audio,
+) {
     (createPlaudClient as Mock).mockResolvedValue({
         getRecordings: vi.fn().mockResolvedValue({
-            data_file_list: [v4Recording(filesize)],
+            data_file_list: ids.map((id) => v4Recording(filesize, id)),
         }),
         hydrateRecording: vi.fn(async (r: unknown) => r),
-        downloadRecording: vi.fn().mockResolvedValue(audio),
+        downloadRecording: vi.fn().mockResolvedValue(buffer),
     });
 }
 
@@ -130,8 +138,13 @@ function stubDb() {
         }),
     });
     (db.insert as Mock).mockReturnValue({
-        values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: "new-rec" }]),
+        values: vi.fn((row: { filesize: number; plaudFileId: string }) => {
+            storedBytes += row.filesize;
+            return {
+                returning: vi
+                    .fn()
+                    .mockResolvedValue([{ id: `rec-${row.plaudFileId}` }]),
+            };
         }),
     });
     (db.update as Mock).mockReturnValue({
@@ -144,10 +157,11 @@ function stubDb() {
 describe("#327 storage cap with unknown Plaud 4.0 sizes", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        storedBytes = 0;
         (enforceStorageCap as Mock).mockImplementation(
             async ({ additionalBytes }: { additionalBytes: number }) => ({
-                allowed: additionalBytes <= CAP_BYTES,
-                currentBytes: 0,
+                allowed: storedBytes + additionalBytes <= CAP_BYTES,
+                currentBytes: storedBytes,
                 limitBytes: CAP_BYTES,
             }),
         );
@@ -181,5 +195,39 @@ describe("#327 storage cap with unknown Plaud 4.0 sizes", () => {
         expect(enforceStorageCap).toHaveBeenCalledTimes(1);
         expect(result.newRecordings).toBe(0);
         expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it("counts concurrent unknown-size downloads of a batch against the cap", async () => {
+        const small = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(56)]);
+        stubPlaud(0, ["f_a", "f_b", "f_c"], small);
+        const storage = (await createUserStorageProvider(USER)) as unknown as {
+            uploadFile: Mock;
+        };
+        storage.uploadFile.mockClear();
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.newRecordings).toBe(1);
+        expect(storage.uploadFile).toHaveBeenCalledTimes(1);
+        expect(storedBytes).toBe(small.length);
+        expect(result.errors).toContain(
+            "Storage limit reached: some recordings were not synced. Upgrade or free up space to continue.",
+        );
+    });
+
+    it("releases reservations once recordings are persisted", async () => {
+        const small = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(6)]);
+        const ids = ["f_a", "f_b", "f_c", "f_d", "f_e", "f_f"];
+        stubPlaud(small.length, ids, small);
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.newRecordings).toBe(ids.length);
+        expect(storedBytes).toBe(ids.length * small.length);
+        expect(
+            (enforceStorageCap as Mock).mock.calls
+                .map(([arg]) => arg.additionalBytes)
+                .at(-1),
+        ).toBe(small.length);
     });
 });
