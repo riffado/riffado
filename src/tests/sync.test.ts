@@ -121,6 +121,7 @@ describe("Sync", () => {
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: mockPlaudRecordings,
                 }),
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi
                     .fn()
                     .mockResolvedValue(Buffer.from("audio")),
@@ -203,6 +204,7 @@ describe("Sync", () => {
                         },
                     ],
                 }),
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi
                     .fn()
                     .mockResolvedValue(Buffer.from("audio")),
@@ -369,6 +371,7 @@ describe("Sync", () => {
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: mockPlaudRecordings,
                 }),
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi
                     .fn()
                     .mockResolvedValue(Buffer.from("audio")),
@@ -545,6 +548,7 @@ describe("Sync", () => {
                 }),
                 // Failure happens here, before any DB write -- lands
                 // straight in processRecording's catch block.
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi
                     .fn()
                     .mockRejectedValue(new Error("network error")),

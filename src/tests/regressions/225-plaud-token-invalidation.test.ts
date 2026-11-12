@@ -113,6 +113,7 @@ describe("#225 Plaud token invalidation on 401", () => {
                         401,
                     ),
                 ),
+            hydrateRecording: vi.fn(async (r: unknown) => r),
             downloadRecording: vi.fn(),
             workspaceId: null,
         };

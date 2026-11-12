@@ -217,6 +217,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: [mockPlaudRecording],
                 }),
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi.fn().mockResolvedValue(oggBuffer),
             });
         }

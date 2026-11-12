@@ -35,6 +35,91 @@ export interface PlaudRecording {
     serial_number: string;
     is_trans: boolean;
     is_summary: boolean;
+    source?: "v4"; // listed via /file-app/v4, see PlaudClient.hydrateRecording
+}
+
+// --- Plaud 4.0 file API (`/file-app/v4/...`), see src/lib/plaud/v4.ts ---
+
+export interface PlaudV4RecordingItem {
+    node_id?: string;
+    parent_id?: string;
+    file_id: string;
+    name?: string;
+    duration_ms?: number;
+    created_at_show_ms?: number;
+    updated_at_show_ms?: number;
+    status?: number;
+    version_ms?: number;
+}
+
+export interface PlaudV4RecordingsResponse {
+    status: number;
+    msg?: string;
+    data?: {
+        items?: PlaudV4RecordingItem[];
+        next_cursor?: string | null;
+    };
+}
+
+export interface PlaudV4FileObject {
+    object_id?: string;
+    object_type?: string; // 'AUDIO' | 'AUDIO_TRANSCODED' | 'TRANSCRIPT' | 'SUMMARY' | ...
+    content_id?: string;
+    content_url?: string | null; // presigned
+    mime_type?: string;
+    object_size?: number;
+    task_status?: number | null; // 1 = ready
+}
+
+export interface PlaudV4FileMeta {
+    file_id?: string;
+    file_type?: string;
+    duration?: number; // ms
+    size_bytes?: number;
+    timezone_iana?: string | null;
+    start_time?: number; // ms
+    serial_number?: string | null;
+    version_ms?: number;
+}
+
+export interface PlaudV4Node {
+    node_id?: string;
+    parent_id?: string;
+    name?: string;
+    version_ms?: number;
+    folder?: { folder_id?: string; name?: string } | null; // per-recording folder
+    breadcrumbs?: { node_id?: string; name?: string }[];
+}
+
+export interface PlaudV4RenameResponse {
+    status: number;
+    msg?: string;
+    data?: {
+        items?: PlaudV4Node[];
+        parent_items?: PlaudV4Node[];
+    };
+}
+
+export interface PlaudV4FolderChildrenResponse {
+    status: number;
+    msg?: string;
+    data?: { items?: PlaudV4Node[]; next_cursor?: string | null };
+}
+
+export interface PlaudV4FileDetailResponse {
+    status: number;
+    msg?: string;
+    data?: {
+        node?: PlaudV4Node;
+        meta?: PlaudV4FileMeta;
+        objects?: PlaudV4FileObject[];
+    };
+}
+
+export interface PlaudV4ContentUrlResponse {
+    status: number;
+    msg?: string;
+    data?: { url_map?: Record<string, string> };
 }
 
 export interface PlaudRecordingsResponse {
