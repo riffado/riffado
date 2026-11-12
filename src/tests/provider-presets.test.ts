@@ -92,9 +92,32 @@ describe("provider-presets", () => {
         });
     });
 
+    describe("MiniMax", () => {
+        it("uses the minimax transcription style with asr-1.0 as default", () => {
+            const preset = findPreset("MiniMax");
+            expect(preset).toBeDefined();
+            expect(preset?.transcriptionStyle).toBe("minimax");
+            expect(preset?.defaultModel).toBe("asr-1.0");
+            expect(preset?.baseUrl).toBe("https://api.minimax.io/v1");
+        });
+
+        it("is not a local preset and stays visible on hosted", () => {
+            expect(isLocalPreset("MiniMax")).toBe(false);
+            expect(
+                getVisiblePresets({ isHosted: true }).some(
+                    (p) => p.name === "MiniMax",
+                ),
+            ).toBe(true);
+        });
+    });
+
     describe("getTranscriptionStyle", () => {
         it("resolves 'elevenlabs' for the ElevenLabs preset", () => {
             expect(getTranscriptionStyle("ElevenLabs")).toBe("elevenlabs");
+        });
+
+        it("resolves 'minimax' for the MiniMax preset", () => {
+            expect(getTranscriptionStyle("MiniMax")).toBe("minimax");
         });
     });
 
@@ -103,9 +126,14 @@ describe("provider-presets", () => {
             expect(supportsEnhancement("ElevenLabs")).toBe(false);
         });
 
+        it("is false for MiniMax (transcription-only provider)", () => {
+            expect(supportsEnhancement("MiniMax")).toBe(false);
+        });
+
         it("is true for every other preset", () => {
             for (const preset of PROVIDER_PRESETS) {
-                if (preset.name === "ElevenLabs") continue;
+                if (preset.name === "ElevenLabs" || preset.name === "MiniMax")
+                    continue;
                 expect(supportsEnhancement(preset.name)).toBe(true);
             }
         });

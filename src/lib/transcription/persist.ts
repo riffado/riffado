@@ -27,6 +27,13 @@ export interface UpsertTranscriptionArgs {
     model: string;
     /** Where it ran. Defaults to "server"; unrelated to `source`. */
     transcriptionType?: "server" | "browser";
+    /**
+     * Structured speaker segments (MiniMax diarization) with raw
+     * chunk-local speaker IDs. Stored like keyPoints/actionItems as an
+     * encrypted JSON envelope in the jsonb column; null/undefined leaves
+     * the column unchanged (browser/whisper paths write no segments).
+     */
+    segments?: unknown[] | null;
 }
 
 export interface UpsertEnhancementArgs {
@@ -76,6 +83,7 @@ export async function upsertTranscription(
         provider,
         model,
         transcriptionType = "server",
+        segments,
     } = args;
 
     try {
@@ -109,6 +117,9 @@ export async function upsertTranscription(
                 .limit(1);
 
             const encryptedText = encryptText(text);
+            // Reset stale segments when overwriting — a fresh whisper run
+            // must not leave an outdated MiniMax diarization behind.
+            const encryptedSegments = encryptJsonField(segments ?? null);
 
             if (current) {
                 await tx
@@ -120,6 +131,7 @@ export async function upsertTranscription(
                         provider,
                         model,
                         source,
+                        segments: encryptedSegments,
                     })
                     .where(
                         and(
@@ -137,6 +149,7 @@ export async function upsertTranscription(
                     provider,
                     model,
                     source,
+                    segments: encryptedSegments,
                 });
             }
 
