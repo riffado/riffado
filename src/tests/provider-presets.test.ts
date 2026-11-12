@@ -147,6 +147,67 @@ describe("provider-presets", () => {
             );
         });
 
+        it("keeps dual-use Gemini chat models", () => {
+            expect(
+                getEnhancementModel("Google Gemini", "gemini-2.5-flash"),
+            ).toBe("gemini-2.5-flash");
+            expect(
+                getEnhancementModel(
+                    "Google Gemini",
+                    "gemini-2.0-flash",
+                    "https://generativelanguage.googleapis.com/v1beta/openai",
+                ),
+            ).toBe("gemini-2.0-flash");
+        });
+
+        it("matches preset names case-insensitively", () => {
+            expect(getEnhancementModel("groq", "whisper-large-v3-turbo")).toBe(
+                "qwen/qwen3.8-27b",
+            );
+            expect(getEnhancementModel("openai", "whisper-1")).toBe(
+                "gpt-4o-mini",
+            );
+        });
+
+        it("swaps transcription-only OpenAI ids", () => {
+            expect(getEnhancementModel("OpenAI", "gpt-4o-transcribe")).toBe(
+                "gpt-4o-mini",
+            );
+            expect(
+                getEnhancementModel("Custom", "gpt-4o-mini-transcribe"),
+            ).toBe("gpt-4o-mini");
+        });
+
+        it("resolves a Custom credential by its endpoint", () => {
+            expect(
+                getEnhancementModel(
+                    "Custom",
+                    "openai/whisper-large-v3",
+                    "https://api.together.xyz/v1",
+                ),
+            ).toBe("meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo");
+            expect(
+                getEnhancementModel(
+                    "Custom",
+                    "whisper-large-v3-turbo",
+                    "https://api.groq.com/openai/v1",
+                ),
+            ).toBe("qwen/qwen3.8-27b");
+            expect(
+                getEnhancementModel(
+                    "Custom",
+                    "whisper-1",
+                    "http://localhost:1234/v1",
+                ),
+            ).toBe("gpt-4o-mini");
+        });
+
+        it("falls back to the preset default model", () => {
+            expect(getEnhancementModel("Google Gemini", null)).toBe(
+                "gemini-2.0-flash",
+            );
+        });
+
         it("falls back to gpt-4o-mini for unknown providers with no model", () => {
             expect(getEnhancementModel("Nope", null)).toBe("gpt-4o-mini");
             expect(getEnhancementModel("Nope", "whisper-1")).toBe(

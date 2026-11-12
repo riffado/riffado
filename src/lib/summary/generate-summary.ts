@@ -204,6 +204,7 @@ export async function generateSummaryForRecording(
     const model = getEnhancementModel(
         credentials.provider,
         credentials.defaultModel,
+        credentials.baseUrl,
     );
 
     // Decrypt the transcript before sending it to the LLM. Plaintext is

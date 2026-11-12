@@ -98,6 +98,7 @@ export async function generateTitleFromTranscription(
         const model = getEnhancementModel(
             credentials.provider,
             credentials.defaultModel,
+            credentials.baseUrl,
         );
 
         // Truncate transcription if too long (to save tokens)

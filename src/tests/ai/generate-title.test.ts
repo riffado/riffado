@@ -184,4 +184,28 @@ describe("generateTitleFromTranscription -- model selection", () => {
         };
         expect(payload.model).toBe("openai/gpt-oss-120b");
     });
+
+    it("resolves a Custom credential's endpoint for the chat model", async () => {
+        mockUserSettings();
+        mockCredentials([
+            {
+                id: "creds-custom",
+                provider: "Custom",
+                apiKey: "enc-1",
+                baseUrl: "https://api.together.xyz/v1",
+                defaultModel: "openai/whisper-large-v3",
+                isDefaultEnhancement: true,
+                createdAt: new Date("2026-01-01"),
+            },
+        ]);
+
+        await generateTitleFromTranscription("user-1", "some transcript text");
+
+        const payload = chatCompletionsCreate.mock.calls[0][0] as {
+            model: string;
+        };
+        expect(payload.model).toBe(
+            "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+        );
+    });
 });

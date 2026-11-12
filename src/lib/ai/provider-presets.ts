@@ -159,21 +159,53 @@ export function supportsEnhancement(providerName: string): boolean {
 }
 
 /**
+ * Preset for a credential: by name (case-insensitive, since older rows store
+ * provider names verbatim), else by the endpoint a `Custom` credential points
+ * at, so a known service configured under `Custom` keeps its chat model.
+ */
+function resolvePreset(
+    providerName: string,
+    baseUrl?: string | null,
+): ProviderPreset | undefined {
+    const name = providerName.trim().toLowerCase();
+    const byName = PROVIDER_PRESETS.find(
+        (preset) => preset.name.toLowerCase() === name,
+    );
+    // `Custom` has no endpoint and no default model: resolve those by URL so a
+    // known service configured under Custom keeps its chat model.
+    if (byName && (byName.baseUrl || byName.defaultModel)) return byName;
+    if (!baseUrl) return undefined;
+    try {
+        const { host } = new URL(baseUrl);
+        return PROVIDER_PRESETS.find((preset) => {
+            if (!preset.baseUrl) return false;
+            try {
+                return new URL(preset.baseUrl).host === host;
+            } catch {
+                return false;
+            }
+        });
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Model to call `chat.completions` with for summaries and titles. A stored
- * credential model is often a transcription id (Whisper, Parakeet, Scribe)
- * or unset, neither of which any provider accepts for chat; in that case use
- * the provider's enhancement model, falling back to `gpt-4o-mini` for
- * OpenAI-compatible proxies and custom endpoints.
+ * credential model is often a transcription id (Whisper, Parakeet, Scribe,
+ * `gpt-4o-transcribe`) or unset, none of which any provider accepts for chat;
+ * in that case use the provider's chat model. Dual-use models such as
+ * Gemini's chat models are listed as known transcription models but work on
+ * `chat.completions`, so only the id patterns above are swapped.
  */
 export function getEnhancementModel(
     providerName: string,
     model: string | null | undefined,
+    baseUrl?: string | null,
 ): string {
-    const preset = findPreset(providerName);
+    const preset = resolvePreset(providerName, baseUrl);
     const isTranscriptionModel =
-        !model ||
-        /whisper|parakeet|scribe/.test(model) ||
-        preset?.knownTranscriptionModels?.includes(model) === true;
+        !model || /whisper|parakeet|scribe|transcribe/i.test(model);
     if (!isTranscriptionModel) return model;
-    return preset?.enhancementModel ?? "gpt-4o-mini";
+    return preset?.enhancementModel || preset?.defaultModel || "gpt-4o-mini";
 }
