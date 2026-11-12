@@ -1,4 +1,9 @@
-export type TranscriptionStyle = "whisper" | "chat" | "gemini" | "elevenlabs";
+export type TranscriptionStyle =
+    | "whisper"
+    | "chat"
+    | "gemini"
+    | "elevenlabs"
+    | "minimax";
 
 export interface ProviderPreset {
     name: string;
@@ -96,6 +101,18 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         defaultModel: "scribe_v2",
         transcriptionStyle: "elevenlabs",
         knownTranscriptionModels: ["scribe_v2", "scribe_v1"],
+        supportsEnhancement: false,
+    },
+    {
+        // MiniMax speech_to_text (asr-1.0) — dedicated /v1/speech_to_text
+        // endpoint, verbose_json with diarization (S1/S2/...). Chunking is
+        // handled server-side in chunk-audio.ts.
+        name: "MiniMax",
+        baseUrl: "https://api.minimax.io/v1",
+        placeholder: "sk-...",
+        defaultModel: "asr-1.0",
+        transcriptionStyle: "minimax",
+        knownTranscriptionModels: ["asr-1.0"],
         supportsEnhancement: false,
     },
     {

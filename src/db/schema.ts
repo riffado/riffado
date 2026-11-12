@@ -348,6 +348,11 @@ export const transcriptions = pgTable(
         //   'plaud'   = imported from Plaud's native transcription
         //   'mixed'   = user-edited combination of the above (see #204)
         source: varchar("source", { length: 20 }).notNull().default("riffado"),
+        // Structured speaker segments (MiniMax diarization) with raw
+        // chunk-local speaker IDs; groundwork for a per-recording speaker
+        // mapping in the UI. Nullable + encrypted so existing readers stay
+        // unchanged.
+        segments: jsonb("segments"),
         createdAt: timestamp("created_at").notNull().defaultNow(),
     },
     (table) => ({
@@ -472,6 +477,14 @@ export const userSettings = pgTable("user_settings", {
     speakerDiarization: boolean("speaker_diarization").notNull().default(true),
     // Optional speaker-count hint, 1..32. Null lets the provider decide.
     diarizationSpeakerCount: integer("diarization_speaker_count"),
+    // Global switch for automatic audio chunking. true (default): providers
+    // without the full-audio flag get the audio in segments of <=480 s /
+    // <=45 MB (chunk-audio.ts). false sends the whole recording in one
+    // request — risky against hard provider limits, but useful e.g. for
+    // self-hosted endpoints with higher limits.
+    autoChunkTranscriptions: boolean("auto_chunk_transcriptions")
+        .notNull()
+        .default(true),
     // Plaud-native content import (feature #204). When enabled, sync imports
     // Plaud's own transcript/summary (source='plaud') for recordings Plaud
     // has already processed, instead of only the audio.

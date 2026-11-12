@@ -68,6 +68,7 @@ const transcription = {
     provider: "openai",
     model: "whisper-1",
     source: "riffado",
+    segments: null,
     createdAt: now,
 };
 
@@ -81,6 +82,7 @@ const enhancement = {
     provider: "openai",
     model: "gpt-4o-mini",
     source: "riffado",
+    segments: null,
     createdAt: now,
 };
 
