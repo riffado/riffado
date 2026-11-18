@@ -4,6 +4,8 @@
  *
  * - A recording first stored as Ogg and re-downloaded on 4.0 as MP3 must not
  *   keep its `.ogg` key (the audio route derives the MIME from it).
+ * - The v4 detail can lack device serial, timezone and scene: an update must
+ *   keep the stored values instead of writing the listing defaults.
  */
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -319,5 +321,67 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
 
         expect(setPayloads[0]?.storagePath).toBe(OLD_PATH);
         expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+});
+
+describe("#327 metadata on update from a Plaud 4.0 detail", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("keeps device, timezone and scene when the v4 detail lacks them", async () => {
+        await storageMock();
+        stubPlaud(listedRecording(), ogg);
+        stubSelects("conn-meta-1", [[storedRow()], []]);
+        const setPayloads = stubUpdateTransaction();
+
+        await syncRecordingsForUser(USER);
+
+        expect(setPayloads[0]).toMatchObject({
+            deviceSn: "SN-OLD",
+            timezone: 2,
+            zonemins: 30,
+            scene: 7,
+        });
+    });
+
+    it("applies the v4 device and timezone when the detail has them", async () => {
+        await storageMock();
+        stubPlaud(
+            listedRecording({
+                serial_number: "SN-NEW",
+                timezone: 1,
+                zonemins: 0,
+                timezone_iana: "Europe/Paris",
+            }),
+            ogg,
+        );
+        stubSelects("conn-meta-2", [[storedRow()], []]);
+        const setPayloads = stubUpdateTransaction();
+
+        await syncRecordingsForUser(USER);
+
+        expect(setPayloads[0]).toMatchObject({
+            deviceSn: "SN-NEW",
+            timezone: 1,
+            zonemins: 0,
+            scene: 7,
+        });
+    });
+
+    it("still writes the listed values for legacy recordings", async () => {
+        await storageMock();
+        stubPlaud(listedRecording({ source: undefined }), ogg);
+        stubSelects("conn-meta-3", [[storedRow()], []]);
+        const setPayloads = stubUpdateTransaction();
+
+        await syncRecordingsForUser(USER);
+
+        expect(setPayloads[0]).toMatchObject({
+            deviceSn: "",
+            timezone: 0,
+            zonemins: 0,
+            scene: 0,
+        });
     });
 });

@@ -199,6 +199,9 @@ export function applyPlaudV4Detail(
     const offset = timeZoneOffsetMinutes(meta.timezone_iana, start);
     return {
         ...recording,
+        ...(offset !== undefined && meta.timezone_iana
+            ? { timezone_iana: meta.timezone_iana }
+            : {}),
         serial_number: meta.serial_number || recording.serial_number,
         filesize: audio?.object_size || metaSize || recording.filesize,
         start_time: start,

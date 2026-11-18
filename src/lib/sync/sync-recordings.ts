@@ -206,6 +206,33 @@ async function deleteReplacedAudio(
     }
 }
 
+interface RecordingMetadata {
+    deviceSn: string;
+    timezone: number | null;
+    zonemins: number | null;
+    scene: number | null;
+}
+
+function recordingMetadata(
+    plaudRecording: PlaudRecording,
+    existing: RecordingMetadata | undefined,
+): RecordingMetadata {
+    const listed = {
+        deviceSn: plaudRecording.serial_number,
+        timezone: plaudRecording.timezone,
+        zonemins: plaudRecording.zonemins,
+        scene: plaudRecording.scene,
+    };
+    if (!existing || plaudRecording.source !== "v4") return listed;
+    const zoneKnown = plaudRecording.timezone_iana !== undefined;
+    return {
+        deviceSn: listed.deviceSn || existing.deviceSn,
+        timezone: zoneKnown ? listed.timezone : existing.timezone,
+        zonemins: zoneKnown ? listed.zonemins : existing.zonemins,
+        scene: existing.scene,
+    };
+}
+
 /**
  * Build an import candidate for a freshly-synced recording, or `undefined`
  * when there's nothing to import — the recording is trashed, or Plaud reports
@@ -481,7 +508,7 @@ async function processRecording(
 
         const recordingData = {
             userId: context.userId,
-            deviceSn: plaudRecording.serial_number,
+            ...recordingMetadata(plaudRecording, existingRecording),
             plaudFileId: plaudRecording.id,
             filename: encryptText(plaudRecording.filename),
             duration: plaudRecording.duration,
@@ -497,9 +524,6 @@ async function processRecording(
             storagePath: storageKey,
             downloadedAt: new Date(),
             plaudVersion: versionKey,
-            timezone: plaudRecording.timezone,
-            zonemins: plaudRecording.zonemins,
-            scene: plaudRecording.scene,
             isTrash: plaudRecording.is_trash,
         };
 

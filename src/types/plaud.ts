@@ -36,6 +36,7 @@ export interface PlaudRecording {
     is_trans: boolean;
     is_summary: boolean;
     source?: "v4"; // listed via /file-app/v4, see PlaudClient.hydrateRecording
+    timezone_iana?: string; // v4 only: zone `timezone` / `zonemins` come from
 }
 
 // --- Plaud 4.0 file API (`/file-app/v4/...`), see src/lib/plaud/v4.ts ---

@@ -471,6 +471,25 @@ describe("Plaud 4.0 helpers", () => {
             }).map((o) => o.content_url ?? o.content_id),
         ).toEqual(["c_tc", "raw"]);
     });
+
+    it("records the IANA zone only when it resolves", () => {
+        const listed = mapPlaudV4Item({
+            file_id: "f_x",
+            created_at_show_ms: NEW_START,
+        });
+        expect(
+            applyPlaudV4Detail(listed, {
+                meta: { timezone_iana: "Europe/Paris" },
+            }).timezone_iana,
+        ).toBe("Europe/Paris");
+        expect(
+            applyPlaudV4Detail(listed, { meta: { timezone_iana: "Not/AZone" } })
+                .timezone_iana,
+        ).toBeUndefined();
+        expect(
+            applyPlaudV4Detail(listed, { meta: {} }).timezone_iana,
+        ).toBeUndefined();
+    });
 });
 
 describe("PlaudClient on a 4.0-migrated account", () => {
