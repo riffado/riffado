@@ -55,8 +55,9 @@ export default async function AdminStoragePage() {
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <MetricCard
-                        label="Retrying"
+                        label="Pending"
                         value={formatNumber(deletionQueue.pending)}
+                        sub="queued, in progress or waiting to retry"
                     />
                     <MetricCard
                         label="Gave up"
