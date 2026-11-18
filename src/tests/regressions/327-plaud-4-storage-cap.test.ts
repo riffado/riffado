@@ -230,4 +230,24 @@ describe("#327 storage cap with unknown Plaud 4.0 sizes", () => {
                 .at(-1),
         ).toBe(small.length);
     });
+
+    it("releases the reservation when the cap check throws", async () => {
+        const small = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(6)]);
+        const ids = ["f_a", "f_b", "f_c", "f_d", "f_e", "f_f"];
+        stubPlaud(small.length, ids, small);
+        (enforceStorageCap as Mock).mockRejectedValueOnce(
+            new Error("cap query failed"),
+        );
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.newRecordings).toBe(ids.length - 1);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain("cap query failed");
+        expect(
+            (enforceStorageCap as Mock).mock.calls
+                .map(([arg]) => arg.additionalBytes)
+                .at(-1),
+        ).toBe(small.length);
+    });
 });

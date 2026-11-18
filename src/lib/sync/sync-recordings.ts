@@ -293,11 +293,17 @@ async function reserveStorageBytes(
     bytes: number,
 ): Promise<boolean> {
     capState.pendingBytes += bytes;
-    const cap = await enforceStorageCap({
-        userId,
-        additionalBytes: capState.pendingBytes,
-    });
-    if (cap.allowed) return true;
+    let allowed: boolean;
+    try {
+        ({ allowed } = await enforceStorageCap({
+            userId,
+            additionalBytes: capState.pendingBytes,
+        }));
+    } catch (error) {
+        capState.pendingBytes -= bytes;
+        throw error;
+    }
+    if (allowed) return true;
     capState.pendingBytes -= bytes;
     capState.blocked = true;
     return false;
