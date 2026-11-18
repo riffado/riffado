@@ -11,6 +11,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { formatDateTime } from "@/lib/format-date";
+import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
 
 interface PlaudReconnectBannerProps {
     /**
@@ -20,6 +22,11 @@ interface PlaudReconnectBannerProps {
      */
     show: boolean;
     /**
+     * When the Plaud sign-in ends for good (ISO string), or null when
+     * unknown. The banner also appears within three days of this.
+     */
+    sessionExpiresAt: string | null;
+    /**
      * Called after a successful reconnect so the parent can refresh server
      * data and kick off a fresh sync.
      */
@@ -27,13 +34,15 @@ interface PlaudReconnectBannerProps {
 }
 
 /**
- * Dashboard banner shown when Plaud stops accepting the stored token
- * (expired ~300-day user token, a mistakenly-pasted 24h workspace token
- * that has died, or a revoked token). Opens the connector-first connect
- * flow as a modal — not full re-onboarding.
+ * Dashboard banner shown when Plaud stops accepting the stored sign-in
+ * (an expired user token with no working refresh token, a mistakenly-pasted
+ * 24h workspace token that has died, or a revoked token), and in the three
+ * days before the sign-in ends. Opens the connector-first connect flow as a
+ * modal, not full re-onboarding.
  */
 export function PlaudReconnectBanner({
     show,
+    sessionExpiresAt,
     onReconnected,
 }: PlaudReconnectBannerProps) {
     const [open, setOpen] = useState(false);
@@ -47,23 +56,49 @@ export function PlaudReconnectBanner({
         prevShow.current = show;
     }, [show]);
 
-    if (!show || dismissed) return null;
+    const [now, setNow] = useState<number | null>(null);
+    useEffect(() => {
+        setNow(Date.now());
+    }, []);
+
+    const state = plaudConnectionBannerState({
+        needsReconnect: show,
+        sessionExpiresAt: now === null ? null : sessionExpiresAt,
+        now: now ?? 0,
+    });
+
+    if (!state || dismissed) return null;
+
+    const endsOn = sessionExpiresAt
+        ? formatDateTime(sessionExpiresAt, "absolute")
+        : null;
 
     return (
         <>
             <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-start gap-3">
                     <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-500" />
-                    <div className="space-y-0.5">
-                        <p className="text-sm font-medium text-foreground">
-                            Your Plaud connection needs to be reconnected
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                            Plaud stopped accepting your saved sign-in, so new
-                            recordings aren't syncing. Reconnect to resume —
-                            your existing recordings stay put.
-                        </p>
-                    </div>
+                    {state === "ending-soon" ? (
+                        <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-foreground">
+                                Your Plaud connection ends on {endsOn}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                Reconnect to keep syncing.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-0.5">
+                            <p className="text-sm font-medium text-foreground">
+                                Your Plaud connection needs to be reconnected
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                Plaud stopped accepting your saved sign-in, so
+                                new recordings aren't syncing. Reconnect to
+                                resume. Your existing recordings stay put.
+                            </p>
+                        </div>
+                    )}
                 </div>
                 <Button
                     onClick={() => setOpen(true)}
@@ -78,7 +113,7 @@ export function PlaudReconnectBanner({
                     <DialogHeader>
                         <DialogTitle>Reconnect your Plaud account</DialogTitle>
                         <DialogDescription>
-                            Sign back in to resume syncing. Your existing
+                            Sign back in to keep syncing. Your existing
                             recordings and transcripts are unaffected.
                         </DialogDescription>
                     </DialogHeader>

@@ -29,6 +29,12 @@ export const GET = apiHandler(async (request: Request) => {
         // uses this to prompt a reconnect. Cleared on the next good sync or
         // on reconnect.
         needsReconnect: connection.invalidatedAt != null,
+        // When the stored user token expires and when the Plaud sign-in ends
+        // for good (null when unknown). The user token renews automatically
+        // until the sign-in ends when a refresh token is stored.
+        accessExpiresAt: connection.accessExpiresAt,
+        sessionExpiresAt: connection.sessionExpiresAt,
+        autoRenews: connection.refreshToken != null,
         createdAt: connection.createdAt,
         updatedAt: connection.updatedAt,
         // Include the raw URL so the UI can populate the custom field

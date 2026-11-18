@@ -73,7 +73,10 @@ export default async function DashboardPage() {
             .where(eq(userSettings.userId, session.user.id))
             .limit(1),
         db
-            .select({ invalidatedAt: plaudConnections.invalidatedAt })
+            .select({
+                invalidatedAt: plaudConnections.invalidatedAt,
+                sessionExpiresAt: plaudConnections.sessionExpiresAt,
+            })
             .from(plaudConnections)
             .where(eq(plaudConnections.userId, session.user.id))
             .limit(1),
@@ -118,6 +121,9 @@ export default async function DashboardPage() {
             userEmail={session.user.email ?? null}
             initialSettings={initialSettings}
             plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
+            plaudSessionExpiresAt={
+                connectionRow?.sessionExpiresAt?.toISOString() ?? null
+            }
             isHosted={env.IS_HOSTED}
         />
     );
