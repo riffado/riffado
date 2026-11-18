@@ -226,6 +226,49 @@ describeWithDatabase("status queries PostgreSQL integration", () => {
         ).toEqual(at("2026-11-18T10:08:00Z"));
     });
 
+    it("lets a newer success stored by another process win over a batch of older failures", async () => {
+        await mergeStatusJobRun({
+            job: "webhooks",
+            lastSuccessAt: at("2026-11-18T10:10:00Z"),
+            lastErrorAt: null,
+            failingFrom: null,
+        });
+
+        await mergeStatusJobRun({
+            job: "webhooks",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:05:00Z"),
+            failingFrom: at("2026-11-18T10:00:00Z"),
+        });
+        expect(await getStatusJobRun("webhooks")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:10:00Z"),
+            lastErrorAt: at("2026-11-18T10:05:00Z"),
+            failingSince: null,
+        });
+
+        await mergeStatusJobRun({
+            job: "webhooks",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:15:00Z"),
+            failingFrom: at("2026-11-18T10:06:00Z"),
+        });
+        expect(await getStatusJobRun("webhooks")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:10:00Z"),
+            lastErrorAt: at("2026-11-18T10:15:00Z"),
+            failingSince: at("2026-11-18T10:10:00Z"),
+        });
+
+        await mergeStatusJobRun({
+            job: "webhooks",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:08:00Z"),
+            failingFrom: at("2026-11-18T10:01:00Z"),
+        });
+        expect((await getStatusJobRun("webhooks"))?.failingSince).toEqual(
+            at("2026-11-18T10:10:00Z"),
+        );
+    });
+
     it("reports the Stripe inbox backlog and recent permanent failures", async () => {
         if (!database) throw new Error("test database was not initialized");
         const base = {

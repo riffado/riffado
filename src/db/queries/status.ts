@@ -106,7 +106,9 @@ export async function pruneStatusBuckets(before: Date): Promise<void> {
 /**
  * Merge one process's job outcomes into the shared row. A success anywhere
  * ends the failure streak; `failingFrom` (first failure after the batch's
- * last success) starts or continues it.
+ * last success) starts or continues it. A batch without a success whose
+ * failures are all older than a stored success leaves the streak as
+ * stored, and a new streak never starts before the stored last success.
  */
 export async function mergeStatusJobRun(input: {
     job: string;
@@ -132,7 +134,8 @@ export async function mergeStatusJobRun(input: {
                     when excluded.failing_since is null then
                         case when excluded.last_success_at is not null then null else ${t.failingSince} end
                     when excluded.last_success_at is not null then excluded.failing_since
-                    else coalesce(${t.failingSince}, excluded.failing_since)
+                    when ${t.lastSuccessAt} >= excluded.last_error_at then ${t.failingSince}
+                    else coalesce(${t.failingSince}, greatest(excluded.failing_since, ${t.lastSuccessAt}))
                 end`,
                 updatedAt: sql`now()`,
             },
