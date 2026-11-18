@@ -30,11 +30,7 @@ export const GET = apiHandler(async (request: Request) => {
         return NextResponse.json({ connected: false });
     }
 
-    const client = await createPlaudClient(
-        connection.bearerToken,
-        connection.apiBase,
-        connection.workspaceId,
-    );
+    const client = await createPlaudClient(connection);
 
     const startedAt = Date.now();
     let reachable = false;

@@ -682,11 +682,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             barkPushUrl: settings?.barkPushUrl || null,
         };
 
-        const plaudClient = await createPlaudClient(
-            connection.bearerToken,
-            connection.apiBase,
-            connection.workspaceId,
-        );
+        const plaudClient = await createPlaudClient(connection);
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
@@ -899,8 +895,9 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             error instanceof Error ? error.message : String(error);
 
         // A 401 from Plaud means the stored token is no longer accepted
-        // (expired ~300-day UT, a mistakenly-pasted 24h workspace token that
-        // has now died, or a revoked token). Mark the connection so the
+        // (an expired user token with no working refresh token, a
+        // mistakenly-pasted 24h workspace token that has now died, or a
+        // revoked token). Mark the connection so the
         // dashboard can prompt a reconnect instead of silently failing every
         // sync. The row and synced recordings are preserved.
         if (
