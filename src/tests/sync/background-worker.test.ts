@@ -29,7 +29,12 @@ vi.mock("@/db/schema", () => ({
 vi.mock("@/lib/env", () => ({ env: envMock }));
 vi.mock("@/lib/sync/sync-recordings", () => syncMock);
 
-import { claimUsersForSync } from "@/lib/sync/worker";
+import {
+    drainPending,
+    resetStatusRecorderForTests,
+    setStatusRecordingEnabled,
+} from "@/lib/status/record";
+import { claimUsersForSync, tick } from "@/lib/sync/worker";
 
 function stubClaimQuery(rows: { userId: string }[]) {
     const where = vi.fn().mockReturnValue({
@@ -76,6 +81,104 @@ describe("claimUsersForSync", () => {
         stubClaimQuery([{ userId: "self-host-user" }]);
         const result = await claimUsersForSync();
         expect(result).toEqual(["self-host-user"]);
+    });
+});
+
+describe("sync status job", () => {
+    const clean = {
+        newRecordings: 0,
+        updatedRecordings: 0,
+        errors: [] as string[],
+        pendingTranscriptionIds: [] as string[],
+    };
+
+    function syncRun() {
+        return drainPending().jobs.find((job) => job.job === "sync") ?? null;
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetStatusRecorderForTests();
+        setStatusRecordingEnabled(true);
+        vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        setStatusRecordingEnabled(false);
+        vi.restoreAllMocks();
+    });
+
+    it("records a failure, not a success, when a sync returns operational errors", async () => {
+        stubClaimQuery([{ userId: "u1" }]);
+        syncMock.syncRecordingsForUser.mockResolvedValue({
+            ...clean,
+            errors: ["Sync failed: connect ECONNREFUSED"],
+        });
+        await tick();
+        expect(syncRun()).toMatchObject({
+            lastSuccessAt: null,
+            lastErrorAt: expect.any(Date),
+        });
+    });
+
+    it("records a success for a sync without errors", async () => {
+        stubClaimQuery([{ userId: "u1" }]);
+        syncMock.syncRecordingsForUser.mockResolvedValue(clean);
+        await tick();
+        expect(syncRun()).toMatchObject({
+            lastSuccessAt: expect.any(Date),
+            lastErrorAt: null,
+        });
+    });
+
+    it("ignores a user whose Plaud token was rejected", async () => {
+        stubClaimQuery([{ userId: "dead" }, { userId: "broken" }]);
+        syncMock.syncRecordingsForUser
+            .mockResolvedValueOnce({
+                ...clean,
+                errors: ["Plaud rejected the stored token."],
+                needsReconnect: true,
+            })
+            .mockResolvedValueOnce({
+                ...clean,
+                errors: ["Sync failed: boom"],
+            });
+        await tick();
+        expect(syncRun()).toMatchObject({
+            lastSuccessAt: null,
+            lastErrorAt: expect.any(Date),
+        });
+    });
+
+    it("counts a pass where every user was skipped for a user-caused reason as a completed run", async () => {
+        stubClaimQuery([{ userId: "dead" }, { userId: "locked" }]);
+        syncMock.syncRecordingsForUser
+            .mockResolvedValueOnce({
+                ...clean,
+                errors: ["Plaud rejected the stored token."],
+                needsReconnect: true,
+            })
+            .mockResolvedValueOnce({
+                ...clean,
+                errors: ["Your hosted plan has lapsed."],
+                skipped: "locked_out",
+            });
+        await tick();
+        expect(syncRun()).toMatchObject({
+            lastSuccessAt: expect.any(Date),
+            lastErrorAt: null,
+        });
+    });
+
+    it("records a failure when a sync throws", async () => {
+        stubClaimQuery([{ userId: "u1" }]);
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        syncMock.syncRecordingsForUser.mockRejectedValue(new Error("boom"));
+        await tick();
+        expect(syncRun()).toMatchObject({
+            lastSuccessAt: null,
+            lastErrorAt: expect.any(Date),
+        });
     });
 });
 

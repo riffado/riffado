@@ -63,6 +63,28 @@ export function isValidPlaudApiUrl(url: string): boolean {
     }
 }
 
+const KNOWN_API_HOSTS = new Set(
+    Object.values(PLAUD_SERVERS).flatMap((server) =>
+        server.apiBase ? [new URL(server.apiBase).hostname] : [],
+    ),
+);
+
+const REGIONAL_API_HOST_RE = /^api-[a-z0-9-]+\.plaud\.(ai|cn)$/;
+
+/**
+ * True when `url` targets a Plaud API server: one of `PLAUD_SERVERS` or a
+ * regional `api-<region>.plaud.ai` / `.plaud.cn` host. Presigned storage
+ * and resource hosts are not API hosts.
+ */
+export function isPlaudApiHost(url: string): boolean {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return KNOWN_API_HOSTS.has(host) || REGIONAL_API_HOST_RE.test(host);
+    } catch {
+        return false;
+    }
+}
+
 export function serverKeyFromApiBase(apiBase: string): PlaudServerKey {
     const entry = (
         Object.entries(PLAUD_SERVERS) as [

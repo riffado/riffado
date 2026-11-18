@@ -1029,3 +1029,45 @@ export const emailLog = pgTable(
         ),
     }),
 );
+
+/**
+ * Status page traffic counters, one row per (part, minute). Every process
+ * aggregates outcomes in memory and adds them here once a minute, so the
+ * counts and the latency histogram sum across processes. The verdict
+ * columns hold the worst raw verdict reason per state for the sustain rule.
+ * Rows older than about a day are pruned. Written only when STATUS_TOKEN is set.
+ */
+export const statusMinuteBuckets = pgTable(
+    "status_minute_buckets",
+    {
+        part: varchar("part", { length: 40 }).notNull(),
+        minute: timestamp("minute").notNull(),
+        ok: integer("ok").notNull().default(0),
+        err: integer("err").notNull().default(0),
+        latencyBuckets: integer("latency_buckets")
+            .array()
+            .notNull()
+            .default(sql`'{}'::integer[]`),
+        verdictOk: text("verdict_ok"),
+        verdictSlow: text("verdict_slow"),
+        verdictDown: text("verdict_down"),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.part, table.minute] }),
+        minuteIdx: index("status_minute_buckets_minute_idx").on(table.minute),
+    }),
+);
+
+/**
+ * Last success / failure of each background job, for the status page's
+ * freshness checks. One row per job name. Written only when STATUS_TOKEN
+ * is set.
+ */
+export const statusJobRuns = pgTable("status_job_runs", {
+    job: varchar("job", { length: 40 }).primaryKey(),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastErrorAt: timestamp("last_error_at"),
+    failingSince: timestamp("failing_since"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

@@ -33,6 +33,7 @@ import {
     claimAutoTranscribeIds,
     listAutoTranscribeRetryIds,
     noteAutoTranscribeOutcome,
+    recordAutoTranscribeStatus,
     releaseAutoTranscribeIds,
 } from "@/lib/sync/auto-transcribe-state";
 import {
@@ -945,6 +946,7 @@ async function queueTranscriptions(
                     outcome.success,
                     outcome.failureKind,
                 );
+                recordAutoTranscribeStatus(outcome);
                 if (stopped) {
                     console.warn(
                         `Auto-transcribe stopped for recording ${recordingId} (${outcome.failureKind}, status ${outcome.providerStatus ?? "none"}): ${(outcome.error ?? "unknown error").slice(0, 200)}. Use Re-transcribe to retry.`,
@@ -957,6 +959,7 @@ async function queueTranscriptions(
                     false,
                     "transient",
                 );
+                recordAutoTranscribeStatus(null);
                 console.error(
                     `Auto-transcription failed for recording ${recordingId}:`,
                     error,

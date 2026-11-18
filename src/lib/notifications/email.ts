@@ -3,6 +3,8 @@ import React from "react";
 import { claimEmailSend, releaseEmailSend } from "@/db/queries/email-log";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
+import { judgeSmtpSend } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 import { AccountDeletedEmail } from "./email-templates/account-deleted";
 import { EmailChangeConfirmEmail } from "./email-templates/email-change-confirm";
 import { ExportReadyEmail } from "./email-templates/export-ready";
@@ -29,6 +31,16 @@ interface EmailOptions {
 }
 
 let transporter: nodemailer.Transporter | null = null;
+
+function plainTextFallback(html: string): string {
+    let text = html;
+    let previous: string;
+    do {
+        previous = text;
+        text = text.replace(/<[^>]*>/g, "");
+    } while (text !== previous);
+    return text;
+}
 
 function getTransporter(): nodemailer.Transporter | null {
     // Return null if SMTP is not configured
@@ -70,14 +82,19 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         const fromEmail =
             env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
 
-        await mailer.sendMail({
-            from: fromEmail,
-            to: options.to,
-            replyTo: env.SMTP_REPLY_TO,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML if no text provided
-        });
+        await trackCall(
+            "emails",
+            () =>
+                mailer.sendMail({
+                    from: fromEmail,
+                    to: options.to,
+                    replyTo: env.SMTP_REPLY_TO,
+                    subject: options.subject,
+                    html: options.html,
+                    text: options.text || plainTextFallback(options.html),
+                }),
+            judgeSmtpSend,
+        );
 
         return true;
     } catch (error) {
@@ -102,14 +119,19 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
     const fromEmail = env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
 
     try {
-        await mailer.sendMail({
-            from: fromEmail,
-            to: options.to,
-            replyTo: env.SMTP_REPLY_TO,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ""),
-        });
+        await trackCall(
+            "emails",
+            () =>
+                mailer.sendMail({
+                    from: fromEmail,
+                    to: options.to,
+                    replyTo: env.SMTP_REPLY_TO,
+                    subject: options.subject,
+                    html: options.html,
+                    text: options.text || plainTextFallback(options.html),
+                }),
+            judgeSmtpSend,
+        );
     } catch (error) {
         const err = error as Error & { code?: string; command?: string };
         let errorMessage = "Failed to send email";

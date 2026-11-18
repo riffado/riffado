@@ -16,6 +16,10 @@ type ExportWorkerModule = {
     startExportWorker: () => void;
 };
 
+type StatusRecorderModule = {
+    startStatusRecorder: () => void;
+};
+
 type EnvModule = {
     env: {
         IS_HOSTED: boolean;
@@ -83,6 +87,10 @@ export async function register() {
     const { startExportWorker } =
         require("./lib/export/worker") as ExportWorkerModule;
     startExportWorker();
+
+    const { startStatusRecorder } =
+        require("./lib/status/flush") as StatusRecorderModule;
+    startStatusRecorder();
 
     // Catch anything that escapes a background worker's own try/catch (or
     // any other unexpected process-level throw) instead of only ever

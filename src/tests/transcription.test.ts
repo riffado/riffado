@@ -67,6 +67,10 @@ import { db } from "@/db";
 import { recordings } from "@/db/schema";
 import { generateTitleFromTranscription } from "@/lib/ai/generate-title";
 import {
+    isMynahConfigured,
+    transcribeViaMynah,
+} from "@/lib/hosted/transcription/mynah";
+import {
     storeBrowserTranscription,
     transcribeRecording,
 } from "@/lib/transcription/transcribe-recording";
@@ -222,10 +226,22 @@ describe("Transcription", () => {
             expect(transcribeViaMynah).not.toHaveBeenCalled();
         });
 
-        it("should return error when API call fails", async () => {
-            const mockCreate = vi
-                .fn()
-                .mockRejectedValue(new Error("API Error"));
+        it.each([
+            {
+                thrown: new Error("API Error"),
+                providerStatus: undefined,
+            },
+            {
+                thrown: Object.assign(new Error("Incorrect API key"), {
+                    status: 401,
+                }),
+                providerStatus: 401,
+            },
+        ])("should return error when API call fails ($thrown.message)", async ({
+            thrown,
+            providerStatus,
+        }) => {
+            const mockCreate = vi.fn().mockRejectedValue(thrown);
             // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
             (OpenAI as unknown as Mock).mockImplementation(function () {
                 return {
@@ -284,7 +300,57 @@ describe("Transcription", () => {
             );
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe("API Error");
+            expect(result.error).toBe(thrown.message);
+            expect(result.errorCode).toBe("TRANSCRIPTION_FAILED");
+            expect(result.providerStatus).toBe(providerStatus);
+            expect(result.managedProvider).toBe(false);
+        });
+
+        it("marks a failed call on the managed provider (Mynah) as managed", async () => {
+            (isMynahConfigured as Mock).mockReturnValueOnce(true);
+            (transcribeViaMynah as Mock).mockRejectedValueOnce(
+                Object.assign(new Error("Mynah transcription failed (401)"), {
+                    status: 401,
+                }),
+            );
+            const empty = {
+                from: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        limit: vi.fn().mockResolvedValue([]),
+                    }),
+                }),
+            };
+            (db.select as Mock)
+                .mockReturnValueOnce({
+                    from: vi.fn().mockReturnValue({
+                        where: vi.fn().mockReturnValue({
+                            limit: vi.fn().mockResolvedValue([
+                                {
+                                    id: mockRecordingId,
+                                    filename: "test.mp3",
+                                    storagePath: "test.mp3",
+                                    duration: 1000,
+                                },
+                            ]),
+                        }),
+                    }),
+                })
+                .mockReturnValueOnce(empty)
+                .mockReturnValueOnce(empty)
+                .mockReturnValueOnce(empty);
+
+            const result = await transcribeRecording(
+                mockUserId,
+                mockRecordingId,
+            );
+
+            expect(transcribeViaMynah).toHaveBeenCalledTimes(1);
+            expect(result).toMatchObject({
+                success: false,
+                errorCode: "TRANSCRIPTION_FAILED",
+                providerStatus: 401,
+                managedProvider: true,
+            });
         });
 
         it("bumps recording updatedAt and emits completion after generated title is stored", async () => {

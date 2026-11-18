@@ -1,15 +1,31 @@
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
 import {
     AUTO_TRANSCRIBE_RETRY_LIMIT,
     type AutoTranscribeRetryOptions,
     listUntranscribedRecordingIds,
 } from "@/lib/sync/untranscribed";
 import type { TranscribeFailureKind } from "@/lib/transcription/failure-kind";
+import type {
+    TranscribeErrorCode,
+    TranscribeResult,
+} from "@/lib/transcription/transcribe-recording";
 
 /** Max remembered failed ids per user in this process. */
 export const AUTO_TRANSCRIBE_FAILED_ID_LIMIT = 256;
 
 /** Transient failures after which auto-transcribe stops retrying a recording. */
 export const AUTO_TRANSCRIBE_MAX_TRANSIENT_FAILURES = 6;
+
+const USER_CAUSED_ERROR_CODES: ReadonlySet<TranscribeErrorCode> = new Set([
+    "HOSTED_LOCKED_OUT",
+    "MYNAH_BUDGET_EXHAUSTED",
+    "FILE_TOO_LARGE",
+    "NO_TRANSCRIPTION_PROVIDER",
+    "RECORDING_NOT_FOUND",
+    "RECORDING_DELETED",
+]);
+
+const REJECTED_KEY_STATUSES: ReadonlySet<number> = new Set([401, 403]);
 
 /** Wait before the first transient-failure retry; doubles per failure. */
 export const AUTO_TRANSCRIBE_RETRY_BACKOFF_MS = 10 * 60 * 1000;
@@ -120,6 +136,38 @@ export function noteAutoTranscribeOutcome(
     failed.set(recordingId, { transientFailures, retryAt, stopped });
     evictOverflow(failed, recordingId);
     return stopped && !previous?.stopped;
+}
+
+/**
+ * Record one auto-transcribe attempt for the `auto-transcribe` status job.
+ * `result` is null when the attempt threw. A success counts only when a
+ * transcript was produced; failures the user caused (lapsed plan, used-up
+ * Mynah budget, file too large, no provider, recording deleted, or their
+ * own provider rejecting their key with 401/403) are not recorded. A
+ * 401/403 from the managed provider is our service token being refused
+ * and is recorded.
+ */
+export function recordAutoTranscribeStatus(
+    result: Pick<
+        TranscribeResult,
+        "success" | "errorCode" | "providerStatus" | "managedProvider"
+    > | null,
+): void {
+    if (result?.success) {
+        recordJobSuccess("auto-transcribe");
+        return;
+    }
+    if (result?.errorCode && USER_CAUSED_ERROR_CODES.has(result.errorCode)) {
+        return;
+    }
+    if (
+        !result?.managedProvider &&
+        result?.providerStatus !== undefined &&
+        REJECTED_KEY_STATUSES.has(result.providerStatus)
+    ) {
+        return;
+    }
+    recordJobFailure("auto-transcribe");
 }
 
 /**
