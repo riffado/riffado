@@ -38,6 +38,23 @@ export interface PlaudUpdateFilenameResponse {
     data_file?: unknown;
 }
 
+/** Options for `PlaudClient.getRecordings`. */
+export interface PlaudListOptions {
+    /**
+     * Plaud 4.0 accounts: list every recording and sort in memory instead of
+     * paging `recordings/all` by update time. Ignored for legacy accounts.
+     */
+    fullListing?: boolean;
+}
+
+interface PlaudV4UpdatedListing {
+    items: PlaudRecording[];
+    ids: Set<string>;
+    cursor?: string;
+    pages: number;
+    done: boolean;
+}
+
 export const DEFAULT_PLAUD_API_BASE = PLAUD_SERVERS[DEFAULT_SERVER_KEY].apiBase;
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -77,6 +94,8 @@ export class PlaudClient {
     private workspaceFallbackToUt = false;
     private v4Mode = false;
     private v4ListCache?: PlaudRecording[];
+    private v4UpdatedListing?: PlaudV4UpdatedListing;
+    private v4UpdatedSortUnusable = false;
     private readonly v4DetailCache = new Map<
         string,
         NonNullable<PlaudV4FileDetailResponse["data"]>
@@ -239,12 +258,22 @@ export class PlaudClient {
         return body;
     }
 
+    /**
+     * One page of recordings, legacy `/file/simple/web` semantics. On Plaud
+     * 4.0 accounts the trash is not listed (empty result), and the default
+     * `edit_time` descending order pages `recordings/all` by update time,
+     * fetching only as many pages as `skip + limit` needs; `data_file_total`
+     * then counts the recordings fetched so far. If Plaud rejects that order
+     * or returns items out of order, the client switches to the full listing
+     * for the rest of its lifetime.
+     */
     async getRecordings(
         skip: number = 0,
         limit: number = 99999,
         isTrash: number = 0,
         sortBy: string = "edit_time",
         isDesc: boolean = true,
+        options: PlaudListOptions = {},
     ): Promise<PlaudRecordingsResponse> {
         if (!this.v4Mode) {
             const params = new URLSearchParams({
@@ -279,6 +308,22 @@ export class PlaudClient {
                 data_file_list: [],
             };
         }
+        if (
+            sortBy === "edit_time" &&
+            isDesc &&
+            !options.fullListing &&
+            !this.v4UpdatedSortUnusable
+        ) {
+            const listed = await this.listUpdatedRecordingsV4(skip + limit);
+            if (listed) {
+                return {
+                    status: 0,
+                    msg: "success",
+                    data_file_total: listed.length,
+                    data_file_list: listed.slice(skip, skip + limit),
+                };
+            }
+        }
         const all = sortPlaudRecordings(
             await this.listAllRecordingsV4(),
             sortBy,
@@ -290,6 +335,64 @@ export class PlaudClient {
             data_file_total: all.length,
             data_file_list: all.slice(skip, skip + limit),
         };
+    }
+
+    private async listUpdatedRecordingsV4(
+        count: number,
+    ): Promise<PlaudRecording[] | undefined> {
+        this.v4UpdatedListing ??= {
+            items: [],
+            ids: new Set(),
+            pages: 0,
+            done: false,
+        };
+        const listing = this.v4UpdatedListing;
+        while (listing.items.length < count && !listing.done) {
+            if (listing.pages >= V4_MAX_PAGES) {
+                listing.done = true;
+                break;
+            }
+            const params = new URLSearchParams({
+                sort_by: "updated",
+                sort_order: "desc",
+                page_size: V4_PAGE_SIZE.toString(),
+            });
+            if (listing.cursor) params.set("cursor", listing.cursor);
+
+            const body = await this.request<PlaudV4RecordingsResponse>(
+                `/file-app/v4/recordings/all?${params.toString()}`,
+            );
+            listing.pages++;
+            if (body?.status !== 0 || !Array.isArray(body.data?.items)) {
+                return this.abandonUpdatedSortV4(
+                    `status ${String(body?.status)}`,
+                );
+            }
+            for (const item of body.data.items) {
+                if (!item?.file_id) continue;
+                const recording = mapPlaudV4Item(item);
+                if (listing.ids.has(recording.id)) continue;
+                const previous = listing.items[listing.items.length - 1];
+                if (previous && recording.edit_time > previous.edit_time) {
+                    return this.abandonUpdatedSortV4("items out of order");
+                }
+                listing.ids.add(recording.id);
+                listing.items.push(recording);
+            }
+            const next = body.data.next_cursor;
+            if (!next || body.data.items.length === 0) listing.done = true;
+            else listing.cursor = next;
+        }
+        return listing.items;
+    }
+
+    private abandonUpdatedSortV4(reason: string): undefined {
+        this.v4UpdatedSortUnusable = true;
+        this.v4UpdatedListing = undefined;
+        console.warn(
+            `[plaud] v4 recordings/all sort_by=updated unusable (${reason}), using the full listing`,
+        );
+        return undefined;
     }
 
     /** All recordings via `/file-app/v4/recordings/all`, newest first. */

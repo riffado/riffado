@@ -118,9 +118,8 @@ export function mapPlaudV4Item(item: PlaudV4RecordingItem): PlaudRecording {
 }
 
 /**
- * Order v4 listings like the legacy `sort_by` / `is_desc` parameters.
- * `recordings/all` only sorts by creation, but sync expects most recently
- * edited first (it stops after unchanged pages).
+ * Order a full v4 listing like the legacy `sort_by` / `is_desc` parameters:
+ * `start_time` / `create_time` by creation, anything else by `edit_time`.
  */
 export function sortPlaudRecordings(
     recordings: PlaudRecording[],

@@ -46,7 +46,9 @@ export const GET = apiHandler(async (request: Request) => {
     try {
         const [devices, active, trash] = await Promise.all([
             client.listDevices(),
-            client.getRecordings(0, 1, 0),
+            client.getRecordings(0, 1, 0, "edit_time", true, {
+                fullListing: true,
+            }),
             client.getRecordings(0, 1, 1),
         ]);
         reachable = true;

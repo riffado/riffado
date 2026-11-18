@@ -48,7 +48,10 @@ const SYNC_CONFIG = {
     PAGE_SIZE: 50,
     BATCH_CONCURRENCY: 5,
     MAX_PAGES: 20,
+    PLAUD_V4_FULL_LISTING_INTERVAL_MS: 24 * 60 * 60 * 1000,
 } as const;
+
+const lastPlaudV4FullListingAt = new Map<string, number>();
 
 interface SyncResult {
     newRecordings: number;
@@ -833,6 +836,11 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const importCandidates: ImportCandidate[] = [];
         const capState: CapState = { blocked: false, pendingBytes: 0 };
         const seenRecordingIds = new Set<string>();
+        const lastFullListingAt = lastPlaudV4FullListingAt.get(connection.id);
+        const fullListing =
+            lastFullListingAt === undefined ||
+            Date.now() - lastFullListingAt >=
+                SYNC_CONFIG.PLAUD_V4_FULL_LISTING_INTERVAL_MS;
 
         let page = 0;
         let hasMore = true;
@@ -846,6 +854,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                 0,
                 "edit_time",
                 true,
+                { fullListing },
             );
 
             const plaudRecordings = recordingsResponse.data_file_list;
@@ -923,6 +932,10 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             }
 
             page++;
+        }
+
+        if (fullListing && plaudClient.usingPlaudV4) {
+            lastPlaudV4FullListingAt.set(connection.id, Date.now());
         }
 
         if (capState.blocked) {

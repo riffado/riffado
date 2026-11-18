@@ -350,6 +350,7 @@ describe("Issue #274 — pagination content backfill", () => {
             0,
             "edit_time",
             true,
+            expect.any(Object),
         );
 
         const fetched = getFileDetail.mock.calls.map((c) => c[0] as string);
@@ -462,6 +463,7 @@ describe("Issue #274 — pagination content backfill", () => {
             0,
             "edit_time",
             true,
+            expect.any(Object),
         );
         expect(getFileDetail.mock.calls.map((c) => c[0])).toEqual([
             older.rec.id,
@@ -510,6 +512,7 @@ describe("Issue #274 — pagination content backfill", () => {
             0,
             "edit_time",
             true,
+            expect.any(Object),
         );
         expect(getFileDetail.mock.calls.map((c) => c[0])).toEqual([
             older.rec.id,

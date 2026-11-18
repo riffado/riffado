@@ -6,6 +6,8 @@
  *   keep its `.ogg` key (the audio route derives the MIME from it).
  * - The v4 detail can lack device serial, timezone and scene: an update must
  *   keep the stored values instead of writing the listing defaults.
+ * - Sync pages v4 listings by update time, so it forces the full listing on
+ *   the first sync of a process and then once per 24h per connection.
  */
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
@@ -382,6 +384,82 @@ describe("#327 metadata on update from a Plaud 4.0 detail", () => {
             timezone: 0,
             zonemins: 0,
             scene: 0,
+        });
+    });
+});
+
+describe("#327 periodic full v4 listing", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (db.update as Mock).mockReturnValue({
+            set: vi.fn().mockReturnValue({
+                where: vi.fn().mockResolvedValue(undefined),
+            }),
+        });
+    });
+
+    function emptyPlaud(usingPlaudV4 = true) {
+        const client = {
+            usingPlaudV4,
+            getRecordings: vi.fn().mockResolvedValue({ data_file_list: [] }),
+            hydrateRecording: vi.fn(async (r: unknown) => r),
+            downloadRecording: vi.fn(),
+        };
+        (createPlaudClient as Mock).mockResolvedValue(client);
+        return client;
+    }
+
+    async function syncAt(connectionId: string, nowMs: number) {
+        const client = emptyPlaud();
+        stubSelects(connectionId, []);
+        const now = vi.spyOn(Date, "now").mockReturnValue(nowMs);
+        try {
+            await syncRecordingsForUser(USER);
+        } finally {
+            now.mockRestore();
+        }
+        return client.getRecordings.mock.calls[0]?.[5];
+    }
+
+    it("forces the full listing on the first sync, then once per 24h per connection", async () => {
+        const t0 = Date.UTC(2026, 10, 18, 8);
+        const hour = 60 * 60 * 1000;
+
+        expect(await syncAt("conn-sweep-1", t0)).toEqual({
+            fullListing: true,
+        });
+        expect(await syncAt("conn-sweep-1", t0 + hour)).toEqual({
+            fullListing: false,
+        });
+        expect(await syncAt("conn-sweep-2", t0 + hour)).toEqual({
+            fullListing: true,
+        });
+        expect(await syncAt("conn-sweep-1", t0 + 23 * hour)).toEqual({
+            fullListing: false,
+        });
+        expect(await syncAt("conn-sweep-1", t0 + 24 * hour)).toEqual({
+            fullListing: true,
+        });
+    });
+
+    it("keeps forcing the full listing until a full v4 sync completes", async () => {
+        const t0 = Date.UTC(2026, 10, 18, 8);
+        const client = emptyPlaud();
+        client.getRecordings.mockRejectedValueOnce(new Error("plaud down"));
+        stubSelects("conn-sweep-3", []);
+        const now = vi.spyOn(Date, "now").mockReturnValue(t0);
+        try {
+            const failed = await syncRecordingsForUser(USER);
+            expect(failed.errors[0]).toContain("plaud down");
+        } finally {
+            now.mockRestore();
+        }
+
+        expect(await syncAt("conn-sweep-3", t0 + 1000)).toEqual({
+            fullListing: true,
+        });
+        expect(await syncAt("conn-sweep-3", t0 + 2000)).toEqual({
+            fullListing: false,
         });
     });
 });

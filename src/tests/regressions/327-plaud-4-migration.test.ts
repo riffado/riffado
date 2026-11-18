@@ -70,6 +70,8 @@ let transcriptUrlInDetail = true;
 // AUDIO_TRANSCODED object in the f_new detail: with a presigned URL, with a
 // content id only, or absent.
 let transcodedAudio: "url" | "id" | undefined;
+// Non-zero: Plaud rejects `recordings/all?sort_by=updated` with this status.
+let updatedSortStatus = 0;
 let unresolvableContentIds: string[] = [];
 let detailFetches = 0;
 
@@ -84,6 +86,7 @@ function installPlaudMock() {
     oldEditedVersion = undefined;
     transcriptUrlInDetail = true;
     transcodedAudio = undefined;
+    updatedSortStatus = 0;
     unresolvableContentIds = [];
     detailFetches = 0;
     global.fetch = vi.fn(
@@ -180,6 +183,15 @@ function installPlaudMock() {
             if (u.pathname === "/file/simple/web") return json(MIGRATED);
             if (u.pathname.startsWith("/file/temp-url/")) return json(MIGRATED);
             if (u.pathname === "/file-app/v4/recordings/all") {
+                if (
+                    u.searchParams.get("sort_by") === "updated" &&
+                    updatedSortStatus !== 0
+                ) {
+                    return json({
+                        status: updatedSortStatus,
+                        msg: "invalid sort_by",
+                    });
+                }
                 if (!u.searchParams.get("cursor")) {
                     return json({
                         status: 0,
@@ -495,8 +507,16 @@ describe("Plaud 4.0 helpers", () => {
 describe("PlaudClient on a 4.0-migrated account", () => {
     it("falls back to /file-app/v4/recordings/all with skip/limit paging", async () => {
         const client = new PlaudClient("ut-1", API, "ws_test");
+        const full = { fullListing: true };
 
-        const page1 = await client.getRecordings(0, 2, 0, "edit_time", true);
+        const page1 = await client.getRecordings(
+            0,
+            2,
+            0,
+            "edit_time",
+            true,
+            full,
+        );
         expect(client.usingPlaudV4).toBe(true);
         expect(page1.data_file_total).toBe(3);
         expect(page1.data_file_list.map((r) => r.id)).toEqual([
@@ -508,7 +528,14 @@ describe("PlaudClient on a 4.0-migrated account", () => {
             duration: 308000,
         });
 
-        const page2 = await client.getRecordings(2, 2, 0, "edit_time", true);
+        const page2 = await client.getRecordings(
+            2,
+            2,
+            0,
+            "edit_time",
+            true,
+            full,
+        );
         expect(page2.data_file_list.map((r) => r.id)).toEqual([
             "ed242f55f01779b404852ebb44e641d5",
         ]);
@@ -519,6 +546,11 @@ describe("PlaudClient on a 4.0-migrated account", () => {
         );
         expect(v4Calls).toHaveLength(2);
         expect(v4Calls.every((c) => c.auth === "Bearer wt-123")).toBe(true);
+        expect(
+            v4Calls.every(
+                (c) => new URL(c.url).searchParams.get("sort_by") === "created",
+            ),
+        ).toBe(true);
         // Legacy list is tried only once.
         expect(
             calls.filter((c) => c.url.includes("/file/simple/web")),
@@ -596,7 +628,9 @@ describe("PlaudClient on a 4.0-migrated account", () => {
     it("serves pages most recently edited first, like the legacy edit_time sort", async () => {
         oldEditedVersion = 1793300000000;
         const client = new PlaudClient("ut-1", API, "ws_test");
-        const page = await client.getRecordings(0, 3, 0, "edit_time", true);
+        const page = await client.getRecordings(0, 3, 0, "edit_time", true, {
+            fullListing: true,
+        });
         expect(page.data_file_list.map((r) => r.id)).toEqual([
             "ed242f55f01779b404852ebb44e641d5",
             "f_new",
@@ -625,6 +659,7 @@ describe("PlaudClient on a 4.0-migrated account", () => {
             "34f465e07b50f0a01cb76302d6c6eaa7",
             "ed242f55f01779b404852ebb44e641d5",
         ]);
+        expect(listCalls("updated")).toHaveLength(0);
     });
 
     it("leaves legacy recordings untouched in hydrateRecording", async () => {
@@ -634,6 +669,147 @@ describe("PlaudClient on a 4.0-migrated account", () => {
             source: undefined,
         };
         expect(await client.hydrateRecording(legacy)).toBe(legacy);
+    });
+});
+
+function listCalls(sortBy: "updated" | "created") {
+    return calls.filter((c) => {
+        const u = new URL(c.url);
+        return (
+            u.pathname === "/file-app/v4/recordings/all" &&
+            u.searchParams.get("sort_by") === sortBy
+        );
+    });
+}
+
+describe("PlaudClient v4 listing by update time", () => {
+    it("fetches update-time pages only as far as skip + limit needs", async () => {
+        const client = new PlaudClient("ut-1", API, "ws_test");
+
+        const page1 = await client.getRecordings(0, 2, 0, "edit_time", true);
+        expect(page1.data_file_list.map((r) => r.id)).toEqual([
+            "f_new",
+            "34f465e07b50f0a01cb76302d6c6eaa7",
+        ]);
+        expect(listCalls("updated")).toHaveLength(1);
+        const first = new URL(listCalls("updated")[0].url).searchParams;
+        expect(first.get("sort_order")).toBe("desc");
+        expect(first.get("page_size")).toBe("50");
+        expect(first.get("cursor")).toBeNull();
+
+        const page2 = await client.getRecordings(2, 2, 0, "edit_time", true);
+        expect(page2.data_file_list.map((r) => r.id)).toEqual([
+            "ed242f55f01779b404852ebb44e641d5",
+        ]);
+        expect(listCalls("updated")).toHaveLength(2);
+        expect(
+            new URL(listCalls("updated")[1].url).searchParams.get("cursor"),
+        ).toBe("page-2");
+
+        const page3 = await client.getRecordings(4, 2, 0, "edit_time", true);
+        expect(page3.data_file_list).toEqual([]);
+        expect(listCalls("updated")).toHaveLength(2);
+        expect(listCalls("created")).toHaveLength(0);
+        expect(
+            listCalls("updated").every((c) => c.auth === "Bearer wt-123"),
+        ).toBe(true);
+    });
+
+    it("switches to the full listing when Plaud rejects sort_by=updated", async () => {
+        updatedSortStatus = -1;
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const client = new PlaudClient("ut-1", API, "ws_test");
+            const page = await client.getRecordings(0, 2, 0, "edit_time", true);
+            expect(page.data_file_total).toBe(3);
+            expect(page.data_file_list.map((r) => r.id)).toEqual([
+                "f_new",
+                "34f465e07b50f0a01cb76302d6c6eaa7",
+            ]);
+            await client.getRecordings(2, 2, 0, "edit_time", true);
+
+            expect(listCalls("updated")).toHaveLength(1);
+            expect(listCalls("created")).toHaveLength(2);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(String(warn.mock.calls[0][0])).not.toMatch(/wt-123|ut-1/);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it("switches to the full listing when update-time pages come out of order", async () => {
+        oldEditedVersion = 1793300000000;
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+            const client = new PlaudClient("ut-1", API, "ws_test");
+            const page = await client.getRecordings(0, 3, 0, "edit_time", true);
+            expect(page.data_file_list.map((r) => r.id)).toEqual([
+                "ed242f55f01779b404852ebb44e641d5",
+                "f_new",
+                "34f465e07b50f0a01cb76302d6c6eaa7",
+            ]);
+            await client.getRecordings(0, 3, 0, "edit_time", true);
+
+            expect(listCalls("updated")).toHaveLength(2);
+            expect(listCalls("created")).toHaveLength(2);
+            expect(warn).toHaveBeenCalledTimes(1);
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it("uses the full listing when the caller forces it", async () => {
+        const client = new PlaudClient("ut-1", API, "ws_test");
+        await client.getRecordings(0, 2, 0, "edit_time", true, {
+            fullListing: true,
+        });
+        expect(listCalls("updated")).toHaveLength(0);
+        expect(listCalls("created")).toHaveLength(2);
+    });
+
+    it("leaves legacy accounts on /file/simple/web", async () => {
+        const listed = {
+            ...mapPlaudV4Item({ file_id: "of_abc" }),
+            source: undefined,
+        };
+        const legacyBody = {
+            status: 0,
+            msg: "success",
+            data_file_total: 1,
+            data_file_list: [listed],
+        };
+        global.fetch = vi.fn(
+            async (input: RequestInfo | URL, init?: RequestInit) => {
+                calls.push({
+                    url: String(input),
+                    method: init?.method ?? "GET",
+                });
+                const u = new URL(String(input));
+                if (u.pathname.startsWith("/user-app/auth/workspace/token/")) {
+                    return json({ status: 0, data: { workspace_token: "wt" } });
+                }
+                if (u.pathname === "/file/simple/web") return json(legacyBody);
+                return new Response("not found", { status: 404 });
+            },
+        ) as typeof global.fetch;
+        const client = new PlaudClient("ut-1", API, "ws_test");
+
+        const paged = await client.getRecordings(0, 50, 0, "edit_time", true);
+        const forced = await client.getRecordings(0, 50, 0, "edit_time", true, {
+            fullListing: true,
+        });
+
+        expect(paged).toEqual(legacyBody);
+        expect(forced).toEqual(legacyBody);
+        expect(client.usingPlaudV4).toBe(false);
+        const listUrls = calls
+            .map((c) => new URL(c.url))
+            .filter((u) => !u.pathname.startsWith("/user-app/"))
+            .map((u) => `${u.pathname}${u.search}`);
+        expect(listUrls).toEqual([
+            "/file/simple/web?skip=0&limit=50&is_trash=0&sort_by=edit_time&is_desc=true",
+            "/file/simple/web?skip=0&limit=50&is_trash=0&sort_by=edit_time&is_desc=true",
+        ]);
     });
 });
 
