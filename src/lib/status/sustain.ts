@@ -12,6 +12,12 @@ export interface SustainConfig {
     windowMinutes: number;
     /** Bad minutes within the window before slow/down shows. 1 = off. */
     badMinutes: number;
+    /**
+     * Minutes of traffic each raw check judges. One bad traffic minute
+     * stays in this many consecutive checks, so sustained bad checks must
+     * span at least this many minutes (newest minus oldest).
+     */
+    rawWindowMinutes: number;
 }
 
 /** The worst check of one minute; null when nothing checked that minute. */
@@ -25,11 +31,13 @@ export const MIN_OBSERVED_MINUTES = 3;
  * (with `raw` already in it) at index 0. Only minutes that were checked
  * count: with `observed` checked minutes (at least
  * `MIN_OBSERVED_MINUTES`), a state needs min(`badMinutes`, observed - 1)
- * of them. Down when that many were down; slow when that many were slow
- * or down; otherwise ok, with reason `transient-<raw reason>` for an
- * unsustained bad check. Polling once a minute gives the full
+ * of them, and those minutes must span at least `rawWindowMinutes` so a
+ * single bad traffic minute reused by consecutive checks never qualifies.
+ * Down when that holds for down minutes; slow when it holds for slow or
+ * down minutes; otherwise ok, with reason `transient-<raw reason>` for
+ * an unsustained bad check. Polling once a minute gives the full
  * `badMinutes`-of-`windowMinutes` rule; sparser or missed polls lower the
- * bar instead of counting unchecked minutes as good.
+ * count instead of counting unchecked minutes as good.
  */
 export function sustainedVerdict(
     raw: Verdict,
@@ -39,11 +47,18 @@ export function sustainedVerdict(
     const window = minutes.slice(0, config.windowMinutes);
     const observed = window.filter((m) => m !== null).length;
     const needed = Math.min(config.badMinutes, observed - 1);
-    const sustained = (count: number) =>
-        observed >= MIN_OBSERVED_MINUTES && count >= needed;
+    const sustained = (matches: (m: Verdict) => boolean) => {
+        const ages = window.flatMap((m, age) => (m && matches(m) ? [age] : []));
+        return (
+            observed >= MIN_OBSERVED_MINUTES &&
+            ages.length > 0 &&
+            ages.length >= needed &&
+            ages[ages.length - 1] - ages[0] >= config.rawWindowMinutes
+        );
+    };
     const down = window.filter((m) => m?.state === "down");
     const bad = window.filter((m) => m && m.state !== "ok");
-    if (sustained(down.length)) {
+    if (sustained((m) => m.state === "down")) {
         return {
             state: "down",
             reason:
@@ -52,7 +67,7 @@ export function sustainedVerdict(
                     : (down[0]?.reason ?? raw.reason),
         };
     }
-    if (sustained(bad.length)) {
+    if (sustained((m) => m.state !== "ok")) {
         return {
             state: "slow",
             reason:

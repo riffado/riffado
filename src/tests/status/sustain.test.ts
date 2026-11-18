@@ -14,13 +14,15 @@ import {
     memoryVerdictHistory,
     minuteFromReasons,
     postgresVerdictHistory,
+    type SustainConfig,
     sustainedVerdict,
     sustainStatus,
     type VerdictHistory,
 } from "@/lib/status/sustain";
 import type { PartState, StatusResponse } from "@/lib/status/types";
 
-const CONFIG = { windowMinutes: 7, badMinutes: 6 };
+const CONFIG = { windowMinutes: 7, badMinutes: 6, rawWindowMinutes: 5 };
+const SHORT_CONFIG = { windowMinutes: 5, badMinutes: 3, rawWindowMinutes: 2 };
 
 function raw(state: PartState, reason = `raw-${state}`): StatusResponse {
     return {
@@ -82,7 +84,7 @@ describe("sustainedVerdict", () => {
         expect(
             sustainedVerdict(
                 down,
-                [down, null, down, null, down, null, ok],
+                [down, null, down, null, down, null, down],
                 CONFIG,
             ),
         ).toEqual(down);
@@ -101,6 +103,24 @@ describe("sustainedVerdict", () => {
         expect(
             sustainedVerdict(down, [down, null, down, null], CONFIG),
         ).toEqual({ state: "ok", reason: "transient-error-rate" });
+    });
+
+    it("needs the bad minutes to span the raw traffic window", () => {
+        const down = { state: "down" as const, reason: "error-rate" };
+        const ok = { state: "ok" as const, reason: "traffic-ok" };
+        expect(
+            sustainedVerdict(
+                down,
+                [down, null, down, null, down, null, ok],
+                CONFIG,
+            ),
+        ).toEqual({ state: "ok", reason: "transient-error-rate" });
+        expect(
+            sustainedVerdict(down, [down, down, ok], SHORT_CONFIG).state,
+        ).toBe("ok");
+        expect(
+            sustainedVerdict(down, [down, down, down], SHORT_CONFIG).state,
+        ).toBe("down");
     });
 });
 
@@ -161,7 +181,7 @@ describe("postgresVerdictHistory", () => {
 describe("sustainStatus", () => {
     async function warmUp(
         history: VerdictHistory,
-        config: { windowMinutes: number; badMinutes: number },
+        config: SustainConfig,
         minutes: number[],
     ) {
         for (const minute of minutes) {
@@ -203,7 +223,7 @@ describe("sustainStatus", () => {
 
     it("counts a minute as bad when any check in it (any process) was bad", async () => {
         const history = memoryVerdictHistory();
-        const config = { windowMinutes: 3, badMinutes: 2 };
+        const config = { windowMinutes: 3, badMinutes: 2, rawWindowMinutes: 1 };
         await warmUp(history, config, [-1]);
         await sustainStatus(raw("down"), { history, config, now: at(0) });
         await sustainStatus(raw("ok"), { history, config, now: at(0) });
@@ -227,8 +247,56 @@ describe("sustainStatus", () => {
             });
             states.push(res.state);
         }
-        expect(states).toEqual(["ok", "ok", "down", "down"]);
+        expect(states).toEqual(["ok", "ok", "ok", "down"]);
     });
+
+    const POLLS: Record<string, number[]> = {
+        "every minute": range(0, 25),
+        "one missed poll": range(0, 25).filter((m) => m !== 9),
+        "every other minute": range(0, 25).filter((m) => m % 2 === 0),
+        startup: range(9, 25),
+    };
+
+    function range(from: number, to: number): number[] {
+        return Array.from({ length: to - from }, (_, i) => from + i);
+    }
+
+    async function replay(
+        config: SustainConfig,
+        polls: number[],
+        badTraffic: number[],
+    ): Promise<PartState[]> {
+        const history = memoryVerdictHistory();
+        const states: PartState[] = [];
+        for (const minute of polls) {
+            const bad = badTraffic.some(
+                (b) => b <= minute && b > minute - config.rawWindowMinutes,
+            );
+            const res = await sustainStatus(raw(bad ? "down" : "ok"), {
+                history,
+                config,
+                now: at(minute),
+            });
+            states.push(res.state);
+        }
+        return states;
+    }
+
+    for (const [pattern, polls] of Object.entries(POLLS)) {
+        for (const config of [CONFIG, SHORT_CONFIG]) {
+            const label = `${pattern}, ${config.rawWindowMinutes}-minute raw window`;
+
+            it(`never sustains a one-minute burst (${label})`, async () => {
+                const states = await replay(config, polls, [10]);
+                expect(states.every((s) => s === "ok")).toBe(true);
+            });
+
+            it(`still goes down for a real outage (${label})`, async () => {
+                const states = await replay(config, polls, range(10, 20));
+                expect(states).toContain("down");
+            });
+        }
+    }
 
     it("answers the raw verdict when the history fails (never hides an outage)", async () => {
         const broken: VerdictHistory = {
@@ -248,7 +316,7 @@ describe("sustainStatus", () => {
     it("is off with badMinutes 1", async () => {
         const res = await sustainStatus(raw("slow"), {
             history: memoryVerdictHistory(),
-            config: { windowMinutes: 5, badMinutes: 1 },
+            config: { windowMinutes: 5, badMinutes: 1, rawWindowMinutes: 2 },
             now: at(0),
         });
         expect(res.state).toBe("slow");

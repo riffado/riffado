@@ -80,19 +80,11 @@ export const THRESHOLDS: Record<TrafficPart, Thresholds> = {
     },
 };
 
-/** Sustained-verdict windows. External dependencies get the longer one. */
-export const SUSTAIN: Record<TrafficPart, SustainConfig> = {
-    "sign-in": { windowMinutes: 5, badMinutes: 3 },
-    plaud: { windowMinutes: 7, badMinutes: 6 },
-    transcription: { windowMinutes: 7, badMinutes: 6 },
-    storage: { windowMinutes: 5, badMinutes: 3 },
-    emails: { windowMinutes: 5, badMinutes: 3 },
-};
-
 /**
  * Minutes of traffic each raw verdict is judged on (the current minute
- * included). Kept below each part's `SUSTAIN.badMinutes` so a single bad
- * minute can't stay in enough consecutive checks to look sustained.
+ * included). Kept below each part's `SUSTAIN.badMinutes`, and passed to
+ * the sustain rule as `rawWindowMinutes`, so a single bad minute can't
+ * stay in enough consecutive checks to look sustained.
  */
 export const TRAFFIC_WINDOW_MINUTES: Record<TrafficPart, number> = {
     "sign-in": 2,
@@ -100,6 +92,35 @@ export const TRAFFIC_WINDOW_MINUTES: Record<TrafficPart, number> = {
     transcription: 5,
     storage: 2,
     emails: 2,
+};
+
+/** Sustained-verdict windows. External dependencies get the longer one. */
+export const SUSTAIN: Record<TrafficPart, SustainConfig> = {
+    "sign-in": {
+        windowMinutes: 5,
+        badMinutes: 3,
+        rawWindowMinutes: TRAFFIC_WINDOW_MINUTES["sign-in"],
+    },
+    plaud: {
+        windowMinutes: 7,
+        badMinutes: 6,
+        rawWindowMinutes: TRAFFIC_WINDOW_MINUTES.plaud,
+    },
+    transcription: {
+        windowMinutes: 7,
+        badMinutes: 6,
+        rawWindowMinutes: TRAFFIC_WINDOW_MINUTES.transcription,
+    },
+    storage: {
+        windowMinutes: 5,
+        badMinutes: 3,
+        rawWindowMinutes: TRAFFIC_WINDOW_MINUTES.storage,
+    },
+    emails: {
+        windowMinutes: 5,
+        badMinutes: 3,
+        rawWindowMinutes: TRAFFIC_WINDOW_MINUTES.emails,
+    },
 };
 
 const INBOX_FAILED_LOOKBACK_MS = 24 * 60 * MINUTE_MS;

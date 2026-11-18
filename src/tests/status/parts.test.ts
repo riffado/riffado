@@ -273,6 +273,9 @@ describe("raw verdict window vs sustain", () => {
             expect(TRAFFIC_WINDOW_MINUTES[part]).toBeLessThan(
                 SUSTAIN[part].badMinutes,
             );
+            expect(SUSTAIN[part].rawWindowMinutes).toBe(
+                TRAFFIC_WINDOW_MINUTES[part],
+            );
         }
     });
 
