@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format-date";
 import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
+
+const ENDING_SOON_DISMISS_KEY = "riffado-plaud-ending-soon-dismissed";
 
 interface PlaudReconnectBannerProps {
     /**
@@ -37,8 +39,10 @@ interface PlaudReconnectBannerProps {
  * Dashboard banner shown when Plaud stops accepting the stored sign-in
  * (an expired user token with no working refresh token, a mistakenly-pasted
  * 24h workspace token that has died, or a revoked token), and in the three
- * days before the sign-in ends. Opens the connector-first connect flow as a
- * modal, not full re-onboarding.
+ * days before the sign-in ends. The ending-soon notice can be dismissed;
+ * the dismissal is stored per session end, so a new sign-in warns again.
+ * Opens the connector-first connect flow as a modal, not full
+ * re-onboarding.
  */
 export function PlaudReconnectBanner({
     show,
@@ -58,8 +62,32 @@ export function PlaudReconnectBanner({
 
     const [now, setNow] = useState<number | null>(null);
     useEffect(() => {
-        setNow(Date.now());
+        const update = () => setNow(Date.now());
+        const onVisibilityChange = () => {
+            if (document.visibilityState === "visible") update();
+        };
+        update();
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        return () =>
+            document.removeEventListener(
+                "visibilitychange",
+                onVisibilityChange,
+            );
     }, []);
+
+    const dismissKey = sessionExpiresAt
+        ? `${ENDING_SOON_DISMISS_KEY}:${sessionExpiresAt}`
+        : null;
+    const [endingSoonDismissed, setEndingSoonDismissed] = useState(false);
+    useEffect(() => {
+        setEndingSoonDismissed(
+            dismissKey !== null && localStorage.getItem(dismissKey) === "1",
+        );
+    }, [dismissKey]);
+    const dismissEndingSoon = useCallback(() => {
+        if (dismissKey) localStorage.setItem(dismissKey, "1");
+        setEndingSoonDismissed(true);
+    }, [dismissKey]);
 
     const state = plaudConnectionBannerState({
         needsReconnect: show,
@@ -68,6 +96,7 @@ export function PlaudReconnectBanner({
     });
 
     if (!state || dismissed) return null;
+    if (state === "ending-soon" && endingSoonDismissed) return null;
 
     const endsOn = sessionExpiresAt
         ? formatDateTime(sessionExpiresAt, "absolute")
@@ -100,12 +129,19 @@ export function PlaudReconnectBanner({
                         </div>
                     )}
                 </div>
-                <Button
-                    onClick={() => setOpen(true)}
-                    className="shrink-0 self-start sm:self-auto"
-                >
-                    Reconnect
-                </Button>
+                <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
+                    <Button onClick={() => setOpen(true)}>Reconnect</Button>
+                    {state === "ending-soon" && (
+                        <button
+                            type="button"
+                            onClick={dismissEndingSoon}
+                            className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                            aria-label="Dismiss Plaud connection ending notice"
+                        >
+                            <X className="size-4" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <Dialog open={open} onOpenChange={setOpen}>
