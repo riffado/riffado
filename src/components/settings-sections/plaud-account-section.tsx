@@ -227,12 +227,11 @@ export function PlaudAccountSection({
                                         </>
                                     )}
                                 </p>
-                                {sessionEndsOn &&
-                                    connectionState !== "reconnect" && (
-                                        <p className="text-sm text-muted-foreground">
-                                            Connected until {sessionEndsOn}
-                                        </p>
-                                    )}
+                                {sessionEndsOn && connectionState === null && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Connected until {sessionEndsOn}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
