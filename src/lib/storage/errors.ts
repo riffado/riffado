@@ -12,14 +12,17 @@ export class StorageRootMissingError extends Error {
     }
 }
 
-interface StorageErrorShape {
+/** One error in a `cause` chain, with the fields storage backends set. */
+export interface StorageErrorShape {
     name?: unknown;
     code?: unknown;
+    message?: unknown;
     cause?: unknown;
     $metadata?: { httpStatusCode?: unknown };
 }
 
-function storageErrorChain(error: unknown): StorageErrorShape[] {
+/** `error` followed by the errors along its `cause` chain (at most 5). */
+export function storageErrorChain(error: unknown): StorageErrorShape[] {
     const chain: StorageErrorShape[] = [];
     let current = error;
     while (
@@ -34,6 +37,24 @@ function storageErrorChain(error: unknown): StorageErrorShape[] {
     return chain;
 }
 
+/** True when this error says the storage itself is unreachable: a missing local base directory or bucket (NoSuchBucket). */
+export function isStorageRootMissingShape(shape: StorageErrorShape): boolean {
+    return (
+        shape instanceof StorageRootMissingError ||
+        shape.name === "NoSuchBucket"
+    );
+}
+
+/** True when this error says the object does not exist: S3 NoSuchKey/NotFound/404 or local ENOENT. */
+export function isObjectMissingShape(shape: StorageErrorShape): boolean {
+    return (
+        shape.name === "NoSuchKey" ||
+        shape.name === "NotFound" ||
+        shape.code === "ENOENT" ||
+        shape.$metadata?.httpStatusCode === 404
+    );
+}
+
 /**
  * True when a storage call failed only because the object does not exist
  * (S3 NoSuchKey/NotFound/404, local ENOENT), judged along the `cause`
@@ -42,22 +63,8 @@ function storageErrorChain(error: unknown): StorageErrorShape[] {
  */
 export function isStorageObjectMissingError(error: unknown): boolean {
     const chain = storageErrorChain(error);
-    if (
-        chain.some(
-            (shape) =>
-                shape instanceof StorageRootMissingError ||
-                shape.name === "NoSuchBucket",
-        )
-    ) {
-        return false;
-    }
-    return chain.some(
-        (shape) =>
-            shape.name === "NoSuchKey" ||
-            shape.name === "NotFound" ||
-            shape.code === "ENOENT" ||
-            shape.$metadata?.httpStatusCode === 404,
-    );
+    if (chain.some(isStorageRootMissingShape)) return false;
+    return chain.some(isObjectMissingShape);
 }
 
 /**

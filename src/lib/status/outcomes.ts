@@ -1,5 +1,10 @@
 import { isPlaudApiHost } from "@/lib/plaud/servers";
-import { StorageRootMissingError } from "@/lib/storage/errors";
+import {
+    isObjectMissingShape,
+    isStorageRootMissingShape,
+    type StorageErrorShape,
+    storageErrorChain,
+} from "@/lib/storage/errors";
 import type { CallOutcome, Settled } from "./record";
 
 /** The URL of a judged Plaud request. */
@@ -60,39 +65,7 @@ export function judgeMynahResponse(settled: Settled<Response>): CallOutcome {
  */
 export type StorageCallKind = "key" | "write";
 
-interface ErrorShape {
-    name?: unknown;
-    code?: unknown;
-    message?: unknown;
-    cause?: unknown;
-    $metadata?: { httpStatusCode?: unknown };
-}
-
-function errorChain(error: unknown): ErrorShape[] {
-    const chain: ErrorShape[] = [];
-    let current = error;
-    while (
-        current !== null &&
-        typeof current === "object" &&
-        chain.length < 5
-    ) {
-        const shape = current as ErrorShape;
-        chain.push(shape);
-        current = shape.cause;
-    }
-    return chain;
-}
-
-function isMissingKey(error: ErrorShape): boolean {
-    return (
-        error.name === "NoSuchKey" ||
-        error.name === "NotFound" ||
-        error.code === "ENOENT" ||
-        error.$metadata?.httpStatusCode === 404
-    );
-}
-
-function isRejectedKey(error: ErrorShape): boolean {
+function isRejectedKey(error: StorageErrorShape): boolean {
     return (
         typeof error.message === "string" &&
         error.message.startsWith("Invalid file key:")
@@ -109,18 +82,10 @@ function isRejectedKey(error: ErrorShape): boolean {
 export function judgeStorageCall(kind: StorageCallKind) {
     return <T>(settled: Settled<T>): CallOutcome => {
         if (settled.ok) return "ok";
-        const chain = errorChain(settled.error);
-        if (
-            chain.some(
-                (error) =>
-                    error instanceof StorageRootMissingError ||
-                    error.name === "NoSuchBucket",
-            )
-        ) {
-            return "error";
-        }
+        const chain = storageErrorChain(settled.error);
+        if (chain.some(isStorageRootMissingShape)) return "error";
         if (chain.some(isRejectedKey)) return "ignore";
-        if (kind === "key" && chain.some(isMissingKey)) return "ignore";
+        if (kind === "key" && chain.some(isObjectMissingShape)) return "ignore";
         return "error";
     };
 }

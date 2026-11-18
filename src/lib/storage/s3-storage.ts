@@ -4,12 +4,16 @@ import {
     GetObjectCommand,
     HeadBucketCommand,
     HeadObjectCommand,
-    NotFound,
     PutObjectCommand,
     S3Client,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+    isObjectMissingShape,
+    isStorageRootMissingShape,
+    type StorageErrorShape,
+} from "./errors";
 import type {
     ByteRange,
     DirectDownloadUrlOptions,
@@ -209,18 +213,10 @@ export class S3Storage implements StorageProvider {
             );
             return true;
         } catch (error) {
-            if ((error as { name?: unknown } | null)?.name === "NoSuchBucket") {
-                throw error;
-            }
-            if (error instanceof NotFound) return false;
-            // Some S3-compatible services return a generic 404 error that
-            // isn't typed as NotFound -- treat any "not found"-shaped error
-            // as missing rather than surfacing a hard failure here, since
-            // this check exists purely to decide whether to skip a file.
-            const status = (
-                error as { $metadata?: { httpStatusCode?: number } }
-            )?.$metadata?.httpStatusCode;
-            if (status === 404) return false;
+            if (error === null || typeof error !== "object") throw error;
+            const shape = error as StorageErrorShape;
+            if (isStorageRootMissingShape(shape)) throw error;
+            if (isObjectMissingShape(shape)) return false;
             throw error;
         }
     }
