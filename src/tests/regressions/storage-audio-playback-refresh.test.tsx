@@ -15,7 +15,12 @@
  *      requests (seeks) straight to the redirect target, so a seek fails.
  *      The player re-requests the app URL (a fresh storage URL) and only
  *      falls back to streaming if that refreshed source fails too.
- * Position and play state are restored after either reload.
+ * Position and play state are restored after either reload. The
+ * position saved by the first failed source is kept until a source
+ * actually loads (`load()` resets the element to 0, so a second failure
+ * must not save that), playback resumes only if the user still wants it
+ * when the new source loads, and once the streamed source fails too the
+ * controls stop showing playback.
  */
 
 import { act, render } from "@testing-library/react";
@@ -65,7 +70,9 @@ describe("usePlaybackEngine source fallback", () => {
         currentTime = 0;
         load = vi
             .spyOn(HTMLMediaElement.prototype, "load")
-            .mockImplementation(() => {});
+            .mockImplementation(() => {
+                currentTime = 0;
+            });
         play = vi
             .spyOn(HTMLMediaElement.prototype, "play")
             .mockImplementation(async () => {});
@@ -232,5 +239,63 @@ describe("usePlaybackEngine source fallback", () => {
 
         expect(currentTime).toBe(30);
         expect(play).not.toHaveBeenCalled();
+    });
+
+    it("keeps the original position when the refreshed source fails before it loads", () => {
+        render(<Player recording={{ id: "rec-1" } as Recording} />);
+        const audio = audioElement();
+        fire(audio, "loadedmetadata");
+        act(() => {
+            engine?.togglePlayPause();
+        });
+        play.mockClear();
+        currentTime = 754;
+
+        fire(audio, "error");
+        expect(audio.getAttribute("src")).toBe("/api/recordings/rec-1/audio");
+        expect(currentTime).toBe(0);
+        fire(audio, "error");
+        expect(audio.getAttribute("src")).toBe(
+            "/api/recordings/rec-1/audio?stream=1",
+        );
+        fire(audio, "loadedmetadata");
+
+        expect(currentTime).toBe(754);
+        expect(play).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops showing playback once the streamed source fails", () => {
+        render(<Player recording={{ id: "rec-1" } as Recording} />);
+        const audio = audioElement();
+        act(() => {
+            engine?.togglePlayPause();
+        });
+        expect(engine?.isPlaying).toBe(true);
+
+        fire(audio, "error");
+        expect(engine?.isPlaying).toBe(true);
+        fire(audio, "error");
+
+        expect(engine?.isPlaying).toBe(false);
+    });
+
+    it("does not resume when the user paused while the new source was loading", () => {
+        render(<Player recording={{ id: "rec-1" } as Recording} />);
+        const audio = audioElement();
+        act(() => {
+            engine?.togglePlayPause();
+        });
+        play.mockClear();
+        currentTime = 120;
+
+        fire(audio, "error");
+        act(() => {
+            engine?.togglePlayPause();
+        });
+        fire(audio, "loadedmetadata");
+
+        expect(currentTime).toBe(120);
+        expect(play).not.toHaveBeenCalled();
+        expect(engine?.isPlaying).toBe(false);
     });
 });

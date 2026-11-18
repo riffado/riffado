@@ -145,22 +145,19 @@ export function usePlaybackEngine({
             isSeekingRef.current = false;
             setCurrentTime(audio.currentTime);
         };
-        let pendingRestore: (() => void) | null = null;
-        const reloadFrom = (source: string) => {
-            const resumeAt = audio.currentTime;
-            const resumePlayback = isPlayingRef.current;
-            if (pendingRestore) {
-                audio.removeEventListener("loadedmetadata", pendingRestore);
+        let pendingResumeAt: number | null = null;
+        const restorePosition = () => {
+            if (pendingResumeAt === null) return;
+            audio.currentTime = pendingResumeAt;
+            pendingResumeAt = null;
+            if (isPlayingRef.current) {
+                audio.play().catch(() => setIsPlaying(false));
             }
-            const restore = () => {
-                pendingRestore = null;
-                audio.currentTime = resumeAt;
-                if (resumePlayback) {
-                    audio.play().catch(() => setIsPlaying(false));
-                }
-            };
-            pendingRestore = restore;
-            audio.addEventListener("loadedmetadata", restore, { once: true });
+        };
+        const reloadFrom = (source: string) => {
+            if (pendingResumeAt === null) {
+                pendingResumeAt = audio.currentTime;
+            }
             sourceLoaded = false;
             audio.src = source;
             audio.load();
@@ -172,7 +169,10 @@ export function usePlaybackEngine({
             }
         };
         const handleError = () => {
-            if (audio.getAttribute("src") === streamSource) return;
+            if (audio.getAttribute("src") === streamSource) {
+                setIsPlaying(false);
+                return;
+            }
             const now = Date.now();
             const canRefresh =
                 sourceLoaded &&
@@ -197,6 +197,7 @@ export function usePlaybackEngine({
 
         audio.addEventListener("timeupdate", updateTime);
         audio.addEventListener("loadedmetadata", handleSourceLoaded);
+        audio.addEventListener("loadedmetadata", restorePosition);
         audio.addEventListener("loadedmetadata", updateDuration);
         audio.addEventListener("durationchange", updateDuration);
         audio.addEventListener("ended", handleEnded);
@@ -210,14 +211,12 @@ export function usePlaybackEngine({
         return () => {
             audio.removeEventListener("timeupdate", updateTime);
             audio.removeEventListener("loadedmetadata", handleSourceLoaded);
+            audio.removeEventListener("loadedmetadata", restorePosition);
             audio.removeEventListener("loadedmetadata", updateDuration);
             audio.removeEventListener("durationchange", updateDuration);
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("seeked", handleSeeked);
             audio.removeEventListener("error", handleError);
-            if (pendingRestore) {
-                audio.removeEventListener("loadedmetadata", pendingRestore);
-            }
         };
     }, [recording.id, autoPlayNext, onEnded]);
 
