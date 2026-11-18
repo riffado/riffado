@@ -46,16 +46,13 @@ function parseRefreshToken(
 
     const refreshSub = typeof claims.sub === "string" ? claims.sub : "";
     const accessSub = decodeJwtClaims(accessToken)?.sub;
-    if (!refreshSub || typeof accessSub !== "string" || !accessSub) {
+    if (
+        !refreshSub ||
+        typeof accessSub !== "string" ||
+        !accessSub ||
+        refreshSub !== accessSub
+    ) {
         return droppedRefreshToken();
-    }
-    if (refreshSub !== accessSub) {
-        throw new AppError(
-            ErrorCode.INVALID_INPUT,
-            "The refresh token belongs to a different Plaud account than the access token. Sign in to Plaud again and reconnect.",
-            400,
-            { field: "refreshToken" },
-        );
     }
 
     const exp = decodeAccessTokenExpiry(token);

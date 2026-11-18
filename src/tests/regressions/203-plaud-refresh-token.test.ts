@@ -829,8 +829,10 @@ describe("POST /api/plaud/auth/connect-token refresh tokens", () => {
         expect(connectionInsert(values).refreshToken).toBeNull();
     });
 
-    it("rejects a refreshToken for a different Plaud account before calling Plaud", async () => {
+    it("drops a refreshToken for a different Plaud account and still connects", async () => {
         authedSession();
+        const values = mockEmptySelectsAndInserts();
+        routeConnectTokenHappyPath();
         const res = await connectTokenPOST(
             connectTokenRequest({
                 accessToken: makeUserToken(nowSec() + DAY),
@@ -842,12 +844,10 @@ describe("POST /api/plaud/auth/connect-token refresh tokens", () => {
                 source: "connector",
             }),
         );
-        expect(res.status).toBe(400);
-        const body = await res.json();
-        expect(body.code).toBe(ErrorCode.INVALID_INPUT);
-        expect(body.details).toEqual({ field: "refreshToken" });
-        expect(body.error).toMatch(/different Plaud account/);
-        expect(mockFetch).not.toHaveBeenCalled();
+        expect(res.status).toBe(200);
+        expect((await res.json()).warning).toMatch(/won't renew/);
+        expect(connectionInsert(values).refreshToken).toBeNull();
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(0);
     });
 
     it.each([
