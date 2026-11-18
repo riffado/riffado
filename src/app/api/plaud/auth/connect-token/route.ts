@@ -99,10 +99,11 @@ function shortLivedTokenWarning(
  * the user token expires; a token expiring within two days still connects
  * but the response carries a `warning` the UI shows.
  *
- * A `refreshToken` whose `sub` differs from the access token's is rejected
- * with 400. One that is malformed, expired, or where either token lacks
- * `sub` is dropped and reported in `warning`. The stored session end is
- * capped at 31 days from now whatever the refresh token's `exp` claims.
+ * A `refreshToken` that is malformed, expired, a workspace token, for a
+ * different Plaud account (`sub` differs from the access token's), or where
+ * either token lacks `sub` is dropped and reported in `warning`; the connect
+ * still succeeds. The stored session end is capped at 31 days from now
+ * whatever the refresh token's `exp` claims.
  *
  * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/connect-token/route.ts
  */
