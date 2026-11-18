@@ -204,13 +204,20 @@ describe("S3Storage", () => {
 });
 
 describe("withStorageTiming", () => {
-    afterEach(() => {
+    let dir: string;
+
+    beforeEach(async () => {
+        dir = await mkdtemp(join(tmpdir(), "riffado-storage-timing-"));
+    });
+
+    afterEach(async () => {
         setStatusRecordingEnabled(false);
+        await rm(dir, { recursive: true, force: true });
     });
 
     it("keeps the direct URL capability exactly when the wrapped provider has it", async () => {
         setStatusRecordingEnabled(true);
-        const local = withStorageTiming(new LocalStorage(tmpdir()));
+        const local = withStorageTiming(new LocalStorage(dir));
         const remote = withStorageTiming(s3());
 
         expect(local.getDirectDownloadUrl).toBeUndefined();
