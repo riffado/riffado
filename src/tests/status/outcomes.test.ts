@@ -14,6 +14,7 @@ const { envMock } = vi.hoisted(() => ({
 vi.mock("@/lib/env", () => ({ env: envMock }));
 
 import { plaudFetch } from "@/lib/plaud/fetch";
+import { _resetPlaudProxyCacheForTest } from "@/lib/plaud/proxy";
 import {
     judgeAuthResponse,
     judgeMynahResponse,
@@ -87,6 +88,54 @@ describe("plaud status recording (plaudFetch)", () => {
         expect(recorded()).toEqual({ ok: 2, err: 0 });
     });
 
+    it("counts a 403 from a Plaud API host as an error", async () => {
+        global.fetch = vi.fn(async () => respond(403)) as typeof fetch;
+        await plaudFetch(URL_);
+        await plaudFetch("https://api-euc1.plaud.ai/file/detail/abc");
+        await plaudFetch("https://api.plaud.cn/user/me");
+        expect(recorded()).toEqual({ ok: 0, err: 3 });
+    });
+
+    it("ignores a 403 from a presigned storage host (expired content link)", async () => {
+        global.fetch = vi.fn(async () => respond(403)) as typeof fetch;
+        await plaudFetch(
+            "https://plaud-prod.s3.amazonaws.com/transcript.json?X-Amz-Signature=abc",
+        );
+        await plaudFetch("https://resource.plaud.ai/audio.opus?sig=abc");
+        expect(recorded()).toEqual({ ok: 0, err: 0 });
+    });
+
+    it("ignores a 403 that came back through the proxy after rotation", async () => {
+        envMock.WEBSHARE_API_KEY = "test-key";
+        _resetPlaudProxyCacheForTest();
+        const proxy = (id: string) => ({
+            id,
+            username: "u",
+            password: "p",
+            proxy_address: "1.2.3.4",
+            port: 8080,
+            valid: true,
+        });
+        global.fetch = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({ results: [proxy("p1"), proxy("p2")] }),
+                    { status: 200 },
+                ),
+            )
+            .mockResolvedValueOnce(respond(403))
+            .mockResolvedValueOnce(respond(403)) as typeof fetch;
+        try {
+            const res = await plaudFetch(URL_);
+            expect(res.status).toBe(403);
+        } finally {
+            envMock.WEBSHARE_API_KEY = undefined;
+            _resetPlaudProxyCacheForTest();
+        }
+        expect(recorded()).toEqual({ ok: 0, err: 0 });
+    });
+
     it("is a plain fetch while recording is off", async () => {
         setStatusRecordingEnabled(false);
         global.fetch = vi.fn(async () => respond(503)) as typeof fetch;
@@ -104,11 +153,30 @@ describe("outcome judges", () => {
     const thrown = (error: unknown) => ({ ok: false as const, error });
 
     it("plaud: ignores 401 and our proxy's 407", () => {
-        expect(judgePlaudResponse(value(401))).toBe("ignore");
-        expect(judgePlaudResponse(value(407))).toBe("ignore");
-        expect(judgePlaudResponse(value(502))).toBe("error");
-        expect(judgePlaudResponse(value(403))).toBe("error");
-        expect(judgePlaudResponse(value(400))).toBe("ok");
+        const direct = { url: URL_, proxied: false };
+        expect(judgePlaudResponse(value(401), direct)).toBe("ignore");
+        expect(judgePlaudResponse(value(407), direct)).toBe("ignore");
+        expect(judgePlaudResponse(value(502), direct)).toBe("error");
+        expect(judgePlaudResponse(value(403), direct)).toBe("error");
+        expect(judgePlaudResponse(value(400), direct)).toBe("ok");
+    });
+
+    it("plaud: a 403 counts only from a Plaud API host reached directly", () => {
+        expect(
+            judgePlaudResponse(value(403), { url: URL_, proxied: true }),
+        ).toBe("ignore");
+        expect(
+            judgePlaudResponse(value(403), {
+                url: "https://api.plaud.ai.evil.com/x",
+                proxied: false,
+            }),
+        ).toBe("ignore");
+        expect(
+            judgePlaudResponse(value(503), {
+                url: "https://plaud-prod.s3.amazonaws.com/x",
+                proxied: false,
+            }),
+        ).toBe("error");
     });
 
     it("mynah: a refused service token is an outage, a rejected request is not", () => {
