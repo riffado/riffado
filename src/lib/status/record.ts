@@ -75,13 +75,14 @@ function dropStaleMinutes(buckets: Map<string, PendingBucket>, nowMs: number) {
 }
 
 /**
- * Count one call for `part` in this process's current minute bucket.
+ * Count one call for `part` in this process's current minute bucket, and
+ * its duration `ms` in the latency histogram unless `ms` is null.
  * Never throws; a no-op when status checks are not configured.
  */
 export function recordOutcome(
     part: TrafficPart,
     ok: boolean,
-    ms: number,
+    ms: number | null,
     nowMs: number = Date.now(),
 ): void {
     if (!isStatusEnabled()) return;
@@ -97,10 +98,21 @@ export function recordOutcome(
         }
         if (ok) bucket.counts.ok += 1;
         else bucket.counts.err += 1;
-        bucket.counts.buckets[bucketIndex(Math.max(0, ms))] += 1;
+        if (ms !== null) {
+            bucket.counts.buckets[bucketIndex(Math.max(0, ms))] += 1;
+        }
     } catch {
         return;
     }
+}
+
+export interface TrackCallOptions {
+    /**
+     * Add the call's duration to the latency histogram. Default true; false
+     * records only the outcome, for calls whose duration depends on the
+     * payload rather than the dependency.
+     */
+    latency?: boolean;
 }
 
 /**
@@ -112,6 +124,7 @@ export async function trackCall<T>(
     part: TrafficPart,
     run: () => Promise<T>,
     judge: (settled: Settled<T>) => CallOutcome,
+    options: TrackCallOptions = {},
 ): Promise<T> {
     if (!isStatusEnabled()) return run();
     const start = performance.now();
@@ -128,7 +141,11 @@ export async function trackCall<T>(
         outcome = settled.ok ? "ok" : "error";
     }
     if (outcome !== "ignore") {
-        recordOutcome(part, outcome === "ok", performance.now() - start);
+        recordOutcome(
+            part,
+            outcome === "ok",
+            options.latency === false ? null : performance.now() - start,
+        );
     }
     if (!settled.ok) throw settled.error;
     return settled.value;

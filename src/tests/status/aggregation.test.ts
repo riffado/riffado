@@ -182,6 +182,24 @@ describe("cross-process aggregation", () => {
         expect(buckets[0].counts.ok).toBe(0);
         expect(buckets[0].counts.err).toBe(1);
     });
+
+    it("trackCall with latency off records the outcome but not the duration", async () => {
+        await trackCall(
+            "storage",
+            async () => "x",
+            () => "ok",
+            { latency: false },
+        );
+        await trackCall(
+            "storage",
+            async () => "y",
+            () => "ok",
+        );
+        const { buckets } = drainPending();
+        expect(buckets).toHaveLength(1);
+        expect(buckets[0].counts.ok).toBe(2);
+        expect(buckets[0].counts.buckets.reduce((a, b) => a + b, 0)).toBe(1);
+    });
 });
 
 describe("startStatusRecorder", () => {

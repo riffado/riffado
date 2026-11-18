@@ -1,7 +1,12 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { NoSuchBucket, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
+import {
+    NoSuchBucket,
+    NoSuchKey,
+    NotFound,
+    S3Client,
+} from "@aws-sdk/client-s3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { envMock } = vi.hoisted(() => ({
@@ -44,6 +49,18 @@ function recorded() {
     return {
         ok: buckets.reduce((n, b) => n + b.counts.ok, 0),
         err: buckets.reduce((n, b) => n + b.counts.err, 0),
+    };
+}
+
+function recordedWithLatency() {
+    const { buckets } = drainPending();
+    return {
+        ok: buckets.reduce((n, b) => n + b.counts.ok, 0),
+        err: buckets.reduce((n, b) => n + b.counts.err, 0),
+        timed: buckets.reduce(
+            (n, b) => n + b.counts.buckets.reduce((a, c) => a + c, 0),
+            0,
+        ),
     };
 }
 
@@ -351,6 +368,29 @@ describe("storage status recording (real adapters)", () => {
         expect(recorded()).toEqual({ ok: 0, err: 1 });
     });
 
+    it("s3: exists() is false for a missing key and rejects for a missing bucket", async () => {
+        const send = vi.spyOn(S3Client.prototype, "send");
+        send.mockRejectedValueOnce(
+            new NotFound({
+                message: "Not Found",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        await expect(s3().exists("a.opus")).resolves.toBe(false);
+        expect(recorded()).toEqual({ ok: 0, err: 0 });
+
+        send.mockRejectedValueOnce(
+            new NoSuchBucket({
+                message: "The specified bucket does not exist",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        await expect(s3().exists("a.opus")).rejects.toBeInstanceOf(
+            NoSuchBucket,
+        );
+        expect(recorded()).toEqual({ ok: 0, err: 1 });
+    });
+
     describe("local", () => {
         let dir: string;
 
@@ -371,11 +411,54 @@ describe("storage status recording (real adapters)", () => {
                 storage.downloadStream("missing.opus"),
             ).rejects.toThrow("ENOENT");
             await expect(storage.exists("missing.opus")).resolves.toBe(false);
+            await expect(storage.exists("../escape")).resolves.toBe(false);
             await expect(storage.downloadFile("../escape")).rejects.toThrow(
                 "path traversal",
             );
-            expect(recorded()).toEqual({ ok: 1, err: 0 });
+            expect(recorded()).toEqual({ ok: 0, err: 0 });
         });
+
+        it("times key lookups and deletes, but not transfers or opened streams", async () => {
+            const storage = withStorageTiming(new LocalStorage(dir));
+            await storage.uploadFile("a.opus", Buffer.from("x"), "audio/ogg");
+            await storage.downloadFile("a.opus");
+            expect(recordedWithLatency()).toEqual({ ok: 2, err: 0, timed: 0 });
+
+            const stream = await storage.downloadStream("a.opus");
+            stream.destroy();
+            expect(recordedWithLatency()).toEqual({ ok: 0, err: 0, timed: 0 });
+
+            await expect(storage.exists("a.opus")).resolves.toBe(true);
+            await storage.deleteFile("a.opus");
+            expect(recordedWithLatency()).toEqual({ ok: 2, err: 0, timed: 2 });
+        });
+
+        it("rejects exists() when storage is unreadable rather than reporting a missing key", async () => {
+            await symlink(join(dir, "loop-b"), join(dir, "loop-a"));
+            await symlink(join(dir, "loop-a"), join(dir, "loop-b"));
+            const storage = withStorageTiming(new LocalStorage(dir));
+            await expect(storage.exists("loop-a")).rejects.toMatchObject({
+                code: "ELOOP",
+            });
+            expect(recorded()).toEqual({ ok: 0, err: 1 });
+        });
+
+        it.skipIf(process.getuid?.() === 0)(
+            "rejects exists() on a permission error (EACCES)",
+            async () => {
+                await mkdir(join(dir, "locked"));
+                await chmod(join(dir, "locked"), 0o000);
+                try {
+                    const storage = withStorageTiming(new LocalStorage(dir));
+                    await expect(
+                        storage.exists("locked/a.opus"),
+                    ).rejects.toMatchObject({ code: "EACCES" });
+                    expect(recorded()).toEqual({ ok: 0, err: 1 });
+                } finally {
+                    await chmod(join(dir, "locked"), 0o700);
+                }
+            },
+        );
 
         it("counts a missing base directory (unmounted volume) as an error", async () => {
             const storage = withStorageTiming(

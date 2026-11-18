@@ -150,10 +150,18 @@ export class LocalStorage implements StorageProvider {
     }
 
     async exists(key: string): Promise<boolean> {
+        let filePath: string;
         try {
-            await access(this.getFilePath(key));
+            filePath = this.getFilePath(key);
+        } catch {
+            return false;
+        }
+        try {
+            await access(filePath);
             return true;
         } catch (error) {
+            const code = (error as { code?: unknown } | null)?.code;
+            if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
             const explained = await this.explainMissing(error);
             if (explained instanceof StorageRootMissingError) throw explained;
             return false;
