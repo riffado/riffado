@@ -152,16 +152,58 @@ async function resolveStorageKey(
     existingRecording: { id: string; storagePath: string | null } | undefined,
     fileExtension: string,
     plaudFileId: string,
-): Promise<string> {
-    if (existingRecording?.storagePath) {
+    requireMatchingExtension: boolean,
+): Promise<{ key: string; replacedPath?: string }> {
+    const existingPath = existingRecording?.storagePath;
+    if (existingRecording && existingPath) {
+        if (
+            requireMatchingExtension &&
+            !existingPath.toLowerCase().endsWith(`.${fileExtension}`)
+        ) {
+            return {
+                key: await allocateStorageKey(
+                    userId,
+                    plaudFileId,
+                    fileExtension,
+                ),
+                replacedPath: existingPath,
+            };
+        }
         const shared = await storagePathHeldByOtherRecording(
             userId,
-            existingRecording.storagePath,
+            existingPath,
             existingRecording.id,
         );
-        if (!shared) return existingRecording.storagePath;
+        if (!shared) return { key: existingPath };
     }
-    return allocateStorageKey(userId, plaudFileId, fileExtension);
+    return {
+        key: await allocateStorageKey(userId, plaudFileId, fileExtension),
+    };
+}
+
+async function deleteReplacedAudio(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+    recordingId: string,
+): Promise<void> {
+    try {
+        if (
+            await storagePathHeldByOtherRecording(
+                userId,
+                storagePath,
+                recordingId,
+            )
+        ) {
+            return;
+        }
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to delete replaced storage object ${storagePath}:`,
+            error,
+        );
+    }
 }
 
 /**
@@ -427,11 +469,12 @@ async function processRecording(
 
         const sniffed = sniffAudio(audioBuffer);
         const fileExtension = sniffed.extension;
-        const storageKey = await resolveStorageKey(
+        const { key: storageKey, replacedPath } = await resolveStorageKey(
             context.userId,
             existingRecording,
             fileExtension,
             plaudRecording.id,
+            isV4,
         );
         const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
@@ -501,6 +544,15 @@ async function processRecording(
                     );
                 }
                 return { status: "skipped" };
+            }
+
+            if (replacedPath) {
+                await deleteReplacedAudio(
+                    storage,
+                    context.userId,
+                    replacedPath,
+                    existingRecording.id,
+                );
             }
 
             await emitEvent(
