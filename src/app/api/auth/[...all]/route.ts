@@ -6,9 +6,7 @@ import { trackCall } from "@/lib/status/record";
 
 const handlers = toNextJsHandler(auth);
 
-export async function GET(request: Request): Promise<Response> {
-    return trackCall("sign-in", () => handlers.GET(request), judgeAuthResponse);
-}
+export const GET = handlers.GET;
 
 export async function POST(request: Request): Promise<Response> {
     const limited = await enforceAuthRateLimit(request);
