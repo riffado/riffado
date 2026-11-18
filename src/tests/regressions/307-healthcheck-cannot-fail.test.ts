@@ -33,19 +33,46 @@ function probeScript(): string {
     return argv[3] as string;
 }
 
+const RECORD_PROBED_URL =
+    "const __http=require('http');const __get=__http.get;" +
+    "__http.get=(u,...a)=>{require('fs').writeSync(1,String(u));return __get(u,...a)};";
+
+interface ProbeResult {
+    code: number;
+    url: string;
+}
+
 /**
  * Spawned asynchronously on purpose. The test server runs in this same
  * process, so a synchronous spawn would block the event loop and the
  * probe would time out against a server that never gets to accept it.
  */
-function runProbe(host: string, port: number): Promise<number> {
+function runProbeWithUrl(
+    host: string | undefined,
+    port: number,
+): Promise<ProbeResult> {
+    const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(port) };
+    if (host === undefined) {
+        delete env.HOSTNAME;
+    } else {
+        env.HOSTNAME = host;
+    }
     return new Promise((resolve) => {
-        const child = execFile(process.execPath, ["-e", probeScript()], {
-            env: { ...process.env, HOSTNAME: host, PORT: String(port) },
-            timeout: 10_000,
+        let url = "";
+        const child = execFile(
+            process.execPath,
+            ["-e", RECORD_PROBED_URL + probeScript()],
+            { env, timeout: 10_000 },
+        );
+        child.stdout?.on("data", (chunk: Buffer | string) => {
+            url += chunk.toString();
         });
-        child.on("close", (code) => resolve(code ?? -1));
+        child.on("close", (code) => resolve({ code: code ?? -1, url }));
     });
+}
+
+async function runProbe(host: string, port: number): Promise<number> {
+    return (await runProbeWithUrl(host, port)).code;
 }
 
 const servers: Server[] = [];
@@ -98,6 +125,27 @@ describe("issue #307: the compose healthcheck must be able to fail", () => {
     it("exits non-zero when nothing is listening", async () => {
         // The original defect: a refused connection reported healthy.
         expect(await runProbe("127.0.0.1", await closedPort())).not.toBe(0);
+    });
+
+    it("probes loopback when HOSTNAME is 0.0.0.0", async () => {
+        const port = await listen(() => 200);
+        expect(await runProbeWithUrl("0.0.0.0", port)).toEqual({
+            code: 0,
+            url: `http://127.0.0.1:${port}/api/health`,
+        });
+    });
+
+    it("probes loopback when HOSTNAME is unset", async () => {
+        const port = await listen(() => 200);
+        expect(await runProbeWithUrl(undefined, port)).toEqual({
+            code: 0,
+            url: `http://127.0.0.1:${port}/api/health`,
+        });
+    });
+
+    it("exits non-zero on a closed port when HOSTNAME is 0.0.0.0", async () => {
+        const { code } = await runProbeWithUrl("0.0.0.0", await closedPort());
+        expect(code).not.toBe(0);
     });
 
     it("handles the request error event", () => {
