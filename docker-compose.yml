@@ -37,7 +37,8 @@ services:
     container_name: riffado-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host port. The one-line installer sets APP_PORT from APP_URL.
+      - "${APP_PORT:-3000}:3000"
     environment:
       # Database
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/riffado

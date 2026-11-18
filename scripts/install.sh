@@ -5,14 +5,16 @@
 #   curl -fsSL https://riffado.com/install.sh | sh
 #   curl -fsSL https://riffado.com/v0.2.0/install.sh | sh   # version-pinned
 #   curl -fsSL https://riffado.com/install.sh | NON_INTERACTIVE=1 sh   # defaults
+#   curl -fsSL https://riffado.com/install.sh | APP_PORT=8080 sh   # host port
 #
 # What this does:
 #   1. Verifies Docker + docker compose v2 are installed and running.
 #   2. Creates an install directory (default $HOME/riffado).
 #   3. Downloads docker-compose.yml + env.example from the GitHub release.
-#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD).
+#   4. Generates secrets (BETTER_AUTH_SECRET, ENCRYPTION_KEY, POSTGRES_PASSWORD)
+#      and writes APP_URL and APP_PORT.
 #   5. Pulls images and starts the stack.
-#   6. Waits for /api/health to return 200.
+#   6. Waits for http://127.0.0.1:<published port>/api/health to return 200.
 #
 # This script is part of the Riffado deploy surface (see AGENTS.md).
 # Source: https://github.com/riffado/riffado/blob/main/scripts/install.sh
@@ -23,6 +25,7 @@ VERSION="{{VERSION}}"
 REPO="riffado/riffado"
 DEFAULT_DIR="$HOME/riffado"
 DEFAULT_APP_URL="http://localhost:3000"
+DEFAULT_APP_PORT=3000
 HEALTH_TIMEOUT=60
 
 # ---- output helpers --------------------------------------------------------
@@ -105,6 +108,56 @@ patch_env() {
     ' .env > "$_tmp" && mv "$_tmp" .env
 }
 
+# ---- published port -------------------------------------------------------
+
+valid_port() {
+    case "$1" in
+        ""|0*|*[!0-9]*) return 1 ;;
+    esac
+    [ "${#1}" -le 5 ] && [ "$1" -le 65535 ]
+}
+
+is_ipv4() {
+    case "$1" in
+        ""|*[!0-9.]*|.*|*.|*..*) return 1 ;;
+    esac
+    _old_ifs="$IFS"
+    IFS=.
+    # shellcheck disable=SC2086
+    set -- $1
+    IFS="$_old_ifs"
+    [ "$#" -eq 4 ] || return 1
+    for _octet in "$@"; do
+        [ "${#_octet}" -le 3 ] && [ "$_octet" -le 255 ] || return 1
+    done
+}
+
+# url_host_port <url>: print the port of an http:// URL on localhost or an
+# IP literal, where Riffado is served directly on that port. Prints nothing
+# for hostnames, https:// and URLs without a port: those point at a reverse
+# proxy on 80/443 that forwards to the published port.
+url_host_port() {
+    _url="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    case "$_url" in
+        http://*) _authority="${_url#http://}" ;;
+        *) return 0 ;;
+    esac
+    _authority="${_authority%%/*}"
+    _authority="${_authority%%\?*}"
+    _authority="${_authority%%#*}"
+    _authority="${_authority##*@}"
+    case "$_authority" in
+        \[*\]:*) _host="${_authority%%]:*}]"; _port="${_authority##*]:}" ;;
+        *:*) _host="${_authority%%:*}"; _port="${_authority#*:}" ;;
+        *) return 0 ;;
+    esac
+    case "$_host" in
+        localhost|*.localhost|\[*\]) ;;
+        *) is_ipv4 "$_host" || return 0 ;;
+    esac
+    printf '%s\n' "$_port"
+}
+
 main() {
     detect_tty
 
@@ -137,6 +190,23 @@ main() {
     prompt INSTALL_DIR "Install directory" "$DEFAULT_DIR"
     prompt APP_URL "Public URL where Riffado will be reachable" "$DEFAULT_APP_URL"
 
+    if [ -n "${APP_PORT:-}" ]; then
+        valid_port "$APP_PORT" \
+            || die "APP_PORT must be a port number between 1 and 65535 (got '$APP_PORT')."
+        ok "Publishing Riffado on host port $APP_PORT (from APP_PORT)"
+    else
+        APP_PORT="$(url_host_port "$APP_URL")"
+        if [ -z "$APP_PORT" ]; then
+            APP_PORT="$DEFAULT_APP_PORT"
+            ok "Publishing Riffado on host port $APP_PORT: $APP_URL names no plain-http port on this machine."
+            info "Point a reverse proxy at http://127.0.0.1:$APP_PORT, or rerun with APP_PORT=<port> to publish on another port."
+        elif ! valid_port "$APP_PORT"; then
+            die "The port in $APP_URL is not a number between 1 and 65535."
+        else
+            ok "Publishing Riffado on host port $APP_PORT (from $APP_URL)"
+        fi
+    fi
+
     if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null || true)" ]; then
         die "$INSTALL_DIR already exists and is not empty. Pick another directory or remove it first."
     fi
@@ -162,6 +232,9 @@ main() {
     curl -fsSL -o .env "$BASE_URL/env.example" \
         || die "Failed to download env.example from $BASE_URL"
     ok "Downloaded docker-compose.yml and .env"
+    if [ "$APP_PORT" != "$DEFAULT_APP_PORT" ] && ! grep -qF "\${APP_PORT" docker-compose.yml; then
+        warn "This release's docker-compose.yml does not read APP_PORT, so Riffado will be published on port $DEFAULT_APP_PORT, not $APP_PORT."
+    fi
 
     # ---- generate secrets --------------------------------------------------
 
@@ -173,6 +246,7 @@ main() {
     patch_env ENCRYPTION_KEY "$ENCRYPTION_KEY"
     patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
     patch_env APP_URL "$APP_URL"
+    patch_env APP_PORT "$APP_PORT"
     if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
         # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
         patch_env RIFFADO_VERSION "${VERSION#v}"
@@ -190,14 +264,24 @@ main() {
 
     # ---- health check ------------------------------------------------------
 
-    info "Waiting for $APP_URL/api/health (timeout ${HEALTH_TIMEOUT}s)..."
+    # The published port is what docker actually bound, which differs from
+    # APP_PORT when an older docker-compose.yml ignores it.
+    PUBLISHED_PORT="$(docker compose port app 3000 2>/dev/null | head -n 1 || true)"
+    PUBLISHED_PORT="${PUBLISHED_PORT##*:}"
+    valid_port "$PUBLISHED_PORT" || PUBLISHED_PORT="$APP_PORT"
+    HEALTH_URL="http://127.0.0.1:$PUBLISHED_PORT/api/health"
+
+    info "Waiting for $HEALTH_URL (timeout ${HEALTH_TIMEOUT}s)..."
     i=0
     while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
-        if curl -fsS -o /dev/null "$APP_URL/api/health" 2>/dev/null; then
+        if curl -fsS -o /dev/null "$HEALTH_URL" 2>/dev/null; then
             ok "Health check passed"
             printf '\n%s🎙  Riffado is up.%s\n' "$BOLD" "$RESET"
             printf '   Open %s%s/register%s to create your account.\n\n' "$BOLD" "$APP_URL" "$RESET"
             printf '   Install dir: %s\n' "$INSTALL_DIR"
+            if [ "$(url_host_port "$APP_URL")" != "$PUBLISHED_PORT" ]; then
+                printf '   Proxy to:    http://127.0.0.1:%s\n' "$PUBLISHED_PORT"
+            fi
             printf '   Logs:        cd %s && docker compose logs -f\n' "$INSTALL_DIR"
             printf '   Upgrade:     cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
             exit 0
@@ -206,8 +290,9 @@ main() {
         sleep 1
     done
 
-    warn "Health check did not return 200 within ${HEALTH_TIMEOUT}s."
-    warn "The stack may still be starting. Check logs:"
+    warn "$HEALTH_URL did not return 200 within ${HEALTH_TIMEOUT}s."
+    warn "The stack publishes Riffado on host port $PUBLISHED_PORT."
+    warn "It may still be starting. Check logs:"
     warn "  cd $INSTALL_DIR && docker compose logs -f"
     exit 1
 }
