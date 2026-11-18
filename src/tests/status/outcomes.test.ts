@@ -1,3 +1,7 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { NoSuchBucket, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { envMock } = vi.hoisted(() => ({
@@ -22,6 +26,10 @@ import {
     resetStatusRecorderForTests,
     setStatusRecordingEnabled,
 } from "@/lib/status/record";
+import { withStorageTiming } from "@/lib/status/storage";
+import { StorageRootMissingError } from "@/lib/storage/errors";
+import { LocalStorage } from "@/lib/storage/local-storage";
+import { S3Storage } from "@/lib/storage/s3-storage";
 
 const originalFetch = global.fetch;
 const URL_ = "https://api.plaud.ai/file/simple/web?skip=0&limit=50";
@@ -112,18 +120,46 @@ describe("outcome judges", () => {
 
     it("storage: a missing object is not an outage", () => {
         expect(
-            judgeStorageCall(
+            judgeStorageCall("key")(
                 thrown(
                     new Error(
-                        "Failed to download file from S3: NoSuchKey: The specified key does not exist.",
+                        "Failed to download file from S3: The specified key does not exist.",
+                        {
+                            cause: new NoSuchKey({
+                                message: "The specified key does not exist.",
+                                $metadata: { httpStatusCode: 404 },
+                            }),
+                        },
                     ),
                 ),
             ),
-        ).toBe("ok");
+        ).toBe("ignore");
         expect(
-            judgeStorageCall(
+            judgeStorageCall("key")(
                 thrown(
                     new Error("Failed to upload file to S3: socket hang up"),
+                ),
+            ),
+        ).toBe("error");
+    });
+
+    it("storage: a missing bucket is an outage even though its message says 'does not exist'", () => {
+        const missingBucket = new Error(
+            "Failed to download file from S3: The specified bucket does not exist",
+            {
+                cause: new NoSuchBucket({
+                    message: "The specified bucket does not exist",
+                    $metadata: { httpStatusCode: 404 },
+                }),
+            },
+        );
+        expect(judgeStorageCall("key")(thrown(missingBucket))).toBe("error");
+        expect(
+            judgeStorageCall("write")(
+                thrown(
+                    Object.assign(new Error("Not Found"), {
+                        $metadata: { httpStatusCode: 404 },
+                    }),
                 ),
             ),
         ).toBe("error");
@@ -139,5 +175,109 @@ describe("outcome judges", () => {
         expect(judgeAuthResponse(value(401))).toBe("ok");
         expect(judgeAuthResponse(value(429))).toBe("ignore");
         expect(judgeAuthResponse(value(500))).toBe("error");
+    });
+});
+
+describe("storage status recording (real adapters)", () => {
+    beforeEach(() => {
+        resetStatusRecorderForTests();
+        setStatusRecordingEnabled(true);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function s3() {
+        return withStorageTiming(
+            new S3Storage({
+                bucket: "riffado-test",
+                region: "us-east-1",
+                accessKeyId: "test",
+                secretAccessKey: "test",
+            }),
+        );
+    }
+
+    it("s3: a missing key is ignored, a missing bucket is an error", async () => {
+        const send = vi.spyOn(S3Client.prototype, "send");
+        send.mockRejectedValueOnce(
+            new NoSuchKey({
+                message: "The specified key does not exist.",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        await expect(s3().downloadFile("a.opus")).rejects.toThrow(
+            "does not exist",
+        );
+        expect(recorded()).toEqual({ ok: 0, err: 0 });
+
+        send.mockRejectedValueOnce(
+            new NoSuchBucket({
+                message: "The specified bucket does not exist",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        await expect(s3().downloadFile("a.opus")).rejects.toThrow(
+            "does not exist",
+        );
+        expect(recorded()).toEqual({ ok: 0, err: 1 });
+
+        send.mockRejectedValueOnce(
+            new NoSuchBucket({
+                message: "The specified bucket does not exist",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        await expect(
+            s3().uploadFile("a.opus", Buffer.from("x"), "audio/ogg"),
+        ).rejects.toThrow("does not exist");
+        expect(recorded()).toEqual({ ok: 0, err: 1 });
+    });
+
+    describe("local", () => {
+        let dir: string;
+
+        beforeEach(async () => {
+            dir = await mkdtemp(join(tmpdir(), "riffado-status-storage-"));
+        });
+
+        afterEach(async () => {
+            await rm(dir, { recursive: true, force: true });
+        });
+
+        it("ignores a missing key and a rejected key", async () => {
+            const storage = withStorageTiming(new LocalStorage(dir));
+            await expect(storage.downloadFile("missing.opus")).rejects.toThrow(
+                "ENOENT",
+            );
+            await expect(
+                storage.downloadStream("missing.opus"),
+            ).rejects.toThrow("ENOENT");
+            await expect(storage.exists("missing.opus")).resolves.toBe(false);
+            await expect(storage.downloadFile("../escape")).rejects.toThrow(
+                "path traversal",
+            );
+            expect(recorded()).toEqual({ ok: 1, err: 0 });
+        });
+
+        it("counts a missing base directory (unmounted volume) as an error", async () => {
+            const storage = withStorageTiming(
+                new LocalStorage(join(dir, "unmounted")),
+            );
+            await expect(storage.downloadFile("a.opus")).rejects.toThrow(
+                "ENOENT",
+            );
+            await expect(
+                storage.downloadStream("a.opus"),
+            ).rejects.toBeInstanceOf(StorageRootMissingError);
+            await expect(storage.exists("a.opus")).rejects.toBeInstanceOf(
+                StorageRootMissingError,
+            );
+            await expect(storage.deleteFile("a.opus")).rejects.toThrow(
+                "ENOENT",
+            );
+            expect(recorded()).toEqual({ ok: 0, err: 4 });
+        });
     });
 });

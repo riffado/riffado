@@ -25,7 +25,7 @@ export interface StorageProvider {
         stream: Readable,
         contentType: string,
     ): Promise<string>;
-    /** Cheap existence check, used to fail fast with a placeholder instead of starting a stream that will error partway through. */
+    /** Cheap existence check, used to fail fast with a placeholder instead of starting a stream that will error partway through. Rejects when the storage itself is unavailable (e.g. a missing base directory). */
     exists(key: string): Promise<boolean>;
     getSignedUrl(key: string, expiresIn: number): Promise<string>;
     deleteFile(key: string): Promise<void>;

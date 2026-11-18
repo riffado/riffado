@@ -2,6 +2,9 @@ import type { StorageProvider } from "@/lib/storage/types";
 import { judgeStorageCall } from "./outcomes";
 import { isStatusEnabled, trackCall } from "./record";
 
+const judgeKeyCall = judgeStorageCall("key");
+const judgeWriteCall = judgeStorageCall("write");
+
 /**
  * Wrap `provider` so uploads, downloads, deletes and existence checks are
  * recorded for the storage status part. Signed URLs (local computation),
@@ -16,31 +19,27 @@ export function withStorageTiming(provider: StorageProvider): StorageProvider {
             trackCall(
                 "storage",
                 () => provider.uploadFile(key, buffer, contentType),
-                judgeStorageCall,
+                judgeWriteCall,
             ),
         downloadFile: (key) =>
             trackCall(
                 "storage",
                 () => provider.downloadFile(key),
-                judgeStorageCall,
+                judgeKeyCall,
             ),
         downloadStream: (key) =>
             trackCall(
                 "storage",
                 () => provider.downloadStream(key),
-                judgeStorageCall,
+                judgeKeyCall,
             ),
         uploadStream: (key, stream, contentType) =>
             provider.uploadStream(key, stream, contentType),
         exists: (key) =>
-            trackCall("storage", () => provider.exists(key), judgeStorageCall),
+            trackCall("storage", () => provider.exists(key), judgeKeyCall),
         getSignedUrl: (key, expiresIn) => provider.getSignedUrl(key, expiresIn),
         deleteFile: (key) =>
-            trackCall(
-                "storage",
-                () => provider.deleteFile(key),
-                judgeStorageCall,
-            ),
+            trackCall("storage", () => provider.deleteFile(key), judgeKeyCall),
         testConnection: () => provider.testConnection(),
     };
 }

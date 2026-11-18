@@ -54,6 +54,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to upload file to S3: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -79,6 +80,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to download file from S3: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -98,6 +100,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to stream download from S3: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -126,6 +129,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to stream upload to S3: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -161,6 +165,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to generate signed URL: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -176,6 +181,7 @@ export class S3Storage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to delete file from S3: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }

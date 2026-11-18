@@ -1,3 +1,4 @@
+import { StorageRootMissingError } from "@/lib/storage/errors";
 import type { CallOutcome, Settled } from "./record";
 
 /**
@@ -31,17 +32,75 @@ export function judgeMynahResponse(settled: Settled<Response>): CallOutcome {
     return "ok";
 }
 
-const STORAGE_NOT_AN_OUTAGE_RE =
-    /NoSuchKey|ENOENT|NotFound|not found|does not exist|path traversal|outside storage directory/i;
+/**
+ * Which kind of storage call is judged. "key" calls (download, exists,
+ * delete) may legitimately find no object; "write" calls may not.
+ */
+export type StorageCallKind = "key" | "write";
 
-/** Storage call outcome. A missing object or a rejected key is not a storage outage. */
-export function judgeStorageCall<T>(settled: Settled<T>): CallOutcome {
-    if (settled.ok) return "ok";
-    const message =
-        settled.error instanceof Error
-            ? settled.error.message
-            : String(settled.error);
-    return STORAGE_NOT_AN_OUTAGE_RE.test(message) ? "ok" : "error";
+interface ErrorShape {
+    name?: unknown;
+    code?: unknown;
+    message?: unknown;
+    cause?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+}
+
+function errorChain(error: unknown): ErrorShape[] {
+    const chain: ErrorShape[] = [];
+    let current = error;
+    while (
+        current !== null &&
+        typeof current === "object" &&
+        chain.length < 5
+    ) {
+        const shape = current as ErrorShape;
+        chain.push(shape);
+        current = shape.cause;
+    }
+    return chain;
+}
+
+function isMissingKey(error: ErrorShape): boolean {
+    return (
+        error.name === "NoSuchKey" ||
+        error.name === "NotFound" ||
+        error.code === "ENOENT" ||
+        error.$metadata?.httpStatusCode === 404
+    );
+}
+
+function isRejectedKey(error: ErrorShape): boolean {
+    return (
+        typeof error.message === "string" &&
+        error.message.startsWith("Invalid file key:")
+    );
+}
+
+/**
+ * Storage call outcome, judged on the error's identity along its `cause`
+ * chain. A missing object (S3 NoSuchKey/NotFound/404, local ENOENT) on a
+ * "key" call and a rejected key are ignored. A missing bucket
+ * (NoSuchBucket), a missing local base directory and everything else are
+ * errors.
+ */
+export function judgeStorageCall(kind: StorageCallKind) {
+    return <T>(settled: Settled<T>): CallOutcome => {
+        if (settled.ok) return "ok";
+        const chain = errorChain(settled.error);
+        if (
+            chain.some(
+                (error) =>
+                    error instanceof StorageRootMissingError ||
+                    error.name === "NoSuchBucket",
+            )
+        ) {
+            return "error";
+        }
+        if (chain.some(isRejectedKey)) return "ignore";
+        if (kind === "key" && chain.some(isMissingKey)) return "ignore";
+        return "error";
+    };
 }
 
 /**
