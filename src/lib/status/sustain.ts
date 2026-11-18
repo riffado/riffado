@@ -192,7 +192,11 @@ export async function sustainStatus(
             { state: raw.state, reason: raw.reason },
             deps.config.windowMinutes,
         );
-    } catch {
+    } catch (error) {
+        console.warn(
+            `[status] verdict history for ${raw.part} failed:`,
+            error instanceof Error ? error.message : error,
+        );
         return raw;
     }
     const verdict = sustainedVerdict(

@@ -153,6 +153,7 @@ describe("part answers", () => {
     });
 
     it("every part is down metrics-unavailable when Postgres can't be read", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         queriesMock.listStatusBuckets.mockRejectedValue(new Error("db down"));
         queriesMock.setStatusMinuteVerdict.mockRejectedValue(
             new Error("db down"),
@@ -167,6 +168,30 @@ describe("part answers", () => {
             });
             expect(typeof res?.latencyMs).toBe("number");
         }
+        expect(warn).toHaveBeenCalledWith(
+            "[status] reading job webhooks failed:",
+            "db down",
+        );
+        warn.mockRestore();
+    });
+
+    it("payments is down metrics-unavailable, and logs why, when the inbox can't be read", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        envMock.IS_HOSTED = true;
+        envMock.BILLING_ENABLED = true;
+        queriesMock.getStripeInboxHealth.mockRejectedValue(
+            new Error("db down"),
+        );
+        const res = await getPartStatus("payments");
+        expect(res).toMatchObject({
+            state: "down",
+            reason: "metrics-unavailable",
+        });
+        expect(warn).toHaveBeenCalledWith(
+            "[status] reading the Stripe inbox failed:",
+            "db down",
+        );
+        warn.mockRestore();
     });
 
     it("plaud without traffic is ok (there is no probe without a user token)", async () => {

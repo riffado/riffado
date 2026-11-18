@@ -299,6 +299,7 @@ describe("sustainStatus", () => {
     }
 
     it("answers the raw verdict when the history fails (never hides an outage)", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         const broken: VerdictHistory = {
             recordAndRead: () => Promise.reject(new Error("db down")),
         };
@@ -311,6 +312,11 @@ describe("sustainStatus", () => {
             state: "down",
             reason: "metrics-unavailable",
         });
+        expect(warn).toHaveBeenCalledWith(
+            "[status] verdict history for plaud failed:",
+            "db down",
+        );
+        warn.mockRestore();
     });
 
     it("is off with badMinutes 1", async () => {

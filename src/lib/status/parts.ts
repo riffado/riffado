@@ -311,7 +311,11 @@ async function jobStatus(
                 downAfterMs: policy.downAfterMs,
             },
         };
-    } catch {
+    } catch (error) {
+        console.warn(
+            `[status] reading job ${job} failed:`,
+            error instanceof Error ? error.message : error,
+        );
         return {
             ...base,
             state: "down",
@@ -344,7 +348,11 @@ async function paymentsStatus(start: number): Promise<StatusResponse> {
                 failedLast24h: health.failedSince,
             },
         };
-    } catch {
+    } catch (error) {
+        console.warn(
+            "[status] reading the Stripe inbox failed:",
+            error instanceof Error ? error.message : error,
+        );
         return {
             ...base,
             state: "down",
