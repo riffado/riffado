@@ -9,6 +9,7 @@
  */
 
 import { z } from "zod";
+import { fetchTranscription } from "@/lib/transcription/fetch";
 
 const DEFAULT_BASE_URL = "https://api.elevenlabs.io/v1";
 const OFFICIAL_ELEVENLABS_ORIGINS = [
@@ -380,13 +381,17 @@ async function postSpeechToText(args: {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: { "xi-api-key": apiKey },
-                body: form,
-                signal: controller.signal,
-                redirect: "error",
-            });
+            const response = await fetchTranscription(
+                url,
+                {
+                    method: "POST",
+                    headers: { "xi-api-key": apiKey },
+                    body: form,
+                    signal: controller.signal,
+                    redirect: "error",
+                },
+                timeoutMs,
+            );
 
             if (response.ok) {
                 return await parseTranscriptionResponse(response);

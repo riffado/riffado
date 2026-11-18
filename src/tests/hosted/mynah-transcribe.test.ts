@@ -10,6 +10,7 @@ const { reserveMock, releaseMock, commitMock, storageMock, envMock } =
             IS_HOSTED: true,
             MYNAH_BASE_URL: "https://mynah.test",
             MYNAH_SERVICE_TOKEN: "secret",
+            WHISPER_REQUEST_TIMEOUT_MS: 60 * 60 * 1000,
         },
     }));
 
@@ -95,6 +96,7 @@ describe("transcribeViaMynah", () => {
 
         const [, init] = fetchSpy.mock.calls[0];
         expect(init.headers["content-type"]).toBe("application/json");
+        expect(init.timeout).toBe(false);
         expect(JSON.parse(init.body)).toMatchObject({
             url: "https://signed.test/rec",
             response_format: "verbose_json",
