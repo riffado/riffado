@@ -215,6 +215,39 @@ export async function persistRefreshedPlaudTokens({
     return updated.length > 0 ? stored : null;
 }
 
+export interface MarkPlaudConnectionInvalidatedInput {
+    userId: string;
+    connectionId: string;
+    /** Encrypted user token the failing client was built from or last stored. */
+    bearerToken: string;
+}
+
+/**
+ * Flag the connection as needing a reconnect, scoped by user and connection
+ * id. Compare-and-swap on `bearerToken`, so a failure from a stale read
+ * never flags a connection that a reconnect or another refresh has since
+ * replaced. Returns true when the row was updated.
+ */
+export async function markPlaudConnectionInvalidated({
+    userId,
+    connectionId,
+    bearerToken,
+}: MarkPlaudConnectionInvalidatedInput): Promise<boolean> {
+    const updated = await db
+        .update(plaudConnections)
+        .set({ invalidatedAt: new Date() })
+        .where(
+            and(
+                eq(plaudConnections.id, connectionId),
+                eq(plaudConnections.userId, userId),
+                eq(plaudConnections.bearerToken, bearerToken),
+            ),
+        )
+        .returning({ id: plaudConnections.id });
+
+    return updated.length > 0;
+}
+
 export interface BackfillPlaudTokenExpiriesInput {
     userId: string;
     connectionId: string;

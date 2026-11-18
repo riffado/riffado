@@ -1453,6 +1453,98 @@ describe("sync with a rejected refresh token", () => {
     });
 });
 
+describe("sync invalidation against a stored row", () => {
+    function expiredRow(): ConnectionRow {
+        return storedConnectionRow({
+            accessToken: makeUserToken(nowSec() - 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() - 60_000),
+            sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+        });
+    }
+
+    it("does not flag a reconnect that replaced the sign-in which failed", async () => {
+        const row = expiredRow();
+        installConnectionStore(row);
+        const utB = makeUserToken(nowSec() + DAY, "ut-b");
+        const rtB = makeRefreshToken(nowSec() + 30 * DAY, "rt-b");
+        routeFetch({
+            "/auth/refresh-user-token": async () => {
+                await persistPlaudConnection({
+                    userId: USER_ID,
+                    tokens: buildPlaudTokenSet({
+                        accessToken: utB,
+                        refreshToken: rtB,
+                    }),
+                    apiBase: API_BASE,
+                    plaudEmail: null,
+                    method: "connector",
+                });
+                return jsonResponse({ detail: "invalid" }, 401);
+            },
+            "/team-app/workspaces/list": workspacesOk,
+            "/workspace/token/": mintOk,
+            "/device/list": devicesOk,
+        });
+
+        const result = await syncRecordingsForUser(USER_ID);
+
+        expect(decrypt(String(row.bearerToken))).toBe(utB);
+        expect(row.invalidatedAt).toBeNull();
+        expect(result.needsReconnect).toBeFalsy();
+        expect(result.errors.join(" ")).toMatch(/changed during this sync/);
+    });
+
+    it("flags the row while it still holds the token that failed", async () => {
+        const row = expiredRow();
+        installConnectionStore(row);
+        routeFetch({
+            "/auth/refresh-user-token": () =>
+                jsonResponse({ detail: "invalid" }, 401),
+        });
+
+        const result = await syncRecordingsForUser(USER_ID);
+
+        expect(row.invalidatedAt).toBeInstanceOf(Date);
+        expect(result.needsReconnect).toBe(true);
+    });
+
+    it("flags the row after the failing client stored a refresh of its own", async () => {
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+        });
+        installConnectionStore(row);
+        const readCiphertext = row.bearerToken;
+        let refreshCalls = 0;
+        routeFetch({
+            "/auth/refresh-user-token": () => {
+                refreshCalls += 1;
+                return refreshCalls === 1
+                    ? jsonResponse({
+                          status: 0,
+                          access_token: makeUserToken(
+                              nowSec() + DAY,
+                              "ut-refreshed",
+                          ),
+                      })
+                    : jsonResponse({ detail: "logged out" }, 401);
+            },
+            "/workspace/token/": mintOk,
+            "/file/simple/web": () => jsonResponse({ msg: "expired" }, 401),
+        });
+
+        const result = await syncRecordingsForUser(USER_ID);
+
+        expect(refreshCalls).toBe(2);
+        expect(row.bearerToken).not.toBe(readCiphertext);
+        expect(row.invalidatedAt).toBeInstanceOf(Date);
+        expect(result.needsReconnect).toBe(true);
+    });
+});
+
 // ── Workspace token 401s ─────────────────────────────────────────────────────
 
 /**

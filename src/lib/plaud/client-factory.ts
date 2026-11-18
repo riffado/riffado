@@ -147,6 +147,15 @@ async function backfillMissingExpiries(
     return accessExpiresAt;
 }
 
+/** Options for `createPlaudClient`. */
+export interface CreatePlaudClientOptions {
+    /**
+     * Called with the encrypted user token each time a refresh is stored, so
+     * callers can match later writes against the row this client now owns.
+     */
+    onTokensStored?: (bearerToken: string) => void;
+}
+
 /**
  * Build a `PlaudClient` from a stored connection. When the connection has a
  * refresh token, refreshes the user token first if it expires within
@@ -161,6 +170,7 @@ async function backfillMissingExpiries(
  */
 export async function createPlaudClient(
     connection: PlaudConnectionCredentials,
+    options: CreatePlaudClientOptions = {},
 ): Promise<PlaudClient> {
     const accessToken = decrypt(connection.bearerToken);
     const storedRefreshToken = connection.refreshToken;
@@ -194,6 +204,7 @@ export async function createPlaudClient(
                 currentRefreshToken = refreshed.refreshToken;
                 if (refreshed.stored) {
                     currentStoredRefreshToken = refreshed.stored.refreshToken;
+                    options.onTokensStored?.(refreshed.stored.bearerToken);
                 }
                 return refreshed.accessToken;
             });
