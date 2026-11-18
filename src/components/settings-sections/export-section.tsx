@@ -451,7 +451,8 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                         original audio into a zip archive; large libraries take
                         a few minutes to build in the background, and you'll get
                         an email when it's ready. A backup stays available for 7
-                        days, and a new backup replaces the previous one.
+                        days. A newer backup that includes all your audio
+                        replaces the previous one.
                     </p>
                     {backupJob && (
                         <div className="rounded-md border p-3 text-sm space-y-1">
