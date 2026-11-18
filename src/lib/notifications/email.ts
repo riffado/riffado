@@ -32,6 +32,10 @@ interface EmailOptions {
 
 let transporter: nodemailer.Transporter | null = null;
 
+function plainTextFallback(html: string): string {
+    return html.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+}
+
 function getTransporter(): nodemailer.Transporter | null {
     // Return null if SMTP is not configured
     if (!isSmtpConfigured()) {
@@ -81,7 +85,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
                     replyTo: env.SMTP_REPLY_TO,
                     subject: options.subject,
                     html: options.html,
-                    text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML if no text provided
+                    text: options.text || plainTextFallback(options.html),
                 }),
             judgeSmtpSend,
         );
@@ -118,7 +122,7 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
                     replyTo: env.SMTP_REPLY_TO,
                     subject: options.subject,
                     html: options.html,
-                    text: options.text || options.html.replace(/<[^>]*>/g, ""),
+                    text: options.text || plainTextFallback(options.html),
                 }),
             judgeSmtpSend,
         );
