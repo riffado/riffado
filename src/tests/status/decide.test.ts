@@ -165,7 +165,7 @@ describe("decideStatus", () => {
 
     it("lets quiet-window errors beat an ok probe", async () => {
         const res = await decideStatus("emails", {
-            readWindow: async () => counts(0, 2),
+            readWindow: async () => counts(1, 2),
             probe: async () => ({
                 state: "ok",
                 reason: "probe-ok",
@@ -175,10 +175,26 @@ describe("decideStatus", () => {
             now,
         });
         expect(res).toMatchObject({
+            state: "slow",
+            reason: "recent-errors",
+            source: "traffic",
+        });
+    });
+
+    it("answers a down quiet window without waiting for the probe", async () => {
+        const probe = vi.fn();
+        const res = await decideStatus("emails", {
+            readWindow: async () => counts(0, 2),
+            probe,
+            thresholds: T,
+            now,
+        });
+        expect(res).toMatchObject({
             state: "down",
             reason: "recent-errors",
             source: "traffic",
         });
+        expect(probe).not.toHaveBeenCalled();
     });
 
     it("treats a throwing probe as down and falls back to a numeric latency", async () => {

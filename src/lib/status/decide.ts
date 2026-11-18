@@ -77,24 +77,28 @@ export async function decideStatus(
         });
     }
 
-    let probe: ProbeResult;
-    try {
-        probe = await deps.probe();
-    } catch {
-        probe = { state: "down", reason: "probe-failed", latencyMs: null };
-    }
     const quiet = quietErrorVerdict(counts);
-    if (quiet && SEVERITY[quiet.state] >= SEVERITY[probe.state]) {
-        return statusResponse({
+    const quietResponse = (verdict: Verdict) =>
+        statusResponse({
             part,
             counts,
-            verdict: quiet,
+            verdict,
             source: "traffic",
             probeLatencyMs: null,
             fallbackLatencyMs: fallback(),
             now: now(),
             windowSeconds: deps.windowSeconds,
         });
+    if (quiet?.state === "down") return quietResponse(quiet);
+
+    let probe: ProbeResult;
+    try {
+        probe = await deps.probe();
+    } catch {
+        probe = { state: "down", reason: "probe-failed", latencyMs: null };
+    }
+    if (quiet && SEVERITY[quiet.state] >= SEVERITY[probe.state]) {
+        return quietResponse(quiet);
     }
     return statusResponse({
         part,
