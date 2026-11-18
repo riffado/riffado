@@ -256,6 +256,7 @@ export function Workstation({
     const showReconnect = reconnectOverride ?? plaudNeedsReconnect;
 
     const handleReconnected = useCallback(() => {
+        setReconnectOverride(false);
         refresh();
         manualSync();
     }, [refresh, manualSync]);

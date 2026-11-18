@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,9 +59,9 @@ interface PlaudReconnectBannerProps {
  * 24h workspace token that has died, or a revoked token), and in the three
  * days before the sign-in ends. The ending-soon notice can be dismissed;
  * the dismissal is stored per session end, so a new sign-in warns again.
- * After a reconnect the banner hides while it still has the old sign-in's
- * end, and ignores `show` until it next changes so a stale rejection does
- * not linger; the new sign-in's own expiry warnings still show.
+ * After a reconnect the ending-soon notice for the old sign-in's end stays
+ * hidden until the new end arrives; `show` is always honoured, so a
+ * rejected replacement sign-in still shows the reconnect banner.
  * Re-reads the clock when the tab becomes visible and when the warning
  * window opens or the sign-in ends. Opens the connector-first connect flow
  * as a modal, not full re-onboarding.
@@ -75,11 +75,6 @@ export function PlaudReconnectBanner({
     const [reconnectedFrom, setReconnectedFrom] = useState<{
         sessionExpiresAt: string | null;
     } | null>(null);
-    const prevShow = useRef(show);
-    useEffect(() => {
-        if (show !== prevShow.current) setReconnectedFrom(null);
-        prevShow.current = show;
-    }, [show]);
 
     const [now, setNow] = useState<number | null>(null);
     useEffect(() => {
@@ -120,13 +115,12 @@ export function PlaudReconnectBanner({
     const showingOldSignIn =
         reconnectedFrom !== null &&
         reconnectedFrom.sessionExpiresAt === sessionExpiresAt;
-    const state = showingOldSignIn
-        ? null
-        : plaudConnectionBannerState({
-              needsReconnect: show && reconnectedFrom === null,
-              sessionExpiresAt: now === null ? null : sessionExpiresAt,
-              now: now ?? 0,
-          });
+    const state = plaudConnectionBannerState({
+        needsReconnect: show,
+        sessionExpiresAt:
+            now === null || showingOldSignIn ? null : sessionExpiresAt,
+        now: now ?? 0,
+    });
 
     if (!state) return null;
     if (state === "ending-soon" && endingSoonDismissed) return null;

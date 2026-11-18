@@ -193,21 +193,47 @@ describe("PlaudReconnectBanner clock", () => {
 });
 
 describe("PlaudReconnectBanner after a reconnect", () => {
-    it("hides the stale reconnect banner until show changes", () => {
+    it("shows the reconnect banner again when the replacement sign-in is rejected", () => {
         const oldEnd = new Date(NOW + 20 * DAY_MS).toISOString();
         const { rerender } = render(
             <PlaudReconnectBanner {...bannerProps(true, oldEnd)} />,
         );
         reconnectThroughDialog();
+        rerender(<PlaudReconnectBanner {...bannerProps(false, oldEnd)} />);
         expect(reconnectNotice()).toBeNull();
 
         const newEnd = new Date(NOW + 30 * DAY_MS).toISOString();
         rerender(<PlaudReconnectBanner {...bannerProps(true, newEnd)} />);
-        expect(reconnectNotice()).toBeNull();
+        expect(reconnectNotice()).not.toBeNull();
+    });
 
-        rerender(<PlaudReconnectBanner {...bannerProps(false, newEnd)} />);
+    it("honours show even when it never went false after the reconnect", () => {
+        const oldEnd = new Date(NOW + 20 * DAY_MS).toISOString();
+        const { rerender } = render(
+            <PlaudReconnectBanner {...bannerProps(true, oldEnd)} />,
+        );
+        reconnectThroughDialog();
+
+        const newEnd = new Date(NOW + 30 * DAY_MS).toISOString();
         rerender(<PlaudReconnectBanner {...bannerProps(true, newEnd)} />);
         expect(reconnectNotice()).not.toBeNull();
+    });
+
+    it("keeps the old sign-in's ending-soon notice hidden until the new end arrives", () => {
+        const oldEnd = new Date(NOW + 2 * DAY_MS).toISOString();
+        const { rerender } = render(
+            <PlaudReconnectBanner {...bannerProps(false, oldEnd)} />,
+        );
+        expect(endingNotice()).not.toBeNull();
+        reconnectThroughDialog();
+        expect(endingNotice()).toBeNull();
+
+        rerender(<PlaudReconnectBanner {...bannerProps(false, oldEnd)} />);
+        expect(endingNotice()).toBeNull();
+
+        const newEnd = new Date(NOW + DAY_MS).toISOString();
+        rerender(<PlaudReconnectBanner {...bannerProps(false, newEnd)} />);
+        expect(endingNotice()).not.toBeNull();
     });
 
     it("shows the replacement sign-in's ending-soon warning", () => {
@@ -218,9 +244,6 @@ describe("PlaudReconnectBanner after a reconnect", () => {
         reconnectThroughDialog();
 
         const newEnd = new Date(NOW + DAY_MS).toISOString();
-        rerender(<PlaudReconnectBanner {...bannerProps(true, newEnd)} />);
-        expect(endingNotice()).not.toBeNull();
-
         rerender(<PlaudReconnectBanner {...bannerProps(false, newEnd)} />);
         expect(endingNotice()).not.toBeNull();
     });
