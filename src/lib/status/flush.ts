@@ -10,9 +10,11 @@ const FLUSH_INTERVAL_MS = 60_000;
 const PRUNE_INTERVAL_MS = 60 * 60_000;
 const BUCKET_RETENTION_MS = 24 * 60 * 60_000;
 
-const STARTED_KEY = "__riffadoStatusFlusherStarted";
+const FLUSHER_KEY = "__riffadoStatusFlusher";
 
-type GlobalWithFlag = typeof globalThis & { [STARTED_KEY]?: boolean };
+type GlobalWithFlusher = typeof globalThis & {
+    [FLUSHER_KEY]?: ReturnType<typeof setInterval>;
+};
 
 let lastPruneAt = 0;
 
@@ -74,9 +76,8 @@ export async function flushStatusRecorder(
 export function startStatusRecorder(): void {
     if (!env.STATUS_TOKEN) return;
     setStatusRecordingEnabled(true);
-    const g = globalThis as GlobalWithFlag;
-    if (g[STARTED_KEY]) return;
-    g[STARTED_KEY] = true;
+    const g = globalThis as GlobalWithFlusher;
+    if (g[FLUSHER_KEY]) return;
     let flushing = false;
     const interval = setInterval(() => {
         if (flushing) return;
@@ -86,4 +87,14 @@ export function startStatusRecorder(): void {
         });
     }, FLUSH_INTERVAL_MS);
     interval.unref?.();
+    g[FLUSHER_KEY] = interval;
+}
+
+/** Test-only: stop the flush interval, switch recording off and forget the last prune. */
+export function stopStatusRecorderForTests(): void {
+    const g = globalThis as GlobalWithFlusher;
+    clearInterval(g[FLUSHER_KEY]);
+    g[FLUSHER_KEY] = undefined;
+    lastPruneAt = 0;
+    setStatusRecordingEnabled(false);
 }

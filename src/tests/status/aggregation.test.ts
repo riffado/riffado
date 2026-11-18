@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { envMock, table } = vi.hoisted(() => ({
     envMock: { STATUS_TOKEN: "t".repeat(64) as string | undefined },
@@ -67,7 +67,11 @@ vi.mock("@/db/queries/status", () => ({
 }));
 
 import { mergeStatusJobRun } from "@/db/queries/status";
-import { flushStatusRecorder, startStatusRecorder } from "@/lib/status/flush";
+import {
+    flushStatusRecorder,
+    startStatusRecorder,
+    stopStatusRecorderForTests,
+} from "@/lib/status/flush";
 import {
     drainPending,
     isStatusEnabled,
@@ -181,15 +185,41 @@ describe("cross-process aggregation", () => {
 });
 
 describe("startStatusRecorder", () => {
+    beforeEach(() => {
+        table.clear();
+        resetStatusRecorderForTests();
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        stopStatusRecorderForTests();
+        envMock.STATUS_TOKEN = "t".repeat(64);
+        vi.useRealTimers();
+    });
+
     it("keeps recording off without STATUS_TOKEN and switches it on with one", () => {
         setStatusRecordingEnabled(false);
         envMock.STATUS_TOKEN = undefined;
         startStatusRecorder();
         expect(isStatusEnabled()).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
 
         envMock.STATUS_TOKEN = "t".repeat(64);
         startStatusRecorder();
+        startStatusRecorder();
         expect(isStatusEnabled()).toBe(true);
+        expect(vi.getTimerCount()).toBe(1);
+    });
+
+    it("flushes once a minute until stopped", async () => {
+        startStatusRecorder();
+        recordOutcome("plaud", true, 100);
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(table.size).toBe(1);
+
+        stopStatusRecorderForTests();
+        expect(vi.getTimerCount()).toBe(0);
+        expect(isStatusEnabled()).toBe(false);
     });
 });
 
