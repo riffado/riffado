@@ -213,8 +213,8 @@ export const plaudConnections = pgTable("plaud_connections", {
     // ~300 days for legacy tokens issued before Plaud added refresh tokens.
     bearerToken: text("bearer_token").notNull(),
     // Encrypted Plaud refresh token, used to mint a fresh UT before it
-    // expires. Null for legacy and pasted connections. Refreshing never
-    // extends past sessionExpiresAt.
+    // expires. Null for legacy and pasted connections. A refresh never moves
+    // sessionExpiresAt later than the stored value.
     refreshToken: text("refresh_token"),
     // When the stored UT expires. Null when unknown.
     accessExpiresAt: timestamp("access_expires_at"),

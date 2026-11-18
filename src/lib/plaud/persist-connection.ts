@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { acquirePlaudConnectLock } from "@/db/queries/plaud-locks";
 import { plaudConnections, plaudDevices } from "@/db/schema";
@@ -179,9 +179,9 @@ export interface StoredPlaudTokenCiphertexts {
  * Store the tokens returned by a refresh, scoped by user and connection id.
  * Compare-and-swap on `storedRefreshToken`: encryption uses a random IV, so
  * a reconnect or another refresh changes the stored ciphertext and turns
- * this write into a no-op. A known `sessionExpiresAt` is never replaced with
- * null. Returns the ciphertexts written, or null when the row was not
- * updated.
+ * this write into a no-op. `sessionExpiresAt` never moves later than the
+ * stored value, and a known value is never replaced with null. Returns the
+ * ciphertexts written, or null when the row was not updated.
  */
 export async function persistRefreshedPlaudTokens({
     userId,
@@ -199,7 +199,9 @@ export async function persistRefreshedPlaudTokens({
             ...stored,
             accessExpiresAt: tokens.accessExpiresAt,
             ...(tokens.sessionExpiresAt
-                ? { sessionExpiresAt: tokens.sessionExpiresAt }
+                ? {
+                      sessionExpiresAt: sql`least(${plaudConnections.sessionExpiresAt}, ${tokens.sessionExpiresAt.toISOString()}::timestamp)`,
+                  }
                 : {}),
             updatedAt: new Date(),
         })

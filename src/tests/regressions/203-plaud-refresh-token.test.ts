@@ -12,7 +12,7 @@
  * helper, and the dashboard banner predicate.
  */
 
-import { DrizzleQueryError, getTableColumns, type SQL } from "drizzle-orm";
+import { DrizzleQueryError, getTableColumns, is, SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import {
     afterEach,
@@ -402,6 +402,25 @@ function rowMatches(where: SQL, row: ConnectionRow): boolean {
 }
 
 /**
+ * Apply one SET value to the row. Plain values are stored as is; the only
+ * SQL expression the Plaud persistence code writes is
+ * `least(<column>, $1::timestamp)`, which, like Postgres, ignores a null.
+ */
+function resolveSetValue(value: unknown, row: ConnectionRow): unknown {
+    if (!is(value, SQL)) return value;
+    const { sql, params } = dialect.sqlToQuery(value);
+    const least =
+        /^least\("plaud_connections"\."([a-z_]+)", \$1::timestamp\)$/.exec(sql);
+    if (!least) throw new Error(`unsupported SET expression: ${sql}`);
+    const key = columnKeyByName.get(least[1]);
+    if (!key) throw new Error(`unknown column ${least[1]}`);
+    const incoming = new Date(String(params[0]));
+    const stored = row[key];
+    if (!(stored instanceof Date)) return incoming;
+    return stored.getTime() <= incoming.getTime() ? stored : incoming;
+}
+
+/**
  * Back `db` (and transactions) with a single in-memory `plaud_connections`
  * row. Updates only land when their WHERE clause matches the row, like
  * Postgres would. Writes to other tables are accepted and dropped.
@@ -422,7 +441,15 @@ function installConnectionStore(row: ConnectionRow): void {
             where: (where: SQL) => {
                 const hit =
                     table === plaudConnections && rowMatches(where, row);
-                if (hit) Object.assign(row, values);
+                if (hit) {
+                    const resolved = Object.fromEntries(
+                        Object.entries(values).map(([key, value]) => [
+                            key,
+                            resolveSetValue(value, row),
+                        ]),
+                    );
+                    Object.assign(row, resolved);
+                }
                 const rows = hit ? [{ id: row.id }] : [];
                 return Object.assign(Promise.resolve(undefined), {
                     returning: async () => rows,
@@ -996,7 +1023,13 @@ describe("createPlaudClient refresh", () => {
         expect(decrypt(String(written.refreshToken))).toBe(newRt);
         expect(String(written.bearerToken)).not.toContain("eyJ");
         expect(written.accessExpiresAt).toEqual(new Date(utExpireAt * 1000));
-        expect(written.sessionExpiresAt).toEqual(new Date(urtExpireAt * 1000));
+        const sessionSql = dialect.sqlToQuery(written.sessionExpiresAt as SQL);
+        expect(sessionSql.sql).toBe(
+            'least("plaud_connections"."session_expires_at", $1::timestamp)',
+        );
+        expect(sessionSql.params).toEqual([
+            new Date(urtExpireAt * 1000).toISOString(),
+        ]);
 
         const where = dialect.sqlToQuery(updates.where.mock.calls[0][0]);
         expect(where.sql).toContain('"plaud_connections"."id" = $');
@@ -1399,6 +1432,54 @@ describe("refresh persistence against a stored row", () => {
 
         expect(decrypt(String(row.bearerToken))).toBe(newUt);
         expect(row.sessionExpiresAt).toEqual(sessionEnd);
+    });
+
+    it.each([
+        ["later than the stored end", 10, 30, 10],
+        ["earlier than the stored end", 20, 5, 5],
+    ])("keeps the earlier session end when the refresh reports one %s", async (_label, storedDays, refreshedDays, expectedDays) => {
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: new Date((nowSec() + storedDays * DAY) * 1000),
+        });
+        installConnectionStore(row);
+        const expected = new Date((nowSec() + expectedDays * DAY) * 1000);
+        refreshRoutes(() =>
+            jsonResponse({
+                status: 0,
+                access_token: makeUserToken(nowSec() + DAY, "ut-new"),
+                refresh_token: makeRefreshToken(nowSec() + 20 * DAY, "rt-new"),
+                urt_expire_at: nowSec() + refreshedDays * DAY,
+            }),
+        );
+
+        await createPlaudClient(credentialsFrom(row));
+
+        expect(row.sessionExpiresAt).toEqual(expected);
+    });
+
+    it("stores the refreshed session end when none was known", async () => {
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: null,
+        });
+        installConnectionStore(row);
+        const urtExpireAt = nowSec() + 12 * DAY;
+        refreshRoutes(() =>
+            jsonResponse({
+                status: 0,
+                access_token: makeUserToken(nowSec() + DAY, "ut-new"),
+                urt_expire_at: urtExpireAt,
+            }),
+        );
+
+        await createPlaudClient(credentialsFrom(row));
+
+        expect(row.sessionExpiresAt).toEqual(new Date(urtExpireAt * 1000));
     });
 });
 
