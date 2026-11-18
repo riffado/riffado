@@ -11,13 +11,16 @@ import {
     contentDispositionAttachment,
     isAudioDownloadRequest,
 } from "@/lib/recordings/filename";
+import { isStorageObjectMissingError } from "@/lib/storage/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import type { ByteRange } from "@/lib/storage/types";
 import { getAudioMimeType } from "@/lib/utils";
 
 type IdContext = { params: Promise<{ id: string }> };
 
-const PLAYBACK_URL_TTL_SECONDS = 60 * 60;
+const PLAYBACK_URL_TTL_SECONDS = 15 * 60;
+
+const SINGLE_BYTE_RANGE = /^bytes=(\d*)-(\d*)$/;
 
 const MEDIA_ELEMENT_DESTINATIONS = new Set(["audio", "video"]);
 
@@ -31,13 +34,35 @@ function parseRange(
     size: number,
 ): ByteRange | "unsatisfiable" | null {
     if (!header) return null;
-    const match = header.match(/bytes=(\d+)-(\d*)/);
+    const match = SINGLE_BYTE_RANGE.exec(header.trim());
     if (!match) return null;
-    const start = Number.parseInt(match[1], 10);
-    const requestedEnd = match[2] ? Number.parseInt(match[2], 10) : size - 1;
-    const end = Math.min(requestedEnd, size - 1);
-    if (start >= size || start > end) return "unsatisfiable";
-    return { start, end };
+    const [, startText, endText] = match;
+    if (startText === "") {
+        if (endText === "") return null;
+        const suffixLength = Number(endText);
+        if (suffixLength === 0 || size === 0) return "unsatisfiable";
+        return { start: Math.max(0, size - suffixLength), end: size - 1 };
+    }
+    const start = Number(startText);
+    if (endText !== "" && Number(endText) < start) return null;
+    if (start >= size) return "unsatisfiable";
+    const requestedEnd = endText === "" ? size - 1 : Number(endText);
+    return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+async function readAudio<T>(read: () => Promise<T>): Promise<T> {
+    try {
+        return await read();
+    } catch (error) {
+        if (isStorageObjectMissingError(error)) {
+            throw new AppError(
+                ErrorCode.RECORDING_NOT_FOUND,
+                "Recording audio not found",
+                404,
+            );
+        }
+        throw error;
+    }
 }
 
 function toBody(stream: Readable): ReadableStream {
@@ -87,7 +112,9 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         return redirect;
     }
 
-    const fileSize = await storage.getObjectSize(recording.storagePath);
+    const fileSize = await readAudio(() =>
+        storage.getObjectSize(recording.storagePath),
+    );
 
     const cacheHeaders: Record<string, string> = wantsDownload
         ? {
@@ -100,7 +127,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
               ),
               "Cache-Control": "private, no-store",
           }
-        : { "Cache-Control": "private, max-age=300" };
+        : { "Cache-Control": "private, max-age=300", Vary: "Sec-Fetch-Dest" };
 
     // Attachment downloads always return the full file so the saved
     // copy is complete. Range is still honored for in-app playback.
@@ -111,14 +138,16 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     if (range === "unsatisfiable") {
         return new NextResponse(null, {
             status: 416,
-            headers: { "Content-Range": `bytes */${fileSize}` },
+            headers: {
+                "Content-Range": `bytes */${fileSize}`,
+                "Cache-Control": "private, no-store",
+            },
         });
     }
 
     if (range) {
-        const stream = await storage.downloadStream(
-            recording.storagePath,
-            range,
+        const stream = await readAudio(() =>
+            storage.downloadStream(recording.storagePath, range),
         );
         return new NextResponse(toBody(stream), {
             status: 206,
@@ -132,7 +161,9 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
         });
     }
 
-    const stream = await storage.downloadStream(recording.storagePath);
+    const stream = await readAudio(() =>
+        storage.downloadStream(recording.storagePath),
+    );
     return new NextResponse(toBody(stream), {
         headers: {
             "Content-Type": contentType,

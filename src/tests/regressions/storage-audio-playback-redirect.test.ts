@@ -13,8 +13,13 @@
  *      (extension-based, so `.ogg`/`.opus` Plaud recordings from #160 stay
  *      `audio/ogg`).
  *   2. Everything else streams, passing Range through to the provider.
+ *      Only a single `bytes=start-end` or suffix `bytes=-N` range is
+ *      honored; multiple, malformed or inverted ranges get the full body
+ *      (RFC 9110), and a start past the end gets 416 with an unsatisfied
+ *      Content-Range.
  *   3. `download=1` still streams a complete attachment.
- *   4. Authenticated audio is never cached publicly.
+ *   4. Authenticated audio is never cached publicly, cacheable responses
+ *      vary on `Sec-Fetch-Dest`, and a missing object is a 404.
  */
 
 import { Readable } from "node:stream";
@@ -111,7 +116,7 @@ describe("in-app audio route storage reads", () => {
         expect(response.headers.get("Cache-Control")).toBe("private, no-store");
         expect(storage.getDirectDownloadUrl).toHaveBeenCalledWith(
             "user-1/plaud-1.opus",
-            { expiresInSeconds: 3600, contentType: "audio/ogg" },
+            { expiresInSeconds: 900, contentType: "audio/ogg" },
         );
         expect(storage.downloadFile).not.toHaveBeenCalled();
         expect(storage.downloadStream).not.toHaveBeenCalled();
@@ -126,7 +131,7 @@ describe("in-app audio route storage reads", () => {
 
         expect(storage.getDirectDownloadUrl).toHaveBeenCalledWith(
             "user-1/legacy.mp3",
-            { expiresInSeconds: 3600, contentType: "audio/mpeg" },
+            { expiresInSeconds: 900, contentType: "audio/mpeg" },
         );
     });
 
@@ -191,6 +196,105 @@ describe("in-app audio route storage reads", () => {
         );
         expect(unsatisfiable.status).toBe(416);
         expect(unsatisfiable.headers.get("Content-Range")).toBe("bytes */10");
+        expect(unsatisfiable.headers.get("Cache-Control")).toBe(
+            "private, no-store",
+        );
+    });
+
+    it("serves suffix ranges from the end of the object", async () => {
+        selectRecording("user-1/rec.mp3");
+        const storage = provider(false);
+        (createUserStorageProvider as Mock).mockResolvedValue(storage);
+
+        const tail = await getAudio(request("", { range: "bytes=-3" }), params);
+        expect(tail.status).toBe(206);
+        expect(tail.headers.get("Content-Range")).toBe("bytes 7-9/10");
+        expect(await tail.text()).toBe("789");
+
+        const longer = await getAudio(
+            request("", { range: "bytes=-100" }),
+            params,
+        );
+        expect(longer.status).toBe(206);
+        expect(longer.headers.get("Content-Range")).toBe("bytes 0-9/10");
+        expect(await longer.text()).toBe("0123456789");
+
+        const empty = await getAudio(
+            request("", { range: "bytes=-0" }),
+            params,
+        );
+        expect(empty.status).toBe(416);
+    });
+
+    it.each([
+        ["multiple ranges", "bytes=0-1,4-5"],
+        ["another unit", "items=0-1"],
+        ["a prefix before the unit", "xbytes=2-5"],
+        ["non-numeric bounds", "bytes=a-b"],
+        ["no bounds", "bytes=-"],
+        ["an inverted range", "bytes=5-2"],
+    ])("ignores Range with %s and returns the full body", async (_label, range) => {
+        selectRecording("user-1/rec.mp3");
+        const storage = provider(false);
+        (createUserStorageProvider as Mock).mockResolvedValue(storage);
+
+        const response = await getAudio(request("", { range }), params);
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("Content-Range")).toBeNull();
+        expect(storage.downloadStream).toHaveBeenCalledWith("user-1/rec.mp3");
+        expect(await response.text()).toBe("0123456789");
+    });
+
+    it("varies cacheable responses on Sec-Fetch-Dest", async () => {
+        selectRecording("user-1/rec.mp3");
+        (createUserStorageProvider as Mock).mockResolvedValue(provider(false));
+
+        const full = await getAudio(request(), params);
+        const ranged = await getAudio(
+            request("", { range: "bytes=0-1" }),
+            params,
+        );
+
+        expect(full.headers.get("Vary")).toBe("Sec-Fetch-Dest");
+        expect(ranged.headers.get("Vary")).toBe("Sec-Fetch-Dest");
+    });
+
+    it("returns 404 instead of 500 when the audio object is missing from storage", async () => {
+        selectRecording("user-1/rec.mp3");
+        const storage = provider(false);
+        storage.getObjectSize.mockRejectedValue(
+            Object.assign(new Error("NotFound"), {
+                name: "NotFound",
+                $metadata: { httpStatusCode: 404 },
+            }),
+        );
+        (createUserStorageProvider as Mock).mockResolvedValue(storage);
+
+        const response = await getAudio(request(), params);
+
+        expect(response.status).toBe(404);
+        expect(storage.downloadStream).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 for a recording the user does not own, even for a media element", async () => {
+        (db.select as Mock).mockReturnValue({
+            from: () => ({
+                where: () => ({ limit: async () => [] }),
+            }),
+        });
+        const storage = provider(true);
+        (createUserStorageProvider as Mock).mockResolvedValue(storage);
+
+        const response = await getAudio(
+            request("", { "sec-fetch-dest": "audio" }),
+            params,
+        );
+
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Location")).toBeNull();
+        expect(storage.getDirectDownloadUrl).not.toHaveBeenCalled();
+        expect(storage.downloadStream).not.toHaveBeenCalled();
     });
 
     it("streams a complete attachment for download=1 even when a storage URL is available", async () => {
