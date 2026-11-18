@@ -1376,6 +1376,160 @@ describe("sync with a rejected refresh token", () => {
     });
 });
 
+// ── Workspace token 401s ─────────────────────────────────────────────────────
+
+/**
+ * Mint hands out `wt.1`, `wt.2`, ... per user token; device list and
+ * recordings accept only the workspace tokens in `accepted`.
+ */
+function routeWorkspaceTokens(input: {
+    accepted: (wt: string) => boolean;
+    refresh?: RouteHandler;
+}): { mintedBy: string[] } {
+    const mintedBy: string[] = [];
+    const dataRoute =
+        (ok: RouteHandler): RouteHandler =>
+        (url, init) => {
+            const wt = authHeader(init)?.replace(/^Bearer /, "") ?? "";
+            return input.accepted(wt)
+                ? ok(url, init)
+                : jsonResponse({ msg: "expired" }, 401);
+        };
+    routeFetch({
+        "/auth/refresh-user-token":
+            input.refresh ??
+            (() => {
+                throw new Error("unexpected refresh");
+            }),
+        "/workspace/token/": (_url, init) => {
+            mintedBy.push(authHeader(init) ?? "");
+            return jsonResponse({
+                status: 0,
+                data: { workspace_token: `wt.${mintedBy.length}` },
+            });
+        },
+        "/device/list": dataRoute(devicesOk),
+        "/file/simple/web": dataRoute(() =>
+            jsonResponse({ status: 0, data_file_list: [] }),
+        ),
+    });
+    return { mintedBy };
+}
+
+describe("workspace token 401", () => {
+    it("re-mints the workspace token without refreshing a valid user token", async () => {
+        mockUpdates();
+        const ut = makeUserToken(nowSec() + 20 * HOUR, "ut");
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: (wt) => wt === "wt.2",
+            refresh: () => jsonResponse({}, 500),
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({ accessToken: ut }),
+        );
+        const devices = await client.listDevices();
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(0);
+        expect(mintedBy).toEqual([`Bearer ${ut}`, `Bearer ${ut}`]);
+        expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it("re-mints once for a legacy connection without a refresh token", async () => {
+        const ut = makeUserToken(nowSec() + 200 * DAY, "legacy-ut");
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: (wt) => wt === "wt.2",
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({
+                accessToken: ut,
+                refreshTokenPlain: null,
+                accessExpiresAt: new Date((nowSec() + 200 * DAY) * 1000),
+            }),
+        );
+        const devices = await client.listDevices();
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(mintedBy).toHaveLength(2);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(0);
+    });
+
+    it("fails a legacy connection after one re-mint with zero refresh calls", async () => {
+        const { mintedBy } = routeWorkspaceTokens({ accepted: () => false });
+
+        const client = await createPlaudClient(
+            makeConnection({
+                refreshTokenPlain: null,
+                accessExpiresAt: new Date((nowSec() + 200 * DAY) * 1000),
+            }),
+        );
+        await expect(client.listDevices()).rejects.toMatchObject({
+            code: ErrorCode.PLAUD_INVALID_TOKEN,
+        });
+        await expect(client.getRecordings(0, 10)).rejects.toMatchObject({
+            code: ErrorCode.PLAUD_INVALID_TOKEN,
+        });
+
+        expect(mintedBy).toHaveLength(2);
+        expect(callsTo("/device/list")).toHaveLength(2);
+        expect(callsTo("/file/simple/web")).toHaveLength(1);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(0);
+    });
+
+    it("refreshes the user token only after the re-minted workspace token also 401s", async () => {
+        mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        const newUt = makeUserToken(nowSec() + DAY, "new-ut");
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: (wt) => wt === "wt.3",
+            refresh: () => jsonResponse({ status: 0, access_token: newUt }),
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({ accessToken: oldUt }),
+        );
+        const devices = await client.listDevices();
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+        expect(mintedBy).toEqual([
+            `Bearer ${oldUt}`,
+            `Bearer ${oldUt}`,
+            `Bearer ${newUt}`,
+        ]);
+    });
+
+    it("shares one re-mint and one refresh between concurrent 401s", async () => {
+        mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        const newUt = makeUserToken(nowSec() + DAY, "new-ut");
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: (wt) => wt === "wt.3",
+            refresh: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                return jsonResponse({ status: 0, access_token: newUt });
+            },
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({ accessToken: oldUt }),
+        );
+        const [devices, recordings, again] = await Promise.all([
+            client.listDevices(),
+            client.getRecordings(0, 10),
+            client.listDevices(),
+        ]);
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(again.data_devices).toHaveLength(1);
+        expect(recordings.data_file_list).toEqual([]);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+        expect(mintedBy).toHaveLength(3);
+    });
+});
+
 // ── Transient refresh failures ────────────────────────────────────────────────
 
 type RefreshFailure = [string, RouteHandler, ErrorCode];
