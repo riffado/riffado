@@ -3,7 +3,10 @@ import { db } from "@/db";
 import { storageDeletionQueue } from "@/db/schema";
 
 /** Where a queued storage delete came from, for operator triage. */
-export type StorageDeletionSource = "account_deletion" | "export_cleanup";
+export type StorageDeletionSource =
+    | "account_deletion"
+    | "export_cleanup"
+    | "recording_cleanup";
 
 /** One queued delete, claimed for a single attempt. */
 export interface ClaimedStorageDeletion {

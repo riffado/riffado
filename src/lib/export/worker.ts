@@ -12,16 +12,16 @@ import {
     selectExpiredExportJobs,
     selectStaleStorageKeys,
 } from "@/db/queries/export-jobs";
-import { enqueueStorageDeletions } from "@/db/queries/storage-deletions";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendExportReadyEmail } from "@/lib/notifications/email";
 import { captureServerException } from "@/lib/posthog-server";
-import { deleteStorageObject } from "@/lib/storage/delete-object";
+import {
+    deleteStorageObject,
+    deleteStorageObjectOrQueue,
+} from "@/lib/storage/delete-object";
 import { sweepStorageDeletionQueue } from "@/lib/storage/deletion-queue";
-import { redactStorageKey } from "@/lib/storage/errors";
 import { createStorageProvider } from "@/lib/storage/factory";
-import type { StorageProvider } from "@/lib/storage/types";
 import { buildAndUploadExportArchive } from "./build-archive";
 import { exportArchiveStorageKey } from "./storage-key";
 
@@ -105,32 +105,6 @@ function runWithStallGuard<T>(
     });
 }
 
-async function discardAttemptObject(
-    storage: StorageProvider,
-    storageKey: string,
-): Promise<void> {
-    try {
-        await deleteStorageObject(storage, storageKey);
-    } catch (error) {
-        console.warn(
-            `[export-worker] could not delete ${storageKey}, queueing retry:`,
-            error instanceof Error ? error.message : String(error),
-        );
-        await enqueueStorageDeletions([storageKey], "export_cleanup").catch(
-            (enqueueError) => {
-                console.error(
-                    `[export-worker] failed to queue ${storageKey} for deletion:`,
-                    enqueueError,
-                );
-                captureServerException(
-                    redactStorageKey(enqueueError, storageKey),
-                    { source: "worker:export" },
-                );
-            },
-        );
-    }
-}
-
 async function processJob(job: {
     id: string;
     userId: string;
@@ -182,7 +156,11 @@ async function processJob(job: {
             console.warn(
                 `[export-worker] job ${job.id} finished but its claim was superseded; discarding result`,
             );
-            await discardAttemptObject(storage, storageKey);
+            await deleteStorageObjectOrQueue(
+                storage,
+                storageKey,
+                "export_cleanup",
+            );
             return;
         }
 
@@ -247,7 +225,7 @@ async function processJob(job: {
         // upload. A retry gets a fresh claim token and therefore a fresh
         // key (see above), so this never collides with a subsequent
         // attempt's object.
-        await discardAttemptObject(storage, storageKey);
+        await deleteStorageObjectOrQueue(storage, storageKey, "export_cleanup");
     }
 }
 

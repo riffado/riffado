@@ -845,6 +845,10 @@ export async function listRecordingStoragePaths(
 /**
  * Hard-delete a user while preserving any lifetime founding-capacity claim.
  *
+ * The user row is locked first (`FOR UPDATE`). A concurrent recording or
+ * export-job insert needs a `FOR KEY SHARE` lock on that row for its FK
+ * check, so it waits for this transaction and then fails with an FK
+ * violation instead of adding a row (and storage key) after the scan.
  * In the same transaction, the user's export jobs and recordings are
  * locked and re-read, and their storage keys are queued for deletion
  * (`storage_deletion_queue`), so the keys are queued exactly when the
@@ -871,7 +875,8 @@ export async function deleteUser(
             })
             .from(users)
             .where(eq(users.id, userId))
-            .limit(1);
+            .limit(1)
+            .for("update");
         if (
             user &&
             (user.foundingMember || user.foundingMemberClaimedAt !== null)

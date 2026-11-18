@@ -19,10 +19,12 @@
  * again with fresh attempts, rows are due by the app's UTC clock rather
  * than the database session's `now()`, operators get pending/failed
  * counts, and error tracking never receives the storage key (it embeds
- * the user id).
+ * the user id). `deleteUser` locks the user row before collecting keys,
+ * so a recording insert that races it waits and then fails on the user
+ * FK instead of landing after the scan.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
@@ -108,6 +110,23 @@ function fakeStorage(deleteFile: (key: string) => Promise<void>) {
     return { deleteFile } as unknown as StorageProvider;
 }
 
+function recordingRow(userId: string, storagePath: string) {
+    return {
+        userId,
+        deviceSn: "SN",
+        plaudFileId: storagePath,
+        filename: "f",
+        duration: 1000,
+        startTime: new Date("2026-01-01T00:00:00Z"),
+        endTime: new Date("2026-01-01T00:00:01Z"),
+        filesize: 10,
+        fileMd5: "0".repeat(32),
+        storageType: "s3",
+        storagePath,
+        plaudVersion: "1",
+    };
+}
+
 describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
     let database: TestPostgresDatabase | null = null;
 
@@ -144,23 +163,88 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
     });
 
     async function insertRecording(userId: string, storagePath: string) {
-        await db()
-            .insert(recordings)
-            .values({
-                userId,
-                deviceSn: "SN",
-                plaudFileId: storagePath,
-                filename: "f",
-                duration: 1000,
-                startTime: new Date("2026-01-01T00:00:00Z"),
-                endTime: new Date("2026-01-01T00:00:01Z"),
-                filesize: 10,
-                fileMd5: "0".repeat(32),
-                storageType: "s3",
-                storagePath,
-                plaudVersion: "1",
-            });
+        await db().insert(recordings).values(recordingRow(userId, storagePath));
     }
+
+    async function waitForLockWaiter() {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+            const [row] = await db().execute<{ waiting: number }>(
+                sql`select count(*)::int as waiting from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`,
+            );
+            if (Number(row?.waiting ?? 0) > 0) return;
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error("no backend started waiting on a lock");
+    }
+
+    it("makes a recording insert that races the deletion wait for it, then fail on the user FK", async () => {
+        if (!database) throw new Error("test database was not initialized");
+        await db().insert(users).values({ id: "gone", email: "g@example.com" });
+        await insertRecording("gone", "gone/a.ogg");
+        await db().insert(exportJobs).values({
+            id: "job",
+            userId: "gone",
+            status: "completed",
+            storageKey: "exports/gone/job-t.zip",
+        });
+        const blocker = postgres(database.url, { max: 1 });
+        const writerClient = postgres(database.url, { max: 1 });
+        const writer = drizzle(writerClient, { schema });
+        let releaseBlocker = () => {};
+        const blockerReleased = new Promise<void>((resolve) => {
+            releaseBlocker = resolve;
+        });
+        let markLocked = () => {};
+        const blockerLocked = new Promise<void>((resolve) => {
+            markLocked = resolve;
+        });
+        const blockerTx = blocker.begin(async (tx) => {
+            await tx`select id from export_jobs where id = 'job' for update`;
+            markLocked();
+            await blockerReleased;
+        });
+        try {
+            await blockerLocked;
+            const deletion = deleteUser("gone");
+            await waitForLockWaiter();
+
+            let insertSettled = false;
+            const insert = writer
+                .insert(recordings)
+                .values(recordingRow("gone", "gone/late.ogg"))
+                .then(
+                    () => null,
+                    (error: unknown) => error,
+                )
+                .finally(() => {
+                    insertSettled = true;
+                });
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            expect(insertSettled).toBe(false);
+
+            releaseBlocker();
+            await blockerTx;
+            await deletion;
+            const insertError = (await insert) as {
+                code?: string;
+                cause?: { code?: string };
+            } | null;
+            expect(insertError?.code ?? insertError?.cause?.code).toBe("23503");
+
+            expect(await db().select().from(recordings)).toEqual([]);
+            const rows = await queueRows();
+            expect(rows.map((row) => row.storageKey)).toEqual([
+                "exports/gone/job-t.zip",
+                "gone/a.ogg",
+            ]);
+        } finally {
+            releaseBlocker();
+            await blockerTx.catch(() => {});
+            await blocker.end({ timeout: 5 });
+            await writerClient.end({ timeout: 5 });
+        }
+    });
 
     it("queues every key not deleted beforehand in the same transaction that deletes the user", async () => {
         await db().insert(users).values({ id: "gone", email: "g@example.com" });
