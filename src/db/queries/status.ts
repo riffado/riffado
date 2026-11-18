@@ -104,11 +104,12 @@ export async function pruneStatusBuckets(before: Date): Promise<void> {
 }
 
 /**
- * Merge one process's job outcomes into the shared row. A success anywhere
- * ends the failure streak; `failingFrom` (first failure after the batch's
- * last success) starts or continues it. A batch without a success whose
- * failures are all older than a stored success leaves the streak as
- * stored, and a new streak never starts before the stored last success.
+ * Merge one process's job outcomes into the shared row, independent of the
+ * order processes flush in. With the merged last success and last error,
+ * the job is failing only when the last error is newer than the last
+ * success; the streak then starts at the earliest stored or incoming
+ * streak start after that success, or at the last error when neither
+ * qualifies.
  */
 export async function mergeStatusJobRun(input: {
     job: string;
@@ -131,11 +132,23 @@ export async function mergeStatusJobRun(input: {
                 lastSuccessAt: sql`greatest(${t.lastSuccessAt}, excluded.last_success_at)`,
                 lastErrorAt: sql`greatest(${t.lastErrorAt}, excluded.last_error_at)`,
                 failingSince: sql`case
-                    when excluded.failing_since is null then
-                        case when excluded.last_success_at is not null then null else ${t.failingSince} end
-                    when excluded.last_success_at is not null then excluded.failing_since
-                    when ${t.lastSuccessAt} >= excluded.last_error_at then ${t.failingSince}
-                    else coalesce(${t.failingSince}, greatest(excluded.failing_since, ${t.lastSuccessAt}))
+                    when greatest(${t.lastErrorAt}, excluded.last_error_at) is null then null
+                    when greatest(${t.lastSuccessAt}, excluded.last_success_at) >= greatest(${t.lastErrorAt}, excluded.last_error_at) then null
+                    else coalesce(
+                        least(
+                            case
+                                when greatest(${t.lastSuccessAt}, excluded.last_success_at) is null
+                                    or ${t.failingSince} > greatest(${t.lastSuccessAt}, excluded.last_success_at)
+                                then ${t.failingSince}
+                            end,
+                            case
+                                when greatest(${t.lastSuccessAt}, excluded.last_success_at) is null
+                                    or excluded.failing_since > greatest(${t.lastSuccessAt}, excluded.last_success_at)
+                                then excluded.failing_since
+                            end
+                        ),
+                        greatest(${t.lastErrorAt}, excluded.last_error_at)
+                    )
                 end`,
                 updatedAt: sql`now()`,
             },

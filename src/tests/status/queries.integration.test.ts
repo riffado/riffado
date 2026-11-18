@@ -255,7 +255,7 @@ describeWithDatabase("status queries PostgreSQL integration", () => {
         expect(await getStatusJobRun("webhooks")).toEqual({
             lastSuccessAt: at("2026-11-18T10:10:00Z"),
             lastErrorAt: at("2026-11-18T10:15:00Z"),
-            failingSince: at("2026-11-18T10:10:00Z"),
+            failingSince: at("2026-11-18T10:15:00Z"),
         });
 
         await mergeStatusJobRun({
@@ -265,8 +265,134 @@ describeWithDatabase("status queries PostgreSQL integration", () => {
             failingFrom: at("2026-11-18T10:01:00Z"),
         });
         expect((await getStatusJobRun("webhooks"))?.failingSince).toEqual(
-            at("2026-11-18T10:10:00Z"),
+            at("2026-11-18T10:15:00Z"),
         );
+    });
+
+    it("keeps a newer failure when an older success is flushed after it", async () => {
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:01:00Z"),
+            failingFrom: at("2026-11-18T10:01:00Z"),
+        });
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: at("2026-11-18T10:00:00Z"),
+            lastErrorAt: null,
+            failingFrom: null,
+        });
+        expect(await getStatusJobRun("sync")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:00:00Z"),
+            lastErrorAt: at("2026-11-18T10:01:00Z"),
+            failingSince: at("2026-11-18T10:01:00Z"),
+        });
+    });
+
+    it("keeps a newer failure when an older mixed batch is flushed after it", async () => {
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:09:00Z"),
+            failingFrom: at("2026-11-18T10:07:00Z"),
+        });
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: at("2026-11-18T10:05:00Z"),
+            lastErrorAt: at("2026-11-18T10:06:00Z"),
+            failingFrom: at("2026-11-18T10:06:00Z"),
+        });
+        expect(await getStatusJobRun("sync")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:05:00Z"),
+            lastErrorAt: at("2026-11-18T10:09:00Z"),
+            failingSince: at("2026-11-18T10:06:00Z"),
+        });
+    });
+
+    it("ends the streak when a newer success is flushed after older failures", async () => {
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: null,
+            lastErrorAt: at("2026-11-18T10:03:00Z"),
+            failingFrom: at("2026-11-18T10:01:00Z"),
+        });
+        await mergeStatusJobRun({
+            job: "sync",
+            lastSuccessAt: at("2026-11-18T10:04:00Z"),
+            lastErrorAt: null,
+            failingFrom: null,
+        });
+        expect(await getStatusJobRun("sync")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:04:00Z"),
+            lastErrorAt: at("2026-11-18T10:03:00Z"),
+            failingSince: null,
+        });
+    });
+
+    it("gives the same row in either flush order", async () => {
+        const batches = [
+            {
+                job: "auto-transcribe",
+                lastSuccessAt: at("2026-11-18T10:02:00Z"),
+                lastErrorAt: at("2026-11-18T10:04:00Z"),
+                failingFrom: at("2026-11-18T10:03:00Z"),
+            },
+            {
+                job: "auto-transcribe",
+                lastSuccessAt: at("2026-11-18T10:01:00Z"),
+                lastErrorAt: at("2026-11-18T10:06:00Z"),
+                failingFrom: at("2026-11-18T10:05:00Z"),
+            },
+            {
+                job: "auto-transcribe",
+                lastSuccessAt: null,
+                lastErrorAt: at("2026-11-18T10:00:30Z"),
+                failingFrom: at("2026-11-18T10:00:00Z"),
+            },
+        ];
+        const expected = {
+            lastSuccessAt: at("2026-11-18T10:02:00Z"),
+            lastErrorAt: at("2026-11-18T10:06:00Z"),
+            failingSince: at("2026-11-18T10:03:00Z"),
+        };
+        for (const order of [
+            [0, 1, 2],
+            [2, 1, 0],
+            [1, 2, 0],
+        ]) {
+            if (!database) throw new Error("test database was not initialized");
+            await database.db.delete(statusJobRuns);
+            for (const i of order) await mergeStatusJobRun(batches[i]);
+            expect(await getStatusJobRun("auto-transcribe")).toEqual(expected);
+        }
+    });
+
+    it("keeps the earliest start of concurrent failure-only streaks", async () => {
+        await mergeStatusJobRun({
+            job: "webhooks",
+            lastSuccessAt: at("2026-11-18T10:00:00Z"),
+            lastErrorAt: null,
+            failingFrom: null,
+        });
+        await Promise.all([
+            mergeStatusJobRun({
+                job: "webhooks",
+                lastSuccessAt: null,
+                lastErrorAt: at("2026-11-18T10:08:00Z"),
+                failingFrom: at("2026-11-18T10:04:00Z"),
+            }),
+            mergeStatusJobRun({
+                job: "webhooks",
+                lastSuccessAt: null,
+                lastErrorAt: at("2026-11-18T10:09:00Z"),
+                failingFrom: at("2026-11-18T10:02:00Z"),
+            }),
+        ]);
+        expect(await getStatusJobRun("webhooks")).toEqual({
+            lastSuccessAt: at("2026-11-18T10:00:00Z"),
+            lastErrorAt: at("2026-11-18T10:09:00Z"),
+            failingSince: at("2026-11-18T10:02:00Z"),
+        });
     });
 
     it("reports the Stripe inbox backlog and recent permanent failures", async () => {
