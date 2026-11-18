@@ -13,6 +13,8 @@ export const PLAYBACK_SPEED_OPTIONS = [
     { label: "2x", value: 2.0 },
 ] as const;
 
+const SOURCE_REFRESH_COOLDOWN_MS = 30 * 1000;
+
 interface Options {
     recording: Recording;
     /** Called when audio finishes playing AND autoPlayNext is on. */
@@ -49,6 +51,12 @@ export function usePlaybackEngine({
     const [autoPlayNext] = useState(initialAutoPlayNext);
     const audioRef = useRef<HTMLAudioElement>(null);
     const isSeekingRef = useRef(false);
+    const isPlayingRef = useRef(false);
+    const lastSourceRefreshRef = useRef(0);
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
     // Reset transport state and re-point src whenever the recording
     // *id* changes. Filename edits must not remount playback.
@@ -104,6 +112,33 @@ export function usePlaybackEngine({
             isSeekingRef.current = false;
             setCurrentTime(audio.currentTime);
         };
+        let pendingRestore: (() => void) | null = null;
+        const handleError = () => {
+            const now = Date.now();
+            if (
+                now - lastSourceRefreshRef.current <
+                SOURCE_REFRESH_COOLDOWN_MS
+            ) {
+                return;
+            }
+            lastSourceRefreshRef.current = now;
+            const resumeAt = audio.currentTime;
+            const resumePlayback = isPlayingRef.current;
+            if (pendingRestore) {
+                audio.removeEventListener("loadedmetadata", pendingRestore);
+            }
+            const restore = () => {
+                pendingRestore = null;
+                audio.currentTime = resumeAt;
+                if (resumePlayback) {
+                    audio.play().catch(() => setIsPlaying(false));
+                }
+            };
+            pendingRestore = restore;
+            audio.addEventListener("loadedmetadata", restore, { once: true });
+            audio.src = `/api/recordings/${recordingId}/audio`;
+            audio.load();
+        };
 
         if (audio.src !== `/api/recordings/${recordingId}/audio`) {
             audio.src = `/api/recordings/${recordingId}/audio`;
@@ -115,6 +150,7 @@ export function usePlaybackEngine({
         audio.addEventListener("durationchange", updateDuration);
         audio.addEventListener("ended", handleEnded);
         audio.addEventListener("seeked", handleSeeked);
+        audio.addEventListener("error", handleError);
 
         if (audio.duration && !Number.isNaN(audio.duration)) {
             setDuration(audio.duration);
@@ -126,6 +162,10 @@ export function usePlaybackEngine({
             audio.removeEventListener("durationchange", updateDuration);
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("seeked", handleSeeked);
+            audio.removeEventListener("error", handleError);
+            if (pendingRestore) {
+                audio.removeEventListener("loadedmetadata", pendingRestore);
+            }
         };
     }, [recording.id, autoPlayNext, onEnded]);
 

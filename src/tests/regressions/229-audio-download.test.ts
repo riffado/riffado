@@ -10,6 +10,7 @@
  *   4. 404 for another user's recording / missing row
  */
 
+import { Readable } from "node:stream";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/lib/posthog-server", () => ({
@@ -36,9 +37,7 @@ vi.mock("@/lib/encryption/fields", () => ({
 }));
 
 vi.mock("@/lib/storage/factory", () => ({
-    createUserStorageProvider: vi.fn().mockResolvedValue({
-        downloadFile: vi.fn().mockResolvedValue(Buffer.from("audio-bytes")),
-    }),
+    createUserStorageProvider: vi.fn(),
 }));
 
 import { GET as getAudio } from "@/app/api/recordings/[id]/audio/route";
@@ -98,7 +97,15 @@ describe("GET /api/recordings/[id]/audio?download=1", () => {
             user: { id: "user-1" },
         });
         (createUserStorageProvider as Mock).mockResolvedValue({
-            downloadFile: vi.fn().mockResolvedValue(audioBytes),
+            getObjectSize: vi.fn().mockResolvedValue(audioBytes.length),
+            downloadStream: vi.fn(
+                async (_key: string, range?: { start: number; end: number }) =>
+                    Readable.from(
+                        range
+                            ? audioBytes.subarray(range.start, range.end + 1)
+                            : audioBytes,
+                    ),
+            ),
         });
     });
 
