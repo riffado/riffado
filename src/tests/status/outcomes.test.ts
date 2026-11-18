@@ -234,9 +234,56 @@ describe("outcome judges", () => {
         ).toBe("error");
     });
 
-    it("smtp: a rejected recipient is not an outage", () => {
-        expect(judgeSmtpSend(thrown({ command: "RCPT TO" }))).toBe("ok");
-        expect(judgeSmtpSend(thrown({ code: "EENVELOPE" }))).toBe("ok");
+    it("smtp: only a permanent recipient rejection is not an outage", () => {
+        const rejected = (responseCode: number) => ({
+            code: "EENVELOPE",
+            command: "RCPT TO",
+            responseCode,
+            recipient: "nobody@example.com",
+        });
+        const allRejected = (...codes: number[]) =>
+            Object.assign(
+                new Error("Can't send mail - all recipients were rejected"),
+                {
+                    ...rejected(codes[codes.length - 1]),
+                    rejected: codes.map(() => "nobody@example.com"),
+                    rejectedErrors: codes.map(rejected),
+                },
+            );
+
+        expect(judgeSmtpSend(thrown(allRejected(550)))).toBe("ok");
+        expect(judgeSmtpSend(thrown(allRejected(550, 553)))).toBe("ok");
+        expect(
+            judgeSmtpSend(thrown({ command: "RCPT TO", responseCode: 550 })),
+        ).toBe("ok");
+
+        expect(judgeSmtpSend(thrown(allRejected(451)))).toBe("error");
+        expect(judgeSmtpSend(thrown(allRejected(451, 550)))).toBe("error");
+        expect(
+            judgeSmtpSend(thrown({ ...rejected(550), rejectedErrors: [] })),
+        ).toBe("error");
+        expect(judgeSmtpSend(thrown({ command: "RCPT TO" }))).toBe("error");
+        expect(
+            judgeSmtpSend(
+                thrown({
+                    code: "EENVELOPE",
+                    command: "MAIL FROM",
+                    responseCode: 553,
+                }),
+            ),
+        ).toBe("error");
+        expect(
+            judgeSmtpSend(thrown({ code: "EENVELOPE", command: "API" })),
+        ).toBe("error");
+        expect(
+            judgeSmtpSend(
+                thrown({
+                    code: "EENVELOPE",
+                    command: "DATA",
+                    responseCode: 554,
+                }),
+            ),
+        ).toBe("error");
         expect(judgeSmtpSend(thrown({ code: "EAUTH" }))).toBe("error");
     });
 

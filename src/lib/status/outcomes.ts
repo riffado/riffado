@@ -125,17 +125,46 @@ export function judgeStorageCall(kind: StorageCallKind) {
     };
 }
 
+interface SmtpErrorShape {
+    code?: unknown;
+    command?: unknown;
+    responseCode?: unknown;
+    rejectedErrors?: unknown;
+}
+
+function isPermanentRecipientRejection(error: unknown): boolean {
+    if (error === null || typeof error !== "object") return false;
+    const { command, responseCode } = error as SmtpErrorShape;
+    return (
+        command === "RCPT TO" &&
+        typeof responseCode === "number" &&
+        responseCode >= 500 &&
+        responseCode < 600
+    );
+}
+
 /**
- * SMTP send outcome. A rejected recipient (RCPT TO, or nodemailer's
- * EENVELOPE) is a bad address, not an email outage.
+ * SMTP send outcome. Only a permanent recipient rejection (a 5xx answer to
+ * RCPT TO for every recipient, as nodemailer's EENVELOPE lists them) is a
+ * bad address rather than an email outage; a refused sender, temporary
+ * (4xx) rejections and everything else are errors.
  */
 export function judgeSmtpSend<T>(settled: Settled<T>): CallOutcome {
     if (settled.ok) return "ok";
-    const error = settled.error as { code?: unknown; command?: unknown };
-    if (error?.command === "RCPT TO" || error?.code === "EENVELOPE") {
-        return "ok";
+    const error = settled.error;
+    if (!isPermanentRecipientRejection(error)) return "error";
+    const { code, rejectedErrors } = error as SmtpErrorShape;
+    if (
+        code === "EENVELOPE" &&
+        !(
+            Array.isArray(rejectedErrors) &&
+            rejectedErrors.length > 0 &&
+            rejectedErrors.every(isPermanentRecipientRejection)
+        )
+    ) {
+        return "error";
     }
-    return "error";
+    return "ok";
 }
 
 /**
