@@ -33,7 +33,13 @@ interface EmailOptions {
 let transporter: nodemailer.Transporter | null = null;
 
 function plainTextFallback(html: string): string {
-    return html.replace(/<[^>]*>/g, "").replace(/[<>]/g, "");
+    let text = html;
+    let previous: string;
+    do {
+        previous = text;
+        text = text.replace(/<[^>]*>/g, "");
+    } while (text !== previous);
+    return text;
 }
 
 function getTransporter(): nodemailer.Transporter | null {
