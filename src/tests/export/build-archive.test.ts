@@ -335,7 +335,11 @@ describe("buildAndUploadExportArchive", () => {
             manifest.recordings.map(
                 (entry: {
                     id: string;
-                    audio: { included: boolean; reason?: string };
+                    audio: {
+                        included: boolean;
+                        path: string | null;
+                        reason?: string;
+                    };
                 }) => [entry.id, entry.audio],
             ),
         );
@@ -346,8 +350,30 @@ describe("buildAndUploadExportArchive", () => {
         });
         expect(audioById["rec-interrupted"]).toMatchObject({
             included: false,
+            path: null,
             reason: expect.stringContaining("interrupted"),
         });
+        // A streamed zip cannot drop an entry it has started writing, so
+        // the cut-short audio stays in the archive with only the bytes
+        // read before the error; the manifest (path null) is what marks
+        // it as not included. Unreachable audio never gets an entry.
+        const audioEntries = [...entries.keys()].filter((name) =>
+            name.includes("/audio."),
+        );
+        expect(audioEntries.sort()).toEqual(
+            [
+                "2026-01-01T00-00-00-000Z_rec-interrupted/audio.mp3",
+                "2026-01-01T00-00-00-000Z_rec-ok/audio.mp3",
+            ].sort(),
+        );
+        expect(
+            entries
+                .get("2026-01-01T00-00-00-000Z_rec-interrupted/audio.mp3")
+                ?.buffer.toString(),
+        ).toBe("partial");
+        expect(audioById["rec-ok"].path).toBe(
+            "2026-01-01T00-00-00-000Z_rec-ok/audio.mp3",
+        );
     });
 
     it("hands its progress callback to the upload so in-flight upload parts count as progress", async () => {

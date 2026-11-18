@@ -177,6 +177,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
             completedDaysAgo: 1,
         });
         await insertProcessing("new", "user-a");
+        const otherUserExpiry = await expiresAtOf("other-user");
 
         const completed = await completeExportJob({
             jobId: "new",
@@ -199,9 +200,8 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
         expect((await expiresAtOf("new"))?.getTime()).toBeGreaterThan(
             now + EXPORT_ARCHIVE_RETENTION_MS - DAY_MS,
         );
-        expect((await expiresAtOf("other-user"))?.getTime()).toBeGreaterThan(
-            now,
-        );
+        expect(otherUserExpiry).not.toBeNull();
+        expect(await expiresAtOf("other-user")).toEqual(otherUserExpiry);
 
         const recent = await getRecentCompletedExportJobForUser("user-a");
         expect(recent?.id).toBe("new");

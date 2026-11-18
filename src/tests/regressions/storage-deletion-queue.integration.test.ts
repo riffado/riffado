@@ -338,6 +338,58 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
         ).toEqual([{ id: "other-job" }]);
     });
 
+    it("keeps the user row and its recordings when queueing the keys it could not delete fails", async () => {
+        await db().insert(users).values({ id: "stay", email: "s@example.com" });
+        await insertRecording("stay", "stay/a.ogg");
+        await db().execute(
+            sql.raw(
+                "create function riffado_test_fail_queue() returns trigger language plpgsql as $$ begin raise exception 'queue unavailable'; end $$",
+            ),
+        );
+        await db().execute(
+            sql.raw(
+                "create trigger riffado_test_fail_queue before insert on storage_deletion_queue for each row execute function riffado_test_fail_queue()",
+            ),
+        );
+        storageRef.current = fakeStorage(async () => {
+            throw new Error("S3 503");
+        });
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            const failure = await deleteUserAccount("stay").catch(
+                (caught: unknown) => caught,
+            );
+            expect(
+                String((failure as Error | undefined)?.cause ?? failure),
+            ).toContain("queue unavailable");
+        } finally {
+            error.mockRestore();
+            await db().execute(
+                sql.raw(
+                    "drop trigger riffado_test_fail_queue on storage_deletion_queue",
+                ),
+            );
+            await db().execute(
+                sql.raw("drop function riffado_test_fail_queue()"),
+            );
+        }
+
+        expect(
+            await db()
+                .select({ id: users.id })
+                .from(users)
+                .where(eq(users.id, "stay")),
+        ).toEqual([{ id: "stay" }]);
+        expect(
+            (
+                await db()
+                    .select({ storagePath: recordings.storagePath })
+                    .from(recordings)
+            ).map((row) => row.storagePath),
+        ).toEqual(["stay/a.ogg"]);
+        expect(await queueRows()).toEqual([]);
+    });
+
     it("enqueue is idempotent per key", async () => {
         await enqueueStorageDeletions(["k1", "k1", "k2"], "export_cleanup");
         await enqueueStorageDeletions(["k1"], "account_deletion");
@@ -580,7 +632,16 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
             schema,
         }) as unknown as Record<PropertyKey, unknown>;
         try {
+            const before = Date.now();
             await enqueueStorageDeletions(["k1"], "account_deletion");
+            const after = Date.now();
+            const [row] = await queueRows();
+            expect(row.nextAttemptAt.getTime()).toBeGreaterThanOrEqual(
+                before - 1000,
+            );
+            expect(row.nextAttemptAt.getTime()).toBeLessThanOrEqual(
+                after + 1000,
+            );
             const claimed = await claimDueStorageDeletions({
                 limit: 1,
                 leaseMs: 60_000,

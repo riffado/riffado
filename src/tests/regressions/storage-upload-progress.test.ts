@@ -48,7 +48,7 @@ function s3WithHandler(
                 response: {
                     statusCode: 200,
                     headers: { etag: '"etag"' },
-                    body: Readable.from([]),
+                    body: Readable.from([multipartResponseBody(request)]),
                 },
             };
         },
@@ -56,6 +56,16 @@ function s3WithHandler(
         httpHandlerConfigs: () => ({}),
     };
     return storage;
+}
+
+function multipartResponseBody(request: SentRequest): string {
+    if (request.method === "POST" && "uploads" in request.query) {
+        return "<InitiateMultipartUploadResult><Bucket>riffado</Bucket><Key>exports/u/job.zip</Key><UploadId>upload-1</UploadId></InitiateMultipartUploadResult>";
+    }
+    if (request.method === "POST" && "uploadId" in request.query) {
+        return '<CompleteMultipartUploadResult><Bucket>riffado</Bucket><Key>exports/u/job.zip</Key><ETag>"etag"</ETag></CompleteMultipartUploadResult>';
+    }
+    return "";
 }
 
 async function drain(body: unknown): Promise<number> {
@@ -68,18 +78,20 @@ async function drain(body: unknown): Promise<number> {
 }
 
 describe("S3 upload progress", () => {
-    it("reports progress while a part's bytes are being sent, not only when it finishes", async () => {
-        let progressBeforeRequestEnded = 0;
+    it("reports progress while each multipart part's bytes are being sent, not only when a part finishes", async () => {
         let progressCalls = 0;
         const onProgress = vi.fn(() => {
             progressCalls += 1;
         });
-        const sentBytes: number[] = [];
+        const parts: { bytes: number; progressWhileSending: number }[] = [];
         const storage = s3WithHandler(async (request) => {
-            sentBytes.push(await drain(request.body));
-            progressBeforeRequestEnded = progressCalls;
+            if (!("partNumber" in request.query)) return;
+            const before = progressCalls;
+            const bytes = await drain(request.body);
+            parts.push({ bytes, progressWhileSending: progressCalls - before });
         });
-        const payload = Buffer.alloc(3 * 1024 * 1024, 1);
+        const partSize = 32 * 1024 * 1024;
+        const payload = Buffer.alloc(partSize + 3 * 1024 * 1024, 1);
 
         await storage.uploadStream(
             "exports/u/job.zip",
@@ -88,8 +100,15 @@ describe("S3 upload progress", () => {
             { onProgress },
         );
 
-        expect(sentBytes).toEqual([payload.length]);
-        expect(progressBeforeRequestEnded).toBeGreaterThanOrEqual(40);
+        expect(parts.map((part) => part.bytes).sort((a, b) => b - a)).toEqual([
+            partSize,
+            3 * 1024 * 1024,
+        ]);
+        for (const part of parts) {
+            expect(part.progressWhileSending).toBeGreaterThanOrEqual(
+                part.bytes / (64 * 1024),
+            );
+        }
     });
 
     it("forwards lib-storage httpUploadProgress events", async () => {

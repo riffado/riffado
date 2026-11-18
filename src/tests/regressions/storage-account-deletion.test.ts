@@ -11,7 +11,9 @@
  * deleted with the audio, objects that are already gone count as
  * deleted, and the keys that are gone are handed to `deleteUser`, which
  * re-reads the user's keys under lock and queues the rest for retry in
- * the same transaction as the user-row delete.
+ * the same transaction as the user-row delete. That the user row survives
+ * a failed queue write is covered against PostgreSQL in
+ * storage-deletion-queue.integration.test.ts.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -114,7 +116,7 @@ describe("deleteUserAccount storage cleanup", () => {
         });
     });
 
-    it("keeps the user row when storage deletes fail and queueing them fails too", async () => {
+    it("propagates a deleteUser failure and sends no account-deleted email", async () => {
         mocks.billing.listRecordingStoragePaths.mockResolvedValue(["u1/a.ogg"]);
         mocks.exportJobs.listExportStorageKeysForUser.mockResolvedValue([]);
         mocks.storage.deleteFile.mockRejectedValue(new Error("S3 503"));
