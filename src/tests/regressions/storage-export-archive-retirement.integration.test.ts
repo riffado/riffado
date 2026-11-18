@@ -63,6 +63,7 @@ import {
     getRecentCompletedExportJobForUser,
     listExportStorageKeysForUser,
     reclaimStaleProcessingExportJobs,
+    recordExportJobFailure,
     selectExpiredExportJobs,
 } from "@/db/queries/export-jobs";
 import { exportArchiveStorageKey } from "@/lib/export/storage-key";
@@ -301,6 +302,27 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
                 "exports/user-a/reclaimed-dead.zip",
             ].sort(),
         );
+    });
+
+    it("requeues a failed processing attempt, then fails it permanently after the attempt limit", async () => {
+        await insertProcessing("job", "user-a");
+
+        expect(
+            await recordExportJobFailure("job", "live-token", "blip"),
+        ).toEqual({ status: "pending", attempts: 1 });
+        const [requeued] = await db()
+            .select()
+            .from(exportJobs)
+            .where(eq(exportJobs.id, "job"));
+        expect(requeued?.claimToken).toBeNull();
+
+        await db()
+            .update(exportJobs)
+            .set({ status: "processing", claimToken: "t2", attempts: 2 })
+            .where(eq(exportJobs.id, "job"));
+        expect(
+            await recordExportJobFailure("job", "t2", "still broken"),
+        ).toEqual({ status: "failed", attempts: 3 });
     });
 
     it("derives attempt keys in SQL exactly as the worker names them", async () => {

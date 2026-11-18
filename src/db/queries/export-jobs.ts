@@ -303,10 +303,10 @@ export async function recordExportJobFailure(
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then claim_token
                 else null
             end,
-            status = case
+            status = (case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then 'failed'
                 else 'pending'
-            end,
+            end)::export_job_status,
             completed_at = case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then now()
                 else null
