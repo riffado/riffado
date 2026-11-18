@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
+import { judgeSmtpSend } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 
 interface SendEmailWithHeadersOptions {
     to: string;
@@ -46,17 +48,32 @@ export async function sendEmailWithHeaders(
     const mailer = getTransporter();
     if (!mailer) throw new SmtpNotConfiguredError();
 
-    const result = await mailer.sendMail({
-        from: options.from,
-        to: options.to,
-        replyTo: options.replyTo,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        headers: options.headers,
-    });
+    const result = await trackCall(
+        "emails",
+        () =>
+            mailer.sendMail({
+                from: options.from,
+                to: options.to,
+                replyTo: options.replyTo,
+                subject: options.subject,
+                html: options.html,
+                text: options.text,
+                headers: options.headers,
+            }),
+        judgeSmtpSend,
+    );
 
     return typeof result.messageId === "string" ? result.messageId : undefined;
+}
+
+/**
+ * Connect and authenticate to the SMTP server without sending anything.
+ * Throws when SMTP is not configured or the server refuses us.
+ */
+export async function verifySmtpConnection(): Promise<void> {
+    const mailer = getTransporter();
+    if (!mailer) throw new SmtpNotConfiguredError();
+    await mailer.verify();
 }
 
 /** Resolve the `Reply-To:` address for outbound mail. Unset means no header. */
