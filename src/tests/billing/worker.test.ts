@@ -157,20 +157,22 @@ describe("billing worker tick", () => {
             );
         }
 
-        it("records a failure when trial-lapse only had errors", async () => {
-            lapseMock.processExpiredTrials.mockResolvedValue({
-                lapsed: 0,
-                errors: 2,
-            });
+        it("records a failure when trial-lapse had any per-user error", async () => {
             const logSpy = vi
                 .spyOn(console, "log")
                 .mockImplementation(() => {});
-            await tick();
+            for (const lapse of [
+                { lapsed: 0, errors: 2 },
+                { lapsed: 1, errors: 1 },
+            ]) {
+                lapseMock.processExpiredTrials.mockResolvedValue(lapse);
+                await tick();
+                expect(lapseRun()).toMatchObject({
+                    lastSuccessAt: null,
+                    lastErrorAt: expect.any(Date),
+                });
+            }
             logSpy.mockRestore();
-            expect(lapseRun()).toMatchObject({
-                lastSuccessAt: null,
-                lastErrorAt: expect.any(Date),
-            });
         });
 
         it("records a success when trial-lapse made progress or had nothing to do", async () => {
@@ -181,7 +183,7 @@ describe("billing worker tick", () => {
             });
             lapseMock.processExpiredTrials.mockResolvedValue({
                 lapsed: 1,
-                errors: 1,
+                errors: 0,
             });
             const logSpy = vi
                 .spyOn(console, "log")

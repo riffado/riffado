@@ -78,7 +78,7 @@ export async function tick(): Promise<void> {
                 return lapse;
             },
             "billing-lapse",
-            (lapse) => lapse.errors > 0 && lapse.lapsed === 0,
+            (lapse) => lapse.errors > 0,
         );
 
         await runPhase("deletion", async () => {
