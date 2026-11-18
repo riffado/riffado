@@ -12,9 +12,27 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format-date";
-import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
+import {
+    PLAUD_SESSION_WARNING_WINDOW_MS,
+    plaudConnectionBannerState,
+} from "@/lib/plaud/connection-expiry";
 
 const ENDING_SOON_DISMISS_KEY = "riffado-plaud-ending-soon-dismissed";
+const MAX_CLOCK_TICK_MS = 60 * 60 * 1000;
+
+function msUntilNextBannerChange(
+    sessionExpiresAt: string | null,
+    now: number,
+): number | null {
+    if (!sessionExpiresAt) return null;
+    const endsAt = new Date(sessionExpiresAt).getTime();
+    if (Number.isNaN(endsAt)) return null;
+    const next = [endsAt - PLAUD_SESSION_WARNING_WINDOW_MS, endsAt].find(
+        (deadline) => deadline > now,
+    );
+    if (next === undefined) return null;
+    return Math.min(next - now, MAX_CLOCK_TICK_MS);
+}
 
 interface PlaudReconnectBannerProps {
     /**
@@ -41,8 +59,12 @@ interface PlaudReconnectBannerProps {
  * 24h workspace token that has died, or a revoked token), and in the three
  * days before the sign-in ends. The ending-soon notice can be dismissed;
  * the dismissal is stored per session end, so a new sign-in warns again.
- * Opens the connector-first connect flow as a modal, not full
- * re-onboarding.
+ * After a reconnect the banner hides while it still has the old sign-in's
+ * end, and ignores `show` until it next changes so a stale rejection does
+ * not linger; the new sign-in's own expiry warnings still show.
+ * Re-reads the clock when the tab becomes visible and when the warning
+ * window opens or the sign-in ends. Opens the connector-first connect flow
+ * as a modal, not full re-onboarding.
  */
 export function PlaudReconnectBanner({
     show,
@@ -50,13 +72,12 @@ export function PlaudReconnectBanner({
     onReconnected,
 }: PlaudReconnectBannerProps) {
     const [open, setOpen] = useState(false);
-    // Optimistically hide the banner the moment a reconnect succeeds, so it
-    // doesn't linger until the next sync clears the server-side flag. Reset
-    // when a *fresh* failure flips `show` false -> true again.
-    const [dismissed, setDismissed] = useState(false);
+    const [reconnectedFrom, setReconnectedFrom] = useState<{
+        sessionExpiresAt: string | null;
+    } | null>(null);
     const prevShow = useRef(show);
     useEffect(() => {
-        if (show && !prevShow.current) setDismissed(false);
+        if (show !== prevShow.current) setReconnectedFrom(null);
         prevShow.current = show;
     }, [show]);
 
@@ -74,6 +95,13 @@ export function PlaudReconnectBanner({
                 onVisibilityChange,
             );
     }, []);
+    useEffect(() => {
+        if (now === null) return;
+        const delay = msUntilNextBannerChange(sessionExpiresAt, now);
+        if (delay === null) return;
+        const timer = window.setTimeout(() => setNow(Date.now()), delay);
+        return () => window.clearTimeout(timer);
+    }, [sessionExpiresAt, now]);
 
     const dismissKey = sessionExpiresAt
         ? `${ENDING_SOON_DISMISS_KEY}:${sessionExpiresAt}`
@@ -89,13 +117,18 @@ export function PlaudReconnectBanner({
         setEndingSoonDismissed(true);
     }, [dismissKey]);
 
-    const state = plaudConnectionBannerState({
-        needsReconnect: show,
-        sessionExpiresAt: now === null ? null : sessionExpiresAt,
-        now: now ?? 0,
-    });
+    const showingOldSignIn =
+        reconnectedFrom !== null &&
+        reconnectedFrom.sessionExpiresAt === sessionExpiresAt;
+    const state = showingOldSignIn
+        ? null
+        : plaudConnectionBannerState({
+              needsReconnect: show && reconnectedFrom === null,
+              sessionExpiresAt: now === null ? null : sessionExpiresAt,
+              now: now ?? 0,
+          });
 
-    if (!state || dismissed) return null;
+    if (!state) return null;
     if (state === "ending-soon" && endingSoonDismissed) return null;
 
     const endsOn = sessionExpiresAt
@@ -157,7 +190,7 @@ export function PlaudReconnectBanner({
                         <PlaudConnectTabs
                             onConnected={() => {
                                 setOpen(false);
-                                setDismissed(true);
+                                setReconnectedFrom({ sessionExpiresAt });
                                 onReconnected();
                             }}
                         />
