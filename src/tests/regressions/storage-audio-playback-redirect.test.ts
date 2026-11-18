@@ -17,7 +17,9 @@
  *      honored; multiple, malformed or inverted ranges get the full body
  *      (RFC 9110), and a start past the end gets 416 with an unsatisfied
  *      Content-Range.
- *   3. `download=1` still streams a complete attachment.
+ *   3. `download=1` still streams a complete attachment, and `stream=1`
+ *      (the player's fallback when the browser cannot reach the storage
+ *      endpoint) is never redirected.
  *   4. Authenticated audio is never cached publicly, cacheable responses
  *      vary on `Sec-Fetch-Dest`, and a missing object is a 404.
  */
@@ -120,6 +122,25 @@ describe("in-app audio route storage reads", () => {
         );
         expect(storage.downloadFile).not.toHaveBeenCalled();
         expect(storage.downloadStream).not.toHaveBeenCalled();
+    });
+
+    it("never redirects a stream=1 request, even for a media element", async () => {
+        selectRecording("user-1/rec.mp3");
+        const storage = provider(true);
+        (createUserStorageProvider as Mock).mockResolvedValue(storage);
+
+        const response = await getAudio(
+            request("?stream=1", {
+                "sec-fetch-dest": "audio",
+                range: "bytes=2-5",
+            }),
+            params,
+        );
+
+        expect(response.status).toBe(206);
+        expect(response.headers.get("Location")).toBeNull();
+        expect(storage.getDirectDownloadUrl).not.toHaveBeenCalled();
+        expect(await response.text()).toBe("2345");
     });
 
     it("keeps the extension-based type for legacy .mp3 keys", async () => {

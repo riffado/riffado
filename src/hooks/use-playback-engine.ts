@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { recordingAudioPlaybackPath } from "@/lib/recordings/filename";
 import type { Recording } from "@/types/recording";
 
 export const PLAYBACK_SPEED_OPTIONS = [
@@ -14,6 +15,31 @@ export const PLAYBACK_SPEED_OPTIONS = [
 ] as const;
 
 const SOURCE_REFRESH_COOLDOWN_MS = 30 * 1000;
+
+const STREAM_MODE_SESSION_KEY = "riffado:audio-stream-mode";
+
+let streamModeWithoutSessionStorage = false;
+
+function isStreamModeEnabled(): boolean {
+    try {
+        return window.sessionStorage.getItem(STREAM_MODE_SESSION_KEY) === "1";
+    } catch {
+        return streamModeWithoutSessionStorage;
+    }
+}
+
+function enableStreamMode(): void {
+    streamModeWithoutSessionStorage = true;
+    try {
+        window.sessionStorage.setItem(STREAM_MODE_SESSION_KEY, "1");
+    } catch {}
+}
+
+function playbackSource(recordingId: string): string {
+    return recordingAudioPlaybackPath(recordingId, {
+        stream: isStreamModeEnabled(),
+    });
+}
 
 interface Options {
     recording: Recording;
@@ -66,7 +92,7 @@ export function usePlaybackEngine({
         setIsPlaying(false);
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
-            audioRef.current.src = `/api/recordings/${recording.id}/audio`;
+            audioRef.current.src = playbackSource(recording.id);
             audioRef.current.load();
         }
     }, [recording.id]);
@@ -91,6 +117,13 @@ export function usePlaybackEngine({
         if (!audioRef.current) return;
         const audio = audioRef.current;
         const recordingId = recording.id;
+        const redirectSource = recordingAudioPlaybackPath(recordingId, {
+            stream: false,
+        });
+        const streamSource = recordingAudioPlaybackPath(recordingId, {
+            stream: true,
+        });
+        let sourceLoaded = audio.readyState >= HTMLMediaElement.HAVE_METADATA;
 
         const updateTime = () => {
             if (!isSeekingRef.current) {
@@ -113,15 +146,7 @@ export function usePlaybackEngine({
             setCurrentTime(audio.currentTime);
         };
         let pendingRestore: (() => void) | null = null;
-        const handleError = () => {
-            const now = Date.now();
-            if (
-                now - lastSourceRefreshRef.current <
-                SOURCE_REFRESH_COOLDOWN_MS
-            ) {
-                return;
-            }
-            lastSourceRefreshRef.current = now;
+        const reloadFrom = (source: string) => {
             const resumeAt = audio.currentTime;
             const resumePlayback = isPlayingRef.current;
             if (pendingRestore) {
@@ -136,16 +161,42 @@ export function usePlaybackEngine({
             };
             pendingRestore = restore;
             audio.addEventListener("loadedmetadata", restore, { once: true });
-            audio.src = `/api/recordings/${recordingId}/audio`;
+            sourceLoaded = false;
+            audio.src = source;
             audio.load();
         };
+        const handleSourceLoaded = () => {
+            sourceLoaded = true;
+            if (audio.getAttribute("src") === streamSource) {
+                enableStreamMode();
+            }
+        };
+        const handleError = () => {
+            if (audio.getAttribute("src") === streamSource) return;
+            const now = Date.now();
+            const canRefresh =
+                sourceLoaded &&
+                now - lastSourceRefreshRef.current >=
+                    SOURCE_REFRESH_COOLDOWN_MS;
+            if (canRefresh) {
+                lastSourceRefreshRef.current = now;
+                reloadFrom(redirectSource);
+                return;
+            }
+            reloadFrom(streamSource);
+        };
 
-        if (audio.src !== `/api/recordings/${recordingId}/audio`) {
-            audio.src = `/api/recordings/${recordingId}/audio`;
+        const currentSource = audio.getAttribute("src");
+        if (
+            currentSource !== redirectSource &&
+            currentSource !== streamSource
+        ) {
+            audio.src = playbackSource(recordingId);
             audio.load();
         }
 
         audio.addEventListener("timeupdate", updateTime);
+        audio.addEventListener("loadedmetadata", handleSourceLoaded);
         audio.addEventListener("loadedmetadata", updateDuration);
         audio.addEventListener("durationchange", updateDuration);
         audio.addEventListener("ended", handleEnded);
@@ -158,6 +209,7 @@ export function usePlaybackEngine({
 
         return () => {
             audio.removeEventListener("timeupdate", updateTime);
+            audio.removeEventListener("loadedmetadata", handleSourceLoaded);
             audio.removeEventListener("loadedmetadata", updateDuration);
             audio.removeEventListener("durationchange", updateDuration);
             audio.removeEventListener("ended", handleEnded);

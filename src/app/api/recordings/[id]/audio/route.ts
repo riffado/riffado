@@ -10,6 +10,7 @@ import {
     buildDownloadFilename,
     contentDispositionAttachment,
     isAudioDownloadRequest,
+    isAudioStreamRequest,
 } from "@/lib/recordings/filename";
 import { isStorageObjectMissingError } from "@/lib/storage/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
@@ -100,6 +101,7 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
 
     if (
         !wantsDownload &&
+        !isAudioStreamRequest(request) &&
         storage.getDirectDownloadUrl &&
         isMediaElementRequest(request)
     ) {

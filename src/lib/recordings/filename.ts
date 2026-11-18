@@ -37,6 +37,24 @@ export function recordingAudioDownloadPath(recordingId: string): string {
     return `/api/recordings/${recordingId}/audio?download=1`;
 }
 
+/**
+ * In-app playback URL. With `stream`, the route always streams the bytes
+ * itself instead of redirecting to a storage URL the browser may not be
+ * able to reach.
+ */
+export function recordingAudioPlaybackPath(
+    recordingId: string,
+    options: { stream: boolean },
+): string {
+    const path = `/api/recordings/${recordingId}/audio`;
+    return options.stream ? `${path}?stream=1` : path;
+}
+
+/** True when the request asked the audio route to stream instead of redirecting. */
+export function isAudioStreamRequest(request: Request): boolean {
+    return new URL(request.url).searchParams.get("stream") === "1";
+}
+
 export function isAudioDownloadRequest(request: Request): boolean {
     const value = new URL(request.url).searchParams.get("download");
     if (value === null) return false;
