@@ -57,7 +57,6 @@ export const POST = apiHandler(async (request: Request) => {
             ? email.trim().toLowerCase()
             : null;
 
-    // Verify OTP with Plaud → user token (UT) + refresh token, both 30 days.
     const tokens = await plaudVerifyOtp(code, otpToken, apiBase);
 
     // Defensive: OTP login returns a UT today. If Plaud ever

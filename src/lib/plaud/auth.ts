@@ -18,9 +18,7 @@ export interface PlaudSendCodeResponse {
 interface PlaudUserTokenFields {
     access_token?: string;
     refresh_token?: string;
-    /** Unix seconds. */
     ut_expire_at?: number;
-    /** Unix seconds. */
     urt_expire_at?: number;
 }
 
