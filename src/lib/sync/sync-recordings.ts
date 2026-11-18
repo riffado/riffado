@@ -186,7 +186,9 @@ async function deleteReplacedAudio(
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     userId: string,
     storagePath: string,
+    storageType: string,
 ): Promise<void> {
+    if (storageType !== env.DEFAULT_STORAGE_TYPE) return;
     try {
         if (await storagePathReferenced(userId, storagePath)) return;
         await storage.deleteFile(storagePath);
@@ -598,6 +600,7 @@ async function processRecording(
                     storage,
                     context.userId,
                     replacedPath,
+                    existingRecording.storageType,
                 );
             }
 

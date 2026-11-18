@@ -9,6 +9,8 @@
  * - Two processes can sync the same user at once: the update is a
  *   compare-and-set on the stored key, and the old object is deleted only
  *   when no row (this recording included) references it after the commit.
+ * - The old object is never deleted through a storage backend other than
+ *   the one the row was stored on (instance switched local and S3).
  */
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -92,6 +94,7 @@ interface StoredRow {
     plaudFileId: string;
     plaudVersion: string;
     storagePath: string;
+    storageType: string;
     deletedAt: Date | null;
     deviceSn: string;
     timezone: number | null;
@@ -105,6 +108,7 @@ function storedRow(overrides: Partial<StoredRow> = {}): StoredRow {
         plaudFileId: "p327",
         plaudVersion: "1",
         storagePath: OLD_PATH,
+        storageType: "local",
         deletedAt: null,
         deviceSn: "SN-OLD",
         timezone: 2,
@@ -328,6 +332,23 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         await syncRecordingsForUser(USER);
 
         expect(setPayloads[0]?.storagePath).toBe(OLD_PATH);
+        expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it("keeps the old object when the row was stored on another storage backend", async () => {
+        const storage = await storageMock();
+        stubPlaud(listedRecording(), mp3);
+        stubSelects("conn-ext-7", [[storedRow({ storageType: "s3" })], [], []]);
+        const { setPayloads } = stubUpdateTransaction();
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.errors).toEqual([]);
+        expect(result.updatedRecordings).toBe(1);
+        expect(setPayloads[0]).toMatchObject({
+            storagePath: `${USER}/p327.mp3`,
+            storageType: "local",
+        });
         expect(storage.deleteFile).not.toHaveBeenCalled();
     });
 });
