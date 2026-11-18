@@ -292,6 +292,11 @@ export async function completeExportJob(input: {
  * reclaimed elsewhere) or the job is no longer `processing` (its
  * completion already committed) -- the caller has nothing to report on
  * a job it no longer owns, and a completed job is never flipped back.
+ *
+ * The failed attempt's archive key is appended to `stale_storage_keys`
+ * in the same write, so its object (possibly partial) stays discoverable
+ * by the stale-key sweep and by account deletion even if the worker
+ * dies before deleting it.
  */
 export async function recordExportJobFailure(
     jobId: string,
@@ -307,6 +312,7 @@ export async function recordExportJobFailure(
             attempts = attempts + 1,
             error_message = ${errorMessage},
             started_at = null,
+            stale_storage_keys = stale_storage_keys || to_jsonb(${attemptStorageKeySql()}),
             claim_token = case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then claim_token
                 else null

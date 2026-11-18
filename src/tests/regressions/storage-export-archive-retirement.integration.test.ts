@@ -18,6 +18,10 @@
  *   3. A failure recorded after a job completed (late failure for the
  *      same claim) never flips it back: completion clears the claim
  *      token and the failure write only matches `processing` jobs.
+ *   4. Recording a failed attempt appends its archive key to
+ *      `stale_storage_keys` before the claim token is cleared, so a
+ *      worker that dies before deleting the object leaves it
+ *      discoverable by the stale-key sweep and by account deletion.
  */
 
 import { eq } from "drizzle-orm";
@@ -70,6 +74,7 @@ import {
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
     selectExpiredExportJobs,
+    selectStaleStorageKeys,
 } from "@/db/queries/export-jobs";
 import { exportArchiveStorageKey } from "@/lib/export/storage-key";
 
@@ -356,6 +361,44 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
         expect(
             await recordExportJobFailure("job", "t2", "still broken"),
         ).toEqual({ status: "failed", attempts: 3 });
+    });
+
+    it("keeps a failed attempt's key discoverable after its claim is cleared", async () => {
+        await insertProcessing("job", "user-a");
+        const attemptKey = exportArchiveStorageKey({
+            userId: "user-a",
+            jobId: "job",
+            claimToken: "live-token",
+        });
+
+        expect(
+            await recordExportJobFailure("job", "live-token", "blip"),
+        ).toEqual({ status: "pending", attempts: 1 });
+
+        expect(await listExportStorageKeysForUser("user-a")).toEqual([
+            attemptKey,
+        ]);
+        expect(await selectStaleStorageKeys(10)).toEqual([
+            { jobId: "job", key: attemptKey },
+        ]);
+
+        await db()
+            .update(exportJobs)
+            .set({ status: "processing", claimToken: "t2", attempts: 2 })
+            .where(eq(exportJobs.id, "job"));
+        expect(await recordExportJobFailure("job", "t2", "again")).toEqual({
+            status: "failed",
+            attempts: 3,
+        });
+        const secondKey = exportArchiveStorageKey({
+            userId: "user-a",
+            jobId: "job",
+            claimToken: "t2",
+        });
+        expect(
+            (await selectStaleStorageKeys(10)).map((entry) => entry.key),
+        ).toEqual([attemptKey, secondKey]);
+        expect(await listExportStorageKeysForUser("user-b")).toEqual([]);
     });
 
     it("never flips a completed job back when a late failure arrives for its claim", async () => {
