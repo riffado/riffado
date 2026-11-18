@@ -102,6 +102,7 @@ describe("export worker tick", () => {
         );
         expect(queriesMock.completeExportJob).toHaveBeenCalledWith({
             jobId: "job-1",
+            userId: "user-1",
             claimToken: "token-1",
             storageKey: "exports/user-1/job-1-token-1.zip",
             fileSize: 12345,

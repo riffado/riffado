@@ -128,6 +128,7 @@ async function processJob(job: {
 
         const completed = await completeExportJob({
             jobId: job.id,
+            userId: job.userId,
             claimToken: job.claimToken,
             storageKey,
             fileSize: result.fileSize,

@@ -1,4 +1,15 @@
-import { and, desc, eq, isNotNull, lte, sql } from "drizzle-orm";
+import {
+    and,
+    desc,
+    eq,
+    gt,
+    isNotNull,
+    isNull,
+    lte,
+    ne,
+    or,
+    sql,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { exportJobs } from "@/db/schema";
 
@@ -196,35 +207,62 @@ export async function claimPendingExportJobs(
  * matches -- the job was reclaimed as stale while this worker was still
  * building it -- so the caller can log it rather than silently
  * pretending the write landed.
+ *
+ * In the same transaction, the user's older completed archives expire
+ * now, so the worker's cleanup pass deletes them and only the archive
+ * that just completed stays downloadable. Nothing is expired when the
+ * claim no longer matches, so the user always keeps at least one
+ * downloadable archive.
  */
 export async function completeExportJob(input: {
     jobId: string;
+    userId: string;
     claimToken: string;
     storageKey: string;
     fileSize: number;
     recordingCount: number;
 }): Promise<boolean> {
     const completedAt = new Date();
-    const result = await db
-        .update(exportJobs)
-        .set({
-            status: "completed",
-            storageKey: input.storageKey,
-            fileSize: input.fileSize,
-            recordingCount: input.recordingCount,
-            completedAt,
-            expiresAt: new Date(
-                completedAt.getTime() + EXPORT_ARCHIVE_RETENTION_MS,
-            ),
-        })
-        .where(
-            and(
-                eq(exportJobs.id, input.jobId),
-                eq(exportJobs.claimToken, input.claimToken),
-            ),
-        )
-        .returning({ id: exportJobs.id });
-    return result.length > 0;
+    return db.transaction(async (tx) => {
+        const completed = await tx
+            .update(exportJobs)
+            .set({
+                status: "completed",
+                storageKey: input.storageKey,
+                fileSize: input.fileSize,
+                recordingCount: input.recordingCount,
+                completedAt,
+                expiresAt: new Date(
+                    completedAt.getTime() + EXPORT_ARCHIVE_RETENTION_MS,
+                ),
+            })
+            .where(
+                and(
+                    eq(exportJobs.id, input.jobId),
+                    eq(exportJobs.userId, input.userId),
+                    eq(exportJobs.claimToken, input.claimToken),
+                ),
+            )
+            .returning({ id: exportJobs.id });
+        if (completed.length === 0) return false;
+
+        await tx
+            .update(exportJobs)
+            .set({ expiresAt: completedAt })
+            .where(
+                and(
+                    eq(exportJobs.userId, input.userId),
+                    eq(exportJobs.status, "completed"),
+                    ne(exportJobs.id, input.jobId),
+                    lte(exportJobs.completedAt, completedAt),
+                    or(
+                        isNull(exportJobs.expiresAt),
+                        gt(exportJobs.expiresAt, completedAt),
+                    ),
+                ),
+            );
+        return true;
+    });
 }
 
 /**
