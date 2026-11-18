@@ -72,7 +72,28 @@ describe("auto-transcribe status recording", () => {
             errorCode: "TRANSCRIPTION_FAILED",
             providerStatus: 403,
         });
+        recordAutoTranscribeStatus({
+            success: false,
+            errorCode: "TRANSCRIPTION_FAILED",
+            providerStatus: 403,
+            managedProvider: false,
+        });
         expect(autoTranscribeRun()).toBeNull();
+    });
+
+    it("records a refused Mynah service token (401/403 on the managed provider)", () => {
+        for (const providerStatus of [401, 403]) {
+            recordAutoTranscribeStatus({
+                success: false,
+                errorCode: "TRANSCRIPTION_FAILED",
+                providerStatus,
+                managedProvider: true,
+            });
+            expect(autoTranscribeRun()).toMatchObject({
+                lastSuccessAt: null,
+                lastErrorAt: expect.any(Date),
+            });
+        }
     });
 
     it("records provider and unexpected failures", () => {

@@ -143,12 +143,14 @@ export function noteAutoTranscribeOutcome(
  * `result` is null when the attempt threw. A success counts only when a
  * transcript was produced; failures the user caused (lapsed plan, used-up
  * Mynah budget, file too large, no provider, recording deleted, or their
- * own provider rejecting their key with 401/403) are not recorded.
+ * own provider rejecting their key with 401/403) are not recorded. A
+ * 401/403 from the managed provider is our service token being refused
+ * and is recorded.
  */
 export function recordAutoTranscribeStatus(
     result: Pick<
         TranscribeResult,
-        "success" | "errorCode" | "providerStatus"
+        "success" | "errorCode" | "providerStatus" | "managedProvider"
     > | null,
 ): void {
     if (result?.success) {
@@ -159,6 +161,7 @@ export function recordAutoTranscribeStatus(
         return;
     }
     if (
+        !result?.managedProvider &&
         result?.providerStatus !== undefined &&
         REJECTED_KEY_STATUSES.has(result.providerStatus)
     ) {

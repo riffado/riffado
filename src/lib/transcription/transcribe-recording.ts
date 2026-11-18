@@ -248,6 +248,12 @@ export interface TranscribeResult {
     failureKind?: TranscribeFailureKind;
     /** Upstream HTTP status of a failed provider call, when known. */
     providerStatus?: number;
+    /**
+     * Set with a failed provider call: true when the managed provider
+     * (Mynah) handled it, so a 401/403 is our service token being refused
+     * rather than the user's own key.
+     */
+    managedProvider?: boolean;
     /** Present on success. Plaintext transcript. */
     text?: string;
     /** Present on success when the provider returned a language. */
@@ -282,6 +288,7 @@ async function transcribeRecordingInner(
     recordingId: string,
     opts: TranscribeOptions = {},
 ): Promise<TranscribeResult> {
+    let usedManaged = false;
     try {
         // Hosted lockout: a lapsed account is read-only. No-op on
         // self-host (isHostedLockedOut always false there).
@@ -405,6 +412,7 @@ async function transcribeRecordingInner(
         }
 
         const runManagedTranscription = async () => {
+            usedManaged = true;
             const input = {
                 userId,
                 storagePath: recording.storagePath,
@@ -836,6 +844,7 @@ async function transcribeRecordingInner(
             errorCode: "TRANSCRIPTION_FAILED",
             failureKind: failure.kind,
             providerStatus: failure.status,
+            managedProvider: usedManaged,
         };
     }
 }
