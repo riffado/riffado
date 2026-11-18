@@ -15,40 +15,57 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
 const MAX_REFRESH_TOKEN_LENGTH = 8192;
 const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/;
 const SHORT_LIVED_TOKEN_MS = 2 * 24 * 60 * 60 * 1000;
+const MAX_SESSION_MS = 31 * 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
-function invalidRefreshToken(): AppError {
-    return new AppError(
-        ErrorCode.INVALID_INPUT,
-        "refreshToken is not a valid Plaud refresh token",
-        400,
-        { field: "refreshToken" },
-    );
+const REFRESH_TOKEN_DROPPED_WARNING =
+    "Riffado couldn't use the refresh token it received, so this connection won't renew automatically.";
+
+interface ParsedRefreshToken {
+    refreshToken: string | null;
+    warning?: string;
 }
 
-function parseRefreshToken(raw: unknown): string | null {
-    if (raw === undefined || raw === null) return null;
-    if (typeof raw !== "string") throw invalidRefreshToken();
+function droppedRefreshToken(): ParsedRefreshToken {
+    return { refreshToken: null, warning: REFRESH_TOKEN_DROPPED_WARNING };
+}
+
+function parseRefreshToken(
+    raw: unknown,
+    accessToken: string,
+): ParsedRefreshToken {
+    if (raw === undefined || raw === null) return { refreshToken: null };
+    if (typeof raw !== "string") return droppedRefreshToken();
     const token = raw.trim().replace(/^Bearer\s+/i, "");
-    if (!token) return null;
-    if (
-        token.length > MAX_REFRESH_TOKEN_LENGTH ||
-        !JWT_SHAPE.test(token) ||
-        !decodeJwtClaims(token) ||
-        isPlaudWorkspaceToken(token)
-    ) {
-        throw invalidRefreshToken();
+    if (!token) return { refreshToken: null };
+    const claims =
+        token.length <= MAX_REFRESH_TOKEN_LENGTH && JWT_SHAPE.test(token)
+            ? decodeJwtClaims(token)
+            : null;
+    if (!claims || isPlaudWorkspaceToken(token)) return droppedRefreshToken();
+
+    const refreshSub = typeof claims.sub === "string" ? claims.sub : "";
+    const accessSub = decodeJwtClaims(accessToken)?.sub;
+    if (!refreshSub || typeof accessSub !== "string" || !accessSub) {
+        return droppedRefreshToken();
     }
-    const exp = decodeAccessTokenExpiry(token);
-    if (exp && exp.getTime() <= Date.now()) {
+    if (refreshSub !== accessSub) {
         throw new AppError(
-            ErrorCode.PLAUD_INVALID_TOKEN,
-            "This Plaud sign-in has already expired. Sign in to Plaud again.",
+            ErrorCode.INVALID_INPUT,
+            "The refresh token belongs to a different Plaud account than the access token. Sign in to Plaud again and reconnect.",
             400,
             { field: "refreshToken" },
         );
     }
-    return token;
+
+    const exp = decodeAccessTokenExpiry(token);
+    if (exp && exp.getTime() <= Date.now()) return droppedRefreshToken();
+    return { refreshToken: token };
+}
+
+function capSessionEnd(sessionExpiresAt: Date | null): Date {
+    const cap = new Date(Date.now() + MAX_SESSION_MS);
+    return sessionExpiresAt && sessionExpiresAt < cap ? sessionExpiresAt : cap;
 }
 
 function shortLivedTokenWarning(
@@ -83,6 +100,11 @@ function shortLivedTokenWarning(
  * Riffado renews the 24-hour user token until the 30-day sign-in ends.
  * Without one, a token expiring within two days still connects but the
  * response carries a `warning` the UI shows.
+ *
+ * A `refreshToken` whose `sub` differs from the access token's is rejected
+ * with 400. One that is malformed, expired, or where either token lacks
+ * `sub` is dropped and reported in `warning`. The stored session end is
+ * capped at 31 days from now whatever the refresh token's `exp` claims.
  *
  * Source: https://github.com/riffado/riffado/blob/main/src/app/api/plaud/auth/connect-token/route.ts
  */
@@ -154,7 +176,10 @@ export const POST = apiHandler(async (request: Request) => {
         );
     }
 
-    const refreshToken = parseRefreshToken(body.refreshToken);
+    const { refreshToken, warning: refreshTokenWarning } = parseRefreshToken(
+        body.refreshToken,
+        accessToken,
+    );
 
     // SSRF guard: apiBase is user-supplied. Restrict to plaud.ai / plaud.cn hosts.
     // Default to global if the client didn't pick a region; the paste
@@ -189,7 +214,13 @@ export const POST = apiHandler(async (request: Request) => {
         `[plaud/connect-token] persisting connection (source=${rawSource}, apiBase=${apiBaseRaw}, refreshToken=${refreshToken ? "yes" : "no"})`,
     );
 
-    const tokens = buildPlaudTokenSet({ accessToken, refreshToken });
+    const tokenSet = buildPlaudTokenSet({ accessToken, refreshToken });
+    const tokens = tokenSet.refreshToken
+        ? {
+              ...tokenSet,
+              sessionExpiresAt: capSessionEnd(tokenSet.sessionExpiresAt),
+          }
+        : tokenSet;
 
     const { devices } = await persistPlaudConnection({
         userId: session.user.id,
@@ -199,9 +230,14 @@ export const POST = apiHandler(async (request: Request) => {
         method,
     });
 
-    const warning = tokens.refreshToken
-        ? undefined
-        : shortLivedTokenWarning(tokens.accessExpiresAt, method);
+    const warning = [
+        refreshTokenWarning,
+        tokens.refreshToken
+            ? undefined
+            : shortLivedTokenWarning(tokens.accessExpiresAt, method),
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return NextResponse.json({
         success: true,

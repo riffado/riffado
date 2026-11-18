@@ -782,10 +782,19 @@ describe("POST /api/plaud/auth/connect-token refresh tokens", () => {
         ["over the length cap", `${"a".repeat(5000)}.${"b".repeat(5000)}.c`],
         [
             "a workspace token",
-            makeJwt({ ut_ref: "x", wid: "ws_1", exp: nowSec() + DAY }),
+            makeJwt({
+                sub: "user-sub",
+                ut_ref: "x",
+                wid: "ws_1",
+                exp: nowSec() + DAY,
+            }),
         ],
-    ])("rejects a refreshToken that is %s before calling Plaud", async (_label, refreshToken) => {
+        ["already expired", makeRefreshToken(nowSec() - 60)],
+        ["missing sub", makeJwt({ typ: "refresh", exp: nowSec() + DAY })],
+    ])("drops a refreshToken that is %s and connects with a warning", async (_label, refreshToken) => {
         authedSession();
+        const values = mockEmptySelectsAndInserts();
+        routeConnectTokenHappyPath();
         const res = await connectTokenPOST(
             connectTokenRequest({
                 accessToken: makeUserToken(nowSec() + DAY),
@@ -794,24 +803,75 @@ describe("POST /api/plaud/auth/connect-token refresh tokens", () => {
                 source: "connector",
             }),
         );
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(200);
         const body = await res.json();
-        expect(body.code).toBe(ErrorCode.INVALID_INPUT);
-        expect(body.error).toMatch(/refreshToken/);
-        expect(mockFetch).not.toHaveBeenCalled();
+        expect(body.warning).toMatch(/won't renew automatically/);
+        expect(body.warning).toMatch(/expires in/);
+        const row = connectionInsert(values);
+        expect(row.refreshToken).toBeNull();
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(0);
     });
 
-    it("rejects an already-expired refreshToken", async () => {
+    it("drops the refreshToken when the access token has no sub", async () => {
+        authedSession();
+        const values = mockEmptySelectsAndInserts();
+        routeConnectTokenHappyPath();
+        const res = await connectTokenPOST(
+            connectTokenRequest({
+                accessToken: makeJwt({ exp: nowSec() + DAY }),
+                refreshToken: makeRefreshToken(nowSec() + 20 * DAY),
+                apiBase: API_BASE,
+                source: "connector",
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect((await res.json()).warning).toMatch(/won't renew/);
+        expect(connectionInsert(values).refreshToken).toBeNull();
+    });
+
+    it("rejects a refreshToken for a different Plaud account before calling Plaud", async () => {
         authedSession();
         const res = await connectTokenPOST(
             connectTokenRequest({
                 accessToken: makeUserToken(nowSec() + DAY),
-                refreshToken: makeRefreshToken(nowSec() - 60),
+                refreshToken: makeJwt({
+                    sub: "someone-else",
+                    exp: nowSec() + 20 * DAY,
+                }),
                 apiBase: API_BASE,
+                source: "connector",
             }),
         );
         expect(res.status).toBe(400);
+        const body = await res.json();
+        expect(body.code).toBe(ErrorCode.INVALID_INPUT);
+        expect(body.details).toEqual({ field: "refreshToken" });
+        expect(body.error).toMatch(/different Plaud account/);
         expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["claims ten years", nowSec() + 3650 * DAY],
+        ["has no exp", undefined],
+    ])("caps the session end at 31 days when the refresh token %s", async (_label, exp) => {
+        authedSession();
+        const values = mockEmptySelectsAndInserts();
+        routeConnectTokenHappyPath();
+        const before = Date.now();
+        const res = await connectTokenPOST(
+            connectTokenRequest({
+                accessToken: makeUserToken(nowSec() + DAY),
+                refreshToken: makeJwt({ sub: "user-sub", exp }),
+                apiBase: API_BASE,
+                source: "connector",
+            }),
+        );
+        expect(res.status).toBe(200);
+        const row = connectionInsert(values);
+        expect(row.refreshToken).not.toBeNull();
+        const sessionEnd = (row.sessionExpiresAt as Date).getTime();
+        expect(sessionEnd).toBeGreaterThanOrEqual(before + 31 * DAY * 1000);
+        expect(sessionEnd).toBeLessThanOrEqual(Date.now() + 31 * DAY * 1000);
     });
 
     it("warns when a pasted token without refresh token expires within two days", async () => {
