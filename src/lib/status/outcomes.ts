@@ -2,21 +2,19 @@ import { isPlaudApiHost } from "@/lib/plaud/servers";
 import { StorageRootMissingError } from "@/lib/storage/errors";
 import type { CallOutcome, Settled } from "./record";
 
-/** Where a judged Plaud request went: its URL and whether it went through our proxy. */
+/** The URL of a judged Plaud request. */
 export interface PlaudRequestInfo {
     url: string;
-    proxied: boolean;
 }
 
 /**
  * Plaud call outcome. 401 is the user's dead or wrong token and 407 is our
  * own proxy rejecting us: neither says anything about Plaud, so neither is
- * recorded. A 403 is an error only when a Plaud API host answered it
- * directly; from a presigned storage host it is an expired link, and
- * through our proxy (after rotation) it is a blocked proxy, so both are
- * ignored. Server errors, rate limiting, request timeouts and network
- * failures are errors; every other answer (including other 4xx) means
- * Plaud is serving.
+ * recorded. A 403 is an error when a Plaud API host answered it, directly
+ * or as the final answer after proxy rotation, since sync is then blocked;
+ * from a presigned storage host it is an expired link and is ignored.
+ * Server errors, rate limiting, request timeouts and network failures are
+ * errors; every other answer (including other 4xx) means Plaud is serving.
  */
 export function judgePlaudResponse(
     settled: Settled<Response>,
@@ -26,9 +24,7 @@ export function judgePlaudResponse(
     const status = settled.value.status;
     if (status === 401 || status === 407) return "ignore";
     if (status === 403) {
-        return isPlaudApiHost(request.url) && !request.proxied
-            ? "error"
-            : "ignore";
+        return isPlaudApiHost(request.url) ? "error" : "ignore";
     }
     if (status >= 500 || status === 408 || status === 429) {
         return "error";

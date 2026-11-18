@@ -21,19 +21,16 @@ const PLAUD_WEB_ORIGIN = "https://web.plaud.ai";
  * status part (see `judgePlaudResponse`).
  */
 export function plaudFetch(url: string, init?: RequestInit): Promise<Response> {
-    const route = { proxied: false };
     return trackCall(
         "plaud",
-        () => fetchViaPlaudProxy(url, init, route),
-        (settled) =>
-            judgePlaudResponse(settled, { url, proxied: route.proxied }),
+        () => fetchViaPlaudProxy(url, init),
+        (settled) => judgePlaudResponse(settled, { url }),
     );
 }
 
 async function fetchViaPlaudProxy(
     url: string,
     init: RequestInit | undefined,
-    route: { proxied: boolean },
 ): Promise<Response> {
     if (!shouldProxyPlaud(url)) {
         return fetch(url, init);
@@ -50,7 +47,6 @@ async function fetchViaPlaudProxy(
     while (true) {
         let response: Response;
         try {
-            route.proxied = true;
             response = await fetch(url, {
                 ...init,
                 headers,
@@ -68,7 +64,6 @@ async function fetchViaPlaudProxy(
                 invalidatePlaudProxy(currentProxy);
                 const next = await getPlaudProxyUrl();
                 if (!next) {
-                    route.proxied = false;
                     return fetch(url, init);
                 }
                 currentProxy = next;

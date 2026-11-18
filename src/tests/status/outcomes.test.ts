@@ -105,7 +105,7 @@ describe("plaud status recording (plaudFetch)", () => {
         expect(recorded()).toEqual({ ok: 0, err: 0 });
     });
 
-    it("ignores a 403 that came back through the proxy after rotation", async () => {
+    it("counts a 403 that is still the answer after proxy rotation", async () => {
         envMock.WEBSHARE_API_KEY = "test-key";
         _resetPlaudProxyCacheForTest();
         const proxy = (id: string) => ({
@@ -133,7 +133,7 @@ describe("plaud status recording (plaudFetch)", () => {
             envMock.WEBSHARE_API_KEY = undefined;
             _resetPlaudProxyCacheForTest();
         }
-        expect(recorded()).toEqual({ ok: 0, err: 0 });
+        expect(recorded()).toEqual({ ok: 0, err: 1 });
     });
 
     it("is a plain fetch while recording is off", async () => {
@@ -153,7 +153,7 @@ describe("outcome judges", () => {
     const thrown = (error: unknown) => ({ ok: false as const, error });
 
     it("plaud: ignores 401 and our proxy's 407", () => {
-        const direct = { url: URL_, proxied: false };
+        const direct = { url: URL_ };
         expect(judgePlaudResponse(value(401), direct)).toBe("ignore");
         expect(judgePlaudResponse(value(407), direct)).toBe("ignore");
         expect(judgePlaudResponse(value(502), direct)).toBe("error");
@@ -161,20 +161,16 @@ describe("outcome judges", () => {
         expect(judgePlaudResponse(value(400), direct)).toBe("ok");
     });
 
-    it("plaud: a 403 counts only from a Plaud API host reached directly", () => {
-        expect(
-            judgePlaudResponse(value(403), { url: URL_, proxied: true }),
-        ).toBe("ignore");
+    it("plaud: a 403 counts only from a Plaud API host", () => {
+        expect(judgePlaudResponse(value(403), { url: URL_ })).toBe("error");
         expect(
             judgePlaudResponse(value(403), {
                 url: "https://api.plaud.ai.evil.com/x",
-                proxied: false,
             }),
         ).toBe("ignore");
         expect(
             judgePlaudResponse(value(503), {
                 url: "https://plaud-prod.s3.amazonaws.com/x",
-                proxied: false,
             }),
         ).toBe("error");
     });
