@@ -99,23 +99,24 @@ interface ImportCandidate {
     isSummary: boolean;
 }
 
-async function storagePathHeldByOtherRecording(
+async function storagePathReferenced(
     userId: string,
     storagePath: string,
-    exceptRecordingId: string,
+    exceptRecordingId?: string,
 ): Promise<boolean> {
-    const [other] = await db
+    const conditions = [
+        eq(recordings.userId, userId),
+        eq(recordings.storagePath, storagePath),
+    ];
+    if (exceptRecordingId) {
+        conditions.push(ne(recordings.id, exceptRecordingId));
+    }
+    const [row] = await db
         .select({ id: recordings.id })
         .from(recordings)
-        .where(
-            and(
-                eq(recordings.userId, userId),
-                eq(recordings.storagePath, storagePath),
-                ne(recordings.id, exceptRecordingId),
-            ),
-        )
+        .where(and(...conditions))
         .limit(1);
-    return Boolean(other);
+    return Boolean(row);
 }
 
 async function allocateStorageKey(
@@ -169,7 +170,7 @@ async function resolveStorageKey(
                 replacedPath: existingPath,
             };
         }
-        const shared = await storagePathHeldByOtherRecording(
+        const shared = await storagePathReferenced(
             userId,
             existingPath,
             existingRecording.id,
@@ -185,22 +186,29 @@ async function deleteReplacedAudio(
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
     userId: string,
     storagePath: string,
-    recordingId: string,
 ): Promise<void> {
     try {
-        if (
-            await storagePathHeldByOtherRecording(
-                userId,
-                storagePath,
-                recordingId,
-            )
-        ) {
-            return;
-        }
+        if (await storagePathReferenced(userId, storagePath)) return;
         await storage.deleteFile(storagePath);
     } catch (error) {
         console.error(
             `Failed to delete replaced storage object ${storagePath}:`,
+            error,
+        );
+    }
+}
+
+async function deleteUnreferencedUpload(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+): Promise<void> {
+    try {
+        if (await storagePathReferenced(userId, storagePath)) return;
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to clean up storage object ${storagePath} after a concurrent replace:`,
             error,
         );
     }
@@ -524,34 +532,55 @@ async function processRecording(
         if (existingRecording) {
             // Re-check under FOR UPDATE: a concurrent DELETE may have
             // tombstoned the row during the download/upload above.
-            const updated = await db.transaction(async (tx) => {
-                const [locked] = await tx
-                    .select({ deletedAt: recordings.deletedAt })
-                    .from(recordings)
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    )
-                    .for("update")
-                    .limit(1);
+            const outcome = await db.transaction(
+                async (tx): Promise<"updated" | "deleted" | "moved"> => {
+                    const [locked] = await tx
+                        .select({
+                            deletedAt: recordings.deletedAt,
+                            storagePath: recordings.storagePath,
+                        })
+                        .from(recordings)
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                            ),
+                        )
+                        .for("update")
+                        .limit(1);
 
-                if (!locked || locked.deletedAt) return false;
+                    if (!locked || locked.deletedAt) return "deleted";
+                    if (locked.storagePath !== existingRecording.storagePath) {
+                        return "moved";
+                    }
 
-                await tx
-                    .update(recordings)
-                    .set({ ...recordingData, updatedAt: new Date() })
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    );
-                return true;
-            });
+                    await tx
+                        .update(recordings)
+                        .set({ ...recordingData, updatedAt: new Date() })
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                                eq(
+                                    recordings.storagePath,
+                                    existingRecording.storagePath,
+                                ),
+                            ),
+                        );
+                    return "updated";
+                },
+            );
 
-            if (!updated) {
+            if (outcome === "moved") {
+                await deleteUnreferencedUpload(
+                    storage,
+                    context.userId,
+                    storageKey,
+                );
+                return { status: "skipped" };
+            }
+
+            if (outcome === "deleted") {
                 // Best-effort cleanup of the orphaned blob.
                 try {
                     await storage.deleteFile(storageKey);
@@ -569,7 +598,6 @@ async function processRecording(
                     storage,
                     context.userId,
                     replacedPath,
-                    existingRecording.id,
                 );
             }
 

@@ -6,7 +6,12 @@
  *   keep its `.ogg` key (the audio route derives the MIME from it).
  * - The v4 detail can lack device serial, timezone and scene: an update must
  *   keep the stored values instead of writing the listing defaults.
+ * - Two processes can sync the same user at once: the update is a
+ *   compare-and-set on the stored key, and the old object is deleted only
+ *   when no row (this recording included) references it after the commit.
  */
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/lib/env", () => ({
@@ -80,6 +85,7 @@ const USER = "user-327";
 const OLD_PATH = `${USER}/p327.ogg`;
 const mp3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00]);
 const ogg = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(28)]);
+const dialect = new PgDialect();
 
 interface StoredRow {
     id: string;
@@ -145,6 +151,15 @@ function stubPlaud(recording: unknown, buffer: Buffer) {
 }
 
 function stubSelects(connectionId: string, results: unknown[][]) {
+    const conditions: SQL[] = [];
+    const chain = (result: unknown[]) => ({
+        from: vi.fn().mockReturnValue({
+            where: vi.fn((condition: SQL) => {
+                conditions.push(condition);
+                return { limit: vi.fn().mockResolvedValue(result) };
+            }),
+        }),
+    });
     const select = (db.select as Mock).mockReset();
     for (const result of [
         [{ id: connectionId, userId: USER, bearerToken: "tok" }],
@@ -152,31 +167,22 @@ function stubSelects(connectionId: string, results: unknown[][]) {
         [{ email: "t@example.com" }],
         ...results,
     ]) {
-        select.mockReturnValueOnce({
-            from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                    limit: vi.fn().mockResolvedValue(result),
-                }),
-            }),
-        });
+        select.mockReturnValueOnce(chain(result));
     }
-    select.mockReturnValue({
-        from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([]),
-            }),
-        }),
-    });
+    select.mockImplementation(() => chain([]));
+    return conditions;
 }
 
 function stubUpdateTransaction(
-    locked: { deletedAt: Date | null } = {
+    locked: { deletedAt: Date | null; storagePath: string } = {
         deletedAt: null,
+        storagePath: OLD_PATH,
     },
 ) {
     const setPayloads: Record<string, unknown>[] = [];
+    const updateConditions: SQL[] = [];
     (db.transaction as Mock).mockImplementation(
-        async (cb: (tx: unknown) => Promise<boolean>) =>
+        async (cb: (tx: unknown) => Promise<unknown>) =>
             cb({
                 select: vi.fn().mockReturnValue({
                     from: vi.fn().mockReturnValue({
@@ -191,7 +197,9 @@ function stubUpdateTransaction(
                     set: vi.fn((payload: Record<string, unknown>) => {
                         setPayloads.push(payload);
                         return {
-                            where: vi.fn().mockResolvedValue(undefined),
+                            where: vi.fn(async (condition: SQL) => {
+                                updateConditions.push(condition);
+                            }),
                         };
                     }),
                 }),
@@ -202,7 +210,7 @@ function stubUpdateTransaction(
             where: vi.fn().mockResolvedValue(undefined),
         }),
     });
-    return setPayloads;
+    return { setPayloads, updateConditions };
 }
 
 async function storageMock() {
@@ -224,7 +232,7 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         const storage = await storageMock();
         stubPlaud(listedRecording(), mp3);
         stubSelects("conn-ext-1", [[storedRow()], [], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         const result = await syncRecordingsForUser(USER);
 
@@ -248,7 +256,7 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         const storage = await storageMock();
         stubPlaud(listedRecording(), mp3);
         stubSelects("conn-ext-2", [[storedRow()], [], [{ id: "other-rec" }]]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         const result = await syncRecordingsForUser(USER);
 
@@ -261,7 +269,7 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         const storage = await storageMock();
         stubPlaud(listedRecording(), mp3);
         stubSelects("conn-ext-3", [[storedRow()], []]);
-        stubUpdateTransaction({ deletedAt: new Date() });
+        stubUpdateTransaction({ deletedAt: new Date(), storagePath: OLD_PATH });
 
         const result = await syncRecordingsForUser(USER);
 
@@ -277,7 +285,7 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         try {
             stubPlaud(listedRecording(), mp3);
             stubSelects("conn-ext-4", [[storedRow()], [], []]);
-            const setPayloads = stubUpdateTransaction();
+            const { setPayloads } = stubUpdateTransaction();
 
             const result = await syncRecordingsForUser(USER);
 
@@ -297,7 +305,7 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         const storage = await storageMock();
         stubPlaud(listedRecording(), ogg);
         stubSelects("conn-ext-5", [[storedRow()], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         const result = await syncRecordingsForUser(USER);
 
@@ -315,12 +323,104 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
         const storage = await storageMock();
         stubPlaud(listedRecording({ source: undefined }), mp3);
         stubSelects("conn-ext-6", [[storedRow()], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         await syncRecordingsForUser(USER);
 
         expect(setPayloads[0]?.storagePath).toBe(OLD_PATH);
         expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+});
+
+describe("#327 concurrent replace of the same recording", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it("updates only while the row still holds the key it was read with", async () => {
+        await storageMock();
+        stubPlaud(listedRecording(), mp3);
+        stubSelects("conn-race-1", [[storedRow()], [], []]);
+        const { updateConditions } = stubUpdateTransaction();
+
+        await syncRecordingsForUser(USER);
+
+        expect(updateConditions).toHaveLength(1);
+        expect(dialect.sqlToQuery(updateConditions[0])).toEqual(
+            expect.objectContaining({
+                sql: '("recordings"."id" = $1 and "recordings"."user_id" = $2 and "recordings"."storage_path" = $3)',
+                params: ["rec-327", USER, OLD_PATH],
+            }),
+        );
+    });
+
+    it("skips the update and keeps the new object when another sync already moved the row to it", async () => {
+        const storage = await storageMock();
+        const newKey = `${USER}/p327.mp3`;
+        stubPlaud(listedRecording(), mp3);
+        stubSelects("conn-race-2", [[storedRow()], [], [{ id: "rec-327" }]]);
+        const { setPayloads } = stubUpdateTransaction({
+            deletedAt: null,
+            storagePath: newKey,
+        });
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.errors).toEqual([]);
+        expect(result.updatedRecordings).toBe(0);
+        expect(setPayloads).toHaveLength(0);
+        expect(storage.uploadFile).toHaveBeenCalledWith(
+            newKey,
+            mp3,
+            "audio/mpeg",
+        );
+        expect(storage.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it("deletes only its own unreferenced upload when the row moved to another key", async () => {
+        const storage = await storageMock();
+        const conditions = stubSelects("conn-race-3", [[storedRow()], [], []]);
+        stubPlaud(listedRecording(), mp3);
+        const { setPayloads } = stubUpdateTransaction({
+            deletedAt: null,
+            storagePath: `${USER}/p327 (2).mp3`,
+        });
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.errors).toEqual([]);
+        expect(result.updatedRecordings).toBe(0);
+        expect(setPayloads).toHaveLength(0);
+        expect(storage.deleteFile).toHaveBeenCalledTimes(1);
+        expect(storage.deleteFile).toHaveBeenCalledWith(`${USER}/p327.mp3`);
+        expect(dialect.sqlToQuery(conditions[5])).toEqual(
+            expect.objectContaining({
+                sql: '("recordings"."user_id" = $1 and "recordings"."storage_path" = $2)',
+                params: [USER, `${USER}/p327.mp3`],
+            }),
+        );
+    });
+
+    it("checks every row, this recording included, before deleting the old object", async () => {
+        const storage = await storageMock();
+        stubPlaud(listedRecording(), mp3);
+        const conditions = stubSelects("conn-race-4", [
+            [storedRow()],
+            [],
+            [{ id: "rec-327" }],
+        ]);
+        stubUpdateTransaction();
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.updatedRecordings).toBe(1);
+        expect(storage.deleteFile).not.toHaveBeenCalled();
+        expect(dialect.sqlToQuery(conditions[5])).toEqual(
+            expect.objectContaining({
+                sql: '("recordings"."user_id" = $1 and "recordings"."storage_path" = $2)',
+                params: [USER, OLD_PATH],
+            }),
+        );
     });
 });
 
@@ -333,7 +433,7 @@ describe("#327 metadata on update from a Plaud 4.0 detail", () => {
         await storageMock();
         stubPlaud(listedRecording(), ogg);
         stubSelects("conn-meta-1", [[storedRow()], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         await syncRecordingsForUser(USER);
 
@@ -357,7 +457,7 @@ describe("#327 metadata on update from a Plaud 4.0 detail", () => {
             ogg,
         );
         stubSelects("conn-meta-2", [[storedRow()], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         await syncRecordingsForUser(USER);
 
@@ -373,7 +473,7 @@ describe("#327 metadata on update from a Plaud 4.0 detail", () => {
         await storageMock();
         stubPlaud(listedRecording({ source: undefined }), ogg);
         stubSelects("conn-meta-3", [[storedRow()], []]);
-        const setPayloads = stubUpdateTransaction();
+        const { setPayloads } = stubUpdateTransaction();
 
         await syncRecordingsForUser(USER);
 
