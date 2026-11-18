@@ -33,14 +33,22 @@ export function judgePlaudResponse(
 }
 
 /**
- * Mynah call outcome. Our service token being refused (401/403), rate
- * limiting and server errors are errors; other 4xx are a working Mynah
- * rejecting one request.
+ * Mynah call outcome. Our service token being refused (401/403), a missing
+ * route (404, since the endpoint path is fixed), request timeouts (408),
+ * rate limiting and server errors are errors; other 4xx are a working
+ * Mynah rejecting one request.
  */
 export function judgeMynahResponse(settled: Settled<Response>): CallOutcome {
     if (!settled.ok) return "error";
     const status = settled.value.status;
-    if (status >= 500 || status === 401 || status === 403 || status === 429) {
+    if (
+        status >= 500 ||
+        status === 401 ||
+        status === 403 ||
+        status === 404 ||
+        status === 408 ||
+        status === 429
+    ) {
         return "error";
     }
     return "ok";

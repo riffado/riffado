@@ -182,6 +182,11 @@ describe("outcome judges", () => {
         expect(judgeMynahResponse(thrown(new Error("x")))).toBe("error");
     });
 
+    it("mynah: a missing route (404) and a request timeout (408) are errors", () => {
+        expect(judgeMynahResponse(value(404))).toBe("error");
+        expect(judgeMynahResponse(value(408))).toBe("error");
+    });
+
     it("storage: a missing object is not an outage", () => {
         expect(
             judgeStorageCall("key")(
