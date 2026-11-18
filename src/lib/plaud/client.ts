@@ -292,7 +292,6 @@ export class PlaudClient {
         };
     }
 
-    /** All recordings via `/file-app/v4/recordings/all`, newest first. */
     private async listAllRecordingsV4(): Promise<PlaudRecording[]> {
         if (this.v4ListCache) return this.v4ListCache;
 
@@ -364,7 +363,6 @@ export class PlaudClient {
         return applyPlaudV4Detail(recording, detail);
     }
 
-    /** Presigned audio URL of a v4 file (transcoded first, then the upload). */
     private async getAudioUrlV4(recordingId: string): Promise<string> {
         const detail = await this.getFileDetailV4(recordingId);
         for (const audio of plaudV4AudioCandidates(detail)) {
@@ -382,7 +380,6 @@ export class PlaudClient {
         );
     }
 
-    /** Presigned URLs for v4 content ids (`/file-app/v4/files/content/url`). */
     private async resolveContentUrlsV4(
         contentIds: string[],
     ): Promise<Record<string, string>> {
@@ -397,20 +394,17 @@ export class PlaudClient {
         return body?.status === 0 ? (body.data?.url_map ?? {}) : {};
     }
 
-    /** Fill missing transcript / summary URLs of a v4 detail. */
     private async withContentUrlsV4(
         detail: NonNullable<PlaudV4FileDetailResponse["data"]>,
     ): Promise<NonNullable<PlaudV4FileDetailResponse["data"]>> {
         const objects = detail.objects ?? [];
-        const missing = objects
-            .filter(
-                (o) =>
-                    (o.object_type === "TRANSCRIPT" ||
-                        o.object_type === "SUMMARY") &&
-                    !o.content_url &&
-                    o.content_id,
-            )
-            .map((o) => o.content_id as string);
+        const missing = objects.flatMap((o) =>
+            (o.object_type === "TRANSCRIPT" || o.object_type === "SUMMARY") &&
+            !o.content_url &&
+            o.content_id
+                ? [o.content_id]
+                : [],
+        );
         if (missing.length === 0) return detail;
         const urls = await this.resolveContentUrlsV4(missing);
         return {
@@ -574,16 +568,11 @@ export class PlaudClient {
         return this.renameV4(fileId, filename);
     }
 
-    /**
-     * Plaud 4.0 title sync. Renames the recording's file node and, when the
-     * per-recording folder (what the Plaud library lists) still carries the
-     * same auto-generated name, that folder too.
-     */
     private async renameV4(
         recordingId: string,
         name: string,
     ): Promise<PlaudUpdateFilenameResponse> {
-        let fileNode = undefined as PlaudV4Node | undefined;
+        let fileNode: PlaudV4Node | undefined;
         const renamed = await this.renameNodeV4(name, async () => {
             const detail = await this.getFileDetailV4(recordingId, {
                 fresh: true,
@@ -629,13 +618,6 @@ export class PlaudClient {
         return { status: 0, msg: "success", data_file: renamed?.data };
     }
 
-    /**
-     * `PATCH /file-app/v4/nodes/rename/{node_id}` with the node's current
-     * version as `origin_version` (optimistic locking). A stale version
-     * answers `-1800313`: refetch and retry once, as the Plaud web app does.
-     * The resolver runs before each attempt and can return `skip` to stop
-     * without writing.
-     */
     private async renameNodeV4(
         name: string,
         resolve: () => Promise<{
@@ -681,7 +663,6 @@ export class PlaudClient {
         );
     }
 
-    /** Current state of a folder child (scans a few pages). */
     private async findChildV4(
         parentId: string,
         childId: string,
