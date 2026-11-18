@@ -71,7 +71,7 @@ describe("deleteUserAccount", () => {
             "users/u1/a.opus",
         );
         expect(queriesMock.deleteUser).toHaveBeenCalledWith("u1", {
-            pendingStorageKeys: [],
+            deletedStorageKeys: ["users/u1/a.opus", "users/u1/b.opus"],
         });
     });
 
@@ -96,7 +96,7 @@ describe("deleteUserAccount", () => {
 
         expect(result.storageErrors).toBe(1);
         expect(queriesMock.deleteUser).toHaveBeenCalledWith("u1", {
-            pendingStorageKeys: ["b"],
+            deletedStorageKeys: ["a", "c"],
         });
     });
 
@@ -110,7 +110,7 @@ describe("deleteUserAccount", () => {
         expect(result.storageErrors).toBe(0);
         expect(storageMock.deleteFile).not.toHaveBeenCalled();
         expect(queriesMock.deleteUser).toHaveBeenCalledWith("u1", {
-            pendingStorageKeys: [],
+            deletedStorageKeys: [],
         });
     });
 });

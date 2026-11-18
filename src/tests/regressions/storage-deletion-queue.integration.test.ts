@@ -5,8 +5,13 @@
  * failures before deleting the user row, so any object whose delete
  * failed stayed in the bucket with nothing left pointing at it.
  *
- * After the fix, failed keys are queued in `storage_deletion_queue` in
- * the same transaction as the user-row delete, and the export worker
+ * After the fix, `deleteUser` re-reads the user's recording paths and
+ * export keys under lock and queues every key that was not deleted
+ * beforehand (and every export key, since an export in flight while the
+ * keys were deleted may have written its object since) in
+ * `storage_deletion_queue`, in the same transaction as the user-row
+ * delete. An export that completes, or is claimed, between the listing
+ * and the user-row delete therefore ends up queued. The export worker
  * retries them: claims are exclusive across processes, retries are
  * bounded, and an object that is already gone counts as deleted.
  *
@@ -30,7 +35,12 @@ import {
     vi,
 } from "vitest";
 import * as schema from "@/db/schema";
-import { exportJobs, storageDeletionQueue, users } from "@/db/schema";
+import {
+    exportJobs,
+    recordings,
+    storageDeletionQueue,
+    users,
+} from "@/db/schema";
 import { captureServerException } from "@/lib/posthog-server";
 import type { StorageProvider } from "@/lib/storage/types";
 import {
@@ -64,7 +74,20 @@ const { dbProxy, dbRef } = vi.hoisted(() => {
 vi.mock("@/db", () => ({ db: dbProxy }));
 vi.mock("@/lib/posthog-server", () => ({ captureServerException: vi.fn() }));
 
+const { storageRef } = vi.hoisted(() => ({
+    storageRef: { current: null as unknown },
+}));
+
+vi.mock("@/lib/storage/factory", () => ({
+    createStorageProvider: () => storageRef.current,
+}));
+vi.mock("@/lib/notifications/email", () => ({
+    sendAccountDeletedEmail: vi.fn(),
+}));
+vi.mock("@/lib/env", () => ({ env: {} }));
+
 import { deleteUser } from "@/db/queries/billing";
+import { completeExportJob } from "@/db/queries/export-jobs";
 import {
     claimDueStorageDeletions,
     completeStorageDeletion,
@@ -72,6 +95,7 @@ import {
     enqueueStorageDeletions,
     failStorageDeletion,
 } from "@/db/queries/storage-deletions";
+import { deleteUserAccount } from "@/lib/hosted/billing/deletion";
 import {
     STORAGE_DELETION_MAX_ATTEMPTS,
     sweepStorageDeletionQueue,
@@ -115,11 +139,33 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
     beforeEach(async () => {
         await db().delete(storageDeletionQueue);
         await db().delete(exportJobs);
+        await db().delete(recordings);
         await db().delete(users);
     });
 
-    it("queues failed keys in the same transaction that deletes the user", async () => {
+    async function insertRecording(userId: string, storagePath: string) {
+        await db()
+            .insert(recordings)
+            .values({
+                userId,
+                deviceSn: "SN",
+                plaudFileId: storagePath,
+                filename: "f",
+                duration: 1000,
+                startTime: new Date("2026-01-01T00:00:00Z"),
+                endTime: new Date("2026-01-01T00:00:01Z"),
+                filesize: 10,
+                fileMd5: "0".repeat(32),
+                storageType: "s3",
+                storagePath,
+                plaudVersion: "1",
+            });
+    }
+
+    it("queues every key not deleted beforehand in the same transaction that deletes the user", async () => {
         await db().insert(users).values({ id: "gone", email: "g@example.com" });
+        await insertRecording("gone", "gone/a.ogg");
+        await insertRecording("gone", "gone/b.ogg");
         await db().insert(exportJobs).values({
             id: "job",
             userId: "gone",
@@ -128,7 +174,7 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
         });
 
         await deleteUser("gone", {
-            pendingStorageKeys: ["gone/a.ogg", "exports/gone/job-t.zip"],
+            deletedStorageKeys: ["gone/a.ogg", "exports/gone/job-t.zip"],
         });
 
         expect(
@@ -138,8 +184,74 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
         const rows = await queueRows();
         expect(rows.map((row) => [row.storageKey, row.source])).toEqual([
             ["exports/gone/job-t.zip", "account_deletion"],
-            ["gone/a.ogg", "account_deletion"],
+            ["gone/b.ogg", "account_deletion"],
         ]);
+    });
+
+    it("queues an export that completed, and one that was claimed, after the keys were listed", async () => {
+        await db()
+            .insert(users)
+            .values([
+                { id: "gone", email: "g@example.com" },
+                { id: "other", email: "o@example.com" },
+            ]);
+        await insertRecording("gone", "gone/a.ogg");
+        await db()
+            .insert(exportJobs)
+            .values([
+                {
+                    id: "building",
+                    userId: "gone",
+                    status: "processing",
+                    claimToken: "t1",
+                    startedAt: new Date(),
+                },
+                {
+                    id: "other-job",
+                    userId: "other",
+                    status: "completed",
+                    storageKey: "exports/other/other-job-x.zip",
+                },
+            ]);
+        const deleted: string[] = [];
+        storageRef.current = fakeStorage(async (key) => {
+            deleted.push(key);
+            if (deleted.length > 1) return;
+            await completeExportJob({
+                jobId: "building",
+                userId: "gone",
+                claimToken: "t1",
+                storageKey: "exports/gone/building-t1.zip",
+                fileSize: 1,
+                recordingCount: 1,
+                retireOlderArchives: true,
+            });
+            await db().insert(exportJobs).values({
+                id: "queued",
+                userId: "gone",
+                status: "processing",
+                claimToken: "t2",
+                startedAt: new Date(),
+            });
+        });
+
+        const result = await deleteUserAccount("gone");
+
+        expect(result.storageErrors).toBe(0);
+        expect(deleted.sort()).toEqual(
+            ["exports/gone/building-t1.zip", "gone/a.ogg"].sort(),
+        );
+        const rows = await queueRows();
+        expect(rows.map((row) => row.storageKey)).toEqual([
+            "exports/gone/building-t1.zip",
+            "exports/gone/queued-t2.zip",
+        ]);
+        expect(
+            await db()
+                .select({ id: exportJobs.id })
+                .from(exportJobs)
+                .where(eq(exportJobs.userId, "other")),
+        ).toEqual([{ id: "other-job" }]);
     });
 
     it("enqueue is idempotent per key", async () => {

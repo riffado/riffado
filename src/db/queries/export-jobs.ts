@@ -45,11 +45,13 @@ export const EXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 /** A build attempt failing this many times in a row stops retrying and sticks as `failed`. */
 export const EXPORT_MAX_ATTEMPTS = 3;
 
-const attemptStorageKeySql = exportArchiveStorageKeySql({
-    userId: exportJobs.userId,
-    jobId: exportJobs.id,
-    claimToken: exportJobs.claimToken,
-});
+function attemptStorageKeySql() {
+    return exportArchiveStorageKeySql({
+        userId: exportJobs.userId,
+        jobId: exportJobs.id,
+        claimToken: exportJobs.claimToken,
+    });
+}
 
 /** Postgres SQLSTATE for unique_violation. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -416,7 +418,7 @@ export async function reclaimStaleProcessingExportJobs(
                 case
                     when ${exportJobs.claimToken} is not null then
                         ${exportJobs.staleStorageKeys} || to_jsonb(
-                            ${attemptStorageKeySql}
+                            ${attemptStorageKeySql()}
                         )
                     else ${exportJobs.staleStorageKeys}
                 end
@@ -488,17 +490,19 @@ export async function clearStaleStorageKey(
  * archives, the per-claim key of any attempt still holding a claim (in
  * flight, or failed with its partial upload), and keys recorded from
  * reclaimed attempts. Used to delete them before the user row (and with
- * it these rows) is deleted.
+ * it these rows) is deleted. Pass a transaction as `executor` to read
+ * inside it.
  */
 export async function listExportStorageKeysForUser(
     userId: string,
+    executor: Pick<typeof db, "execute"> = db,
 ): Promise<string[]> {
-    const result = await db.execute<{ key: string }>(sql`
+    const result = await executor.execute<{ key: string }>(sql`
         select storage_key as key
         from ${exportJobs}
         where user_id = ${userId} and storage_key is not null
         union
-        select ${attemptStorageKeySql} as key
+        select ${attemptStorageKeySql()} as key
         from ${exportJobs}
         where user_id = ${userId} and claim_token is not null
         union

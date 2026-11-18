@@ -9,8 +9,9 @@
  *
  * After the fix, every export key the user's jobs may have written is
  * deleted with the audio, objects that are already gone count as
- * deleted, and keys whose delete failed are handed to `deleteUser`,
- * which queues them for retry in the same transaction.
+ * deleted, and the keys that are gone are handed to `deleteUser`, which
+ * re-reads the user's keys under lock and queues the rest for retry in
+ * the same transaction as the user-row delete.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -78,11 +79,15 @@ describe("deleteUserAccount storage cleanup", () => {
             ["u1/a.ogg", "exports/u1/job-1-t1.zip", "exports/u1/job-2-t2.zip"],
         );
         expect(mocks.billing.deleteUser).toHaveBeenCalledWith("u1", {
-            pendingStorageKeys: [],
+            deletedStorageKeys: [
+                "u1/a.ogg",
+                "exports/u1/job-1-t1.zip",
+                "exports/u1/job-2-t2.zip",
+            ],
         });
     });
 
-    it("hands failed keys to deleteUser for durable retry, but not keys that are already gone", async () => {
+    it("tells deleteUser which keys are gone (deleted or already missing), so it queues the rest", async () => {
         mocks.billing.listRecordingStoragePaths.mockResolvedValue([
             "u1/a.ogg",
             "u1/tombstoned.ogg",
@@ -105,7 +110,7 @@ describe("deleteUserAccount storage cleanup", () => {
 
         expect(result.storageErrors).toBe(1);
         expect(mocks.billing.deleteUser).toHaveBeenCalledWith("u1", {
-            pendingStorageKeys: ["exports/u1/job-1-t1.zip"],
+            deletedStorageKeys: ["u1/a.ogg", "u1/tombstoned.ogg"],
         });
     });
 

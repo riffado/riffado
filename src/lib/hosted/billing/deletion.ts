@@ -28,13 +28,15 @@ export interface DeletionResult {
  * archives), then the user row.
  *
  * Storage cleanup is best-effort per object: a failed delete does not
- * block the user-row delete. Failed keys are queued in
- * `storage_deletion_queue` in the same transaction as the user-row
- * delete, and the export worker retries them. An object that is already
- * gone counts as deleted. The DB row deletion cascades through every
- * FK-bound dependent table (recordings, transcriptions, export jobs,
- * plaud connections, etc.) so encrypted secrets at rest are removed in
- * the same statement.
+ * block the user-row delete. `deleteUser` re-reads the user's storage
+ * keys under lock in the same transaction as the user-row delete and
+ * queues every key not deleted here in `storage_deletion_queue` (plus
+ * every export key, since an in-flight export may have written its
+ * object after it was deleted here); the export worker retries them. An
+ * object that is already gone counts as deleted. The DB row deletion
+ * cascades through every FK-bound dependent table (recordings,
+ * transcriptions, export jobs, plaud connections, etc.) so encrypted
+ * secrets at rest are removed in the same statement.
  */
 export async function deleteUserAccount(userId: string): Promise<{
     storageErrors: number;
@@ -51,12 +53,14 @@ export async function deleteUserAccount(userId: string): Promise<{
     const keys = [...new Set([...recordingPaths, ...exportKeys])];
     const storage = createStorageProvider();
 
-    const failedKeys: string[] = [];
+    const deletedKeys: string[] = [];
+    let storageErrors = 0;
     for (const key of keys) {
         try {
             await deleteStorageObject(storage, key);
+            deletedKeys.push(key);
         } catch (error) {
-            failedKeys.push(key);
+            storageErrors += 1;
             console.error(
                 `[billing-deletion] storage deleteFile failed for user=${userId} key=${key}, queued for retry:`,
                 error,
@@ -64,7 +68,7 @@ export async function deleteUserAccount(userId: string): Promise<{
         }
     }
 
-    await deleteUser(userId, { pendingStorageKeys: failedKeys });
+    await deleteUser(userId, { deletedStorageKeys: deletedKeys });
 
     if (capturedEmail) {
         const base = env.APP_URL?.replace(/\/$/, "");
@@ -81,7 +85,7 @@ export async function deleteUserAccount(userId: string): Promise<{
         }
     }
 
-    return { storageErrors: failedKeys.length };
+    return { storageErrors };
 }
 
 /**
