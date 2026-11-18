@@ -22,6 +22,10 @@
 set -eu
 
 VERSION="{{VERSION}}"
+# 1 when served from the version-pinned route (riffado.com/vX.Y.Z/install.sh).
+# Anything else, including this unrendered placeholder, installs the latest
+# release.
+PINNED="{{PINNED}}"
 REPO="riffado/riffado"
 DEFAULT_DIR="$HOME/riffado"
 DEFAULT_APP_URL="http://localhost:3000"
@@ -222,14 +226,12 @@ main() {
 
     # ---- download release artifacts ----------------------------------------
 
-    if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
-        # Should not happen — the script is rendered server-side with a version
-        # substituted in. Defend anyway.
-        BASE_URL="https://github.com/$REPO/releases/latest/download"
-        info "Downloading latest release artifacts..."
-    else
+    if [ "$PINNED" = "1" ] && [ -n "$VERSION" ]; then
         BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
         info "Downloading release $VERSION artifacts..."
+    else
+        BASE_URL="https://github.com/$REPO/releases/latest/download"
+        info "Downloading latest release artifacts..."
     fi
 
     curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
@@ -252,7 +254,7 @@ main() {
     patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
     patch_env APP_URL "$APP_URL"
     patch_env APP_PORT "$APP_PORT"
-    if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
+    if [ "$PINNED" = "1" ] && [ -n "$VERSION" ]; then
         # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
         patch_env RIFFADO_VERSION "${VERSION#v}"
     fi

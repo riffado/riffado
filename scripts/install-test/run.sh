@@ -134,6 +134,13 @@ expect_health_url() {
     fi
 }
 
+expect_log() {
+    if ! grep -qF "$1" "$CASE_DIR/stub.log"; then
+        fail "stub log lacks '$1'"
+        return 1
+    fi
+}
+
 pass() {
     PASS=$((PASS + 1))
     printf 'ok   %s\n' "$CASE"
@@ -252,6 +259,26 @@ expect_status 1 \
     && expect_output "publishes Riffado on host port 3555" \
     && pass
 CASE_ENV=""
+
+# Rendered the way src/lib/install-script.ts serves it.
+RAW_INSTALL_SH="$INSTALL_SH"
+sed -e 's/{{VERSION}}/v9.9.9/g' -e 's/{{PINNED}}/1/g' "$RAW_INSTALL_SH" >"$WORK/install-pinned.sh"
+sed -e 's/{{VERSION}}/v9.9.9/g' -e 's/{{PINNED}}/0/g' "$RAW_INSTALL_SH" >"$WORK/install-latest.sh"
+
+INSTALL_SH="$WORK/install-pinned.sh"
+run_case "rendered pinned route downloads that release and pins RIFFADO_VERSION" "$PORT_SHELL" 4096 no-tty
+expect_status 0 \
+    && expect_log "releases/download/v9.9.9/docker-compose.yml" \
+    && expect_env "$CASE_DIR/home/riffado" "RIFFADO_VERSION=9.9.9" \
+    && pass
+
+INSTALL_SH="$WORK/install-latest.sh"
+run_case "rendered latest route downloads the latest release unpinned" "$PORT_SHELL" 4096 no-tty
+expect_status 0 \
+    && expect_log "releases/latest/download/docker-compose.yml" \
+    && expect_env "$CASE_DIR/home/riffado" "RIFFADO_VERSION=latest" \
+    && pass
+INSTALL_SH="$RAW_INSTALL_SH"
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
