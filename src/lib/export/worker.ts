@@ -19,6 +19,7 @@ import { sendExportReadyEmail } from "@/lib/notifications/email";
 import { captureServerException } from "@/lib/posthog-server";
 import { deleteStorageObject } from "@/lib/storage/delete-object";
 import { sweepStorageDeletionQueue } from "@/lib/storage/deletion-queue";
+import { redactStorageKey } from "@/lib/storage/errors";
 import { createStorageProvider } from "@/lib/storage/factory";
 import type { StorageProvider } from "@/lib/storage/types";
 import { buildAndUploadExportArchive } from "./build-archive";
@@ -121,10 +122,10 @@ async function discardAttemptObject(
                     `[export-worker] failed to queue ${storageKey} for deletion:`,
                     enqueueError,
                 );
-                captureServerException(enqueueError, {
-                    source: "worker:export",
-                    storageKey,
-                });
+                captureServerException(
+                    redactStorageKey(enqueueError, storageKey),
+                    { source: "worker:export" },
+                );
             },
         );
     }

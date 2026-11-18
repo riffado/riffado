@@ -59,3 +59,15 @@ export function isStorageObjectMissingError(error: unknown): boolean {
             shape.$metadata?.httpStatusCode === 404,
     );
 }
+
+/**
+ * A copy of `error` (name and message only) with `storageKey` replaced,
+ * for error tracking: storage keys embed user ids, and both storage and
+ * database errors can echo the key in their message.
+ */
+export function redactStorageKey(error: unknown, storageKey: string): Error {
+    const message = error instanceof Error ? error.message : String(error);
+    const redacted = new Error(message.split(storageKey).join("<storage-key>"));
+    redacted.name = error instanceof Error ? error.name : "Error";
+    return redacted;
+}

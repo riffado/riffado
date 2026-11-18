@@ -15,9 +15,12 @@ export interface ClaimedStorageDeletion {
 type QueueWriter = Pick<typeof db, "insert">;
 
 /**
- * Queues storage keys whose delete failed. A key that is already queued
- * keeps its existing row. Pass a transaction as `writer` so the keys are
- * only queued if the surrounding write (e.g. the user-row delete) commits.
+ * Queues storage keys whose delete failed, due now. A key that is already
+ * pending keeps its existing row and schedule; a key whose row gave up
+ * (`failed`) is reset to pending with its attempts cleared, so a new
+ * delete request retries it. Pass a transaction as `writer` so the keys
+ * are only queued if the surrounding write (e.g. the user-row delete)
+ * commits.
  */
 export async function enqueueStorageDeletions(
     keys: string[],
@@ -26,10 +29,47 @@ export async function enqueueStorageDeletions(
 ): Promise<void> {
     const unique = [...new Set(keys)];
     if (unique.length === 0) return;
+    const nowIso = new Date().toISOString();
+    const now = sql`${nowIso}::timestamp`;
     await writer
         .insert(storageDeletionQueue)
-        .values(unique.map((storageKey) => ({ storageKey, source })))
-        .onConflictDoNothing({ target: storageDeletionQueue.storageKey });
+        .values(
+            unique.map((storageKey) => ({
+                storageKey,
+                source,
+                nextAttemptAt: now,
+                createdAt: now,
+                updatedAt: now,
+            })),
+        )
+        .onConflictDoUpdate({
+            target: storageDeletionQueue.storageKey,
+            set: {
+                status: "pending",
+                attempts: 0,
+                claimToken: null,
+                nextAttemptAt: now,
+                updatedAt: now,
+            },
+            setWhere: eq(storageDeletionQueue.status, "failed"),
+        });
+}
+
+/** Queue size by status, for operators. */
+export async function countStorageDeletionQueue(): Promise<{
+    pending: number;
+    failed: number;
+}> {
+    const rows = await db
+        .select({
+            status: storageDeletionQueue.status,
+            count: sql<number>`count(*)::int`,
+        })
+        .from(storageDeletionQueue)
+        .groupBy(storageDeletionQueue.status);
+    const countOf = (status: string) =>
+        Number(rows.find((row) => row.status === status)?.count ?? 0);
+    return { pending: countOf("pending"), failed: countOf("failed") };
 }
 
 /**
@@ -114,6 +154,7 @@ export async function failStorageDeletion(input: {
     retryAt: Date;
 }): Promise<{ status: string; attempts: number } | null> {
     const retryAtIso = input.retryAt.toISOString();
+    const nowIso = new Date().toISOString();
     const result = await db.execute<{ status: string; attempts: number }>(sql`
         update ${storageDeletionQueue}
         set
@@ -125,7 +166,7 @@ export async function failStorageDeletion(input: {
             next_attempt_at = ${retryAtIso}::timestamp,
             claim_token = null,
             last_error = ${input.errorMessage},
-            updated_at = now()
+            updated_at = ${nowIso}::timestamp
         where storage_key = ${input.storageKey}
           and claim_token = ${input.claimToken}
         returning status, attempts

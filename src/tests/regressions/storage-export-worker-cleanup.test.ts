@@ -53,6 +53,7 @@ vi.mock("@/lib/storage/factory", () => ({
 }));
 
 import { tick } from "@/lib/export/worker";
+import { captureServerException } from "@/lib/posthog-server";
 
 function enoent(): Error {
     return new Error("Failed to delete file from local storage", {
@@ -105,6 +106,35 @@ describe("export worker storage cleanup", () => {
             ["exports/user-1/job-1-token-1.zip"],
             "export_cleanup",
         );
+    });
+
+    it("reports a failed queue write without the storage key", async () => {
+        mocks.queries.claimPendingExportJobs.mockResolvedValue([
+            { id: "job-1", userId: "user-1", claimToken: "token-1" },
+        ]);
+        mocks.buildArchive.buildAndUploadExportArchive.mockRejectedValue(
+            new Error("upload interrupted"),
+        );
+        mocks.storage.deleteFile.mockRejectedValue(new Error("S3 503"));
+        mocks.storageDeletions.enqueueStorageDeletions.mockRejectedValue(
+            new Error(
+                "Failed query: insert ... params: exports/user-1/job-1-token-1.zip",
+            ),
+        );
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
+
+        await tick();
+        warnSpy.mockRestore();
+        errorSpy.mockRestore();
+
+        expect(captureServerException).toHaveBeenCalledTimes(1);
+        const [captured, properties] = vi.mocked(captureServerException).mock
+            .calls[0];
+        expect(JSON.stringify(properties)).not.toContain("user-1");
+        expect((captured as Error).message).not.toContain("user-1");
     });
 
     it("queues a superseded claim's finished archive when its delete fails", async () => {

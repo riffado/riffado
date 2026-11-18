@@ -5,6 +5,7 @@ import {
 } from "@/db/queries/storage-deletions";
 import { captureServerException } from "@/lib/posthog-server";
 import { deleteStorageObject } from "./delete-object";
+import { redactStorageKey } from "./errors";
 import type { StorageProvider } from "./types";
 
 const SWEEP_BATCH_SIZE = 20;
@@ -65,11 +66,13 @@ export async function sweepStorageDeletionQueue(
                     `[storage-deletion] giving up on ${entry.storageKey} after ${outcome.attempts} attempt(s):`,
                     error,
                 );
-                captureServerException(error, {
-                    source: "worker:storage-deletion",
-                    storageKey: entry.storageKey,
-                    attempts: outcome.attempts,
-                });
+                captureServerException(
+                    redactStorageKey(error, entry.storageKey),
+                    {
+                        source: "worker:storage-deletion",
+                        attempts: outcome.attempts,
+                    },
+                );
             } else if (outcome) {
                 result.retrying += 1;
                 console.warn(

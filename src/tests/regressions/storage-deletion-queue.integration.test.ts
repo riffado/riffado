@@ -9,9 +9,17 @@
  * the same transaction as the user-row delete, and the export worker
  * retries them: claims are exclusive across processes, retries are
  * bounded, and an object that is already gone counts as deleted.
+ *
+ * Follow-ups: re-queueing a key that gave up (`failed`) makes it pending
+ * again with fresh attempts, rows are due by the app's UTC clock rather
+ * than the database session's `now()`, operators get pending/failed
+ * counts, and error tracking never receives the storage key (it embeds
+ * the user id).
  */
 
 import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
     afterAll,
     beforeAll,
@@ -21,7 +29,9 @@ import {
     it,
     vi,
 } from "vitest";
+import * as schema from "@/db/schema";
 import { exportJobs, storageDeletionQueue, users } from "@/db/schema";
+import { captureServerException } from "@/lib/posthog-server";
 import type { StorageProvider } from "@/lib/storage/types";
 import {
     createMigratedTestDatabase,
@@ -58,6 +68,7 @@ import { deleteUser } from "@/db/queries/billing";
 import {
     claimDueStorageDeletions,
     completeStorageDeletion,
+    countStorageDeletionQueue,
     enqueueStorageDeletions,
     failStorageDeletion,
 } from "@/db/queries/storage-deletions";
@@ -284,5 +295,104 @@ describeWithDatabase("storage deletion queue PostgreSQL integration", () => {
         const [row] = await queueRows();
         expect(row.status).toBe("failed");
         expect(row.attempts).toBe(STORAGE_DELETION_MAX_ATTEMPTS);
+    });
+
+    it("reports a give-up to error tracking without the storage key", async () => {
+        const key = "user-secret-id/rec.ogg";
+        await enqueueStorageDeletions([key], "account_deletion");
+        await db()
+            .update(storageDeletionQueue)
+            .set({ attempts: STORAGE_DELETION_MAX_ATTEMPTS - 1 });
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        vi.mocked(captureServerException).mockClear();
+
+        await sweepStorageDeletionQueue(
+            fakeStorage(async (storageKey) => {
+                throw new Error(
+                    `EACCES: permission denied, unlink '/data/${storageKey}'`,
+                );
+            }),
+        );
+        error.mockRestore();
+
+        expect(captureServerException).toHaveBeenCalledTimes(1);
+        const [captured, properties] = vi.mocked(captureServerException).mock
+            .calls[0];
+        expect(JSON.stringify(properties)).not.toContain("user-secret-id");
+        expect((captured as Error).message).not.toContain("user-secret-id");
+        expect((captured as Error).message).toContain("EACCES");
+    });
+
+    it("re-queueing a key that gave up makes it pending and due again with fresh attempts", async () => {
+        await enqueueStorageDeletions(["k1"], "export_cleanup");
+        await db()
+            .update(storageDeletionQueue)
+            .set({
+                status: "failed",
+                attempts: STORAGE_DELETION_MAX_ATTEMPTS,
+                nextAttemptAt: new Date(Date.now() + 60 * 60_000),
+                lastError: "S3 503",
+            });
+
+        await enqueueStorageDeletions(["k1"], "account_deletion");
+
+        const [row] = await queueRows();
+        expect(row.status).toBe("pending");
+        expect(row.attempts).toBe(0);
+        const claimed = await claimDueStorageDeletions({
+            limit: 1,
+            leaseMs: 60_000,
+        });
+        expect(claimed.map((entry) => entry.storageKey)).toEqual(["k1"]);
+    });
+
+    it("re-queueing a pending key keeps its attempts and schedule", async () => {
+        await enqueueStorageDeletions(["k1"], "export_cleanup");
+        const retryAt = new Date(Date.now() + 60 * 60_000);
+        await db()
+            .update(storageDeletionQueue)
+            .set({ attempts: 2, nextAttemptAt: retryAt });
+
+        await enqueueStorageDeletions(["k1"], "account_deletion");
+
+        const [row] = await queueRows();
+        expect(row.attempts).toBe(2);
+        expect(row.nextAttemptAt).toEqual(retryAt);
+    });
+
+    it("counts pending and failed rows for operators", async () => {
+        await enqueueStorageDeletions(["k1", "k2", "k3"], "account_deletion");
+        await db()
+            .update(storageDeletionQueue)
+            .set({ status: "failed" })
+            .where(eq(storageDeletionQueue.storageKey, "k3"));
+
+        expect(await countStorageDeletionQueue()).toEqual({
+            pending: 2,
+            failed: 1,
+        });
+    });
+
+    it("makes queued keys due by the app clock even when the database session is not on UTC", async () => {
+        if (!database) throw new Error("test database was not initialized");
+        const offsetClient = postgres(database.url, {
+            max: 1,
+            connection: { TimeZone: "Pacific/Kiritimati" },
+        });
+        const previous = dbRef.current;
+        dbRef.current = drizzle(offsetClient, {
+            schema,
+        }) as unknown as Record<PropertyKey, unknown>;
+        try {
+            await enqueueStorageDeletions(["k1"], "account_deletion");
+            const claimed = await claimDueStorageDeletions({
+                limit: 1,
+                leaseMs: 60_000,
+            });
+            expect(claimed.map((entry) => entry.storageKey)).toEqual(["k1"]);
+        } finally {
+            dbRef.current = previous;
+            await offsetClient.end({ timeout: 5 });
+        }
     });
 });

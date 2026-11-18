@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { storageHistogram, topStorageUsers } from "@/db/queries/admin";
-import { formatBytes, formatNumber } from "../_components/metrics";
+import { countStorageDeletionQueue } from "@/db/queries/storage-deletions";
+import { formatBytes, formatNumber, MetricCard } from "../_components/metrics";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminStoragePage() {
-    const [hist, top] = await Promise.all([
+    const [hist, top, deletionQueue] = await Promise.all([
         storageHistogram(),
         topStorageUsers(50),
+        countStorageDeletionQueue(),
     ]);
     const totalBytes = top.reduce(
         (acc: number, u: { bytes: number }) => acc + Number(u.bytes),
@@ -44,6 +46,26 @@ export default async function AdminStoragePage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            </section>
+
+            <section>
+                <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                    Deletion queue
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <MetricCard
+                        label="Retrying"
+                        value={formatNumber(deletionQueue.pending)}
+                    />
+                    <MetricCard
+                        label="Gave up"
+                        value={formatNumber(deletionQueue.failed)}
+                        sub="storage_deletion_queue status failed"
+                        accent={
+                            deletionQueue.failed > 0 ? "warning" : undefined
+                        }
+                    />
                 </div>
             </section>
 
