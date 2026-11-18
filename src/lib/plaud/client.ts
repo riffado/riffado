@@ -495,7 +495,8 @@ export class PlaudClient {
      * links to their bodies. Goes through `request`, so it inherits
      * workspace-token auth, retry/backoff, and 401 → PLAUD_INVALID_TOKEN.
      * NOTE: the response shape is unverified (see #204 / Phase 0).
-     * On Plaud 4.0 accounts the v4 detail is mapped onto the same shape.
+     * On Plaud 4.0 accounts a fresh v4 detail (current presigned links) is
+     * mapped onto the same shape.
      */
     async getFileDetail(fileId: string): Promise<PlaudFileDetailResponse> {
         if (!this.v4Mode) {
@@ -506,7 +507,9 @@ export class PlaudClient {
             this.v4Mode = true;
         }
         return plaudV4DetailToLegacy(
-            await this.withContentUrlsV4(await this.getFileDetailV4(fileId)),
+            await this.withContentUrlsV4(
+                await this.getFileDetailV4(fileId, { fresh: true }),
+            ),
         );
     }
 

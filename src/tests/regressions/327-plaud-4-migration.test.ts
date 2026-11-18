@@ -71,6 +71,7 @@ let transcriptUrlInDetail = true;
 // content id only, or absent.
 let transcodedAudio: "url" | "id" | undefined;
 let unresolvableContentIds: string[] = [];
+let detailFetches = 0;
 
 function installPlaudMock() {
     calls.length = 0;
@@ -84,6 +85,7 @@ function installPlaudMock() {
     transcriptUrlInDetail = true;
     transcodedAudio = undefined;
     unresolvableContentIds = [];
+    detailFetches = 0;
     global.fetch = vi.fn(
         async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = String(input);
@@ -220,6 +222,7 @@ function installPlaudMock() {
                 });
             }
             if (u.pathname === "/file-app/v4/files/detail/f_new") {
+                detailFetches++;
                 return json({
                     status: 0,
                     data: {
@@ -279,7 +282,7 @@ function installPlaudMock() {
                                 object_type: "TRANSCRIPT",
                                 content_id: "c_trans",
                                 content_url: transcriptUrlInDetail
-                                    ? "https://bucket.s3.amazonaws.com/trans_result.json.gz?sig=2"
+                                    ? `https://bucket.s3.amazonaws.com/trans_result.json.gz?sig=t${detailFetches}`
                                     : null,
                                 mime_type: "text/vnd.plaud.transcript+json",
                                 task_status: 1,
@@ -705,7 +708,21 @@ describe("Plaud-native content on a 4.0-migrated account", () => {
         expect(sum.summary).toBe("## 1. Points clés\nTexte.");
         expect(
             calls.filter((c) => c.url.includes("/files/detail/f_new")),
-        ).toHaveLength(1);
+        ).toHaveLength(2);
+    });
+
+    it("refetches the v4 detail for content import so presigned links are current", async () => {
+        const client = new PlaudClient("ut-1", API, "ws_test");
+        const listed = (await client.getRecordings(0, 1, 0)).data_file_list[0];
+        await client.hydrateRecording(listed);
+        await client.downloadRecording(listed.id, false);
+        expect(detailFetches).toBe(1);
+
+        const { transcript } = selectContentItems(
+            await client.getFileDetail(listed.id),
+        );
+        expect(detailFetches).toBe(2);
+        expect(transcript?.data_link).toContain("sig=t2");
     });
 });
 
