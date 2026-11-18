@@ -62,8 +62,10 @@ import {
     EXPORT_ARCHIVE_RETENTION_MS,
     getRecentCompletedExportJobForUser,
     listExportStorageKeysForUser,
+    reclaimStaleProcessingExportJobs,
     selectExpiredExportJobs,
 } from "@/db/queries/export-jobs";
+import { exportArchiveStorageKey } from "@/lib/export/storage-key";
 
 const testDatabaseUrl = getTestDatabaseUrl();
 const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
@@ -299,5 +301,34 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
                 "exports/user-a/reclaimed-dead.zip",
             ].sort(),
         );
+    });
+
+    it("derives attempt keys in SQL exactly as the worker names them", async () => {
+        await db()
+            .insert(exportJobs)
+            .values({
+                id: "crashed",
+                userId: "user-a",
+                status: "processing",
+                claimToken: "zombie",
+                startedAt: new Date(Date.now() - DAY_MS),
+            });
+        const workerKey = exportArchiveStorageKey({
+            userId: "user-a",
+            jobId: "crashed",
+            claimToken: "zombie",
+        });
+        expect(workerKey).toBe("exports/user-a/crashed-zombie.zip");
+
+        expect(await listExportStorageKeysForUser("user-a")).toEqual([
+            workerKey,
+        ]);
+
+        expect(await reclaimStaleProcessingExportJobs(60_000)).toBe(1);
+        const [row] = await db()
+            .select({ staleStorageKeys: exportJobs.staleStorageKeys })
+            .from(exportJobs)
+            .where(eq(exportJobs.id, "crashed"));
+        expect(row?.staleStorageKeys).toEqual([workerKey]);
     });
 });

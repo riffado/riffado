@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { exportJobs } from "@/db/schema";
+import { exportArchiveStorageKeySql } from "@/lib/export/storage-key";
 
 export type ExportJobStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -43,6 +44,12 @@ export const EXPORT_ARCHIVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const EXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 /** A build attempt failing this many times in a row stops retrying and sticks as `failed`. */
 export const EXPORT_MAX_ATTEMPTS = 3;
+
+const attemptStorageKeySql = exportArchiveStorageKeySql({
+    userId: exportJobs.userId,
+    jobId: exportJobs.id,
+    claimToken: exportJobs.claimToken,
+});
 
 /** Postgres SQLSTATE for unique_violation. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -376,7 +383,7 @@ export async function reclaimStaleProcessingExportJobs(
                 case
                     when ${exportJobs.claimToken} is not null then
                         ${exportJobs.staleStorageKeys} || to_jsonb(
-                            'exports/' || ${exportJobs.userId} || '/' || ${exportJobs.id} || '-' || ${exportJobs.claimToken} || '.zip'
+                            ${attemptStorageKeySql}
                         )
                     else ${exportJobs.staleStorageKeys}
                 end
@@ -458,7 +465,7 @@ export async function listExportStorageKeysForUser(
         from ${exportJobs}
         where user_id = ${userId} and storage_key is not null
         union
-        select 'exports/' || user_id || '/' || id || '-' || claim_token || '.zip' as key
+        select ${attemptStorageKeySql} as key
         from ${exportJobs}
         where user_id = ${userId} and claim_token is not null
         union

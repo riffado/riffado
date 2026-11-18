@@ -21,6 +21,7 @@ import { sweepStorageDeletionQueue } from "@/lib/storage/deletion-queue";
 import { createStorageProvider } from "@/lib/storage/factory";
 import type { StorageProvider } from "@/lib/storage/types";
 import { buildAndUploadExportArchive } from "./build-archive";
+import { exportArchiveStorageKey } from "./storage-key";
 
 const TICK_MS = 30 * 1000;
 // Archive builds are CPU/memory/IO heavier than a sync tick -- cap how
@@ -141,7 +142,11 @@ async function processJob(job: {
     // only ever touches *this attempt's own* upload, whether it's a
     // partial from a failed build or a finished one nobody ended up
     // using because the row moved on without it.
-    const storageKey = `exports/${job.userId}/${job.id}-${job.claimToken}.zip`;
+    const storageKey = exportArchiveStorageKey({
+        userId: job.userId,
+        jobId: job.id,
+        claimToken: job.claimToken,
+    });
 
     try {
         const result = await runWithStallGuard(
