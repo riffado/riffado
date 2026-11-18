@@ -12,7 +12,7 @@
  * helper, and the dashboard banner predicate.
  */
 
-import { getTableColumns, type SQL } from "drizzle-orm";
+import { DrizzleQueryError, getTableColumns, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import {
     afterEach,
@@ -90,6 +90,11 @@ vi.mock("@/lib/webhooks/emit", () => ({
     emitEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/posthog-server", () => ({
+    captureServerEvent: vi.fn(),
+    captureServerException: vi.fn(),
+}));
+
 import { POST as connectTokenPOST } from "@/app/api/plaud/auth/connect-token/route";
 import { POST as verifyPOST } from "@/app/api/plaud/auth/verify/route";
 import { db } from "@/db";
@@ -117,6 +122,7 @@ import {
     persistRefreshedPlaudTokens,
 } from "@/lib/plaud/persist-connection";
 import { PLAUD_USER_AGENT } from "@/lib/plaud/servers";
+import { captureServerException } from "@/lib/posthog-server";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
 const USER_ID = "user-refresh";
@@ -133,6 +139,7 @@ beforeEach(() => {
     mockFetch = vi.fn() as Mock;
     global.fetch = mockFetch as typeof global.fetch;
     vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "info").mockImplementation(() => {});
     vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -1051,6 +1058,96 @@ describe("createPlaudClient refresh", () => {
         expect(where.params).toEqual(
             expect.arrayContaining([CONNECTION_ID, USER_ID]),
         );
+    });
+
+    it("keeps tokens and ciphertext out of logs and error capture when storing refreshed tokens fails", async () => {
+        const oldRt = makeRefreshToken(nowSec() + 20 * DAY, "old-rt");
+        const newUt = makeUserToken(nowSec() + DAY, "new-ut");
+        const newRt = makeRefreshToken(nowSec() + 20 * DAY, "new-rt");
+        const connection = makeConnection({
+            refreshTokenPlain: oldRt,
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        });
+        const written: string[] = [];
+        (db.update as Mock).mockReturnValue({
+            set: (values: Record<string, unknown>) => ({
+                where: () => {
+                    const params = [
+                        values.bearerToken,
+                        values.refreshToken,
+                        connection.refreshToken,
+                    ].map(String);
+                    written.push(...params);
+                    throw new DrizzleQueryError(
+                        'update "plaud_connections" set "bearer_token" = $1, "refresh_token" = $2 where "refresh_token" = $3',
+                        params,
+                        Object.assign(new Error("terminating connection"), {
+                            code: "57P01",
+                        }),
+                    );
+                },
+            }),
+        });
+        routeFetch({
+            "/auth/refresh-user-token": () =>
+                jsonResponse({
+                    status: 0,
+                    access_token: newUt,
+                    refresh_token: newRt,
+                }),
+            "/workspace/token/": mintOk,
+            "/device/list": devicesOk,
+        });
+
+        const client = await createPlaudClient(connection);
+        await client.listDevices();
+
+        const [[, mintInit]] = callsTo("/workspace/token/");
+        expect(authHeader(mintInit)).toBe(`Bearer ${newUt}`);
+
+        const secrets = [
+            ...written,
+            String(connection.bearerToken),
+            oldRt,
+            newUt,
+            newRt,
+        ];
+        const logged = JSON.stringify([
+            (console.log as Mock).mock.calls,
+            (console.info as Mock).mock.calls,
+            (console.warn as Mock).mock.calls,
+            (console.error as Mock).mock.calls,
+        ]);
+        const captured = JSON.stringify(
+            (captureServerException as Mock).mock.calls.map(
+                ([error, context]) => [
+                    error instanceof Error
+                        ? { message: error.message, cause: error.cause }
+                        : error,
+                    context,
+                ],
+            ),
+        );
+        for (const secret of secrets) {
+            expect(logged).not.toContain(secret);
+            expect(captured).not.toContain(secret);
+        }
+
+        expect(console.error).toHaveBeenCalledWith(
+            "[plaud] failed to store refreshed tokens (error=Error, cause=57P01)",
+        );
+        expect(captureServerException).toHaveBeenCalledTimes(1);
+        const [error, context] = (captureServerException as Mock).mock.calls[0];
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe("plaud_refresh_persist_failed");
+        expect((error as Error).cause).toBeUndefined();
+        expect(context).toEqual({
+            source: "plaud",
+            distinctId: USER_ID,
+            reason: "refresh_persist_failed",
+            errorName: "Error",
+            causeCode: "57P01",
+        });
     });
 });
 

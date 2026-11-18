@@ -37,6 +37,22 @@ export function shouldRefreshPlaudAccessToken(
     );
 }
 
+function dbErrorSummary(err: unknown): {
+    errorName: string;
+    causeCode: string | null;
+} {
+    const errorName = err instanceof Error ? err.name : typeof err;
+    const cause = err instanceof Error ? err.cause : undefined;
+    const causeCode =
+        typeof cause === "object" &&
+        cause !== null &&
+        "code" in cause &&
+        typeof cause.code === "string"
+            ? cause.code
+            : null;
+    return { errorName, causeCode };
+}
+
 async function refreshConnectionTokens(
     connection: PlaudConnectionCredentials,
     storedRefreshToken: string,
@@ -76,14 +92,16 @@ async function refreshConnectionTokens(
             );
         }
     } catch (err) {
+        const { errorName, causeCode } = dbErrorSummary(err);
         console.error(
-            "[plaud] failed to store refreshed tokens:",
-            err instanceof Error ? err.message : err,
+            `[plaud] failed to store refreshed tokens (error=${errorName}, cause=${causeCode ?? "none"})`,
         );
-        captureServerException(err, {
+        captureServerException(new Error("plaud_refresh_persist_failed"), {
             source: "plaud",
             distinctId: connection.userId,
             reason: "refresh_persist_failed",
+            errorName,
+            causeCode,
         });
     }
 
@@ -109,9 +127,9 @@ async function backfillMissingExpiries(
             sessionExpiresAt,
         });
     } catch (err) {
+        const { errorName, causeCode } = dbErrorSummary(err);
         console.warn(
-            "[plaud] failed to backfill token expiries:",
-            err instanceof Error ? err.message : err,
+            `[plaud] failed to backfill token expiries (error=${errorName}, cause=${causeCode ?? "none"})`,
         );
     }
     return accessExpiresAt;
