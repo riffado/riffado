@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import unzipper from "unzipper";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { StorageProvider } from "@/lib/storage/types";
+import type { StorageProvider, UploadStreamOptions } from "@/lib/storage/types";
 
 const { dbMock } = vi.hoisted(() => ({ dbMock: { select: vi.fn() } }));
 
@@ -57,11 +57,14 @@ class FakeStorage implements StorageProvider {
         if (!buf) throw new Error(`not found: ${key}`);
         return Readable.from(buf);
     }
+    uploadOptions: UploadStreamOptions | undefined;
     async uploadStream(
         key: string,
         stream: Readable,
         _contentType: string,
+        options?: UploadStreamOptions,
     ): Promise<string> {
+        this.uploadOptions = options;
         const chunks: Buffer[] = [];
         for await (const chunk of stream) {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -345,6 +348,20 @@ describe("buildAndUploadExportArchive", () => {
             included: false,
             reason: expect.stringContaining("interrupted"),
         });
+    });
+
+    it("hands its progress callback to the upload so in-flight upload parts count as progress", async () => {
+        mockSelectSequence([[], [], []]);
+        const onProgress = vi.fn();
+
+        await buildAndUploadExportArchive({
+            userId: "user-1",
+            storage,
+            storageKey: "exports/user-1/job-7.zip",
+            onProgress,
+        });
+
+        expect(storage.uploadOptions?.onProgress).toBe(onProgress);
     });
 
     it("aborts and rejects immediately when the signal is already aborted", async () => {

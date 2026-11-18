@@ -61,8 +61,8 @@ export function withStorageTiming(provider: StorageProvider): StorageProvider {
                 () => provider.getObjectSize(key),
                 judgeKeyCall,
             ),
-        uploadStream: (key, stream, contentType) =>
-            provider.uploadStream(key, stream, contentType),
+        uploadStream: (key, stream, contentType, options) =>
+            provider.uploadStream(key, stream, contentType, options),
         exists: (key) =>
             trackCall("storage", () => provider.exists(key), judgeExists),
         getSignedUrl: (key, expiresIn) => provider.getSignedUrl(key, expiresIn),

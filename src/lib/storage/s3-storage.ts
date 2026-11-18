@@ -1,4 +1,4 @@
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import {
     DeleteObjectCommand,
     GetObjectCommand,
@@ -15,10 +15,35 @@ import type {
     DirectDownloadUrlOptions,
     S3Config,
     StorageProvider,
+    UploadStreamOptions,
 } from "./types";
 
 const MULTIPART_PART_SIZE_BYTES = 32 * 1024 * 1024;
 const MULTIPART_QUEUE_SIZE = 2;
+const UPLOAD_PROGRESS_CHUNK_BYTES = 64 * 1024;
+
+function progressReportingBody(
+    body: Uint8Array,
+    onProgress: () => void,
+): Readable {
+    let offset = 0;
+    return new Readable({
+        read() {
+            if (offset >= body.byteLength) {
+                this.push(null);
+                return;
+            }
+            const end = Math.min(
+                offset + UPLOAD_PROGRESS_CHUNK_BYTES,
+                body.byteLength,
+            );
+            const chunk = body.subarray(offset, end);
+            offset = end;
+            onProgress();
+            this.push(chunk);
+        },
+    });
+}
 
 /**
  * S3-compatible storage provider
@@ -27,6 +52,7 @@ const MULTIPART_QUEUE_SIZE = 2;
 export class S3Storage implements StorageProvider {
     private client: S3Client;
     private bucket: string;
+    private uploadProgressListeners = new Map<string, () => void>();
 
     constructor(config: S3Config) {
         this.client = new S3Client({
@@ -40,6 +66,31 @@ export class S3Storage implements StorageProvider {
                 forcePathStyle: true, // Required for some S3-compatible services
             }),
         });
+        this.client.middlewareStack.add(
+            (next) => async (args) => {
+                const key = (args.input as { Key?: unknown }).Key;
+                const onProgress =
+                    typeof key === "string"
+                        ? this.uploadProgressListeners.get(key)
+                        : undefined;
+                const request = args.request as { body?: unknown };
+                if (!onProgress || !(request.body instanceof Uint8Array)) {
+                    return next(args);
+                }
+                return next({
+                    ...args,
+                    request: {
+                        ...request,
+                        body: progressReportingBody(request.body, onProgress),
+                    },
+                });
+            },
+            {
+                step: "deserialize",
+                priority: "low",
+                name: "riffadoUploadProgress",
+            },
+        );
 
         this.bucket = config.bucket;
     }
@@ -118,7 +169,10 @@ export class S3Storage implements StorageProvider {
         key: string,
         stream: Readable,
         contentType: string,
+        options: UploadStreamOptions = {},
     ): Promise<string> {
+        const { onProgress } = options;
+        if (onProgress) this.uploadProgressListeners.set(key, onProgress);
         try {
             // lib-storage's Upload handles multipart automatically once the
             // stream crosses the part-size threshold, so archives of any
@@ -135,6 +189,7 @@ export class S3Storage implements StorageProvider {
                     ContentType: contentType,
                 },
             });
+            if (onProgress) upload.on("httpUploadProgress", onProgress);
             await upload.done();
             return key;
         } catch (error) {
@@ -142,6 +197,8 @@ export class S3Storage implements StorageProvider {
                 `Failed to stream upload to S3: ${error instanceof Error ? error.message : String(error)}`,
                 { cause: error },
             );
+        } finally {
+            if (onProgress) this.uploadProgressListeners.delete(key);
         }
     }
 

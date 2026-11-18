@@ -154,6 +154,7 @@ export async function buildAndUploadExportArchive(input: {
         storageKey,
         passthrough,
         "application/zip",
+        { onProgress },
     );
     // `uploadPromise` is only *awaited* much later (after the
     // audio-settled wait and `archive.finalize()`), but it starts
