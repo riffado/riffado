@@ -169,6 +169,7 @@ async function processJob(job: {
             storageKey,
             fileSize: result.fileSize,
             recordingCount: result.recordingCount,
+            retireOlderArchives: result.audioOmittedCount === 0,
         });
 
         if (!completed) {
@@ -182,6 +183,12 @@ async function processJob(job: {
             );
             await discardAttemptObject(storage, storageKey);
             return;
+        }
+
+        if (result.audioOmittedCount > 0) {
+            console.warn(
+                `[export-worker] job ${job.id} completed without audio for ${result.audioOmittedCount} recording(s); keeping the user's older archives`,
+            );
         }
 
         await notifyExportReady(job.userId, job.id).catch((error) => {

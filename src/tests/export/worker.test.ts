@@ -104,6 +104,7 @@ describe("export worker tick", () => {
         buildArchiveMock.buildAndUploadExportArchive.mockResolvedValue({
             recordingCount: 3,
             fileSize: 12345,
+            audioOmittedCount: 0,
         });
 
         await tick();
@@ -123,6 +124,7 @@ describe("export worker tick", () => {
             storageKey: "exports/user-1/job-1-token-1.zip",
             fileSize: 12345,
             recordingCount: 3,
+            retireOlderArchives: true,
         });
         expect(emailMock.sendExportReadyEmail).toHaveBeenCalledWith(
             expect.objectContaining({ userId: "user-1", jobId: "job-1" }),

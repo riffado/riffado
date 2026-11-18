@@ -11,7 +11,8 @@
  *   1. Completing a job expires the same user's older completed archives
  *      now (the worker's cleanup pass then deletes them); the archive that
  *      just completed stays downloadable, other users are untouched, and a
- *      superseded claim retires nothing.
+ *      superseded claim retires nothing. An archive that omitted any
+ *      audio retires nothing either, so it never replaces a complete one.
  *   2. `listExportStorageKeysForUser` returns every key the user's jobs
  *      may have written, scoped to that user.
  *   3. A failure recorded after a job completed (late failure for the
@@ -179,6 +180,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
             storageKey: "exports/user-a/new-live-token.zip",
             fileSize: 200,
             recordingCount: 2,
+            retireOlderArchives: true,
         });
 
         expect(completed).toBe(true);
@@ -203,6 +205,30 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
         expect(expired.map((job) => job.id).sort()).toEqual(["old-1", "old-2"]);
     });
 
+    it("keeps older archives when the new archive omitted audio", async () => {
+        await insertCompleted({
+            id: "complete",
+            userId: "user-a",
+            completedDaysAgo: 2,
+        });
+        await insertProcessing("degraded", "user-a");
+        const before = await expiresAtOf("complete");
+
+        const completed = await completeExportJob({
+            jobId: "degraded",
+            userId: "user-a",
+            claimToken: "live-token",
+            storageKey: "exports/user-a/degraded-live-token.zip",
+            fileSize: 200,
+            recordingCount: 2,
+            retireOlderArchives: false,
+        });
+
+        expect(completed).toBe(true);
+        expect(await expiresAtOf("complete")).toEqual(before);
+        expect(await selectExpiredExportJobs(10)).toEqual([]);
+    });
+
     it("retires nothing when the claim was superseded, so the older archive stays downloadable", async () => {
         await insertCompleted({
             id: "old",
@@ -219,6 +245,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
             storageKey: "exports/user-a/new-stale-token.zip",
             fileSize: 200,
             recordingCount: 2,
+            retireOlderArchives: true,
         });
 
         expect(completed).toBe(false);
@@ -243,6 +270,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
             storageKey: "exports/user-b/new-live-token.zip",
             fileSize: 200,
             recordingCount: 2,
+            retireOlderArchives: true,
         });
 
         expect(completed).toBe(false);
@@ -265,6 +293,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
             storageKey: "exports/user-a/new-live-token.zip",
             fileSize: 200,
             recordingCount: 2,
+            retireOlderArchives: true,
         });
 
         expect(await expiresAtOf("ancient")).toEqual(before);
@@ -339,6 +368,7 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
                 storageKey: "exports/user-a/new-live-token.zip",
                 fileSize: 200,
                 recordingCount: 2,
+                retireOlderArchives: true,
             }),
         ).toBe(true);
 

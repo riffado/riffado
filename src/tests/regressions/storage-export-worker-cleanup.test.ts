@@ -168,6 +168,32 @@ describe("export worker storage cleanup", () => {
         ).toHaveBeenCalledWith(mocks.storage);
     });
 
+    it("keeps the user's older archives when the new archive omitted audio", async () => {
+        mocks.queries.claimPendingExportJobs.mockResolvedValue([
+            { id: "job-1", userId: "user-1", claimToken: "token-1" },
+        ]);
+        mocks.buildArchive.buildAndUploadExportArchive.mockResolvedValue({
+            recordingCount: 3,
+            fileSize: 10,
+            audioOmittedCount: 2,
+        });
+        mocks.queries.completeExportJob.mockResolvedValue(true);
+        mocks.db.select.mockReturnValue({
+            from: () => ({ where: () => ({ limit: async () => [] }) }),
+        });
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await tick();
+        warnSpy.mockRestore();
+
+        expect(mocks.queries.completeExportJob).toHaveBeenCalledWith(
+            expect.objectContaining({
+                jobId: "job-1",
+                retireOlderArchives: false,
+            }),
+        );
+    });
+
     it("keeps the archive when completion committed but the call still failed", async () => {
         mocks.queries.claimPendingExportJobs.mockResolvedValue([
             { id: "job-1", userId: "user-1", claimToken: "token-1" },

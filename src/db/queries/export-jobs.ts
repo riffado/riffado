@@ -219,8 +219,9 @@ export async function claimPendingExportJobs(
  * In the same transaction, the user's older completed archives expire
  * now, so the worker's cleanup pass deletes them and only the archive
  * that just completed stays downloadable. Nothing is expired when the
- * claim no longer matches, so the user always keeps at least one
- * downloadable archive.
+ * claim no longer matches, or when `retireOlderArchives` is false (the
+ * new archive is missing audio, so an older one may be more complete),
+ * so the user always keeps at least one downloadable archive.
  */
 export async function completeExportJob(input: {
     jobId: string;
@@ -229,6 +230,7 @@ export async function completeExportJob(input: {
     storageKey: string;
     fileSize: number;
     recordingCount: number;
+    retireOlderArchives: boolean;
 }): Promise<boolean> {
     const completedAt = new Date();
     return db.transaction(async (tx) => {
@@ -254,6 +256,7 @@ export async function completeExportJob(input: {
             )
             .returning({ id: exportJobs.id });
         if (completed.length === 0) return false;
+        if (!input.retireOlderArchives) return true;
 
         await tx
             .update(exportJobs)
