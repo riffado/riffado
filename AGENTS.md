@@ -271,7 +271,7 @@ When designing or reviewing any feature, assume hosted is real and check both mo
 
 Riffado has "marketing ahead of code" in some places. **Always cross-check landing / pricing / changelog claims against actual code before designing features that depend on them.** Known gaps:
 
-- Plaud refresh-token handling was removed in `bed9cd3` — Plaud issues only long-lived access tokens (~300 day JWT). Do not re-add refresh-token plumbing.
+- Plaud connections are not permanent. Even with refresh tokens a Plaud sign-in ends 30 days after login (24 hours for a pasted token without a refresh token), then the user reconnects. Don't claim "connect once" in copy. Refresh-token plumbing was removed in `bed9cd3` when Plaud issued ~300-day tokens and re-added once Plaud moved to short user tokens (see Plaud API Gotchas).
 
 ### Target UX comparisons
 
@@ -307,7 +307,7 @@ This is not optional, not "I'll add it later," not "it's an internal endpoint." 
 
 These values go through `src/lib/encryption.ts` (AES-256-GCM) before hitting the DB:
 
-- Plaud bearer tokens (`plaudConnections.bearerToken`)
+- Plaud bearer and refresh tokens (`plaudConnections.bearerToken`, `plaudConnections.refreshToken`)
 - AI API keys (`apiCredentials.apiKey`)
 - SMTP credentials
 - S3 credentials
@@ -333,11 +333,11 @@ If drizzle-kit generates SQL that re-adds columns that already exist, meta snaps
 
 Non-obvious facts about Plaud's server:
 
-- **No refresh tokens.** The OTP login flow returns only `access_token` — a long-lived JWT (~300 day expiry observed). Do not re-add refresh-token plumbing. When access tokens expire, users re-auth via the reconnect UI.
-- **Two token types: UT vs WT.** Plaud issues a long-lived **user token (UT, ~300 days)** AND short-lived **workspace tokens (WT, ~24h)**. The UT is what Riffado stores in `plaudConnections.bearerToken`; `PlaudClient` mints a fresh WT from it per request (`/user-app/auth/workspace/token/<id>`). Tell them apart by JWT claims: a WT carries `ut_ref`/`wid`/`wtype` (and ~24h lifetime); a UT does not. This holds for SSO (Google/Apple) accounts too — verified via HAR (issue #203). **Gotcha:** web.plaud.ai puts the WT on the data requests users inspect (`/device/list`, `/file/simple/web`) and the UT in `localStorage.pld_tokenstr` plus identity endpoints (`/user/me`, `/team-app/workspaces/list`), so paste-flow users grab the WT by mistake. A pasted WT validates against `/device/list` (connect *looks* fine) but cannot mint a fresh WT, so the connection dies within a day. `isPlaudWorkspaceToken()` (`src/lib/plaud/auth.ts`) guards the connect-token + verify routes against this. Paste instructions should recommend the connector first, then `pld_tokenstr` if the user insists on manual paste; never point users at `/device/list` or `/file/simple/web`.
+- **User tokens are short; refresh tokens keep them alive.** The user token (UT) lasts 24 hours when captured from the Plaud web app (HttpOnly cookie `pld_ut`, Domain=plaud.ai) and 30 days from the email-code login (`POST /auth/otp-login` returns `access_token`, `refresh_token`, `ut_expire_at`, `urt_expire_at`, unix seconds). The refresh token (cookie `pld_urt`, Path=/auth/refresh-user-token, or OTP `refresh_token`) lasts 30 days and is a hard cap: `POST {apiBase}/auth/refresh-user-token` with `Authorization: Bearer <refresh_token>` and no body returns a fresh UT plus a rotated refresh token, but `urt_expire_at` never moves, so after 30 days the user must reconnect. The old refresh token keeps working after rotation, so concurrent refreshes from several processes are safe. Riffado stores the refresh token encrypted in `plaudConnections.refreshToken` with `accessExpiresAt` / `sessionExpiresAt`; `createPlaudClient()` (`src/lib/plaud/client-factory.ts`) refreshes when the UT expires within an hour or Plaud answers 401, at most once per client, and stores the result with a conditional update that never replaces a newer `accessExpiresAt`. A rejected refresh surfaces as `PLAUD_INVALID_TOKEN`, which the sync marks for reconnect. Legacy UTs issued before Plaud added refresh tokens last ~300 days, have no refresh token, and keep working until their `exp`.
+- **Two token types: UT vs WT.** Plaud issues a **user token (UT)** AND short-lived **workspace tokens (WT, ~24h)**. The UT is what Riffado stores in `plaudConnections.bearerToken`; `PlaudClient` mints a fresh WT from it per request (`/user-app/auth/workspace/token/<id>`). Tell them apart by JWT claims: a WT carries `ut_ref`/`wid`/`wtype`; a UT does not. This holds for SSO (Google/Apple) accounts too, verified via HAR (issue #203). **Gotcha:** web.plaud.ai puts the WT on the data requests users inspect (`/device/list`, `/file/simple/web`), while the UT lives in the HttpOnly `pld_ut` cookie and rides on identity endpoints (`/user/me`, `/team-app/workspaces/list`), so paste-flow users grab the WT by mistake. A pasted WT validates against `/device/list` (connect *looks* fine) but cannot mint a fresh WT, so the connection dies within a day. `isPlaudWorkspaceToken()` (`src/lib/plaud/auth.ts`) guards the connect-token + verify routes against this. Paste instructions should recommend Sign in with Plaud (the connector, which sends `pld_ut` as `accessToken` and `pld_urt` as `refreshToken`) or the email code first; the manual fallback is DevTools → Application → Cookies → `pld_ut`, which lasts 24 hours. Never point users at `/device/list` or `/file/simple/web`.
 - **Regional servers.** `api.plaud.ai` is global; accounts may live on `api-euc1.plaud.ai` (EU) or `api-apse1.plaud.ai` (APAC). `/auth/otp-send-code` returns `status: -302` with `data.domains.api` when the account is on a different region. `plaudSendCode` handles the redirect.
 - **Rate limiting.** `PlaudClient` has built-in retry-with-backoff on 429 + 5xx (`src/lib/plaud/client.ts`). Respect `Retry-After`.
-- **Bearer tokens are encrypted at rest** in `plaudConnections.bearerToken` — see Encryption block above. Decrypt only when constructing the HTTP request.
+- **Plaud tokens are encrypted at rest** in `plaudConnections.bearerToken` and `plaudConnections.refreshToken`. See Encryption block above. Decrypt only when constructing the HTTP request.
 
 ## Extension Points
 
