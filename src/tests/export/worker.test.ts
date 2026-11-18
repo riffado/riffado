@@ -18,6 +18,7 @@ const {
         reclaimStaleProcessingExportJobs: vi.fn(),
         selectStaleStorageKeys: vi.fn(),
         clearStaleStorageKey: vi.fn(),
+        isExportArchiveReferenced: vi.fn(),
         EXPORT_MAX_ATTEMPTS: 3,
     },
     buildArchiveMock: { buildAndUploadExportArchive: vi.fn() },

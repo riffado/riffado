@@ -6,6 +6,7 @@ import {
     completeExportJob,
     deleteExportJobRow,
     EXPORT_MAX_ATTEMPTS,
+    isExportArchiveReferenced,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
     selectExpiredExportJobs,
@@ -197,6 +198,19 @@ async function processJob(job: {
             message,
         );
         if (outcome === null) {
+            if (
+                await isExportArchiveReferenced({
+                    jobId: job.id,
+                    userId: job.userId,
+                    storageKey,
+                })
+            ) {
+                console.warn(
+                    `[export-worker] job ${job.id} reported a failure after its completion committed; keeping the archive:`,
+                    message,
+                );
+                return;
+            }
             // Claim superseded -- another worker owns (or already resolved)
             // this job. Nothing to record against a claim we no longer
             // hold. Cleanup below still runs: `storageKey` is scoped to

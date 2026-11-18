@@ -213,7 +213,8 @@ export async function claimPendingExportJobs(
  * work. Returns `false` (instead of throwing) if the claim no longer
  * matches -- the job was reclaimed as stale while this worker was still
  * building it -- so the caller can log it rather than silently
- * pretending the write landed.
+ * pretending the write landed. The claim token is cleared on completion,
+ * so no later write scoped to that claim can touch the completed row.
  *
  * In the same transaction, the user's older completed archives expire
  * now, so the worker's cleanup pass deletes them and only the archive
@@ -235,6 +236,7 @@ export async function completeExportJob(input: {
             .update(exportJobs)
             .set({
                 status: "completed",
+                claimToken: null,
                 storageKey: input.storageKey,
                 fileSize: input.fileSize,
                 recordingCount: input.recordingCount,
@@ -282,8 +284,9 @@ export async function completeExportJob(input: {
  * durable reason the job can never succeed.
  *
  * Returns `null` if the claim token no longer matches (the job was
- * reclaimed elsewhere) -- the caller has nothing to report on a job it
- * no longer owns.
+ * reclaimed elsewhere) or the job is no longer `processing` (its
+ * completion already committed) -- the caller has nothing to report on
+ * a job it no longer owns, and a completed job is never flipped back.
  */
 export async function recordExportJobFailure(
     jobId: string,
@@ -311,10 +314,37 @@ export async function recordExportJobFailure(
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then now()
                 else null
             end
-        where id = ${jobId} and claim_token = ${claimToken}
+        where id = ${jobId}
+          and status = 'processing'
+          and claim_token = ${claimToken}
         returning status, attempts
     `);
     return row ?? null;
+}
+
+/**
+ * True when the user's job row records `storageKey` as its completed
+ * archive. The worker checks this before discarding an attempt's object
+ * after a failure it could not record, so an archive whose completion
+ * committed is never deleted by the failure path.
+ */
+export async function isExportArchiveReferenced(input: {
+    jobId: string;
+    userId: string;
+    storageKey: string;
+}): Promise<boolean> {
+    const rows = await db
+        .select({ id: exportJobs.id })
+        .from(exportJobs)
+        .where(
+            and(
+                eq(exportJobs.id, input.jobId),
+                eq(exportJobs.userId, input.userId),
+                eq(exportJobs.storageKey, input.storageKey),
+            ),
+        )
+        .limit(1);
+    return rows.length > 0;
 }
 
 /**

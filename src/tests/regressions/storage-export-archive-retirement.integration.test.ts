@@ -14,6 +14,9 @@
  *      superseded claim retires nothing.
  *   2. `listExportStorageKeysForUser` returns every key the user's jobs
  *      may have written, scoped to that user.
+ *   3. A failure recorded after a job completed (late failure for the
+ *      same claim) never flips it back: completion clears the claim
+ *      token and the failure write only matches `processing` jobs.
  */
 
 import { eq } from "drizzle-orm";
@@ -61,6 +64,7 @@ import {
     completeExportJob,
     EXPORT_ARCHIVE_RETENTION_MS,
     getRecentCompletedExportJobForUser,
+    isExportArchiveReferenced,
     listExportStorageKeysForUser,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
@@ -323,6 +327,85 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
         expect(
             await recordExportJobFailure("job", "t2", "still broken"),
         ).toEqual({ status: "failed", attempts: 3 });
+    });
+
+    it("never flips a completed job back when a late failure arrives for its claim", async () => {
+        await insertProcessing("new", "user-a");
+        expect(
+            await completeExportJob({
+                jobId: "new",
+                userId: "user-a",
+                claimToken: "live-token",
+                storageKey: "exports/user-a/new-live-token.zip",
+                fileSize: 200,
+                recordingCount: 2,
+            }),
+        ).toBe(true);
+
+        expect(
+            await recordExportJobFailure("new", "live-token", "late"),
+        ).toBeNull();
+
+        const [row] = await db()
+            .select()
+            .from(exportJobs)
+            .where(eq(exportJobs.id, "new"));
+        expect(row?.status).toBe("completed");
+        expect(row?.claimToken).toBeNull();
+        expect(row?.errorMessage).toBeNull();
+        expect(row?.storageKey).toBe("exports/user-a/new-live-token.zip");
+    });
+
+    it("ignores a late failure for a completed row that still holds its claim token", async () => {
+        await insertCompleted({
+            id: "done",
+            userId: "user-a",
+            completedDaysAgo: 1,
+        });
+
+        expect(
+            await recordExportJobFailure("done", "token-done", "late"),
+        ).toBeNull();
+
+        const [row] = await db()
+            .select({
+                status: exportJobs.status,
+                attempts: exportJobs.attempts,
+            })
+            .from(exportJobs)
+            .where(eq(exportJobs.id, "done"));
+        expect(row).toEqual({ status: "completed", attempts: 0 });
+    });
+
+    it("reports a completed archive as referenced only for its own user and key", async () => {
+        await insertCompleted({
+            id: "done",
+            userId: "user-a",
+            completedDaysAgo: 1,
+        });
+        const storageKey = "exports/user-a/done-token-done.zip";
+
+        expect(
+            await isExportArchiveReferenced({
+                jobId: "done",
+                userId: "user-a",
+                storageKey,
+            }),
+        ).toBe(true);
+        expect(
+            await isExportArchiveReferenced({
+                jobId: "done",
+                userId: "user-b",
+                storageKey,
+            }),
+        ).toBe(false);
+        expect(
+            await isExportArchiveReferenced({
+                jobId: "done",
+                userId: "user-a",
+                storageKey: "exports/user-a/done-other.zip",
+            }),
+        ).toBe(false);
     });
 
     it("derives attempt keys in SQL exactly as the worker names them", async () => {

@@ -8,6 +8,12 @@
  * `storage_deletion_queue`, a missing object counts as deleted in the
  * expired-archive and stale-key sweeps, and every tick also retries the
  * deletion queue.
+ *
+ * A failure reported after the job's completion had already committed
+ * (e.g. the connection dropped after COMMIT) used to requeue the
+ * completed job and delete its archive. The failure write now only
+ * matches a `processing` job, completion clears the claim token, and the
+ * worker keeps an attempt's object whenever the job row references it.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,6 +29,7 @@ const mocks = vi.hoisted(() => ({
         reclaimStaleProcessingExportJobs: vi.fn(),
         selectStaleStorageKeys: vi.fn(),
         clearStaleStorageKey: vi.fn(),
+        isExportArchiveReferenced: vi.fn(),
         EXPORT_MAX_ATTEMPTS: 3,
     },
     storageDeletions: { enqueueStorageDeletions: vi.fn() },
@@ -159,5 +166,54 @@ describe("export worker storage cleanup", () => {
         expect(
             mocks.deletionQueue.sweepStorageDeletionQueue,
         ).toHaveBeenCalledWith(mocks.storage);
+    });
+
+    it("keeps the archive when completion committed but the call still failed", async () => {
+        mocks.queries.claimPendingExportJobs.mockResolvedValue([
+            { id: "job-1", userId: "user-1", claimToken: "token-1" },
+        ]);
+        mocks.buildArchive.buildAndUploadExportArchive.mockResolvedValue({
+            recordingCount: 1,
+            fileSize: 10,
+            audioOmittedCount: 0,
+        });
+        mocks.queries.completeExportJob.mockRejectedValue(
+            new Error("Connection terminated unexpectedly"),
+        );
+        mocks.queries.recordExportJobFailure.mockResolvedValue(null);
+        mocks.queries.isExportArchiveReferenced.mockResolvedValue(true);
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await tick();
+        warnSpy.mockRestore();
+
+        expect(mocks.queries.isExportArchiveReferenced).toHaveBeenCalledWith({
+            jobId: "job-1",
+            userId: "user-1",
+            storageKey: "exports/user-1/job-1-token-1.zip",
+        });
+        expect(mocks.storage.deleteFile).not.toHaveBeenCalled();
+        expect(
+            mocks.storageDeletions.enqueueStorageDeletions,
+        ).not.toHaveBeenCalled();
+    });
+
+    it("still discards a superseded attempt's object when the failure could not be recorded", async () => {
+        mocks.queries.claimPendingExportJobs.mockResolvedValue([
+            { id: "job-1", userId: "user-1", claimToken: "old" },
+        ]);
+        mocks.buildArchive.buildAndUploadExportArchive.mockRejectedValue(
+            new Error("boom"),
+        );
+        mocks.queries.recordExportJobFailure.mockResolvedValue(null);
+        mocks.queries.isExportArchiveReferenced.mockResolvedValue(false);
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+        await tick();
+        warnSpy.mockRestore();
+
+        expect(mocks.storage.deleteFile).toHaveBeenCalledWith(
+            "exports/user-1/job-1-old.zip",
+        );
     });
 });
