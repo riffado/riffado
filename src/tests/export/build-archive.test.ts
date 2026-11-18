@@ -67,6 +67,11 @@ class FakeStorage implements StorageProvider {
     async exists(key: string): Promise<boolean> {
         return this.files.has(key) || this.stuckPaths.has(key);
     }
+    async getObjectSize(key: string): Promise<number> {
+        const buf = this.files.get(key);
+        if (!buf) throw new Error(`not found: ${key}`);
+        return buf.length;
+    }
     async getSignedUrl(): Promise<string> {
         return "https://example.com/signed";
     }

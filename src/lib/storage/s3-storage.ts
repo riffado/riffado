@@ -10,7 +10,15 @@ import {
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { S3Config, StorageProvider } from "./types";
+import type {
+    ByteRange,
+    DirectDownloadUrlOptions,
+    S3Config,
+    StorageProvider,
+} from "./types";
+
+const MULTIPART_PART_SIZE_BYTES = 32 * 1024 * 1024;
+const MULTIPART_QUEUE_SIZE = 2;
 
 /**
  * S3-compatible storage provider
@@ -85,11 +93,12 @@ export class S3Storage implements StorageProvider {
         }
     }
 
-    async downloadStream(key: string): Promise<Readable> {
+    async downloadStream(key: string, range?: ByteRange): Promise<Readable> {
         try {
             const command = new GetObjectCommand({
                 Bucket: this.bucket,
                 Key: key,
+                ...(range && { Range: `bytes=${range.start}-${range.end}` }),
             });
             const response = await this.client.send(command);
             if (!response.Body) {
@@ -117,6 +126,8 @@ export class S3Storage implements StorageProvider {
             // thing in server memory.
             const upload = new Upload({
                 client: this.client,
+                partSize: MULTIPART_PART_SIZE_BYTES,
+                queueSize: MULTIPART_QUEUE_SIZE,
                 params: {
                     Bucket: this.bucket,
                     Key: key,
@@ -155,6 +166,32 @@ export class S3Storage implements StorageProvider {
             if (status === 404) return false;
             throw error;
         }
+    }
+
+    async getObjectSize(key: string): Promise<number> {
+        const response = await this.client.send(
+            new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+        );
+        if (typeof response.ContentLength !== "number") {
+            throw new Error(
+                `S3 HeadObject returned no ContentLength for ${key}`,
+            );
+        }
+        return response.ContentLength;
+    }
+
+    async getDirectDownloadUrl(
+        key: string,
+        options: DirectDownloadUrlOptions,
+    ): Promise<string> {
+        const command = new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+            ResponseContentType: options.contentType,
+        });
+        return getSignedUrl(this.client, command, {
+            expiresIn: options.expiresInSeconds,
+        });
     }
 
     async getSignedUrl(key: string, expiresIn: number): Promise<string> {
