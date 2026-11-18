@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 const { originalNextPhase } = vi.hoisted(() => {
@@ -50,5 +52,13 @@ describe("STATUS_TOKEN env", () => {
         expect(logged).toContain("STATUS_TOKEN");
         expect(logged).not.toContain(short);
         expect(logged).not.toContain("b".repeat(20));
+    });
+
+    it("is passed into the app container by docker-compose.yml", () => {
+        const compose = readFileSync(
+            join(process.cwd(), "docker-compose.yml"),
+            "utf8",
+        );
+        expect(compose).toContain(`STATUS_TOKEN: \${STATUS_TOKEN:-}`);
     });
 });
