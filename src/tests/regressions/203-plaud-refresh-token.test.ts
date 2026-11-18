@@ -1279,6 +1279,199 @@ describe("sync with a rejected refresh token", () => {
     });
 });
 
+// ── Transient refresh failures ────────────────────────────────────────────────
+
+type RefreshFailure = [string, RouteHandler, ErrorCode];
+
+const transientRefreshFailures: RefreshFailure[] = [
+    [
+        "a 429",
+        () => jsonResponse({ msg: "slow down" }, 429),
+        ErrorCode.PLAUD_RATE_LIMITED,
+    ],
+    [
+        "a 503",
+        () => jsonResponse({ msg: "down" }, 503),
+        ErrorCode.PLAUD_UPSTREAM_ERROR,
+    ],
+    [
+        "a network error",
+        () => {
+            throw new TypeError("fetch failed");
+        },
+        ErrorCode.PLAUD_UPSTREAM_ERROR,
+    ],
+];
+
+/** Plaud rejects `rejectedUt` everywhere and accepts anything else. */
+function routeWithExpiredUserToken(
+    rejectedUt: string,
+    refresh: RouteHandler,
+): void {
+    const rejectOld =
+        (ok: RouteHandler): RouteHandler =>
+        (url, init) =>
+            authHeader(init) === `Bearer ${rejectedUt}`
+                ? jsonResponse({ msg: "expired" }, 401)
+                : ok(url, init);
+    routeFetch({
+        "/auth/refresh-user-token": refresh,
+        "/workspace/token/": rejectOld(() =>
+            jsonResponse({ status: 0, data: { workspace_token: "wt.new" } }),
+        ),
+        "/device/list": rejectOld(devicesOk),
+        "/file/simple/web": rejectOld(() =>
+            jsonResponse({ status: 0, data_file_list: [] }),
+        ),
+    });
+}
+
+describe("transient refresh failures after a 401", () => {
+    it.each(
+        transientRefreshFailures,
+    )("rethrows %s instead of reporting an invalid token", async (_label, refresh, code) => {
+        mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        routeWithExpiredUserToken(oldUt, refresh);
+
+        const client = await createPlaudClient(
+            makeConnection({ accessToken: oldUt }),
+        );
+
+        await expect(client.listDevices()).rejects.toMatchObject({ code });
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+    });
+
+    it("retries the refresh on a later 401 after a transient failure", async () => {
+        mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        const newUt = makeUserToken(nowSec() + DAY, "new-ut");
+        let refreshCalls = 0;
+        routeWithExpiredUserToken(oldUt, () => {
+            refreshCalls += 1;
+            return refreshCalls === 1
+                ? jsonResponse({}, 503)
+                : jsonResponse({ status: 0, access_token: newUt });
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({ accessToken: oldUt }),
+        );
+        await expect(client.listDevices()).rejects.toMatchObject({
+            code: ErrorCode.PLAUD_UPSTREAM_ERROR,
+        });
+        const devices = await client.listDevices();
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(2);
+    });
+
+    it("does not mark the connection for reconnect when the refresh fails transiently", async () => {
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        mockSyncSelects(makeConnection({ accessToken: oldUt }));
+        const updates = mockUpdates();
+        routeWithExpiredUserToken(oldUt, () => jsonResponse({}, 503));
+
+        const result = await syncRecordingsForUser(USER_ID);
+
+        expect(result.needsReconnect).toBeFalsy();
+        expect(updates.set).not.toHaveBeenCalledWith(
+            expect.objectContaining({ invalidatedAt: expect.any(Date) }),
+        );
+        expect(result.errors.join(" ")).toMatch(/temporarily unavailable/);
+    });
+});
+
+describe("transient failures of the early refresh", () => {
+    it.each(
+        transientRefreshFailures,
+    )("uses the still-valid token after %s and retries on a later 401", async (_label, refresh) => {
+        mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 30 * 60, "old-ut");
+        const newUt = makeUserToken(nowSec() + DAY, "new-ut");
+        let refreshCalls = 0;
+        let oldUtAccepted = true;
+        const acceptsOldUt: RouteHandler = (_url, init) =>
+            authHeader(init) === `Bearer ${oldUt}` && !oldUtAccepted
+                ? jsonResponse({ msg: "expired" }, 401)
+                : jsonResponse({
+                      status: 0,
+                      data: {
+                          workspace_token:
+                              authHeader(init) === `Bearer ${oldUt}`
+                                  ? "wt.old"
+                                  : "wt.new",
+                      },
+                  });
+        routeFetch({
+            "/auth/refresh-user-token": (url, init) => {
+                refreshCalls += 1;
+                return refreshCalls === 1
+                    ? refresh(url, init)
+                    : jsonResponse({ status: 0, access_token: newUt });
+            },
+            "/workspace/token/": acceptsOldUt,
+            "/device/list": (url, init) =>
+                !oldUtAccepted &&
+                ["Bearer wt.old", `Bearer ${oldUt}`].includes(
+                    authHeader(init) ?? "",
+                )
+                    ? jsonResponse({ msg: "expired" }, 401)
+                    : devicesOk(url, init),
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({
+                accessToken: oldUt,
+                accessExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+            }),
+        );
+        await client.listDevices();
+        expect(refreshCalls).toBe(1);
+
+        oldUtAccepted = false;
+        await client.listDevices();
+
+        expect(refreshCalls).toBe(2);
+        expect(authHeader(callsTo("/device/list").at(-1)?.[1])).toBe(
+            "Bearer wt.new",
+        );
+    });
+
+    it.each(
+        transientRefreshFailures,
+    )("surfaces %s, not an invalid token, when the token already expired", async (_label, refresh, code) => {
+        routeFetch({ "/auth/refresh-user-token": refresh });
+        await expect(
+            createPlaudClient(
+                makeConnection({
+                    accessExpiresAt: new Date(Date.now() - 1000),
+                }),
+            ),
+        ).rejects.toMatchObject({ code });
+    });
+
+    it("does not mark the connection for reconnect when the early refresh fails transiently", async () => {
+        mockSyncSelects(
+            makeConnection({
+                accessToken: makeUserToken(nowSec() - 60),
+                accessExpiresAt: new Date(Date.now() - 60_000),
+            }),
+        );
+        const updates = mockUpdates();
+        routeFetch({
+            "/auth/refresh-user-token": () => jsonResponse({}, 429),
+        });
+
+        const result = await syncRecordingsForUser(USER_ID);
+
+        expect(result.needsReconnect).toBeFalsy();
+        expect(updates.set).not.toHaveBeenCalledWith(
+            expect.objectContaining({ invalidatedAt: expect.any(Date) }),
+        );
+    });
+});
+
 // ── Dashboard banner predicate ──────────────────────────────────────────────
 
 describe("plaudConnectionBannerState", () => {

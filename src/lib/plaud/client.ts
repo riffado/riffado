@@ -48,10 +48,23 @@ function plaudHttpError(status: number, msg: string): AppError {
     });
 }
 
+/**
+ * True when `err` means Plaud rejected the token outright
+ * (`PLAUD_INVALID_TOKEN`), as opposed to a rate limit, upstream or network
+ * failure that may succeed on a later attempt.
+ */
+export function isPlaudTokenRejection(err: unknown): boolean {
+    return (
+        err instanceof AppError && err.code === ErrorCode.PLAUD_INVALID_TOKEN
+    );
+}
+
 export interface PlaudClientOptions {
     /**
-     * Returns a fresh user token after Plaud answers 401. Called at most once
-     * per client; a rejection leaves the original 401 in place.
+     * Returns a fresh user token after Plaud answers 401. At most one call is
+     * in flight per client. A `PLAUD_INVALID_TOKEN` rejection leaves the
+     * original 401 in place and is not retried; any other rejection is
+     * rethrown to the caller and a later 401 may try again.
      */
     refreshUserToken?: () => Promise<string>;
 }
@@ -121,17 +134,27 @@ export class PlaudClient {
     ): Promise<boolean> {
         if (!this.refreshUserToken) return false;
         if (!this.userTokenRefresh) {
-            this.userTokenRefresh = this.refreshUserToken().then((token) => {
+            const attempt = this.refreshUserToken().then((token) => {
                 this.userToken = token;
                 this.workspaceToken = undefined;
                 this.workspaceFallbackToUt = false;
+            });
+            this.userTokenRefresh = attempt;
+            attempt.catch((err: unknown) => {
+                if (
+                    !isPlaudTokenRejection(err) &&
+                    this.userTokenRefresh === attempt
+                ) {
+                    this.userTokenRefresh = undefined;
+                }
             });
         }
         try {
             await this.userTokenRefresh;
         } catch (err) {
+            if (!isPlaudTokenRejection(err)) throw err;
             console.warn(
-                "[plaud] user token refresh after 401 failed:",
+                "[plaud] user token refresh after 401 was rejected:",
                 err instanceof Error ? err.message : err,
             );
             return false;

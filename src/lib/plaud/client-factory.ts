@@ -3,7 +3,7 @@ import { decrypt } from "@/lib/encryption";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { captureServerException } from "@/lib/posthog-server";
 import { buildPlaudTokenSet, plaudRefreshUserToken } from "./auth";
-import { PlaudClient } from "./client";
+import { isPlaudTokenRejection, PlaudClient } from "./client";
 import {
     backfillPlaudTokenExpiries,
     persistRefreshedPlaudTokens,
@@ -120,10 +120,13 @@ async function backfillMissingExpiries(
 /**
  * Build a `PlaudClient` from a stored connection. When the connection has a
  * refresh token, refreshes the user token first if it expires within
- * `PLAUD_ACCESS_REFRESH_WINDOW_MS`, and lets the client refresh once more on
- * a 401. Refreshed tokens are stored encrypted, scoped by user and
- * connection id. Throws `PLAUD_INVALID_TOKEN` when Plaud rejects the refresh
- * token and the stored user token has already expired.
+ * `PLAUD_ACCESS_REFRESH_WINDOW_MS`, and lets the client refresh again on a
+ * 401. At most one refresh is in flight; a refresh that failed for a
+ * transient reason (rate limit, upstream or network error) may be retried,
+ * a rejected one is not. Refreshed tokens are stored encrypted, scoped by
+ * user and connection id. Throws `PLAUD_INVALID_TOKEN` when Plaud rejects
+ * the refresh token and the stored user token has already expired, or the
+ * transient error when the refresh fails and the user token has expired.
  */
 export async function createPlaudClient(
     connection: PlaudConnectionCredentials,
@@ -149,11 +152,19 @@ export async function createPlaudClient(
 
     let refreshing: Promise<string> | undefined;
     const refreshOnce = (): Promise<string> => {
-        refreshing ??= refreshConnectionTokens(
-            connection,
-            storedRefreshToken,
-            refreshToken,
-        );
+        if (!refreshing) {
+            const attempt = refreshConnectionTokens(
+                connection,
+                storedRefreshToken,
+                refreshToken,
+            );
+            refreshing = attempt;
+            attempt.catch((err: unknown) => {
+                if (!isPlaudTokenRejection(err) && refreshing === attempt) {
+                    refreshing = undefined;
+                }
+            });
+        }
         return refreshing;
     };
 

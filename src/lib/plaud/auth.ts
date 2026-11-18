@@ -184,7 +184,8 @@ const REFRESH_REJECTED_MESSAGE =
  * (`POST /auth/refresh-user-token`). Plaud rotates the refresh token but
  * keeps the old one valid, and never extends the session past its original
  * end. Throws `PLAUD_INVALID_TOKEN` when Plaud rejects the refresh token,
- * `PLAUD_RATE_LIMITED` / `PLAUD_UPSTREAM_ERROR` for transient failures.
+ * `PLAUD_RATE_LIMITED` / `PLAUD_UPSTREAM_ERROR` for transient failures
+ * (including network errors).
  */
 export async function plaudRefreshUserToken(
     refreshToken: string,
@@ -198,13 +199,22 @@ export async function plaudRefreshUserToken(
         );
     }
 
-    const res = await plaudFetch(`${apiBase}/auth/refresh-user-token`, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${refreshToken}`,
-            "User-Agent": PLAUD_USER_AGENT,
-        },
-    });
+    let res: Response;
+    try {
+        res = await plaudFetch(`${apiBase}/auth/refresh-user-token`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${refreshToken}`,
+                "User-Agent": PLAUD_USER_AGENT,
+            },
+        });
+    } catch {
+        throw new AppError(
+            ErrorCode.PLAUD_UPSTREAM_ERROR,
+            "Failed to communicate with Plaud. Please try again later.",
+            502,
+        );
+    }
 
     if (res.status === 429) {
         throw new AppError(
