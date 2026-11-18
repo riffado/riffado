@@ -840,6 +840,13 @@ async function transcribeRecordingInner(
     }
 }
 
+function providerStatusOf(error: unknown): number | undefined {
+    const status = (error as { status?: unknown } | null)?.status;
+    return error instanceof Error && typeof status === "number"
+        ? status
+        : undefined;
+}
+
 function isMynahBudgetExhausted(error: unknown): boolean {
     return error instanceof Error && error.name === "MynahBudgetExhaustedError";
 }

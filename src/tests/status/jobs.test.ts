@@ -136,6 +136,30 @@ describe("event job freshness (auto-transcribe)", () => {
             reason: "job-failing",
         });
     });
+
+    it("is idle, not down, when failures stopped without a later success (nothing left to do)", () => {
+        expect(
+            judgeJob(
+                row({
+                    lastSuccessAt: ago(5 * 60 * MIN),
+                    lastErrorAt: ago(31 * MIN),
+                    failingSince: ago(4 * 60 * MIN),
+                }),
+                policy,
+                NOW,
+            ),
+        ).toEqual({ state: "ok", reason: "job-idle" });
+        expect(
+            judgeJob(
+                row({
+                    lastErrorAt: ago(29 * MIN),
+                    failingSince: ago(4 * 60 * MIN),
+                }),
+                policy,
+                NOW,
+            ).state,
+        ).toBe("down");
+    });
 });
 
 describe("payments: Stripe webhook inbox", () => {

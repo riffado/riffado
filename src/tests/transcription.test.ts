@@ -222,10 +222,22 @@ describe("Transcription", () => {
             expect(transcribeViaMynah).not.toHaveBeenCalled();
         });
 
-        it("should return error when API call fails", async () => {
-            const mockCreate = vi
-                .fn()
-                .mockRejectedValue(new Error("API Error"));
+        it.each([
+            {
+                thrown: new Error("API Error"),
+                providerStatus: undefined,
+            },
+            {
+                thrown: Object.assign(new Error("Incorrect API key"), {
+                    status: 401,
+                }),
+                providerStatus: 401,
+            },
+        ])("should return error when API call fails ($thrown.message)", async ({
+            thrown,
+            providerStatus,
+        }) => {
+            const mockCreate = vi.fn().mockRejectedValue(thrown);
             // biome-ignore lint/complexity/useArrowFunction: mock must be constructable
             (OpenAI as unknown as Mock).mockImplementation(function () {
                 return {
@@ -284,7 +296,9 @@ describe("Transcription", () => {
             );
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe("API Error");
+            expect(result.error).toBe(thrown.message);
+            expect(result.errorCode).toBe("TRANSCRIPTION_FAILED");
+            expect(result.providerStatus).toBe(providerStatus);
         });
 
         it("bumps recording updatedAt and emits completion after generated title is stored", async () => {

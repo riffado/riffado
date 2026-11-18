@@ -8,9 +8,11 @@ import { SEVERITY, type StatusJob, type Verdict } from "./types";
 /**
  * How a job is judged. "loop": a timer-driven job that records a success
  * every run, even with nothing to do; slow/down when the last success is
- * older than the thresholds. "event": runs only when there is work, so a
- * quiet job is fine; slow/down when it has failed continuously for longer
- * than the thresholds.
+ * older than the thresholds. "event": records only real outcomes, so a
+ * quiet job is fine; slow/down when it has failed with no success in
+ * between for longer than the thresholds while failures keep arriving
+ * (the last error is no older than `slowAfterMs`). Failures that stopped
+ * without a later success read as idle.
  */
 export interface JobPolicy {
     kind: "loop" | "event";
@@ -72,6 +74,12 @@ export function judgeJob(
         return { state: "ok", reason: "job-idle" };
     }
     if (!row.failingSince) return { state: "ok", reason: "job-ok" };
+    if (
+        !row.lastErrorAt ||
+        now.getTime() - row.lastErrorAt.getTime() > policy.slowAfterMs
+    ) {
+        return { state: "ok", reason: "job-idle" };
+    }
     const streak = now.getTime() - row.failingSince.getTime();
     if (streak > policy.downAfterMs) {
         return { state: "down", reason: "job-failing" };
