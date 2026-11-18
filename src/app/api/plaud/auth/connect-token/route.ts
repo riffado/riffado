@@ -78,9 +78,9 @@ function shortLivedTokenWarning(
     const hours = Math.max(1, Math.ceil(remaining / HOUR_MS));
     const duration = `${hours} hour${hours === 1 ? "" : "s"}`;
     if (method === "connector") {
-        return `This sign-in expires in ${duration}. Update the Riffado Connector so Riffado can renew it, or use the email code instead.`;
+        return `This sign-in expires in ${duration}. Riffado Connector 0.2.4 or newer keeps you connected for up to 30 days; older versions connect for about a day. Plaud accounts that sign in with email and password can also use the email code, which lasts 30 days.`;
     }
-    return `This token expires in ${duration}; use Sign in with Plaud or the email code instead.`;
+    return `This token expires in ${duration}. Sign in with Plaud keeps you connected for up to 30 days with Riffado Connector 0.2.4 or newer. Plaud accounts that sign in with email and password can also use the email code, which lasts 30 days. Google and Apple accounts can't use the email code.`;
 }
 
 /**
@@ -94,12 +94,13 @@ function shortLivedTokenWarning(
  * shadow account and your real recordings never appear.
  *
  * Body: `accessToken` (required), optional `refreshToken`, `apiBase` and
- * `source` (`connector` | `paste`). The Riffado Connector sends the Plaud
- * web session's `pld_ut` and `pld_urt` cookies as `accessToken` and
- * `refreshToken`; manual paste sends `pld_ut` only. With a refresh token,
- * Riffado renews the 24-hour user token until the 30-day sign-in ends.
- * Without one, a token expiring within two days still connects but the
- * response carries a `warning` the UI shows.
+ * `source` (`connector` | `paste`). Riffado Connector 0.2.4 and newer send
+ * the Plaud web session's `pld_ut` and `pld_urt` cookies as `accessToken`
+ * and `refreshToken`; older connector versions and manual paste send
+ * `pld_ut` only. With a refresh token, Riffado renews the 24-hour user
+ * token until the 30-day sign-in ends. Without one, the connection ends when
+ * the user token expires; a token expiring within two days still connects
+ * but the response carries a `warning` the UI shows.
  *
  * A `refreshToken` whose `sub` differs from the access token's is rejected
  * with 400. One that is malformed, expired, or where either token lacks

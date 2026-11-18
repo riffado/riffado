@@ -47,9 +47,14 @@ Install the [Riffado Connector](https://github.com/riffado/connector/releases/la
 browser extension (AGPL-3.0) — grab the latest release from GitHub and
 load it as an unpacked extension. With the extension installed, the
 connect screen surfaces a **Sign in with Plaud** button. You sign in to
-`web.plaud.ai` the way you normally do; the extension forwards the
-resulting sign-in (access token and refresh token) to your Riffado
-instance. No copy-pasting, no devtools.
+`web.plaud.ai` the way you normally do and the extension forwards the
+resulting sign-in to your Riffado instance. No copy-pasting, no devtools.
+
+Riffado Connector 0.2.4 or newer forwards the access token and the
+refresh token, which keeps you connected for up to 30 days. Older
+versions forward only the access token, so the connection lasts about a
+day. Google and Apple accounts can't use the email code, so for them the
+connector is the way to stay connected for 30 days.
 
 ### Manual fallback: paste the token
 
@@ -73,13 +78,17 @@ The pasted token is encrypted at rest the same way as a code-flow token.
 
 ## How long does a connection last?
 
-- **Email code:** 30 days.
-- **Sign in with Plaud (connector):** 30 days with a connector version
-  that forwards the refresh token. Riffado renews the 24-hour access
-  token in the background until then.
+- **Email code:** 30 days. Only for Plaud accounts that sign in with
+  email and password; Google and Apple accounts can't use it.
+- **Sign in with Plaud (connector):** up to 30 days with Riffado
+  Connector 0.2.4 or newer, which forwards the refresh token. Riffado
+  renews the 24-hour access token in the background until then. Older
+  connector versions connect for about a day.
 - **Pasted token:** 24 hours.
 
-Plaud's refresh tokens never extend a sign-in past its original end.
+Plaud's refresh tokens never extend a sign-in past its original end. If
+you connected with the connector or a pasted token, signing out of
+`web.plaud.ai` in that browser ends Riffado's connection too.
 Settings → Plaud account shows when your connection ends, and the
 dashboard shows a reconnect banner three days before. Repeat whichever
 flow above you used originally. Tokens issued by Plaud before it added

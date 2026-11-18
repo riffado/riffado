@@ -888,7 +888,24 @@ describe("POST /api/plaud/auth/connect-token refresh tokens", () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.warning).toBe(
-            "This token expires in 5 hours; use Sign in with Plaud or the email code instead.",
+            "This token expires in 5 hours. Sign in with Plaud keeps you connected for up to 30 days with Riffado Connector 0.2.4 or newer. Plaud accounts that sign in with email and password can also use the email code, which lasts 30 days. Google and Apple accounts can't use the email code.",
+        );
+    });
+
+    it("tells connector users without a refresh token which connector version lasts 30 days", async () => {
+        authedSession();
+        mockEmptySelectsAndInserts();
+        routeConnectTokenHappyPath();
+        const res = await connectTokenPOST(
+            connectTokenRequest({
+                accessToken: makeUserToken(nowSec() + DAY - 30),
+                apiBase: API_BASE,
+                source: "connector",
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect((await res.json()).warning).toBe(
+            "This sign-in expires in 24 hours. Riffado Connector 0.2.4 or newer keeps you connected for up to 30 days; older versions connect for about a day. Plaud accounts that sign in with email and password can also use the email code, which lasts 30 days.",
         );
     });
 

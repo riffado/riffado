@@ -39,6 +39,8 @@ type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
 const ISSUE_URL = "https://github.com/riffado/riffado/issues/65";
+const CONNECTOR_DURATION_NOTE =
+    "Riffado Connector 0.2.4 or newer keeps you connected for up to 30 days; older versions connect for about a day.";
 
 async function toastConnectWarning(res: Response): Promise<void> {
     const data = (await res.json().catch(() => null)) as {
@@ -223,6 +225,9 @@ function ConnectorPane({
                     (Google, Apple, or email) and the connector hands the
                     session back here, no copy-pasting.
                 </p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    {CONNECTOR_DURATION_NOTE}
+                </p>
                 <Button asChild className="w-full">
                     <a
                         href={CONNECTOR_CHROME_URL}
@@ -261,7 +266,7 @@ function ConnectorPane({
             <p className="text-sm text-muted-foreground leading-relaxed">
                 Click below to sign in to Plaud in a new tab. Use Google, Apple,
                 or email/password as you normally would. The connector will
-                return you here automatically.
+                return you here automatically. {CONNECTOR_DURATION_NOTE}
             </p>
             <Button
                 onClick={handleConnect}
@@ -577,9 +582,10 @@ function PasteTokenPane({
                         Recommended: use Sign in with Plaud or the email code
                     </p>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        A token copied from the Plaud web app lasts about a day.
-                        Email-code connections last 30 days, and so does Sign in
-                        with Plaud with the latest Riffado Connector.{" "}
+                        A token copied from the Plaud web app lasts about a day.{" "}
+                        {CONNECTOR_DURATION_NOTE} The email code lasts 30 days,
+                        but only for Plaud accounts that sign in with email and
+                        password. Google and Apple accounts can't use it.{" "}
                         <button
                             type="button"
                             onClick={onUseConnector}
@@ -601,7 +607,7 @@ function PasteTokenPane({
             )}
             <p className="text-xs text-muted-foreground leading-relaxed">
                 {isChina
-                    ? `Copy the token from a logged-in ${webHost} session. It lasts about a day.`
+                    ? `Copy the token from a logged-in ${webHost} session.`
                     : `Still want to paste? Copy the token from a logged-in ${webHost} session.`}{" "}
                 <a
                     href={ISSUE_URL}
@@ -706,10 +712,18 @@ function PasteTokenPane({
                             you see in the Network tab.
                         </li>
                     </ol>
-                    <p>
-                        This token lasts 24 hours. After that, syncing stops
-                        until you reconnect.
-                    </p>
+                    {isChina ? (
+                        <p>
+                            These steps match web.plaud.ai. They haven't been
+                            verified for China accounts, so the cookie name and
+                            how long the token lasts may differ on {webHost}.
+                        </p>
+                    ) : (
+                        <p>
+                            This token lasts 24 hours. After that, syncing stops
+                            until you reconnect.
+                        </p>
+                    )}
                     <p className="text-muted-foreground/80">
                         Don't copy the Authorization header from a{" "}
                         <span className="font-mono">/device/list</span> or{" "}
