@@ -11,6 +11,8 @@
  *   when no row (this recording included) references it after the commit.
  * - The old object is never deleted through a storage backend other than
  *   the one the row was stored on (instance switched local and S3).
+ * - A failed delete of the old object is reported as a server exception
+ *   that carries neither the storage key nor the user id.
  */
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -80,6 +82,7 @@ vi.mock("@/lib/posthog-server", () => ({
 
 import { db } from "@/db";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
+import { captureServerException } from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
@@ -300,6 +303,40 @@ describe("#327 re-download of a stored recording on Plaud 4.0", () => {
                 `Failed to delete replaced storage object ${OLD_PATH}:`,
                 expect.any(Error),
             );
+        } finally {
+            error.mockRestore();
+        }
+    });
+
+    it("reports a failed delete without the storage key or user id", async () => {
+        const storage = await storageMock();
+        storage.deleteFile.mockRejectedValue(
+            new Error(`ENOENT: no such file, unlink '/data/${OLD_PATH}'`),
+        );
+        const error = vi.spyOn(console, "error").mockImplementation(() => {});
+        try {
+            stubPlaud(listedRecording(), mp3);
+            stubSelects("conn-ext-8", [[storedRow()], [], []]);
+            stubUpdateTransaction();
+
+            const result = await syncRecordingsForUser(USER);
+
+            expect(result.errors).toEqual([]);
+            expect(captureServerException).toHaveBeenCalledTimes(1);
+            const [reported, context] = (captureServerException as Mock).mock
+                .calls[0];
+            expect(reported).toBeInstanceOf(Error);
+            expect(context).toEqual({
+                source: "sync:delete-replaced-audio",
+                storageType: "local",
+            });
+            const sent = JSON.stringify([
+                (reported as Error).message,
+                (reported as Error).stack,
+                context,
+            ]);
+            expect(sent).not.toContain(USER);
+            expect(sent).not.toContain("p327");
         } finally {
             error.mockRestore();
         }

@@ -197,6 +197,10 @@ async function deleteReplacedAudio(
             `Failed to delete replaced storage object ${storagePath}:`,
             error,
         );
+        captureServerException(
+            new Error("Failed to delete replaced recording audio"),
+            { source: "sync:delete-replaced-audio", storageType },
+        );
     }
 }
 
