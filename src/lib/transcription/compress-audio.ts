@@ -40,7 +40,7 @@ export async function maybeCompressForWhisper(
     const maxBytes = opts.maxBytes ?? env.WHISPER_MAX_BYTES;
     const startBitrate = opts.bitrateKbps ?? env.WHISPER_COMPRESS_BITRATE_KBPS;
 
-    if (audioBuffer.length <= maxBytes) {
+    if (env.WHISPER_COMPRESS === "off" || audioBuffer.length <= maxBytes) {
         return { buffer: audioBuffer, contentType, compressed: false };
     }
 
