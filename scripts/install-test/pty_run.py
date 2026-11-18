@@ -118,7 +118,16 @@ def run_with_tty(cmd, timeout, expects):
 
     if timed_out:
         kill_group(pid)
-    _, status = os.waitpid(pid, 0)
+    status = None
+    while status is None:
+        reaped, wait_status = os.waitpid(pid, 0 if timed_out else os.WNOHANG)
+        if reaped:
+            status = wait_status
+        elif time.monotonic() >= deadline:
+            timed_out = True
+            kill_group(pid)
+        else:
+            time.sleep(0.05)
     os.close(fd)
     sys.stdout.buffer.write(output)
     if timed_out:
