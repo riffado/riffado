@@ -97,6 +97,7 @@ vi.mock("@/lib/posthog-server", () => ({
 
 import { POST as connectTokenPOST } from "@/app/api/plaud/auth/connect-token/route";
 import { POST as verifyPOST } from "@/app/api/plaud/auth/verify/route";
+import { GET as connectionGET } from "@/app/api/plaud/connection/route";
 import { db } from "@/db";
 import { plaudConnections } from "@/db/schema";
 import { auth } from "@/lib/auth";
@@ -2065,6 +2066,53 @@ describe("transient failures of the early refresh", () => {
         expect(updates.set).not.toHaveBeenCalledWith(
             expect.objectContaining({ invalidatedAt: expect.any(Date) }),
         );
+    });
+});
+
+// ── Connection status route ─────────────────────────────────────────────────
+
+describe("GET /api/plaud/connection autoRenews", () => {
+    async function autoRenewsFor(
+        overrides: Partial<ConnectionRow>,
+    ): Promise<unknown> {
+        authedSession();
+        installConnectionStore({
+            ...storedConnectionRow({
+                accessToken: makeUserToken(nowSec() + DAY),
+                refreshToken: makeRefreshToken(nowSec() + 20 * DAY),
+                accessExpiresAt: new Date((nowSec() + DAY) * 1000),
+                sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+            }),
+            ...overrides,
+        });
+        const res = await connectionGET(
+            new Request("http://localhost/api/plaud/connection"),
+        );
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(JSON.stringify(body)).not.toContain("eyJ");
+        return body.autoRenews;
+    }
+
+    it("is true for a healthy connection with a refresh token", async () => {
+        expect(await autoRenewsFor({})).toBe(true);
+        expect(await autoRenewsFor({ sessionExpiresAt: null })).toBe(true);
+    });
+
+    it("is false without a refresh token", async () => {
+        expect(await autoRenewsFor({ refreshToken: null })).toBe(false);
+    });
+
+    it("is false once Plaud rejected the sign-in", async () => {
+        expect(await autoRenewsFor({ invalidatedAt: new Date() })).toBe(false);
+    });
+
+    it("is false once the sign-in has ended", async () => {
+        expect(
+            await autoRenewsFor({
+                sessionExpiresAt: new Date(Date.now() - 1000),
+            }),
+        ).toBe(false);
     });
 });
 
