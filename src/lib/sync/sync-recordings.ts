@@ -353,12 +353,6 @@ interface CapState {
     pendingBytes: number;
 }
 
-/**
- * Reserve `bytes` for a new recording, then check the cap against the
- * persisted total plus every reservation still in flight. The reservation
- * is taken before the check awaits, so concurrent callers see each other.
- * Returns false, releasing the reservation, when over cap.
- */
 async function reserveStorageBytes(
     capState: CapState,
     userId: string,

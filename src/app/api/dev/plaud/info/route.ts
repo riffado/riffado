@@ -55,8 +55,9 @@ export const GET = apiHandler(async (request: Request) => {
         deviceCount = devices.data_devices?.length ?? 0;
         activeRecordingCount =
             active.data_file_total ?? active.data_file_list?.length ?? 0;
-        trashedRecordingCount =
-            trash.data_file_total ?? trash.data_file_list?.length ?? 0;
+        trashedRecordingCount = client.usingPlaudV4
+            ? null
+            : (trash.data_file_total ?? trash.data_file_list?.length ?? 0);
     } catch (err) {
         errorMessage = err instanceof Error ? err.message : String(err);
     }
