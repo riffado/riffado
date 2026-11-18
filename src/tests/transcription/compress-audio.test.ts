@@ -17,12 +17,12 @@ import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/env", () => ({
-    env: {
-        WHISPER_MAX_BYTES: 24 * 1024 * 1024,
-        WHISPER_COMPRESS_BITRATE_KBPS: 12,
-    },
+const mockEnv = vi.hoisted(() => ({
+    WHISPER_MAX_BYTES: 24 * 1024 * 1024,
+    WHISPER_COMPRESS_BITRATE_KBPS: 12,
+    WHISPER_COMPRESS: "auto" as "auto" | "off",
 }));
+vi.mock("@/lib/env", () => ({ env: mockEnv }));
 
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
 
@@ -87,4 +87,19 @@ describe("maybeCompressForWhisper", () => {
         },
         15_000,
     );
+
+    it("never re-encodes when WHISPER_COMPRESS=off", async () => {
+        mockEnv.WHISPER_COMPRESS = "off";
+        try {
+            const buffer = Buffer.alloc(100, 0);
+            const result = await maybeCompressForWhisper(buffer, "audio/mpeg", {
+                maxBytes: 10,
+            });
+            expect(result.compressed).toBe(false);
+            expect(result.buffer).toBe(buffer);
+            expect(result.contentType).toBe("audio/mpeg");
+        } finally {
+            mockEnv.WHISPER_COMPRESS = "auto";
+        }
+    });
 });

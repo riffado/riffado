@@ -90,6 +90,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# The standalone server binds to $HOSTNAME, which Docker sets to the
+# container id. Listen on all interfaces so the compose healthcheck
+# (http://localhost:3000/api/health) can reach it.
+ENV HOSTNAME=0.0.0.0
 
 # ffmpeg is required by the transcription path: OpenAI Whisper rejects any
 # request body above 25 MiB, so long meeting recordings are re-encoded to

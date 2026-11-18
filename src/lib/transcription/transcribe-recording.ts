@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -43,12 +42,17 @@ import {
     elevenLabsTranscribe,
 } from "@/lib/transcription/elevenlabs-transcribe";
 import {
+    classifyTranscribeError,
+    type TranscribeFailureKind,
+} from "@/lib/transcription/failure-kind";
+import {
     buildTranscriptionParams,
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
 import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
+import { createTranscriptionClient } from "@/lib/transcription/openai-client";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -237,6 +241,13 @@ export interface TranscribeResult {
     success: boolean;
     error?: string;
     errorCode?: TranscribeErrorCode;
+    /**
+     * Present when the provider call itself failed. Unset for account-level
+     * failures (no provider, lockout, budget) that the user resolves.
+     */
+    failureKind?: TranscribeFailureKind;
+    /** Upstream HTTP status of a failed provider call, when known. */
+    providerStatus?: number;
     /** Present on success. Plaintext transcript. */
     text?: string;
     /** Present on success when the provider returned a language. */
@@ -512,14 +523,15 @@ async function transcribeRecordingInner(
                         audioBuffer,
                         contentType,
                         language: defaultLanguage,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
                     transcriptionText = result.text;
                     detectedLanguage = result.detectedLanguage;
                 } else {
-                    const openai = new OpenAI({
+                    const openai = createTranscriptionClient({
                         apiKey,
                         baseURL: credentials.baseUrl || undefined,
-                        timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
 
                     if (transcriptionStyle === "chat") {
@@ -797,6 +809,7 @@ async function transcribeRecordingInner(
                 errorCode: "MYNAH_BUDGET_EXHAUSTED",
             };
         }
+        const failure = classifyTranscribeError(error);
         if (error instanceof ElevenLabsFileTooLargeError) {
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: error.message,
@@ -805,6 +818,7 @@ async function transcribeRecordingInner(
                 success: false,
                 error: error.message,
                 errorCode: "FILE_TOO_LARGE",
+                failureKind: failure.kind,
             };
         }
         captureServerException(error, {
@@ -820,6 +834,8 @@ async function transcribeRecordingInner(
             error:
                 error instanceof Error ? error.message : "Transcription failed",
             errorCode: "TRANSCRIPTION_FAILED",
+            failureKind: failure.kind,
+            providerStatus: failure.status,
         };
     }
 }

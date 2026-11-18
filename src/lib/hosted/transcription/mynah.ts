@@ -7,6 +7,7 @@ import {
 } from "@/lib/hosted/billing/enforcement";
 import { captureServerException } from "@/lib/posthog-server";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { fetchTranscription } from "@/lib/transcription/fetch";
 
 /** Thrown when the user's Mynah second budget is exhausted for the cycle. */
 export class MynahBudgetExhaustedError extends Error {
@@ -75,7 +76,9 @@ interface PostTranscriptionRequestInput {
  * POST the transcription request to Mynah, retrying transient gateway
  * failures (502/503/504/524) with exponential backoff before giving up.
  * Non-transient failures (4xx, or 5xx after retries are exhausted) throw
- * a status-only `Error` -- the upstream body can contain internal Mynah
+ * a status-only `Error` carrying `status`, so callers can tell a
+ * permanent rejection from a transient one -- the upstream body can
+ * contain internal Mynah
  * diagnostics, so the detail is logged server-side only, not propagated
  * to the client.
  *
@@ -95,20 +98,25 @@ async function postTranscriptionRequest(
     const idempotencyKey = randomUUID();
     let attempt = 0;
     for (;;) {
-        const res = await fetch(`${mynahBaseUrl}/v1/audio/transcriptions`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${mynahServiceToken}`,
-                "content-type": "application/json",
-                "x-riffado-user-id": userId,
-                "idempotency-key": idempotencyKey,
+        const res = await fetchTranscription(
+            `${mynahBaseUrl}/v1/audio/transcriptions`,
+            {
+                method: "POST",
+                headers: {
+                    authorization: `Bearer ${mynahServiceToken}`,
+                    "content-type": "application/json",
+                    "x-riffado-user-id": userId,
+                    "idempotency-key": idempotencyKey,
+                },
+                body: JSON.stringify({
+                    url,
+                    response_format: "verbose_json",
+                    ...(language ? { language } : {}),
+                }),
             },
-            body: JSON.stringify({
-                url,
-                response_format: "verbose_json",
-                ...(language ? { language } : {}),
-            }),
-        });
+            env.WHISPER_REQUEST_TIMEOUT_MS,
+            { retry: false },
+        );
 
         if (res.ok) {
             return (await res.json()) as {
@@ -137,8 +145,9 @@ async function postTranscriptionRequest(
         console.error(
             `[mynah] transcription request failed (${res.status}) for user ${userId}: ${detail.slice(0, 2000)}`,
         );
-        const upstreamError = new Error(
-            `Mynah transcription failed (${res.status})`,
+        const upstreamError = Object.assign(
+            new Error(`Mynah transcription failed (${res.status})`),
+            { status: res.status },
         );
         captureServerException(upstreamError, {
             source: "mynah",

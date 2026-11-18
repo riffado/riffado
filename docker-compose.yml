@@ -47,6 +47,9 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-}
 
+      # Maximum duration of each server transcription request, including its response body.
+      WHISPER_REQUEST_TIMEOUT_MS: ${WHISPER_REQUEST_TIMEOUT_MS:-3600000}
+
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
 
@@ -68,6 +71,10 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_MARKETING_FROM: ${SMTP_MARKETING_FROM:-}
       SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+
+      # Transcription (optional): `off` sends original audio to self-hosted
+      # Whisper-compatible servers instead of re-encoding above 25 MiB.
+      WHISPER_COMPRESS: ${WHISPER_COMPRESS:-auto}
     volumes:
       # Official compose defaults LOCAL_STORAGE_PATH to /app/audio.
       # The app default without that override is ./storage → /app/storage
@@ -79,7 +86,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      test: ["CMD", "node", "-e", "const e=process.env.HOSTNAME;const h=(!e||e==='0.0.0.0')?'127.0.0.1':e;const p=parseInt(process.env.PORT,10)||3000;const r=require('http').get('http://'+h+':'+p+'/api/health',s=>process.exit(s.statusCode===200?0:1));r.on('error',()=>process.exit(1));r.setTimeout(2500,()=>{r.destroy();process.exit(1)})"]
       interval: 30s
       timeout: 3s
       start_period: 30s
