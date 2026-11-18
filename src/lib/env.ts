@@ -53,6 +53,24 @@ const baseEnvSchema = z.object({
     /** Trust X-Forwarded-For for IP rate limiting; only enable behind a trusted proxy. */
     RATE_LIMIT_TRUST_PROXY_HEADERS: optionalStrictBoolean,
 
+    /**
+     * Bearer token for the status checks at GET /api/status/<part>. Unset
+     * (default) makes those endpoints 404 and turns all status recording off.
+     */
+    STATUS_TOKEN: z
+        .string()
+        .optional()
+        .transform((val) => {
+            const trimmed = val?.trim();
+            return trimmed ? trimmed : undefined;
+        })
+        .refine((val) => val === undefined || val.length >= 32, {
+            message: "STATUS_TOKEN must be at least 32 characters",
+        })
+        .refine((val) => val === undefined || !/\s/.test(val), {
+            message: "STATUS_TOKEN must not contain whitespace",
+        }),
+
     ENCRYPTION_KEY: z.string().optional(),
 
     DEFAULT_STORAGE_TYPE: z.enum(["local", "s3"]).optional().default("local"),
@@ -756,6 +774,7 @@ function validateEnv(): Env {
                 process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
             RATE_LIMIT_TRUST_PROXY_HEADERS:
                 process.env.RATE_LIMIT_TRUST_PROXY_HEADERS,
+            STATUS_TOKEN: process.env.STATUS_TOKEN,
             ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
             DEFAULT_STORAGE_TYPE: process.env.DEFAULT_STORAGE_TYPE,
             LOCAL_STORAGE_PATH: process.env.LOCAL_STORAGE_PATH,
