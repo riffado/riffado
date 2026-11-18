@@ -29,27 +29,24 @@ afterEach(() => {
 
 describe("Gemini HTTP errors", () => {
     it.each([
-        [400, "API key not valid"],
-        [429, "Quota exceeded"],
-        [404, "Model not found"],
-    ])("preserves provider diagnostics for HTTP %s", async (status, message) => {
+        [400, "API key not valid", 1],
+        [429, "Quota exceeded", 3],
+        [404, "Model not found", 1],
+    ])("preserves provider diagnostics for HTTP %s", async (status, message, calls) => {
         const details = [
             {
                 "@type": "type.googleapis.com/google.rpc.ErrorInfo",
                 reason: "PROVIDER_REASON",
             },
         ];
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValue(
-                    new Response(
-                        JSON.stringify({ error: { message, details } }),
-                        { status },
-                    ),
-                ),
+        const fetchMock = vi.fn().mockImplementation(
+            async () =>
+                new Response(JSON.stringify({ error: { message, details } }), {
+                    status,
+                    headers: { "retry-after": "0" },
+                }),
         );
+        vi.stubGlobal("fetch", fetchMock);
         const error = await geminiTranscribe(args).catch(
             (error: unknown) => error,
         );
@@ -59,6 +56,7 @@ describe("Gemini HTTP errors", () => {
             errorDetails: details,
             message: expect.stringContaining(message),
         });
+        expect(fetchMock).toHaveBeenCalledTimes(calls);
     });
 
     it.each([
@@ -135,16 +133,17 @@ describe("Gemini HTTP errors", () => {
     it("preserves the message even if optional details are malformed", async () => {
         vi.stubGlobal(
             "fetch",
-            vi.fn().mockResolvedValue(
-                new Response(
-                    JSON.stringify({
-                        error: {
-                            message: "Quota exceeded",
-                            details: "unexpected shape",
-                        },
-                    }),
-                    { status: 429 },
-                ),
+            vi.fn().mockImplementation(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            error: {
+                                message: "Quota exceeded",
+                                details: "unexpected shape",
+                            },
+                        }),
+                        { status: 429, headers: { "retry-after": "0" } },
+                    ),
             ),
         );
         await expect(geminiTranscribe(args)).rejects.toMatchObject({

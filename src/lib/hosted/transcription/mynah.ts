@@ -115,6 +115,7 @@ async function postTranscriptionRequest(
                 }),
             },
             env.WHISPER_REQUEST_TIMEOUT_MS,
+            { retry: false },
         );
 
         if (res.ok) {

@@ -284,4 +284,44 @@ describe("transcribeViaMynah", () => {
             firstInit.headers["idempotency-key"],
         );
     });
+
+    it("keeps its own retry policy: a 429 is not retried", async () => {
+        reserveMock.mockResolvedValue({
+            userId: "u1",
+            seconds: 65,
+            reserved: true,
+        });
+        const fetchSpy = vi.fn().mockResolvedValue(
+            new Response("slow down", {
+                status: 429,
+                headers: { "retry-after": "0" },
+            }),
+        );
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(transcribeViaMynah(input)).rejects.toMatchObject({
+            status: 429,
+        });
+        expect(fetchSpy).toHaveBeenCalledOnce();
+        expect(releaseMock).toHaveBeenCalledOnce();
+    });
+
+    it("keeps its own retry policy: a connection error is not retried", async () => {
+        reserveMock.mockResolvedValue({
+            userId: "u1",
+            seconds: 65,
+            reserved: true,
+        });
+        const refused = new TypeError("fetch failed", {
+            cause: Object.assign(new Error("connect ECONNREFUSED"), {
+                code: "ECONNREFUSED",
+            }),
+        });
+        const fetchSpy = vi.fn().mockRejectedValue(refused);
+        vi.stubGlobal("fetch", fetchSpy);
+
+        await expect(transcribeViaMynah(input)).rejects.toBe(refused);
+        expect(fetchSpy).toHaveBeenCalledOnce();
+        expect(releaseMock).toHaveBeenCalledOnce();
+    });
 });

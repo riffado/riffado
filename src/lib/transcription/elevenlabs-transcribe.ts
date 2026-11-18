@@ -391,6 +391,7 @@ async function postSpeechToText(args: {
                     redirect: "error",
                 },
                 timeoutMs,
+                { retry: false },
             );
 
             if (response.ok) {
