@@ -51,7 +51,18 @@ export async function claimUsersForSync(): Promise<string[]> {
     return rows.map((r) => r.userId);
 }
 
-async function tick(): Promise<void> {
+type SyncResult = Awaited<ReturnType<typeof syncRecordingsForUser>>;
+
+function syncStatusOutcome(
+    result: Pick<SyncResult, "errors" | "skipped" | "needsReconnect">,
+): "success" | "failure" | "ignore" {
+    if (result.errors.length === 0) return "success";
+    if (result.skipped || result.needsReconnect) return "ignore";
+    return "failure";
+}
+
+/** One background sync pass. Exported for testing. */
+export async function tick(): Promise<void> {
     if (running) return;
     running = true;
     try {
@@ -65,11 +76,21 @@ async function tick(): Promise<void> {
         let errors = 0;
         for (const userId of userIds) {
             try {
-                await syncRecordingsForUser(userId, "background");
-                synced++;
-                recordJobSuccess("sync");
+                const result = await syncRecordingsForUser(
+                    userId,
+                    "background",
+                );
+                const outcome = syncStatusOutcome(result);
+                if (outcome === "success") {
+                    synced++;
+                    recordJobSuccess("sync");
+                } else if (outcome === "failure") {
+                    errors++;
+                    recordJobFailure("sync");
+                }
             } catch (error) {
                 errors++;
+                recordJobFailure("sync");
                 console.error(
                     `[background-sync] failed for user ${userId}:`,
                     error,
@@ -83,8 +104,9 @@ async function tick(): Promise<void> {
 
         if (synced > 0 || errors > 0) {
             console.log(`[background-sync] synced=${synced} errors=${errors}`);
+        } else {
+            recordJobSuccess("sync");
         }
-        if (synced === 0) recordJobFailure("sync");
     } catch (error) {
         recordJobFailure("sync");
         console.error("[background-sync] tick failed:", error);
