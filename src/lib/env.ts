@@ -56,19 +56,22 @@ const baseEnvSchema = z.object({
     /**
      * Bearer token for the status checks at GET /api/status/<part>. Unset
      * (default) makes those endpoints 404 and turns all status recording off.
+     * A malformed value (under 32 characters or containing whitespace) is
+     * treated as unset, with a warning that never includes the value.
      */
     STATUS_TOKEN: z
         .string()
         .optional()
         .transform((val) => {
             const trimmed = val?.trim();
-            return trimmed ? trimmed : undefined;
-        })
-        .refine((val) => val === undefined || val.length >= 32, {
-            message: "STATUS_TOKEN must be at least 32 characters",
-        })
-        .refine((val) => val === undefined || !/\s/.test(val), {
-            message: "STATUS_TOKEN must not contain whitespace",
+            if (!trimmed) return undefined;
+            if (trimmed.length < 32 || /\s/.test(trimmed)) {
+                console.warn(
+                    "[status] STATUS_TOKEN is set but invalid (it needs at least 32 characters and no whitespace); status checks stay disabled.",
+                );
+                return undefined;
+            }
+            return trimmed;
         }),
 
     ENCRYPTION_KEY: z.string().optional(),
