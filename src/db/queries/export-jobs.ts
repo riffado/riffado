@@ -442,3 +442,32 @@ export async function clearStaleStorageKey(
         where id = ${jobId}
     `);
 }
+
+/**
+ * Every storage key the user's export jobs may have written: completed
+ * archives, the per-claim key of any attempt still holding a claim (in
+ * flight, or failed with its partial upload), and keys recorded from
+ * reclaimed attempts. Used to delete them before the user row (and with
+ * it these rows) is deleted.
+ */
+export async function listExportStorageKeysForUser(
+    userId: string,
+): Promise<string[]> {
+    const result = await db.execute<{ key: string }>(sql`
+        select storage_key as key
+        from ${exportJobs}
+        where user_id = ${userId} and storage_key is not null
+        union
+        select 'exports/' || user_id || '/' || id || '-' || claim_token || '.zip' as key
+        from ${exportJobs}
+        where user_id = ${userId} and claim_token is not null
+        union
+        select elem as key
+        from ${exportJobs} j, jsonb_array_elements_text(j.stale_storage_keys) elem
+        where j.user_id = ${userId}
+    `);
+    const rows = Array.isArray(result)
+        ? result
+        : ((result as { rows: { key: string }[] }).rows ?? []);
+    return rows.map((row) => row.key);
+}

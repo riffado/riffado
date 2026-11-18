@@ -61,6 +61,7 @@ import {
     completeExportJob,
     EXPORT_ARCHIVE_RETENTION_MS,
     getRecentCompletedExportJobForUser,
+    listExportStorageKeysForUser,
     selectExpiredExportJobs,
 } from "@/db/queries/export-jobs";
 
@@ -260,5 +261,43 @@ describeWithDatabase("export archive retirement PostgreSQL integration", () => {
         });
 
         expect(await expiresAtOf("ancient")).toEqual(before);
+    });
+
+    it("lists every export key of one user: archives, claimed or failed attempts and stale keys", async () => {
+        await insertCompleted({
+            id: "done",
+            userId: "user-a",
+            completedDaysAgo: 1,
+        });
+        await insertProcessing("building", "user-a");
+        await db()
+            .insert(exportJobs)
+            .values({
+                id: "reclaimed",
+                userId: "user-a",
+                status: "failed",
+                claimToken: "dead",
+                staleStorageKeys: [
+                    "exports/user-a/reclaimed-crashed-1.zip",
+                    "exports/user-a/reclaimed-crashed-2.zip",
+                ],
+            });
+        await insertCompleted({
+            id: "b-done",
+            userId: "user-b",
+            completedDaysAgo: 1,
+        });
+
+        const keys = await listExportStorageKeysForUser("user-a");
+
+        expect(keys.sort()).toEqual(
+            [
+                "exports/user-a/building-live-token.zip",
+                "exports/user-a/done-token-done.zip",
+                "exports/user-a/reclaimed-crashed-1.zip",
+                "exports/user-a/reclaimed-crashed-2.zip",
+                "exports/user-a/reclaimed-dead.zip",
+            ].sort(),
+        );
     });
 });

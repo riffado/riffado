@@ -288,6 +288,13 @@
       "when": 1795011471174,
       "tag": "0040_eager_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795047684163,
+      "tag": "0041_steep_colossus",
+      "breakpoints": true
     }
   ]
 }

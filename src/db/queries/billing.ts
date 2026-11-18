@@ -1,5 +1,6 @@
 import { and, desc, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
+import { enqueueStorageDeletions } from "@/db/queries/storage-deletions";
 import {
     billingCustomers,
     foundingMemberReservations,
@@ -839,8 +840,16 @@ export async function listRecordingStoragePaths(
     return rows.map((r) => r.storagePath);
 }
 
-/** Hard-delete a user while preserving any lifetime founding-capacity claim. */
-export async function deleteUser(userId: string): Promise<void> {
+/**
+ * Hard-delete a user while preserving any lifetime founding-capacity claim.
+ * `pendingStorageKeys` (objects whose delete failed) are queued for retry
+ * in the same transaction, so they are queued exactly when the user row
+ * and every row that referenced them are gone.
+ */
+export async function deleteUser(
+    userId: string,
+    options: { pendingStorageKeys?: string[] } = {},
+): Promise<void> {
     await db.transaction(async (tx) => {
         await tx.execute(
             sql`select pg_advisory_xact_lock(hashtextextended('billing_founding_members', 0))`,
@@ -888,6 +897,11 @@ export async function deleteUser(userId: string): Promise<void> {
         }
 
         await tx.delete(users).where(eq(users.id, userId));
+        await enqueueStorageDeletions(
+            options.pendingStorageKeys ?? [],
+            "account_deletion",
+            tx,
+        );
     });
 }
 

@@ -28,9 +28,16 @@ const {
     envMock: { APP_URL: "https://app.example.com" },
 }));
 
+const { storageDeletionsMock, deletionQueueMock } = vi.hoisted(() => ({
+    storageDeletionsMock: { enqueueStorageDeletions: vi.fn() },
+    deletionQueueMock: { sweepStorageDeletionQueue: vi.fn() },
+}));
+
 vi.mock("@/db", () => ({ db: dbMock }));
 vi.mock("@/db/schema", () => ({ users: { id: "id", email: "email" } }));
 vi.mock("@/db/queries/export-jobs", () => queriesMock);
+vi.mock("@/db/queries/storage-deletions", () => storageDeletionsMock);
+vi.mock("@/lib/storage/deletion-queue", () => deletionQueueMock);
 vi.mock("@/lib/export/build-archive", () => buildArchiveMock);
 vi.mock("@/lib/notifications/email", () => emailMock);
 vi.mock("@/lib/env", () => ({ env: envMock }));
@@ -70,6 +77,14 @@ describe("export worker tick", () => {
         });
         emailMock.sendExportReadyEmail.mockResolvedValue(true);
         storageMock.deleteFile.mockResolvedValue(undefined);
+        storageDeletionsMock.enqueueStorageDeletions.mockResolvedValue(
+            undefined,
+        );
+        deletionQueueMock.sweepStorageDeletionQueue.mockResolvedValue({
+            deleted: 0,
+            retrying: 0,
+            failed: 0,
+        });
         stubEmailLookup("user@example.com");
     });
 
@@ -334,6 +349,14 @@ describe("export worker stall guard", () => {
             attempts: 1,
         });
         storageMock.deleteFile.mockResolvedValue(undefined);
+        storageDeletionsMock.enqueueStorageDeletions.mockResolvedValue(
+            undefined,
+        );
+        deletionQueueMock.sweepStorageDeletionQueue.mockResolvedValue({
+            deleted: 0,
+            retrying: 0,
+            failed: 0,
+        });
         stubEmailLookup("user@example.com");
     });
 

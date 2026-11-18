@@ -11,11 +11,15 @@ import {
     selectExpiredExportJobs,
     selectStaleStorageKeys,
 } from "@/db/queries/export-jobs";
+import { enqueueStorageDeletions } from "@/db/queries/storage-deletions";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendExportReadyEmail } from "@/lib/notifications/email";
 import { captureServerException } from "@/lib/posthog-server";
+import { deleteStorageObject } from "@/lib/storage/delete-object";
+import { sweepStorageDeletionQueue } from "@/lib/storage/deletion-queue";
 import { createStorageProvider } from "@/lib/storage/factory";
+import type { StorageProvider } from "@/lib/storage/types";
 import { buildAndUploadExportArchive } from "./build-archive";
 
 const TICK_MS = 30 * 1000;
@@ -98,6 +102,32 @@ function runWithStallGuard<T>(
     });
 }
 
+async function discardAttemptObject(
+    storage: StorageProvider,
+    storageKey: string,
+): Promise<void> {
+    try {
+        await deleteStorageObject(storage, storageKey);
+    } catch (error) {
+        console.warn(
+            `[export-worker] could not delete ${storageKey}, queueing retry:`,
+            error instanceof Error ? error.message : String(error),
+        );
+        await enqueueStorageDeletions([storageKey], "export_cleanup").catch(
+            (enqueueError) => {
+                console.error(
+                    `[export-worker] failed to queue ${storageKey} for deletion:`,
+                    enqueueError,
+                );
+                captureServerException(enqueueError, {
+                    source: "worker:export",
+                    storageKey,
+                });
+            },
+        );
+    }
+}
+
 async function processJob(job: {
     id: string;
     userId: string;
@@ -144,7 +174,7 @@ async function processJob(job: {
             console.warn(
                 `[export-worker] job ${job.id} finished but its claim was superseded; discarding result`,
             );
-            await storage.deleteFile(storageKey).catch(() => {});
+            await discardAttemptObject(storage, storageKey);
             return;
         }
 
@@ -190,7 +220,7 @@ async function processJob(job: {
         // upload. A retry gets a fresh claim token and therefore a fresh
         // key (see above), so this never collides with a subsequent
         // attempt's object.
-        await storage.deleteFile(storageKey).catch(() => {});
+        await discardAttemptObject(storage, storageKey);
     }
 }
 
@@ -222,7 +252,7 @@ async function cleanupExpired(): Promise<void> {
             // succeeds -- deleting the row first would permanently
             // orphan the archive object (no record left to retry
             // against) if the storage call then failed.
-            await storage.deleteFile(job.storageKey);
+            await deleteStorageObject(storage, job.storageKey);
             await deleteExportJobRow(job.id);
             cleaned += 1;
         } catch (error) {
@@ -248,7 +278,7 @@ async function sweepStaleStorageKeys(): Promise<void> {
             // reclaim that recorded it can't know whether the crashed
             // worker's upload ever actually landed in storage before it
             // died.
-            await storage.deleteFile(entry.key);
+            await deleteStorageObject(storage, entry.key);
             await clearStaleStorageKey(entry.jobId, entry.key);
             swept += 1;
         } catch (error) {
@@ -261,6 +291,15 @@ async function sweepStaleStorageKeys(): Promise<void> {
     if (swept > 0) {
         console.log(
             `[export-worker] swept ${swept} orphaned storage key(s) from reclaimed attempts`,
+        );
+    }
+}
+
+async function sweepQueuedStorageDeletions(): Promise<void> {
+    const result = await sweepStorageDeletionQueue(createStorageProvider());
+    if (result.deleted > 0 || result.retrying > 0 || result.failed > 0) {
+        console.log(
+            `[export-worker] storage deletion queue deleted=${result.deleted} retrying=${result.retrying} failed=${result.failed}`,
         );
     }
 }
@@ -286,6 +325,7 @@ export async function tick(): Promise<void> {
 
         await cleanupExpired();
         await sweepStaleStorageKeys();
+        await sweepQueuedStorageDeletions();
     } catch (error) {
         console.error("[export-worker] tick failed:", error);
         captureServerException(error, { source: "worker:export" });
@@ -298,7 +338,8 @@ export async function tick(): Promise<void> {
  * Start the full-data export archive worker. Runs on both hosted and
  * self-host (unlike the Plaud sync worker, this isn't hosted-only --
  * self-host users benefit from the same async, non-blocking archive
- * build). Safe to call more than once.
+ * build). Each tick also retries queued storage deletes
+ * (`sweepStorageDeletionQueue`). Safe to call more than once.
  */
 export function startExportWorker(): void {
     if (started) return;
