@@ -714,6 +714,8 @@ function PasteTokenPane({
                     </ol>
                     {isChina ? (
                         <p>
+                            The Riffado Connector doesn't cover China (plaud.cn)
+                            accounts, so paste a token from {webHost} instead.
                             These steps match web.plaud.ai. They haven't been
                             verified for China accounts, so the cookie name and
                             how long the token lasts may differ on {webHost}.
