@@ -67,10 +67,12 @@ reconnect. Prefer the connector or the email code.
 2. Open browser devtools (F12 / Cmd+Option+I) → **Application** →
    **Cookies** → `https://web.plaud.ai`.
 3. Copy the value of the `pld_ut` cookie (the long `eyJ…` JWT).
-4. In Riffado, switch to the **Paste token** tab, pick the region that
-   matches the API host you see in the **Network** tab (EU for
-   `api-euc1.plaud.ai`, APAC for `api-apse1.plaud.ai`, otherwise
-   Global), and paste.
+4. Find your region: switch devtools to **Network**, refresh the page,
+   and look at which `api*.plaud.ai` host the requests go to.
+   `api-euc1.plaud.ai` is EU, `api-apse1.plaud.ai` is APAC, and
+   `api.plaud.ai` is Global.
+5. In Riffado, switch to the **Paste token** tab, pick that region, and
+   paste.
 
 Don't copy the `Authorization` header from a `/device/list` or
 `/file/simple/web` request. That's a workspace token Riffado can't use.
