@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { acquirePlaudConnectLock } from "@/db/queries/plaud-locks";
 import { plaudConnections, plaudDevices } from "@/db/schema";
@@ -163,45 +163,41 @@ export async function persistPlaudConnection({
 export interface PersistRefreshedPlaudTokensInput {
     userId: string;
     connectionId: string;
-    tokens: PlaudTokenSet;
+    /** Encrypted refresh token exactly as read from the row before refreshing. */
+    storedRefreshToken: string;
+    /** Refreshed tokens. The refresh token is re-encrypted on every write. */
+    tokens: PlaudTokenSet & { refreshToken: string };
 }
 
 /**
  * Store the tokens returned by a refresh, scoped by user and connection id.
- * The write only lands when the stored access expiry is older or unknown and
- * the row still holds a refresh token, so a slower concurrent refresh never
- * replaces a newer token and a reconnect without one is left alone. Returns
- * true when the row was updated.
+ * Compare-and-swap on `storedRefreshToken`: encryption uses a random IV, so
+ * a reconnect or another refresh changes the stored ciphertext and turns
+ * this write into a no-op. A known `sessionExpiresAt` is never replaced with
+ * null. Returns true when the row was updated.
  */
 export async function persistRefreshedPlaudTokens({
     userId,
     connectionId,
+    storedRefreshToken,
     tokens,
 }: PersistRefreshedPlaudTokensInput): Promise<boolean> {
-    const storedIsOlder = tokens.accessExpiresAt
-        ? or(
-              isNull(plaudConnections.accessExpiresAt),
-              lt(plaudConnections.accessExpiresAt, tokens.accessExpiresAt),
-          )
-        : isNull(plaudConnections.accessExpiresAt);
-
     const updated = await db
         .update(plaudConnections)
         .set({
             bearerToken: encrypt(tokens.accessToken),
-            ...(tokens.refreshToken
-                ? { refreshToken: encrypt(tokens.refreshToken) }
-                : {}),
+            refreshToken: encrypt(tokens.refreshToken),
             accessExpiresAt: tokens.accessExpiresAt,
-            sessionExpiresAt: tokens.sessionExpiresAt,
+            ...(tokens.sessionExpiresAt
+                ? { sessionExpiresAt: tokens.sessionExpiresAt }
+                : {}),
             updatedAt: new Date(),
         })
         .where(
             and(
                 eq(plaudConnections.id, connectionId),
                 eq(plaudConnections.userId, userId),
-                isNotNull(plaudConnections.refreshToken),
-                storedIsOlder,
+                eq(plaudConnections.refreshToken, storedRefreshToken),
             ),
         )
         .returning({ id: plaudConnections.id });

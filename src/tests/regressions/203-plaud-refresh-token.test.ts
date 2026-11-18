@@ -7,11 +7,12 @@
  * `POST /auth/refresh-user-token` until the original sign-in ends. This file
  * pins: token + expiry persistence on connect (OTP and connect-token),
  * refresh-before-expiry and refresh-on-401 in the client factory, the
- * reconnect path when Plaud rejects the refresh token, the conditional
- * update that never regresses a stored expiry, the JWT `exp` helper, and
- * the dashboard banner predicate.
+ * reconnect path when Plaud rejects the refresh token, the compare-and-swap
+ * that keeps a stale refresh from overwriting a reconnect, the JWT `exp`
+ * helper, and the dashboard banner predicate.
  */
 
+import { getTableColumns, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import {
     afterEach,
@@ -92,6 +93,7 @@ vi.mock("@/lib/webhooks/emit", () => ({
 import { POST as connectTokenPOST } from "@/app/api/plaud/auth/connect-token/route";
 import { POST as verifyPOST } from "@/app/api/plaud/auth/verify/route";
 import { db } from "@/db";
+import { plaudConnections } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { AppError, ErrorCode } from "@/lib/errors";
@@ -110,7 +112,10 @@ import {
     PLAUD_SESSION_WARNING_WINDOW_MS,
     plaudConnectionBannerState,
 } from "@/lib/plaud/connection-expiry";
-import { persistRefreshedPlaudTokens } from "@/lib/plaud/persist-connection";
+import {
+    persistPlaudConnection,
+    persistRefreshedPlaudTokens,
+} from "@/lib/plaud/persist-connection";
 import { PLAUD_USER_AGENT } from "@/lib/plaud/servers";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
@@ -170,7 +175,10 @@ function jsonResponse(body: unknown, status = 200): Response {
     });
 }
 
-type RouteHandler = (url: string, init: RequestInit | undefined) => Response;
+type RouteHandler = (
+    url: string,
+    init: RequestInit | undefined,
+) => Response | Promise<Response>;
 
 /** Route mocked fetch calls by URL fragment; unknown URLs fail the test. */
 function routeFetch(routes: Record<string, RouteHandler>): void {
@@ -304,6 +312,154 @@ function makeConnection(
 }
 
 const dialect = new PgDialect();
+
+// ── In-memory plaud_connections row ─────────────────────────────────────────
+
+type ConnectionRow = Record<string, unknown>;
+
+const columnKeyByName = new Map(
+    Object.entries(getTableColumns(plaudConnections)).map(([key, column]) => [
+        column.name,
+        key,
+    ]),
+);
+
+function sameValue(stored: unknown, param: unknown, op: "=" | "<"): boolean {
+    if (stored instanceof Date) {
+        const a = stored.getTime();
+        const b = new Date(String(param)).getTime();
+        return op === "=" ? a === b : a < b;
+    }
+    if (stored === null || stored === undefined) return false;
+    return op === "=" ? stored === param : String(stored) < String(param);
+}
+
+/**
+ * Evaluate a rendered Drizzle WHERE clause against one row. Supports the
+ * subset the Plaud persistence code emits: and/or, parentheses, `=`, `<`,
+ * `is null`, `is not null` on `plaud_connections` columns.
+ */
+function rowMatches(where: SQL, row: ConnectionRow): boolean {
+    const { sql, params } = dialect.sqlToQuery(where);
+    const tokens =
+        sql.match(
+            /\(|\)|"plaud_connections"\."[a-z_]+"|\$\d+|is not null|is null|=|<|and|or/g,
+        ) ?? [];
+    let pos = 0;
+    const next = () => tokens[pos++];
+    const peek = () => tokens[pos];
+
+    const factor = (): boolean => {
+        const token = next();
+        if (token === "(") {
+            const value = expr();
+            expect(next()).toBe(")");
+            return value;
+        }
+        const column = /"plaud_connections"\."([a-z_]+)"/.exec(token ?? "");
+        if (!column) throw new Error(`unsupported SQL near ${token}: ${sql}`);
+        const key = columnKeyByName.get(column[1]);
+        if (!key) throw new Error(`unknown column ${column[1]}`);
+        const stored = row[key];
+        const op = next();
+        if (op === "is null") return stored === null || stored === undefined;
+        if (op === "is not null") {
+            return stored !== null && stored !== undefined;
+        }
+        if (op === "=" || op === "<") {
+            const param = params[Number(next()?.slice(1)) - 1];
+            return sameValue(stored, param, op);
+        }
+        throw new Error(`unsupported operator ${op}: ${sql}`);
+    };
+    const term = (): boolean => {
+        let value = factor();
+        while (peek() === "and") {
+            next();
+            value = factor() && value;
+        }
+        return value;
+    };
+    const expr = (): boolean => {
+        let value = term();
+        while (peek() === "or") {
+            next();
+            value = term() || value;
+        }
+        return value;
+    };
+
+    const result = expr();
+    expect(pos).toBe(tokens.length);
+    return result;
+}
+
+/**
+ * Back `db` (and transactions) with a single in-memory `plaud_connections`
+ * row. Updates only land when their WHERE clause matches the row, like
+ * Postgres would. Writes to other tables are accepted and dropped.
+ */
+function installConnectionStore(row: ConnectionRow): void {
+    (db.select as Mock).mockImplementation(() => ({
+        from: (table: unknown) => ({
+            where: (where: SQL) => ({
+                limit: async () =>
+                    table === plaudConnections && rowMatches(where, row)
+                        ? [{ ...row }]
+                        : [],
+            }),
+        }),
+    }));
+    (db.update as Mock).mockImplementation((table: unknown) => ({
+        set: (values: ConnectionRow) => ({
+            where: (where: SQL) => {
+                const hit =
+                    table === plaudConnections && rowMatches(where, row);
+                if (hit) Object.assign(row, values);
+                const rows = hit ? [{ id: row.id }] : [];
+                return Object.assign(Promise.resolve(undefined), {
+                    returning: async () => rows,
+                });
+            },
+        }),
+    }));
+    (db.insert as Mock).mockImplementation(() => ({
+        values: async () => undefined,
+    }));
+}
+
+function storedConnectionRow(input: {
+    accessToken: string;
+    refreshToken: string;
+    accessExpiresAt: Date;
+    sessionExpiresAt: Date | null;
+}): ConnectionRow {
+    return {
+        id: CONNECTION_ID,
+        userId: USER_ID,
+        bearerToken: encrypt(input.accessToken),
+        refreshToken: encrypt(input.refreshToken),
+        accessExpiresAt: input.accessExpiresAt,
+        sessionExpiresAt: input.sessionExpiresAt,
+        apiBase: API_BASE,
+        workspaceId: "ws_personal",
+        plaudEmail: null,
+        invalidatedAt: null,
+    };
+}
+
+function credentialsFrom(row: ConnectionRow): PlaudConnectionCredentials {
+    return {
+        id: String(row.id),
+        userId: String(row.userId),
+        bearerToken: String(row.bearerToken),
+        refreshToken: (row.refreshToken as string | null) ?? null,
+        accessExpiresAt: (row.accessExpiresAt as Date | null) ?? null,
+        sessionExpiresAt: (row.sessionExpiresAt as Date | null) ?? null,
+        apiBase: String(row.apiBase),
+        workspaceId: (row.workspaceId as string | null) ?? null,
+    };
+}
 
 // ── JWT exp helper + token set ──────────────────────────────────────────────
 
@@ -898,7 +1054,7 @@ describe("createPlaudClient refresh", () => {
     });
 });
 
-describe("persistRefreshedPlaudTokens conditional update", () => {
+describe("persistRefreshedPlaudTokens compare-and-swap", () => {
     const tokens = {
         accessToken: "new.access.token",
         refreshToken: "new.refresh.token",
@@ -906,41 +1062,169 @@ describe("persistRefreshedPlaudTokens conditional update", () => {
         sessionExpiresAt: new Date("2026-12-10T12:00:00Z"),
     };
 
-    it("only writes over an older or unknown stored expiry", async () => {
+    it("only writes while the row still holds the refresh-token ciphertext that was read", async () => {
         const updates = mockUpdates();
+        const storedRefreshToken = encrypt("old.refresh.token");
         await persistRefreshedPlaudTokens({
             userId: USER_ID,
             connectionId: CONNECTION_ID,
+            storedRefreshToken,
             tokens,
         });
 
         const where = dialect.sqlToQuery(updates.where.mock.calls[0][0]);
-        expect(where.sql).toContain(
-            '("plaud_connections"."access_expires_at" is null or "plaud_connections"."access_expires_at" < $',
-        );
-        expect(where.sql).toContain(
-            '"plaud_connections"."refresh_token" is not null',
-        );
-        expect(where.params).toEqual(
-            expect.arrayContaining([CONNECTION_ID, USER_ID]),
-        );
-        const expiryParam = where.params.find(
-            (p) => p !== CONNECTION_ID && p !== USER_ID,
-        );
-        expect(new Date(String(expiryParam)).getTime()).toBe(
-            tokens.accessExpiresAt.getTime(),
-        );
+        expect(where.sql).toContain('"plaud_connections"."refresh_token" = $');
+        expect(where.sql).not.toContain("access_expires_at");
+        expect(where.params).toEqual([
+            CONNECTION_ID,
+            USER_ID,
+            storedRefreshToken,
+        ]);
     });
 
-    it("reports false when a newer expiry is already stored", async () => {
+    it("reports false when the stored ciphertext changed", async () => {
         mockUpdates([]);
         await expect(
             persistRefreshedPlaudTokens({
                 userId: USER_ID,
                 connectionId: CONNECTION_ID,
+                storedRefreshToken: encrypt("old.refresh.token"),
                 tokens,
             }),
         ).resolves.toBe(false);
+    });
+});
+
+describe("refresh persistence against a stored row", () => {
+    function refreshRoutes(refreshHandler: RouteHandler): void {
+        routeFetch({
+            "/auth/refresh-user-token": refreshHandler,
+            "/team-app/workspaces/list": workspacesOk,
+            "/workspace/token/": mintOk,
+            "/device/list": devicesOk,
+        });
+    }
+
+    it("a stale refresh does not overwrite tokens stored by a reconnect", async () => {
+        const rtA = makeRefreshToken(nowSec() + 20 * DAY, "rt-a");
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: rtA,
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+        });
+        installConnectionStore(row);
+        const readByRefresher = credentialsFrom(row);
+
+        const utB = makeUserToken(nowSec() + 23 * HOUR, "ut-b");
+        const rtB = makeRefreshToken(nowSec() + 30 * DAY, "rt-b");
+        const staleUtExp = nowSec() + DAY;
+        refreshRoutes(async () => {
+            await persistPlaudConnection({
+                userId: USER_ID,
+                tokens: buildPlaudTokenSet({
+                    accessToken: utB,
+                    refreshToken: rtB,
+                }),
+                apiBase: API_BASE,
+                plaudEmail: null,
+                method: "connector",
+            });
+            return jsonResponse({
+                status: 0,
+                access_token: makeUserToken(staleUtExp, "ut-stale"),
+                refresh_token: makeRefreshToken(nowSec() + 20 * DAY, "rt-x"),
+                ut_expire_at: staleUtExp,
+                urt_expire_at: nowSec() + 20 * DAY,
+            });
+        });
+
+        await createPlaudClient(readByRefresher);
+
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+        expect(decrypt(String(row.bearerToken))).toBe(utB);
+        expect(decrypt(String(row.refreshToken))).toBe(rtB);
+        expect(row.accessExpiresAt).toEqual(
+            new Date((nowSec() + 23 * HOUR) * 1000),
+        );
+    });
+
+    it("stores the refreshed tokens when nothing changed the row", async () => {
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+        });
+        installConnectionStore(row);
+        const readCiphertext = row.refreshToken;
+        const newUt = makeUserToken(nowSec() + DAY, "ut-new");
+        const newRt = makeRefreshToken(nowSec() + 20 * DAY, "rt-new");
+        refreshRoutes(() =>
+            jsonResponse({
+                status: 0,
+                access_token: newUt,
+                refresh_token: newRt,
+            }),
+        );
+
+        await createPlaudClient(credentialsFrom(row));
+
+        expect(decrypt(String(row.bearerToken))).toBe(newUt);
+        expect(decrypt(String(row.refreshToken))).toBe(newRt);
+        expect(row.refreshToken).not.toBe(readCiphertext);
+    });
+
+    it("re-encrypts an unrotated refresh token so a second stale writer still loses", async () => {
+        const rt = makeRefreshToken(nowSec() + 20 * DAY, "rt-same");
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: rt,
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
+        });
+        installConnectionStore(row);
+        const first = credentialsFrom(row);
+        const second = credentialsFrom(row);
+        const firstUt = makeUserToken(nowSec() + DAY, "ut-first");
+        refreshRoutes(() => jsonResponse({ status: 0, access_token: firstUt }));
+        await createPlaudClient(first);
+        expect(decrypt(String(row.bearerToken))).toBe(firstUt);
+
+        refreshRoutes(() =>
+            jsonResponse({
+                status: 0,
+                access_token: makeUserToken(nowSec() + DAY, "ut-second"),
+            }),
+        );
+        await createPlaudClient(second);
+
+        expect(decrypt(String(row.bearerToken))).toBe(firstUt);
+        expect(decrypt(String(row.refreshToken))).toBe(rt);
+    });
+
+    it("keeps a known session end when the refresh response has none", async () => {
+        const sessionEnd = new Date((nowSec() + 20 * DAY) * 1000);
+        const row = storedConnectionRow({
+            accessToken: makeUserToken(nowSec() + 10 * 60, "ut-a"),
+            refreshToken: makeRefreshToken(nowSec() + 20 * DAY, "rt-a"),
+            accessExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+            sessionExpiresAt: sessionEnd,
+        });
+        installConnectionStore(row);
+        const newUt = makeUserToken(nowSec() + DAY, "ut-new");
+        refreshRoutes(() =>
+            jsonResponse({
+                status: 0,
+                access_token: newUt,
+                refresh_token: makeJwt({ sub: "user-sub", tag: "no-exp" }),
+            }),
+        );
+
+        await createPlaudClient(credentialsFrom(row));
+
+        expect(decrypt(String(row.bearerToken))).toBe(newUt);
+        expect(row.sessionExpiresAt).toEqual(sessionEnd);
     });
 });
 

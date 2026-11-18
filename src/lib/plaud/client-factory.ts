@@ -39,6 +39,7 @@ export function shouldRefreshPlaudAccessToken(
 
 async function refreshConnectionTokens(
     connection: PlaudConnectionCredentials,
+    storedRefreshToken: string,
     refreshToken: string,
 ): Promise<string> {
     if (
@@ -53,17 +54,27 @@ async function refreshConnectionTokens(
         );
     }
 
-    const tokens = await plaudRefreshUserToken(
+    const refreshed = await plaudRefreshUserToken(
         refreshToken,
         connection.apiBase,
     );
+    const tokens = {
+        ...refreshed,
+        refreshToken: refreshed.refreshToken ?? refreshToken,
+    };
 
     try {
-        await persistRefreshedPlaudTokens({
+        const stored = await persistRefreshedPlaudTokens({
             userId: connection.userId,
             connectionId: connection.id,
+            storedRefreshToken,
             tokens,
         });
+        if (!stored) {
+            console.info(
+                "[plaud] refreshed tokens not stored: the connection changed since it was read",
+            );
+        }
     } catch (err) {
         console.error(
             "[plaud] failed to store refreshed tokens:",
@@ -118,8 +129,9 @@ export async function createPlaudClient(
     connection: PlaudConnectionCredentials,
 ): Promise<PlaudClient> {
     const accessToken = decrypt(connection.bearerToken);
-    const refreshToken = connection.refreshToken
-        ? decrypt(connection.refreshToken)
+    const storedRefreshToken = connection.refreshToken;
+    const refreshToken = storedRefreshToken
+        ? decrypt(storedRefreshToken)
         : null;
     const accessExpiresAt = await backfillMissingExpiries(
         connection,
@@ -127,7 +139,7 @@ export async function createPlaudClient(
         refreshToken,
     );
 
-    if (!refreshToken) {
+    if (!storedRefreshToken || !refreshToken) {
         return new PlaudClient(
             accessToken,
             connection.apiBase,
@@ -137,7 +149,11 @@ export async function createPlaudClient(
 
     let refreshing: Promise<string> | undefined;
     const refreshOnce = (): Promise<string> => {
-        refreshing ??= refreshConnectionTokens(connection, refreshToken);
+        refreshing ??= refreshConnectionTokens(
+            connection,
+            storedRefreshToken,
+            refreshToken,
+        );
         return refreshing;
     };
 
