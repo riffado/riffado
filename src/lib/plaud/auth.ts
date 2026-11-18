@@ -2,7 +2,7 @@ import { AppError, ErrorCode } from "@/lib/errors";
 import { DEFAULT_PLAUD_API_BASE } from "./client";
 import { plaudFetch } from "./fetch";
 import { safeParseJson } from "./parse";
-import { PLAUD_USER_AGENT } from "./servers";
+import { isValidPlaudApiUrl, PLAUD_USER_AGENT } from "./servers";
 
 export interface PlaudSendCodeResponse {
     status: number;
@@ -15,16 +15,92 @@ export interface PlaudSendCodeResponse {
     };
 }
 
-export interface PlaudOtpLoginResponse {
+interface PlaudUserTokenFields {
+    access_token?: string;
+    refresh_token?: string;
+    /** Unix seconds. */
+    ut_expire_at?: number;
+    /** Unix seconds. */
+    urt_expire_at?: number;
+}
+
+export interface PlaudOtpLoginResponse extends PlaudUserTokenFields {
     status: number;
     msg: string;
-    access_token?: string;
-    data?: {
-        access_token?: string;
-    };
+    data?: PlaudUserTokenFields;
+}
+
+/** Body of `POST /auth/refresh-user-token`. Same token fields as OTP login. */
+export interface PlaudRefreshUserTokenResponse extends PlaudUserTokenFields {
+    status?: number;
+    msg?: string;
+    data?: PlaudUserTokenFields;
+}
+
+/**
+ * A Plaud user token (UT) with its optional refresh token and expiries.
+ * `sessionExpiresAt` is when the sign-in ends for good: refreshing never
+ * extends past it.
+ */
+export interface PlaudTokenSet {
+    accessToken: string;
+    refreshToken: string | null;
+    accessExpiresAt: Date | null;
+    sessionExpiresAt: Date | null;
 }
 
 const MAX_REGION_REDIRECTS = 3;
+
+function unixSecondsToDate(value: unknown): Date | null {
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+        return null;
+    }
+    return new Date(value * 1000);
+}
+
+/**
+ * Build a token set, preferring Plaud's explicit `ut_expire_at` /
+ * `urt_expire_at` (unix seconds) and falling back to each JWT's `exp`.
+ * Without a refresh token the session ends when the access token does.
+ */
+export function buildPlaudTokenSet(input: {
+    accessToken: string;
+    refreshToken?: string | null;
+    accessExpireAt?: unknown;
+    refreshExpireAt?: unknown;
+}): PlaudTokenSet {
+    const refreshToken = input.refreshToken || null;
+    const accessExpiresAt =
+        unixSecondsToDate(input.accessExpireAt) ??
+        decodeAccessTokenExpiry(input.accessToken);
+    const sessionExpiresAt = refreshToken
+        ? (unixSecondsToDate(input.refreshExpireAt) ??
+          decodeAccessTokenExpiry(refreshToken))
+        : accessExpiresAt;
+    return {
+        accessToken: input.accessToken,
+        refreshToken,
+        accessExpiresAt,
+        sessionExpiresAt,
+    };
+}
+
+function tokenSetFromBody(
+    body: PlaudRefreshUserTokenResponse,
+    fallbackRefreshToken: string | null,
+): PlaudTokenSet | null {
+    const accessToken = body.access_token ?? body.data?.access_token;
+    if (!accessToken) return null;
+    return buildPlaudTokenSet({
+        accessToken,
+        refreshToken:
+            body.refresh_token ??
+            body.data?.refresh_token ??
+            fallbackRefreshToken,
+        accessExpireAt: body.ut_expire_at ?? body.data?.ut_expire_at,
+        refreshExpireAt: body.urt_expire_at ?? body.data?.urt_expire_at,
+    });
+}
 
 /** Send an OTP code. Follows regional redirects (`status === -302`). */
 export async function plaudSendCode(
@@ -70,14 +146,12 @@ export async function plaudSendCode(
     return { token: body.token, apiBase };
 }
 
-/** Verify the OTP code and obtain the access token. */
+/** Verify the OTP code and obtain the user token, refresh token and expiries. */
 export async function plaudVerifyOtp(
     code: string,
     otpToken: string,
     apiBase: string = DEFAULT_PLAUD_API_BASE,
-): Promise<{
-    accessToken: string;
-}> {
+): Promise<PlaudTokenSet> {
     const res = await plaudFetch(`${apiBase}/auth/otp-login`, {
         method: "POST",
         headers: {
@@ -89,10 +163,8 @@ export async function plaudVerifyOtp(
 
     const body = await safeParseJson<PlaudOtpLoginResponse>(res);
 
-    const accessToken =
-        body.access_token ?? body.data?.access_token ?? undefined;
-
-    if (!accessToken) {
+    const tokens = tokenSetFromBody(body, null);
+    if (!tokens) {
         throw new AppError(
             ErrorCode.PLAUD_OTP_INVALID,
             body.msg || "Invalid verification code",
@@ -101,13 +173,84 @@ export async function plaudVerifyOtp(
         );
     }
 
-    return { accessToken };
+    return tokens;
+}
+
+const REFRESH_REJECTED_MESSAGE =
+    "Plaud ended this sign-in. Reconnect your Plaud account.";
+
+/**
+ * Exchange a refresh token for a fresh user token
+ * (`POST /auth/refresh-user-token`). Plaud rotates the refresh token but
+ * keeps the old one valid, and never extends the session past its original
+ * end. Throws `PLAUD_INVALID_TOKEN` when Plaud rejects the refresh token,
+ * `PLAUD_RATE_LIMITED` / `PLAUD_UPSTREAM_ERROR` for transient failures.
+ */
+export async function plaudRefreshUserToken(
+    refreshToken: string,
+    apiBase: string,
+): Promise<PlaudTokenSet> {
+    if (!isValidPlaudApiUrl(apiBase)) {
+        throw new AppError(
+            ErrorCode.PLAUD_INVALID_API_BASE,
+            "Invalid Plaud API base",
+            400,
+        );
+    }
+
+    const res = await plaudFetch(`${apiBase}/auth/refresh-user-token`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${refreshToken}`,
+            "User-Agent": PLAUD_USER_AGENT,
+        },
+    });
+
+    if (res.status === 429) {
+        throw new AppError(
+            ErrorCode.PLAUD_RATE_LIMITED,
+            "Too many requests to Plaud. Please try again later.",
+            429,
+            { plaudStatus: res.status },
+        );
+    }
+    if (res.status >= 500) {
+        throw new AppError(
+            ErrorCode.PLAUD_UPSTREAM_ERROR,
+            "Plaud is temporarily unavailable. Please try again later.",
+            502,
+            { plaudStatus: res.status },
+        );
+    }
+    if (!res.ok) {
+        throw new AppError(
+            ErrorCode.PLAUD_INVALID_TOKEN,
+            REFRESH_REJECTED_MESSAGE,
+            401,
+            { plaudStatus: res.status },
+        );
+    }
+
+    const body = await safeParseJson<PlaudRefreshUserTokenResponse>(res);
+    const tokens =
+        body.status === undefined || body.status === 0
+            ? tokenSetFromBody(body, refreshToken)
+            : null;
+    if (!tokens) {
+        throw new AppError(
+            ErrorCode.PLAUD_INVALID_TOKEN,
+            REFRESH_REJECTED_MESSAGE,
+            401,
+            { plaudStatus: body.status },
+        );
+    }
+    return tokens;
 }
 
 /**
- * Claims we read off a Plaud JWT. Plaud signs both long-lived user tokens
- * (UT) and short-lived workspace tokens (WT) with the same alg; the claim
- * set is what tells them apart. WTs carry `ut_ref`/`wid`/`wtype`; UTs don't.
+ * Claims we read off a Plaud JWT. Plaud signs user tokens (UT), refresh
+ * tokens and workspace tokens (WT) with the same alg; the claim set is what
+ * tells a WT apart. WTs carry `ut_ref`/`wid`/`wtype`; UTs don't.
  */
 export interface PlaudTokenClaims {
     exp?: number;
@@ -143,20 +286,22 @@ export function decodeJwtClaims(token: string): PlaudTokenClaims | null {
     }
 }
 
-/** Decode the JWT `exp` claim without verifying. UX hint only — never authorise from this. */
+/**
+ * Decode a JWT's `exp` claim (user or refresh token) without verifying.
+ * Returns null for malformed tokens or a missing, non-numeric or
+ * non-positive `exp`. Used for expiry bookkeeping only; never authorise
+ * from this.
+ */
 export function decodeAccessTokenExpiry(token: string): Date | null {
     const claims = decodeJwtClaims(token);
     if (!claims) return null;
-    if (typeof claims.exp !== "number" || !Number.isFinite(claims.exp)) {
-        return null;
-    }
-    return new Date(claims.exp * 1000);
+    return unixSecondsToDate(claims.exp);
 }
 
 /**
  * True if `token` is a Plaud workspace token (WT) rather than a user token
  * (UT). WTs are workspace-scoped (`ut_ref`/`wid` claims) and short-lived
- * (~24h). Riffado must store the long-lived UT: minting a fresh WT requires
+ * (~24h). Riffado must store the UT: minting a fresh WT requires
  * a UT, so a connection built on a pasted WT cannot be refreshed and dies
  * within a day. web.plaud.ai puts the WT on the data requests users tend to
  * inspect (`/device/list`, `/file/simple/web`), which is why users paste it

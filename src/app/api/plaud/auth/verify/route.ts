@@ -8,8 +8,9 @@ import { isValidPlaudApiUrl } from "@/lib/plaud/servers";
 /**
  * POST /api/plaud/auth/verify
  *
- * Verifies the OTP code against Plaud's API, obtains a long-lived access
- * token, encrypts it, and stores the connection.
+ * Verifies the OTP code against Plaud's API, obtains the user token,
+ * refresh token and their expiries, encrypts the tokens, and stores the
+ * connection.
  *
  * Errors are unified via `apiHandler` — Plaud helpers throw structured
  * `AppError`s, so a Plaud 5xx after retries surfaces as 502
@@ -56,13 +57,13 @@ export const POST = apiHandler(async (request: Request) => {
             ? email.trim().toLowerCase()
             : null;
 
-    // Verify OTP with Plaud → get the (long-lived) user token (UT)
-    const { accessToken } = await plaudVerifyOtp(code, otpToken, apiBase);
+    // Verify OTP with Plaud → user token (UT) + refresh token, both 30 days.
+    const tokens = await plaudVerifyOtp(code, otpToken, apiBase);
 
-    // Defensive: OTP login returns a long-lived UT today. If Plaud ever
+    // Defensive: OTP login returns a UT today. If Plaud ever
     // starts handing back a short-lived workspace token here, fail loud
     // rather than silently storing a token that dies within a day. (issue #203)
-    if (isPlaudWorkspaceToken(accessToken)) {
+    if (isPlaudWorkspaceToken(tokens.accessToken)) {
         throw new AppError(
             ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED,
             "Plaud returned a short-lived workspace token instead of an account token. This is unexpected — please report it.",
@@ -75,7 +76,7 @@ export const POST = apiHandler(async (request: Request) => {
     // Same gauntlet the paste-token connect flow runs through.
     const { devices } = await persistPlaudConnection({
         userId: session.user.id,
-        accessToken,
+        tokens,
         apiBase,
         plaudEmail,
         method: "otp",

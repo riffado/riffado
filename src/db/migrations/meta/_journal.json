@@ -281,6 +281,13 @@
       "when": 1794993103103,
       "tag": "0039_wealthy_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795011471174,
+      "tag": "0040_eager_annihilus",
+      "breakpoints": true
     }
   ]
 }
