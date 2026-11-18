@@ -176,6 +176,19 @@ for sh_name in $SHELLS; do
     expect_status 1 \
         && expect_output "no terminal is available" \
         && pass
+
+    CASE_ENV="NON_INTERACTIVE=true"
+    run_case "$sh_name NON_INTERACTIVE=true with a terminal" "$sh_name" 4096 tty
+    expect_status 0 \
+        && expect_output "non-interactive: using default" \
+        && pass
+
+    CASE_ENV="NON_INTERACTIVE=maybe"
+    run_case "$sh_name NON_INTERACTIVE=maybe without a terminal" "$sh_name" 4096 no-tty
+    expect_status 0 \
+        && expect_output "Ignoring NON_INTERACTIVE='maybe'" \
+        && expect_output "non-interactive: using default" \
+        && pass
     CASE_ENV=""
 done
 

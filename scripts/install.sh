@@ -50,14 +50,19 @@ die()   { printf '%serror:%s %s\n' "$RED" "$RESET" "$1" >&2; exit 1; }
 
 # When piped from curl (`curl ... | sh`), stdin is the script itself, so
 # prompts read from /dev/tty one `read` at a time and stdin is never
-# replaced. NON_INTERACTIVE=1 takes every default; NON_INTERACTIVE=0
-# requires a terminal; unset uses the terminal when one exists and the
-# defaults otherwise (CI mode).
+# replaced. NON_INTERACTIVE=1 (or true/yes) takes every default;
+# NON_INTERACTIVE=0 (or false/no) requires a terminal; unset uses the
+# terminal when one exists and the defaults otherwise (CI mode). Any other
+# value warns and is treated as unset.
 detect_tty() {
     case "${NON_INTERACTIVE:-}" in
-        1) return 0 ;;
-        ""|0) ;;
-        *) die "NON_INTERACTIVE must be 1 or 0 (got '$NON_INTERACTIVE')." ;;
+        1|true|TRUE|True|yes|YES|Yes) NON_INTERACTIVE=1; return 0 ;;
+        0|false|FALSE|False|no|NO|No) NON_INTERACTIVE=0 ;;
+        "") ;;
+        *)
+            warn "Ignoring NON_INTERACTIVE='$NON_INTERACTIVE' (use 1 or 0); detecting a terminal instead."
+            NON_INTERACTIVE=""
+            ;;
     esac
     # `[ -r /dev/tty ]` is not enough: GitHub Actions runners have the
     # device node with read perms but no controlling terminal, so opening
