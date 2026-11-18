@@ -362,7 +362,6 @@ export async function deliverDueWebhooks(): Promise<void> {
                 current.endpoint,
                 result,
             );
-            recordJobSuccess("webhooks");
         }
         recordJobSuccess("webhooks");
     } catch (error) {

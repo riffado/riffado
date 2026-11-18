@@ -123,6 +123,11 @@ vi.mock("@/lib/v1/serialize", () => ({
 
 import { db } from "@/db";
 import { recordings, webhookDeliveries, webhookEndpoints } from "@/db/schema";
+import {
+    drainPending,
+    resetStatusRecorderForTests,
+    setStatusRecordingEnabled,
+} from "@/lib/status/record";
 import { getV1RecordingDetailForUser } from "@/lib/v1/serialize";
 import {
     decryptWebhookSecret,
@@ -862,5 +867,80 @@ describe("webhooks", () => {
                 lastError: null,
             }),
         );
+    });
+
+    describe("webhooks status job", () => {
+        beforeEach(() => {
+            resetStatusRecorderForTests();
+            setStatusRecordingEnabled(true);
+        });
+
+        afterEach(() => {
+            setStatusRecordingEnabled(false);
+            vi.restoreAllMocks();
+        });
+
+        function webhooksRun() {
+            return (
+                drainPending().jobs.find((job) => job.job === "webhooks") ??
+                null
+            );
+        }
+
+        it("records no success for a run that delivered some webhooks and then failed", async () => {
+            const endpoint = endpointRow({
+                url: "encrypted:http://n8n:5678/webhook",
+            });
+            mockDueDeliveries([
+                { delivery: deliveryRow(), endpoint },
+                { delivery: deliveryRow({ id: "delivery-2" }), endpoint },
+            ]);
+            const updateChain = {
+                set: vi.fn().mockReturnValue({
+                    where: vi.fn().mockReturnValue({
+                        returning: vi
+                            .fn()
+                            .mockResolvedValue([{ id: "delivery-1" }]),
+                    }),
+                }),
+            };
+            (db.transaction as Mock)
+                .mockImplementationOnce(async (callback) => {
+                    await callback({
+                        update: vi.fn().mockReturnValue(updateChain),
+                    });
+                })
+                .mockRejectedValueOnce(new Error("db down"));
+            mockNodeResponse(httpRequest as unknown as Mock, 204, "");
+            vi.spyOn(console, "error").mockImplementation(() => {});
+
+            await deliverDueWebhooks();
+
+            expect(httpRequest).toHaveBeenCalledTimes(2);
+            expect(webhooksRun()).toMatchObject({
+                lastSuccessAt: null,
+                lastErrorAt: expect.any(Date),
+            });
+        });
+
+        it("records a success once the whole run completed", async () => {
+            mockDueDeliveries([
+                {
+                    delivery: deliveryRow(),
+                    endpoint: endpointRow({
+                        url: "encrypted:http://n8n:5678/webhook",
+                    }),
+                },
+            ]);
+            mockSuccessfulUpdates();
+            mockNodeResponse(httpRequest as unknown as Mock, 204, "");
+
+            await deliverDueWebhooks();
+
+            expect(webhooksRun()).toMatchObject({
+                lastSuccessAt: expect.any(Date),
+                lastErrorAt: null,
+            });
+        });
     });
 });
