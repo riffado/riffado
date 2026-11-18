@@ -121,7 +121,7 @@ export async function trackCall<T>(
     } catch (error) {
         settled = { ok: false, error };
     }
-    let outcome: CallOutcome = settled.ok ? "ok" : "error";
+    let outcome: CallOutcome;
     try {
         outcome = judge(settled);
     } catch {
