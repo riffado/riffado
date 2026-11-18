@@ -34,6 +34,7 @@ import {
     applyPlaudV4Detail,
     isPlaudV4MigratedResponse,
     mapPlaudV4Item,
+    plaudV4AudioCandidates,
     plaudV4DetailToLegacy,
     plaudV4FileIdToRecordingId,
     recordingIdToPlaudV4FileId,
@@ -69,6 +70,7 @@ let transcriptUrlInDetail = true;
 // AUDIO_TRANSCODED object in the f_new detail: with a presigned URL, with a
 // content id only, or absent.
 let transcodedAudio: "url" | "id" | undefined;
+let unresolvableContentIds: string[] = [];
 
 function installPlaudMock() {
     calls.length = 0;
@@ -81,6 +83,7 @@ function installPlaudMock() {
     oldEditedVersion = undefined;
     transcriptUrlInDetail = true;
     transcodedAudio = undefined;
+    unresolvableContentIds = [];
     global.fetch = vi.fn(
         async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = String(input);
@@ -141,12 +144,17 @@ function installPlaudMock() {
                     status: 0,
                     data: {
                         url_map: Object.fromEntries(
-                            (content_ids as string[]).map((id) => [
-                                id,
-                                id === "c_tc"
-                                    ? "https://bucket.s3.amazonaws.com/a.mp3?sig=resolved"
-                                    : "https://bucket.s3.amazonaws.com/trans_result.json.gz?sig=resolved",
-                            ]),
+                            (content_ids as string[])
+                                .filter(
+                                    (id) =>
+                                        !unresolvableContentIds.includes(id),
+                                )
+                                .map((id) => [
+                                    id,
+                                    id === "c_tc"
+                                        ? "https://bucket.s3.amazonaws.com/a.mp3?sig=resolved"
+                                        : "https://bucket.s3.amazonaws.com/trans_result.json.gz?sig=resolved",
+                                ]),
                         ),
                     },
                 });
@@ -447,6 +455,19 @@ describe("Plaud 4.0 helpers", () => {
         );
         expect(hydrated.filesize).toBe(0);
     });
+
+    it("lists downloadable audio candidates transcoded first", () => {
+        expect(
+            plaudV4AudioCandidates({
+                objects: [
+                    { object_type: "AUDIO", content_url: "raw" },
+                    { object_type: "TRANSCRIPT", content_url: "t" },
+                    { object_type: "AUDIO_TRANSCODED", object_size: 1 },
+                    { object_type: "AUDIO_TRANSCODED", content_id: "c_tc" },
+                ],
+            }).map((o) => o.content_url ?? o.content_id),
+        ).toEqual(["c_tc", "raw"]);
+    });
 });
 
 describe("PlaudClient on a 4.0-migrated account", () => {
@@ -528,6 +549,19 @@ describe("PlaudClient on a 4.0-migrated account", () => {
         expect(JSON.parse(resolve[0].body ?? "{}")).toEqual({
             content_ids: ["c_tc"],
         });
+    });
+
+    it("downloads the recorder upload when the transcoded content id does not resolve", async () => {
+        transcodedAudio = "id";
+        unresolvableContentIds = ["c_tc"];
+        const client = new PlaudClient("ut-1", API, "ws_test");
+        const audio = await client.downloadRecording("f_new", false);
+        expect(audio.subarray(0, 4).toString("latin1")).toBe("OggS");
+        expect(
+            calls.filter((c) => c.url.includes("/files/content/url")),
+        ).toHaveLength(1);
+        expect(calls.some((c) => c.url.includes("/a.ogg?sig=1"))).toBe(true);
+        expect(calls.some((c) => c.url.includes("/a.mp3"))).toBe(false);
     });
 
     it("switches to v4 when the legacy temp-url reports the migration", async () => {

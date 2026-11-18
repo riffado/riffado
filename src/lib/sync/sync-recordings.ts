@@ -398,22 +398,31 @@ async function processRecording(
             reservedBytes += plaudRecording.filesize;
         }
 
+        const isV4 = plaudRecording.source === "v4";
         const audioBuffer = await plaudClient.downloadRecording(
             plaudRecording.id,
             false,
         );
 
-        if (!existingRecording && !plaudRecording.filesize) {
-            if (
-                !(await reserveStorageBytes(
-                    capState,
-                    context.userId,
-                    audioBuffer.length,
-                ))
-            ) {
-                return { status: "skipped", capExceeded: true };
+        if (!existingRecording) {
+            let unreservedBytes: number | undefined;
+            if (!plaudRecording.filesize) {
+                unreservedBytes = audioBuffer.length;
+            } else if (isV4 && audioBuffer.length > reservedBytes) {
+                unreservedBytes = audioBuffer.length - reservedBytes;
             }
-            reservedBytes += audioBuffer.length;
+            if (unreservedBytes !== undefined) {
+                if (
+                    !(await reserveStorageBytes(
+                        capState,
+                        context.userId,
+                        unreservedBytes,
+                    ))
+                ) {
+                    return { status: "skipped", capExceeded: true };
+                }
+                reservedBytes += unreservedBytes;
+            }
         }
 
         const sniffed = sniffAudio(audioBuffer);
@@ -435,7 +444,9 @@ async function processRecording(
             duration: plaudRecording.duration,
             startTime: new Date(plaudRecording.start_time),
             endTime: new Date(plaudRecording.end_time),
-            filesize: plaudRecording.filesize || audioBuffer.length,
+            filesize: isV4
+                ? audioBuffer.length
+                : plaudRecording.filesize || audioBuffer.length,
             fileMd5:
                 plaudRecording.file_md5 ||
                 createHash("md5").update(audioBuffer).digest("hex"),

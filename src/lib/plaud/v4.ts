@@ -151,20 +151,37 @@ function readyObject(
 const AUDIO_OBJECT_TYPES = ["AUDIO_TRANSCODED", "AUDIO"];
 
 /**
- * The audio object riffado downloads from a v4 file detail. `AUDIO_TRANSCODED`
- * (the MP3 the Plaud player streams) wins over `AUDIO` (the recorder upload,
- * not always a playable container); objects carrying a content URL or id win
- * over those that do not.
+ * Downloadable audio objects of a v4 file detail, in the order riffado tries
+ * them: `AUDIO_TRANSCODED` (the MP3 the Plaud player streams) before `AUDIO`
+ * (the recorder upload, not always a playable container). Only objects with
+ * a content URL or id are listed.
+ */
+export function plaudV4AudioCandidates(
+    detail: PlaudV4FileDetail | undefined,
+): PlaudV4FileObject[] {
+    const objects = detail?.objects ?? [];
+    return AUDIO_OBJECT_TYPES.flatMap((type) =>
+        objects.filter(
+            (o) =>
+                o.object_type === type &&
+                Boolean(o.content_url || o.content_id),
+        ),
+    );
+}
+
+/**
+ * The audio object riffado expects to download from a v4 file detail: the
+ * first of `plaudV4AudioCandidates`, else any audio object (for its size).
  */
 export function selectPlaudV4Audio(
     detail: PlaudV4FileDetail | undefined,
 ): PlaudV4FileObject | undefined {
-    const rank = (o: PlaudV4FileObject) =>
-        (o.content_url || o.content_id ? 0 : AUDIO_OBJECT_TYPES.length) +
-        AUDIO_OBJECT_TYPES.indexOf(o.object_type ?? "");
-    return (detail?.objects ?? [])
-        .filter((o) => AUDIO_OBJECT_TYPES.includes(o.object_type ?? ""))
-        .sort((a, b) => rank(a) - rank(b))[0];
+    return (
+        plaudV4AudioCandidates(detail)[0] ??
+        AUDIO_OBJECT_TYPES.map((type) =>
+            detail?.objects?.find((o) => o.object_type === type),
+        ).find(Boolean)
+    );
 }
 
 /** Fill device, size, timezone and content flags from a v4 file detail. */

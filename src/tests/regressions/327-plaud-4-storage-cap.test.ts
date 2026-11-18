@@ -250,4 +250,29 @@ describe("#327 storage cap with unknown Plaud 4.0 sizes", () => {
                 .at(-1),
         ).toBe(small.length);
     });
+
+    it("reserves the extra bytes when the v4 download is larger than reported", async () => {
+        stubPlaud(50);
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(
+            (enforceStorageCap as Mock).mock.calls.map(
+                ([arg]) => arg.additionalBytes,
+            ),
+        ).toEqual([50, audio.length]);
+        expect(result.newRecordings).toBe(0);
+        expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it("stores the size of the downloaded v4 audio", async () => {
+        const small = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(56)]);
+        stubPlaud(90, ["f_a"], small);
+
+        const result = await syncRecordingsForUser(USER);
+
+        expect(result.newRecordings).toBe(1);
+        expect(storedBytes).toBe(small.length);
+        expect(enforceStorageCap).toHaveBeenCalledTimes(1);
+    });
 });
