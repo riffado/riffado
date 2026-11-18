@@ -7,7 +7,10 @@
  *   - a 32 MiB multipart part size for archive uploads, down from the
  *     SDK's 5 MiB default (about 6x fewer UploadPart requests, and a
  *     ~312 GiB archive ceiling at S3's 10,000-part limit instead of
- *     ~48 GiB), with memory held to queueSize x partSize.
+ *     ~48 GiB), with memory held to queueSize x partSize;
+ *   - upload progress from local storage too (`onProgress` per chunk
+ *     written), so the export stall guard sees the same contract on both
+ *     providers.
  */
 
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -95,6 +98,28 @@ describe("LocalStorage ranged reads", () => {
     it("has no direct storage URL, so callers stream through the app", () => {
         const storage: StorageProvider = new LocalStorage(dir);
         expect(storage.getDirectDownloadUrl).toBeUndefined();
+    });
+
+    it("reports progress for each chunk it writes during a streamed upload", async () => {
+        const storage = new LocalStorage(dir);
+        const onProgress = vi.fn();
+        const source = Readable.from(
+            ["first-", "second-", "third"].map((chunk) => Buffer.from(chunk)),
+        );
+
+        await storage.uploadStream(
+            "exports/u/job.zip",
+            source,
+            "application/zip",
+            {
+                onProgress,
+            },
+        );
+
+        expect(onProgress).toHaveBeenCalledTimes(3);
+        expect(
+            await readAll(await storage.downloadStream("exports/u/job.zip")),
+        ).toBe("first-second-third");
     });
 });
 

@@ -8,11 +8,11 @@ import {
     writeFile,
 } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import type { Readable } from "node:stream";
+import { type Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { env } from "../env";
 import { StorageRootMissingError } from "./errors";
-import type { ByteRange, StorageProvider } from "./types";
+import type { ByteRange, StorageProvider, UploadStreamOptions } from "./types";
 
 /**
  * Local filesystem storage provider
@@ -147,8 +147,10 @@ export class LocalStorage implements StorageProvider {
         key: string,
         stream: Readable,
         contentType: string,
+        options: UploadStreamOptions = {},
     ): Promise<string> {
         void contentType;
+        const { onProgress } = options;
         try {
             await this.ensureBaseDir();
             const filePath = this.getFilePath(key);
@@ -158,7 +160,21 @@ export class LocalStorage implements StorageProvider {
             } catch {
                 await mkdir(fileDir, { recursive: true });
             }
-            await pipeline(stream, createWriteStream(filePath));
+            const sink = createWriteStream(filePath);
+            if (onProgress) {
+                await pipeline(
+                    stream,
+                    new Transform({
+                        transform(chunk, _encoding, callback) {
+                            callback(null, chunk);
+                            onProgress();
+                        },
+                    }),
+                    sink,
+                );
+            } else {
+                await pipeline(stream, sink);
+            }
             return key;
         } catch (error) {
             throw new Error(
