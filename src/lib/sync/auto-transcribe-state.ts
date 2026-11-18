@@ -1,3 +1,4 @@
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
 import {
     AUTO_TRANSCRIBE_RETRY_LIMIT,
     type AutoTranscribeRetryOptions,
@@ -68,6 +69,7 @@ export function claimAutoTranscribeIds(ids: readonly string[]): string[] {
         inFlightAutoTranscribeIds.add(id);
         claimed.push(id);
     }
+    if (claimed.length === 0) recordJobSuccess("auto-transcribe");
     return claimed;
 }
 
@@ -98,12 +100,14 @@ export function noteAutoTranscribeOutcome(
 ): boolean {
     const failed = failedIdsFor(userId);
     if (success) {
+        recordJobSuccess("auto-transcribe");
         failed.delete(recordingId);
         if (failed.size === 0) {
             recentFailedByUser.delete(userId);
         }
         return false;
     }
+    recordJobFailure("auto-transcribe");
     const previous = failed.get(recordingId);
     const transientFailures =
         (previous?.transientFailures ?? 0) +

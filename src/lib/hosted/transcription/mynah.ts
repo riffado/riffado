@@ -6,6 +6,8 @@ import {
     reserveMynah,
 } from "@/lib/hosted/billing/enforcement";
 import { captureServerException } from "@/lib/posthog-server";
+import { judgeMynahResponse } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { fetchTranscription } from "@/lib/transcription/fetch";
 
@@ -98,24 +100,29 @@ async function postTranscriptionRequest(
     const idempotencyKey = randomUUID();
     let attempt = 0;
     for (;;) {
-        const res = await fetchTranscription(
-            `${mynahBaseUrl}/v1/audio/transcriptions`,
-            {
-                method: "POST",
-                headers: {
-                    authorization: `Bearer ${mynahServiceToken}`,
-                    "content-type": "application/json",
-                    "x-riffado-user-id": userId,
-                    "idempotency-key": idempotencyKey,
-                },
-                body: JSON.stringify({
-                    url,
-                    response_format: "verbose_json",
-                    ...(language ? { language } : {}),
-                }),
-            },
-            env.WHISPER_REQUEST_TIMEOUT_MS,
-            { retry: false },
+        const res = await trackCall(
+            "transcription",
+            () =>
+                fetchTranscription(
+                    `${mynahBaseUrl}/v1/audio/transcriptions`,
+                    {
+                        method: "POST",
+                        headers: {
+                            authorization: `Bearer ${mynahServiceToken}`,
+                            "content-type": "application/json",
+                            "x-riffado-user-id": userId,
+                            "idempotency-key": idempotencyKey,
+                        },
+                        body: JSON.stringify({
+                            url,
+                            response_format: "verbose_json",
+                            ...(language ? { language } : {}),
+                        }),
+                    },
+                    env.WHISPER_REQUEST_TIMEOUT_MS,
+                    { retry: false },
+                ),
+            judgeMynahResponse,
         );
 
         if (res.ok) {

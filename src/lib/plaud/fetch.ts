@@ -1,3 +1,5 @@
+import { judgePlaudResponse } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 import {
     getPlaudProxyUrl,
     invalidatePlaudProxy,
@@ -15,9 +17,18 @@ const PLAUD_WEB_ORIGIN = "https://web.plaud.ai";
  * pass-through to the global `fetch`.
  *
  * Uses the runtime's native `proxy` option so the same TLS stack handles
- * both proxied and direct requests.
+ * both proxied and direct requests. Every call is recorded for the `plaud`
+ * status part (see `judgePlaudResponse`).
  */
-export async function plaudFetch(
+export function plaudFetch(url: string, init?: RequestInit): Promise<Response> {
+    return trackCall(
+        "plaud",
+        () => fetchViaPlaudProxy(url, init),
+        judgePlaudResponse,
+    );
+}
+
+async function fetchViaPlaudProxy(
     url: string,
     init?: RequestInit,
 ): Promise<Response> {

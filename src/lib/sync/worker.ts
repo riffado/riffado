@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { captureServerException } from "@/lib/posthog-server";
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
 // ponytail: skip users synced in the last 4 min -- they likely just client-synced
@@ -55,7 +56,10 @@ async function tick(): Promise<void> {
     running = true;
     try {
         const userIds = await claimUsersForSync();
-        if (userIds.length === 0) return;
+        if (userIds.length === 0) {
+            recordJobSuccess("sync");
+            return;
+        }
 
         let synced = 0;
         let errors = 0;
@@ -63,6 +67,7 @@ async function tick(): Promise<void> {
             try {
                 await syncRecordingsForUser(userId, "background");
                 synced++;
+                recordJobSuccess("sync");
             } catch (error) {
                 errors++;
                 console.error(
@@ -79,7 +84,9 @@ async function tick(): Promise<void> {
         if (synced > 0 || errors > 0) {
             console.log(`[background-sync] synced=${synced} errors=${errors}`);
         }
+        if (synced === 0) recordJobFailure("sync");
     } catch (error) {
+        recordJobFailure("sync");
         console.error("[background-sync] tick failed:", error);
         captureServerException(error, { source: "worker:sync" });
     } finally {
