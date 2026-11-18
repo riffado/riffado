@@ -23,14 +23,18 @@ let tickCount = 0;
  * (before that phase's internal per-item try/catch even starts) can't
  * block the other, unrelated phases in the same tick from running.
  */
-async function runPhase(
+async function runPhase<T>(
     name: string,
-    phase: () => Promise<void>,
+    phase: () => Promise<T>,
     job?: StatusJob,
+    failed: (result: T) => boolean = () => false,
 ) {
     try {
-        await phase();
-        if (job) recordJobSuccess(job);
+        const result = await phase();
+        if (job) {
+            if (failed(result)) recordJobFailure(job);
+            else recordJobSuccess(job);
+        }
     } catch (error) {
         if (job) recordJobFailure(job);
         console.error(`[billing-worker] phase "${name}" failed:`, error);
@@ -71,8 +75,10 @@ export async function tick(): Promise<void> {
                         `[billing-worker] trial-lapse lapsed=${lapse.lapsed} errors=${lapse.errors}`,
                     );
                 }
+                return lapse;
             },
             "billing-lapse",
+            (lapse) => lapse.errors > 0 && lapse.lapsed === 0,
         );
 
         await runPhase("deletion", async () => {

@@ -36,6 +36,11 @@ vi.mock("@/lib/env", () => ({
 }));
 
 import { tick } from "@/lib/hosted/billing/worker";
+import {
+    drainPending,
+    resetStatusRecorderForTests,
+    setStatusRecordingEnabled,
+} from "@/lib/status/record";
 
 function zeroResults() {
     cycleCloseMock.closeDueCycles.mockResolvedValue(0);
@@ -138,5 +143,55 @@ describe("billing worker tick", () => {
         expect(
             foundingReservationsMock.reconcileExpiredFoundingReservations,
         ).toHaveBeenCalled();
+    });
+
+    describe("billing-lapse status job", () => {
+        beforeEach(() => {
+            resetStatusRecorderForTests();
+            setStatusRecordingEnabled(true);
+        });
+
+        function lapseRun() {
+            return drainPending().jobs.find(
+                (job) => job.job === "billing-lapse",
+            );
+        }
+
+        it("records a failure when trial-lapse only had errors", async () => {
+            lapseMock.processExpiredTrials.mockResolvedValue({
+                lapsed: 0,
+                errors: 2,
+            });
+            const logSpy = vi
+                .spyOn(console, "log")
+                .mockImplementation(() => {});
+            await tick();
+            logSpy.mockRestore();
+            expect(lapseRun()).toMatchObject({
+                lastSuccessAt: null,
+                lastErrorAt: expect.any(Date),
+            });
+        });
+
+        it("records a success when trial-lapse made progress or had nothing to do", async () => {
+            await tick();
+            expect(lapseRun()).toMatchObject({
+                lastSuccessAt: expect.any(Date),
+                lastErrorAt: null,
+            });
+            lapseMock.processExpiredTrials.mockResolvedValue({
+                lapsed: 1,
+                errors: 1,
+            });
+            const logSpy = vi
+                .spyOn(console, "log")
+                .mockImplementation(() => {});
+            await tick();
+            logSpy.mockRestore();
+            expect(lapseRun()).toMatchObject({
+                lastSuccessAt: expect.any(Date),
+                lastErrorAt: null,
+            });
+        });
     });
 });
