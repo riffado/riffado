@@ -95,6 +95,7 @@ vi.mock("@/lib/posthog-server", () => ({
     captureServerException: vi.fn(),
 }));
 
+import { GET as devInfoGET } from "@/app/api/dev/plaud/info/route";
 import { POST as connectTokenPOST } from "@/app/api/plaud/auth/connect-token/route";
 import { POST as verifyPOST } from "@/app/api/plaud/auth/verify/route";
 import { GET as connectionGET } from "@/app/api/plaud/connection/route";
@@ -2113,6 +2114,39 @@ describe("GET /api/plaud/connection autoRenews", () => {
                 sessionExpiresAt: new Date(Date.now() - 1000),
             }),
         ).toBe(false);
+    });
+});
+
+describe("GET /api/dev/plaud/info", () => {
+    it("reports an ended sign-in as unreachable and still returns the connection", async () => {
+        authedSession();
+        installConnectionStore(
+            storedConnectionRow({
+                accessToken: makeUserToken(nowSec() - 60),
+                refreshToken: makeRefreshToken(nowSec() - 30),
+                accessExpiresAt: new Date(Date.now() - 60_000),
+                sessionExpiresAt: new Date(Date.now() - 30_000),
+            }),
+        );
+
+        const res = await devInfoGET(
+            new Request("http://localhost/api/dev/plaud/info"),
+        );
+
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.connected).toBe(true);
+        expect(body.reachable).toBe(false);
+        expect(body.error).toMatch(/sign-in has ended/);
+        expect(body.connection).toMatchObject({
+            id: CONNECTION_ID,
+            apiBase: API_BASE,
+            workspaceId: "ws_personal",
+            workspaceIdSource: "cache",
+            workspaceTokenFallback: false,
+        });
+        expect(JSON.stringify(body)).not.toContain("eyJ");
+        expect(mockFetch).not.toHaveBeenCalled();
     });
 });
 
