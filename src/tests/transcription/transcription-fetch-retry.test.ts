@@ -243,6 +243,66 @@ describe("fetchTranscription retries connection errors raised before a response"
     });
 });
 
+describe("fetchTranscription limits socket-closed retries to fast failures", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    function failAfter(ms: number, error: Error) {
+        return async () => {
+            vi.setSystemTime(Date.now() + ms);
+            throw error;
+        };
+    }
+
+    it.each([
+        ["Node", nodeConnectionError("ECONNRESET")],
+        ["Node", nodeConnectionError("UND_ERR_SOCKET")],
+        ["Bun", bunConnectionError("ECONNRESET")],
+    ])("does not retry a %s socket closed after 5s %#", async (_runtime, error) => {
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(failAfter(5000, error))
+            .mockResolvedValueOnce(ok());
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(
+            fetchTranscription(URL_UNDER_TEST, POST, TIMEOUT_MS),
+        ).rejects.toBe(error);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("retries a socket closed within 5s", async () => {
+        const error = nodeConnectionError("ECONNRESET");
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(failAfter(4999, error))
+            .mockResolvedValueOnce(ok());
+        vi.stubGlobal("fetch", fetchMock);
+
+        const pending = fetchTranscription(URL_UNDER_TEST, POST, TIMEOUT_MS);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect((await pending).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries a refused connection however long it took", async () => {
+        const error = nodeConnectionError("ECONNREFUSED");
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(failAfter(60_000, error))
+            .mockResolvedValueOnce(ok());
+        vi.stubGlobal("fetch", fetchMock);
+
+        const pending = fetchTranscription(URL_UNDER_TEST, POST, TIMEOUT_MS);
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect((await pending).status).toBe(200);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+});
+
 describe("fetchTranscription does not retry other failures", () => {
     it.each([
         500, 502, 503, 504, 524,

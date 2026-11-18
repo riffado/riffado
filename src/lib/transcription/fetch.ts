@@ -3,14 +3,15 @@ import { type Dispatcher, getGlobalDispatcher } from "undici";
 const MAX_RETRIES = 2;
 const INITIAL_RETRY_DELAY_MS = 1000;
 const MAX_RETRY_DELAY_MS = 30_000;
+const SOCKET_CLOSED_RETRY_WINDOW_MS = 5000;
 
-const PRE_RESPONSE_CONNECTION_ERROR_CODES = new Set([
+const NOT_CONNECTED_ERROR_CODES = new Set([
     "ECONNREFUSED",
     "ConnectionRefused",
-    "ECONNRESET",
     "ENOTFOUND",
-    "UND_ERR_SOCKET",
 ]);
+
+const SOCKET_CLOSED_ERROR_CODES = new Set(["ECONNRESET", "UND_ERR_SOCKET"]);
 
 const transcriptionDispatcher = {
     dispatch(
@@ -40,15 +41,24 @@ function stringCode(value: unknown): string | undefined {
     return typeof code === "string" ? code : undefined;
 }
 
-function preResponseConnectionErrorCode(error: unknown): string | undefined {
+function retryableConnectionErrorCode(
+    error: unknown,
+    elapsedMs: number,
+): string | undefined {
     if (!(error instanceof Error)) return undefined;
     if (error.name === "AbortError" || error.name === "TimeoutError") {
         return undefined;
     }
     const code = stringCode(error) ?? stringCode(error.cause);
-    return code !== undefined && PRE_RESPONSE_CONNECTION_ERROR_CODES.has(code)
-        ? code
-        : undefined;
+    if (code === undefined) return undefined;
+    if (NOT_CONNECTED_ERROR_CODES.has(code)) return code;
+    if (
+        SOCKET_CLOSED_ERROR_CODES.has(code) &&
+        elapsedMs < SOCKET_CLOSED_RETRY_WINDOW_MS
+    ) {
+        return code;
+    }
+    return undefined;
 }
 
 function hasReplayableBody(
@@ -100,10 +110,11 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 /**
  * Apply a transcription deadline through response-body consumption. The
  * deadline covers every attempt and backoff. Unless `retry` is `false`,
- * HTTP 429 and connection failures raised before any response are retried
- * up to twice, honouring `Retry-After` (capped at 30s) or backing off 1s
- * then 2s. Other statuses, timeouts and aborts are never retried, and
- * neither is a request whose body cannot be replayed.
+ * HTTP 429, refused connections, unresolved hosts, and sockets closed within
+ * 5s of the attempt starting are retried up to twice, honouring
+ * `Retry-After` (capped at 30s) or backing off 1s then 2s. Other statuses,
+ * later socket closes, timeouts and aborts are never retried, and neither is
+ * a request whose body cannot be replayed.
  */
 export async function fetchTranscription(
     input: string | URL | Request,
@@ -130,10 +141,14 @@ export async function fetchTranscription(
 
     for (let attempt = 0; ; attempt += 1) {
         let response: Response;
+        const attemptStartedAt = Date.now();
         try {
             response = await fetch(input, requestInit);
         } catch (error) {
-            const code = preResponseConnectionErrorCode(error);
+            const code = retryableConnectionErrorCode(
+                error,
+                Date.now() - attemptStartedAt,
+            );
             if (attempt >= maxRetries || signal.aborted || !code) {
                 throw error;
             }
