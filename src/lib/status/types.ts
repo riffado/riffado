@@ -75,7 +75,7 @@ export interface StatusResponse {
     checkedAt: string;
 }
 
-/** Rolling traffic window. */
+/** Default rolling traffic window. */
 export const STATUS_WINDOW_S = 5 * 60;
 
 /**
@@ -222,6 +222,8 @@ export function statusResponse(input: {
     probeLatencyMs: number | null;
     fallbackLatencyMs: number;
     now: Date;
+    /** Length of the window `counts` cover. Default `STATUS_WINDOW_S`. */
+    windowSeconds?: number;
 }): StatusResponse {
     const p = p95(input.counts.buckets);
     const latency = input.source === "probe" ? input.probeLatencyMs : p;
@@ -232,7 +234,7 @@ export function statusResponse(input: {
         latencyMs: latency ?? input.fallbackLatencyMs,
         source: input.source,
         window: {
-            seconds: STATUS_WINDOW_S,
+            seconds: input.windowSeconds ?? STATUS_WINDOW_S,
             requests: input.counts.ok + input.counts.err,
             errors: input.counts.err,
             p95Ms: p,

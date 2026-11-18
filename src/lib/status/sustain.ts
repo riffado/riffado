@@ -17,12 +17,19 @@ export interface SustainConfig {
 /** The worst check of one minute; null when nothing checked that minute. */
 export type MinuteVerdict = Verdict | null;
 
+/** Checked minutes a window needs before a bad state can be sustained. */
+export const MIN_OBSERVED_MINUTES = 3;
+
 /**
  * Pure rule. `minutes` holds the window newest first, the current minute
- * (with `raw` already in it) at index 0. Down when at least `badMinutes`
- * minutes were down; slow when at least `badMinutes` were slow or down;
- * otherwise ok, with reason `transient-<raw reason>` for an unsustained bad
- * check. A minute without a check counts as good.
+ * (with `raw` already in it) at index 0. Only minutes that were checked
+ * count: with `observed` checked minutes (at least
+ * `MIN_OBSERVED_MINUTES`), a state needs min(`badMinutes`, observed - 1)
+ * of them. Down when that many were down; slow when that many were slow
+ * or down; otherwise ok, with reason `transient-<raw reason>` for an
+ * unsustained bad check. Polling once a minute gives the full
+ * `badMinutes`-of-`windowMinutes` rule; sparser or missed polls lower the
+ * bar instead of counting unchecked minutes as good.
  */
 export function sustainedVerdict(
     raw: Verdict,
@@ -30,9 +37,13 @@ export function sustainedVerdict(
     config: SustainConfig,
 ): Verdict {
     const window = minutes.slice(0, config.windowMinutes);
+    const observed = window.filter((m) => m !== null).length;
+    const needed = Math.min(config.badMinutes, observed - 1);
+    const sustained = (count: number) =>
+        observed >= MIN_OBSERVED_MINUTES && count >= needed;
     const down = window.filter((m) => m?.state === "down");
     const bad = window.filter((m) => m && m.state !== "ok");
-    if (down.length >= config.badMinutes) {
+    if (sustained(down.length)) {
         return {
             state: "down",
             reason:
@@ -41,7 +52,7 @@ export function sustainedVerdict(
                     : (down[0]?.reason ?? raw.reason),
         };
     }
-    if (bad.length >= config.badMinutes) {
+    if (sustained(bad.length)) {
         return {
             state: "slow",
             reason:

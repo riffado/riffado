@@ -10,6 +10,7 @@ const { queriesMock } = vi.hoisted(() => ({
 vi.mock("@/db/queries/status", () => queriesMock);
 
 import {
+    MIN_OBSERVED_MINUTES,
     memoryVerdictHistory,
     minuteFromReasons,
     postgresVerdictHistory,
@@ -74,6 +75,33 @@ describe("sustainedVerdict", () => {
         const minutes = [ok, down, down, down, down, down, ok, down, down];
         expect(sustainedVerdict(ok, minutes, CONFIG).state).toBe("ok");
     });
+
+    it("judges only checked minutes, so missed polls don't count as good", () => {
+        const down = { state: "down" as const, reason: "error-rate" };
+        const ok = { state: "ok" as const, reason: "traffic-ok" };
+        expect(
+            sustainedVerdict(
+                down,
+                [down, null, down, null, down, null, ok],
+                CONFIG,
+            ),
+        ).toEqual(down);
+        expect(
+            sustainedVerdict(
+                down,
+                [down, null, down, null, ok, null, ok],
+                CONFIG,
+            ).state,
+        ).toBe("ok");
+    });
+
+    it("needs at least MIN_OBSERVED_MINUTES checked minutes", () => {
+        const down = { state: "down" as const, reason: "error-rate" };
+        expect(MIN_OBSERVED_MINUTES).toBe(3);
+        expect(
+            sustainedVerdict(down, [down, null, down, null], CONFIG),
+        ).toEqual({ state: "ok", reason: "transient-error-rate" });
+    });
 });
 
 describe("minuteFromReasons", () => {
@@ -131,8 +159,23 @@ describe("postgresVerdictHistory", () => {
 });
 
 describe("sustainStatus", () => {
+    async function warmUp(
+        history: VerdictHistory,
+        config: { windowMinutes: number; badMinutes: number },
+        minutes: number[],
+    ) {
+        for (const minute of minutes) {
+            await sustainStatus(raw("ok"), {
+                history,
+                config,
+                now: at(minute),
+            });
+        }
+    }
+
     it("needs 6 bad minutes out of 7 to show down, then recovers", async () => {
         const history = memoryVerdictHistory();
+        await warmUp(history, CONFIG, [-7, -6, -5, -4, -3, -2, -1]);
         const states: PartState[] = [];
         for (let minute = 0; minute < 6; minute++) {
             const res = await sustainStatus(raw("down"), {
@@ -161,6 +204,7 @@ describe("sustainStatus", () => {
     it("counts a minute as bad when any check in it (any process) was bad", async () => {
         const history = memoryVerdictHistory();
         const config = { windowMinutes: 3, badMinutes: 2 };
+        await warmUp(history, config, [-1]);
         await sustainStatus(raw("down"), { history, config, now: at(0) });
         await sustainStatus(raw("ok"), { history, config, now: at(0) });
         const res = await sustainStatus(raw("down"), {
@@ -169,6 +213,21 @@ describe("sustainStatus", () => {
             now: at(1),
         });
         expect(res.state).toBe("down");
+    });
+
+    it("still goes down when Kener polls only every other minute", async () => {
+        const history = memoryVerdictHistory();
+        await warmUp(history, CONFIG, [-14, -12, -10, -8, -6, -4, -2]);
+        const states: PartState[] = [];
+        for (const minute of [0, 2, 4, 6]) {
+            const res = await sustainStatus(raw("down"), {
+                history,
+                config: CONFIG,
+                now: at(minute),
+            });
+            states.push(res.state);
+        }
+        expect(states).toEqual(["ok", "ok", "down", "down"]);
     });
 
     it("answers the raw verdict when the history fails (never hides an outage)", async () => {

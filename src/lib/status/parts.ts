@@ -89,6 +89,19 @@ export const SUSTAIN: Record<TrafficPart, SustainConfig> = {
     emails: { windowMinutes: 5, badMinutes: 3 },
 };
 
+/**
+ * Minutes of traffic each raw verdict is judged on (the current minute
+ * included). Kept below each part's `SUSTAIN.badMinutes` so a single bad
+ * minute can't stay in enough consecutive checks to look sustained.
+ */
+export const TRAFFIC_WINDOW_MINUTES: Record<TrafficPart, number> = {
+    "sign-in": 2,
+    plaud: 5,
+    transcription: 5,
+    storage: 2,
+    emails: 2,
+};
+
 const INBOX_FAILED_LOOKBACK_MS = 24 * 60 * MINUTE_MS;
 
 function billingEnabled(): boolean {
@@ -237,8 +250,10 @@ async function trafficStatus(
     part: TrafficPart,
     start: number,
 ): Promise<StatusResponse> {
+    const windowMinutes = TRAFFIC_WINDOW_MINUTES[part];
     const raw = await decideStatus(part, {
-        readWindow: (p) => readWindow(p),
+        readWindow: (p) => readWindow(p, new Date(), windowMinutes),
+        windowSeconds: windowMinutes * 60,
         thresholds: THRESHOLDS[part],
         probe: () => cachedProbe(part, PROBE_TTL_S, PROBES[part]),
         fallbackLatencyMs: () => elapsedSince(start),

@@ -37,9 +37,14 @@ vi.mock("@/lib/hosted/billing/enforcement", () => ({
 }));
 vi.mock("@/lib/posthog-server", () => ({ captureServerException: vi.fn() }));
 
-import { getPartStatus, isPartApplicable } from "@/lib/status/parts";
+import {
+    getPartStatus,
+    isPartApplicable,
+    SUSTAIN,
+    TRAFFIC_WINDOW_MINUTES,
+} from "@/lib/status/parts";
 import { resetProbeCacheForTests } from "@/lib/status/probe";
-import { STATUS_PARTS } from "@/lib/status/types";
+import { STATUS_PARTS, TRAFFIC_PARTS } from "@/lib/status/types";
 
 const originalFetch = global.fetch;
 
@@ -239,5 +244,92 @@ describe("part answers", () => {
             source: "inbox",
             inbox: { open: 2, failedLast24h: 0 },
         });
+    });
+});
+
+describe("raw verdict window vs sustain", () => {
+    interface Row {
+        minute: Date;
+        ok: number;
+        err: number;
+        latencyBuckets: number[];
+        verdictOk: string | null;
+        verdictSlow: string | null;
+        verdictDown: string | null;
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetProbeCacheForTests();
+        selfHostEnv();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("keeps every raw window shorter than the bad minutes its sustain needs", () => {
+        for (const part of TRAFFIC_PARTS) {
+            expect(TRAFFIC_WINDOW_MINUTES[part]).toBeLessThan(
+                SUSTAIN[part].badMinutes,
+            );
+        }
+    });
+
+    it("a single minute of storage errors never shows as down", async () => {
+        vi.useFakeTimers({ toFake: ["Date"] });
+        const rows = new Map<number, Row>();
+        const rowAt = (minute: number): Row => {
+            let row = rows.get(minute);
+            if (!row) {
+                row = {
+                    minute: new Date(minute * 60_000),
+                    ok: 0,
+                    err: 0,
+                    latencyBuckets: [],
+                    verdictOk: null,
+                    verdictSlow: null,
+                    verdictDown: null,
+                };
+                rows.set(minute, row);
+            }
+            return row;
+        };
+        queriesMock.listStatusBuckets.mockImplementation(
+            async (_part: string, since: Date) =>
+                [...rows.values()].filter(
+                    (row) => row.minute.getTime() >= since.getTime(),
+                ),
+        );
+        queriesMock.setStatusMinuteVerdict.mockImplementation(
+            async (input: {
+                minute: Date;
+                state: "ok" | "slow" | "down";
+                reason: string;
+            }) => {
+                const row = rowAt(input.minute.getTime() / 60_000);
+                if (input.state === "ok") row.verdictOk = input.reason;
+                if (input.state === "slow") row.verdictSlow = input.reason;
+                if (input.state === "down") row.verdictDown = input.reason;
+            },
+        );
+        storageMock.testConnection.mockResolvedValue(true);
+
+        const bad = Math.floor(Date.parse("2026-11-18T10:00:00Z") / 60_000);
+        const states: (string | undefined)[] = [];
+        for (let minute = bad - 5; minute <= bad + 6; minute++) {
+            vi.setSystemTime(new Date(minute * 60_000 + 30_000));
+            if (minute === bad) {
+                const row = rowAt(bad);
+                row.err = 10;
+                row.latencyBuckets = [10];
+            }
+            states.push((await getPartStatus("storage"))?.state);
+        }
+
+        expect(
+            [...rows.values()].filter((row) => row.verdictDown !== null),
+        ).toHaveLength(2);
+        expect(states.every((state) => state === "ok")).toBe(true);
     });
 });

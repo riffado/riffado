@@ -23,6 +23,11 @@ function notFound(): NextResponse {
  * `Authorization: Bearer <STATUS_TOKEN>`. 404 when STATUS_TOKEN is unset or
  * the part is unknown or not applicable here, 401 on a missing or wrong
  * token, otherwise always 200 with `{ state, latencyMs, ... }`.
+ *
+ * Kener should poll every part once a minute. Each check is stored as that
+ * minute's verdict, and slow/down is only shown once enough checked
+ * minutes in the window agree (see `sustainedVerdict`); polling less often
+ * leaves fewer checked minutes and makes the sustained answer coarser.
  */
 export async function GET(
     request: Request,

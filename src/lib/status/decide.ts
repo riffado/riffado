@@ -18,6 +18,8 @@ export interface DecideDeps {
     now?: () => Date;
     /** Latency reported when neither traffic nor probe has one. */
     fallbackLatencyMs?: () => number;
+    /** Length of the window `readWindow` covers, reported in the response. */
+    windowSeconds?: number;
 }
 
 /**
@@ -57,6 +59,7 @@ export async function decideStatus(
             probeLatencyMs: null,
             fallbackLatencyMs: fallback(),
             now: now(),
+            windowSeconds: deps.windowSeconds,
         });
     }
 
@@ -70,6 +73,7 @@ export async function decideStatus(
             probeLatencyMs: null,
             fallbackLatencyMs: fallback(),
             now: now(),
+            windowSeconds: deps.windowSeconds,
         });
     }
 
@@ -89,6 +93,7 @@ export async function decideStatus(
             probeLatencyMs: null,
             fallbackLatencyMs: fallback(),
             now: now(),
+            windowSeconds: deps.windowSeconds,
         });
     }
     return statusResponse({
@@ -99,5 +104,6 @@ export async function decideStatus(
         probeLatencyMs: probe.latencyMs,
         fallbackLatencyMs: fallback(),
         now: now(),
+        windowSeconds: deps.windowSeconds,
     });
 }
