@@ -169,24 +169,34 @@ export interface PersistRefreshedPlaudTokensInput {
     tokens: PlaudTokenSet & { refreshToken: string };
 }
 
+/** Encrypted tokens as written to `plaud_connections` by a refresh. */
+export interface StoredPlaudTokenCiphertexts {
+    bearerToken: string;
+    refreshToken: string;
+}
+
 /**
  * Store the tokens returned by a refresh, scoped by user and connection id.
  * Compare-and-swap on `storedRefreshToken`: encryption uses a random IV, so
  * a reconnect or another refresh changes the stored ciphertext and turns
  * this write into a no-op. A known `sessionExpiresAt` is never replaced with
- * null. Returns true when the row was updated.
+ * null. Returns the ciphertexts written, or null when the row was not
+ * updated.
  */
 export async function persistRefreshedPlaudTokens({
     userId,
     connectionId,
     storedRefreshToken,
     tokens,
-}: PersistRefreshedPlaudTokensInput): Promise<boolean> {
+}: PersistRefreshedPlaudTokensInput): Promise<StoredPlaudTokenCiphertexts | null> {
+    const stored: StoredPlaudTokenCiphertexts = {
+        bearerToken: encrypt(tokens.accessToken),
+        refreshToken: encrypt(tokens.refreshToken),
+    };
     const updated = await db
         .update(plaudConnections)
         .set({
-            bearerToken: encrypt(tokens.accessToken),
-            refreshToken: encrypt(tokens.refreshToken),
+            ...stored,
             accessExpiresAt: tokens.accessExpiresAt,
             ...(tokens.sessionExpiresAt
                 ? { sessionExpiresAt: tokens.sessionExpiresAt }
@@ -202,7 +212,7 @@ export async function persistRefreshedPlaudTokens({
         )
         .returning({ id: plaudConnections.id });
 
-    return updated.length > 0;
+    return updated.length > 0 ? stored : null;
 }
 
 export interface BackfillPlaudTokenExpiriesInput {

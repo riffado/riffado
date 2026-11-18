@@ -1256,7 +1256,7 @@ describe("persistRefreshedPlaudTokens compare-and-swap", () => {
         ]);
     });
 
-    it("reports false when the stored ciphertext changed", async () => {
+    it("returns null when the stored ciphertext changed", async () => {
         mockUpdates([]);
         await expect(
             persistRefreshedPlaudTokens({
@@ -1265,7 +1265,7 @@ describe("persistRefreshedPlaudTokens compare-and-swap", () => {
                 storedRefreshToken: encrypt("old.refresh.token"),
                 tokens,
             }),
-        ).resolves.toBe(false);
+        ).resolves.toBeNull();
     });
 });
 
@@ -1604,6 +1604,101 @@ describe("workspace token 401", () => {
         expect(recordings.data_file_list).toEqual([]);
         expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
         expect(mintedBy).toHaveLength(3);
+    });
+});
+
+describe("repeated 401 episodes on one client", () => {
+    function rotatingRefresh(delayMs = 0): {
+        handler: RouteHandler;
+        issued: { ut: string; rt: string }[];
+    } {
+        const issued: { ut: string; rt: string }[] = [];
+        const handler: RouteHandler = async () => {
+            const n = issued.length + 1;
+            const ut = makeUserToken(nowSec() + DAY, `ut-${n}`);
+            const rt = makeRefreshToken(nowSec() + 20 * DAY, `rt-${n}`);
+            issued.push({ ut, rt });
+            if (delayMs) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+            return jsonResponse({
+                status: 0,
+                access_token: ut,
+                refresh_token: rt,
+            });
+        };
+        return { handler, issued };
+    }
+
+    it("refreshes again on a later 401 and shares that refresh between concurrent requests", async () => {
+        const updates = mockUpdates();
+        const oldUt = makeUserToken(nowSec() + 20 * HOUR, "old-ut");
+        const oldRt = makeRefreshToken(nowSec() + 20 * DAY, "old-rt");
+        const connection = makeConnection({
+            accessToken: oldUt,
+            refreshTokenPlain: oldRt,
+        });
+        let acceptedWt = "wt.3";
+        const refresh = rotatingRefresh(5);
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: (wt) => wt === acceptedWt,
+            refresh: refresh.handler,
+        });
+
+        const client = await createPlaudClient(connection);
+        await client.listDevices();
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+
+        acceptedWt = "wt.4";
+        const results = await Promise.all([
+            client.listDevices(),
+            client.getRecordings(0, 10),
+            client.listDevices(),
+        ]);
+        expect(results).toHaveLength(3);
+
+        const refreshCalls = callsTo("/auth/refresh-user-token");
+        expect(refreshCalls).toHaveLength(2);
+        expect(authHeader(refreshCalls[0][1])).toBe(`Bearer ${oldRt}`);
+        expect(authHeader(refreshCalls[1][1])).toBe(
+            `Bearer ${refresh.issued[0].rt}`,
+        );
+        expect(mintedBy).toEqual([
+            `Bearer ${oldUt}`,
+            `Bearer ${oldUt}`,
+            `Bearer ${refresh.issued[0].ut}`,
+            `Bearer ${refresh.issued[1].ut}`,
+        ]);
+
+        expect(updates.set).toHaveBeenCalledTimes(2);
+        const firstWrite = updates.set.mock.calls[0][0] as Record<
+            string,
+            unknown
+        >;
+        const secondWhere = dialect.sqlToQuery(updates.where.mock.calls[1][0]);
+        expect(secondWhere.params).toEqual([
+            CONNECTION_ID,
+            USER_ID,
+            firstWrite.refreshToken,
+        ]);
+    });
+
+    it("stops after MAX_AUTH_RETRIES when Plaud rejects every refreshed token", async () => {
+        mockUpdates();
+        const refresh = rotatingRefresh();
+        const { mintedBy } = routeWorkspaceTokens({
+            accepted: () => false,
+            refresh: refresh.handler,
+        });
+
+        const client = await createPlaudClient(makeConnection());
+        await expect(client.listDevices()).rejects.toMatchObject({
+            code: ErrorCode.PLAUD_INVALID_TOKEN,
+        });
+
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(2);
+        expect(callsTo("/device/list")).toHaveLength(4);
+        expect(mintedBy).toHaveLength(4);
     });
 });
 

@@ -64,7 +64,8 @@ export interface PlaudClientOptions {
     /**
      * Returns a fresh user token when Plaud answers 401 to the user token, or
      * to a workspace token that was already re-minted once. At most one call
-     * is in flight per client. A `PLAUD_INVALID_TOKEN` rejection leaves the
+     * is in flight per client; once it settles, a later 401 on the new token
+     * may refresh again. A `PLAUD_INVALID_TOKEN` rejection leaves the
      * original 401 in place and is not retried; any other rejection is
      * rethrown to the caller and a later 401 may try again.
      */
@@ -157,14 +158,21 @@ export class PlaudClient {
                 this.workspaceFallbackToUt = false;
             });
             this.userTokenRefresh = attempt;
-            attempt.catch((err: unknown) => {
-                if (
-                    !isPlaudTokenRejection(err) &&
-                    this.userTokenRefresh === attempt
-                ) {
-                    this.userTokenRefresh = undefined;
-                }
-            });
+            attempt.then(
+                () => {
+                    if (this.userTokenRefresh === attempt) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+                (err: unknown) => {
+                    if (
+                        !isPlaudTokenRejection(err) &&
+                        this.userTokenRefresh === attempt
+                    ) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+            );
         }
         try {
             await this.userTokenRefresh;
