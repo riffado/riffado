@@ -4,6 +4,7 @@
 # Usage:
 #   curl -fsSL https://riffado.com/install.sh | sh
 #   curl -fsSL https://riffado.com/v0.2.0/install.sh | sh   # version-pinned
+#   curl -fsSL https://riffado.com/install.sh | NON_INTERACTIVE=1 sh   # defaults
 #
 # What this does:
 #   1. Verifies Docker + docker compose v2 are installed and running.
@@ -44,22 +45,28 @@ die()   { printf '%serror:%s %s\n' "$RED" "$RESET" "$1" >&2; exit 1; }
 
 # ---- tty handling ----------------------------------------------------------
 
-# When piped from curl (`curl ... | sh`), stdin is the pipe, not a tty —
-# so plain `read` would consume the script itself. Reopen stdin from the
-# controlling tty when one exists, otherwise run non-interactively with
-# defaults (CI mode).
-NON_INTERACTIVE=0
-if [ ! -t 0 ]; then
-    # `[ -r /dev/tty ]` is not enough — GitHub Actions runners have the
+# When piped from curl (`curl ... | sh`), stdin is the script itself, so
+# prompts read from /dev/tty one `read` at a time and stdin is never
+# replaced. NON_INTERACTIVE=1 takes every default; NON_INTERACTIVE=0
+# requires a terminal; unset uses the terminal when one exists and the
+# defaults otherwise (CI mode).
+detect_tty() {
+    case "${NON_INTERACTIVE:-}" in
+        1) return 0 ;;
+        ""|0) ;;
+        *) die "NON_INTERACTIVE must be 1 or 0 (got '$NON_INTERACTIVE')." ;;
+    esac
+    # `[ -r /dev/tty ]` is not enough: GitHub Actions runners have the
     # device node with read perms but no controlling terminal, so opening
-    # it errors. Probe with a no-op redirect first; only `exec` if the
-    # probe succeeds.
+    # it errors. Probe with a no-op redirect instead.
     if (: </dev/tty) 2>/dev/null; then
-        exec </dev/tty
+        NON_INTERACTIVE=0
+    elif [ "${NON_INTERACTIVE:-}" = "0" ]; then
+        die "NON_INTERACTIVE=0 but no terminal is available (/dev/tty cannot be opened). Run the installer from an interactive terminal, or set NON_INTERACTIVE=1 to accept the defaults."
     else
         NON_INTERACTIVE=1
     fi
-fi
+}
 
 prompt() {
     # prompt <var> <message> <default>
@@ -70,71 +77,10 @@ prompt() {
         return
     fi
     printf '%s [%s]: ' "$_msg" "$_default"
-    read -r _ans || _ans=""
+    read -r _ans </dev/tty || _ans=""
     [ -z "$_ans" ] && _ans="$_default"
     eval "$_var=\"\$_ans\""
 }
-
-# ---- prerequisite checks ---------------------------------------------------
-
-OS="$(uname -s)"
-case "$OS" in
-    Linux|Darwin) ;;
-    MINGW*|MSYS*|CYGWIN*) die "Windows is not supported directly. Use WSL2: https://learn.microsoft.com/windows/wsl/install" ;;
-    *) die "Unsupported OS: $OS (Linux and macOS only)" ;;
-esac
-ok "Detected $OS"
-
-command -v curl  >/dev/null 2>&1 || die "curl is required but not installed"
-command -v openssl >/dev/null 2>&1 || die "openssl is required but not installed"
-command -v docker >/dev/null 2>&1 || die "Docker is required. Install: https://docs.docker.com/get-docker/"
-
-if ! docker info >/dev/null 2>&1; then
-    die "Docker daemon is not running or your user lacks permission. Start Docker Desktop / 'sudo systemctl start docker' / add yourself to the docker group."
-fi
-ok "Docker daemon reachable"
-
-if ! docker compose version >/dev/null 2>&1; then
-    die "Docker Compose v2 is required. 'docker compose version' failed. Install: https://docs.docker.com/compose/install/"
-fi
-ok "Docker Compose v2 available"
-
-# ---- prompt for install dir + APP_URL --------------------------------------
-
-prompt INSTALL_DIR "Install directory" "$DEFAULT_DIR"
-prompt APP_URL "Public URL where Riffado will be reachable" "$DEFAULT_APP_URL"
-
-if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null || true)" ]; then
-    die "$INSTALL_DIR already exists and is not empty. Pick another directory or remove it first."
-fi
-
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-ok "Using $INSTALL_DIR"
-
-# ---- download release artifacts --------------------------------------------
-
-if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
-    # Should not happen — the script is rendered server-side with a version
-    # substituted in. Defend anyway.
-    BASE_URL="https://github.com/$REPO/releases/latest/download"
-    info "Downloading latest release artifacts..."
-else
-    BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
-    info "Downloading release $VERSION artifacts..."
-fi
-
-curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
-    || die "Failed to download docker-compose.yml from $BASE_URL"
-curl -fsSL -o .env "$BASE_URL/env.example" \
-    || die "Failed to download env.example from $BASE_URL"
-ok "Downloaded docker-compose.yml and .env"
-
-# ---- generate secrets ------------------------------------------------------
-
-BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
-ENCRYPTION_KEY="$(openssl rand -hex 32)"
-POSTGRES_PASSWORD="$(openssl rand -hex 24)"
 
 # Patch the .env in place. macOS ships BSD sed which requires a backup-suffix
 # arg to -i; GNU sed does not. Use a temp file + mv to stay portable.
@@ -159,44 +105,113 @@ patch_env() {
     ' .env > "$_tmp" && mv "$_tmp" .env
 }
 
-patch_env BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
-patch_env ENCRYPTION_KEY "$ENCRYPTION_KEY"
-patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
-patch_env APP_URL "$APP_URL"
-if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
-    # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
-    patch_env RIFFADO_VERSION "${VERSION#v}"
-fi
-chmod 600 .env
-ok "Generated secrets and wrote .env"
+main() {
+    detect_tty
 
-# ---- start the stack -------------------------------------------------------
+    # ---- prerequisite checks -----------------------------------------------
 
-info "Pulling images (this can take a minute on first run)..."
-docker compose pull
+    OS="$(uname -s)"
+    case "$OS" in
+        Linux|Darwin) ;;
+        MINGW*|MSYS*|CYGWIN*) die "Windows is not supported directly. Use WSL2: https://learn.microsoft.com/windows/wsl/install" ;;
+        *) die "Unsupported OS: $OS (Linux and macOS only)" ;;
+    esac
+    ok "Detected $OS"
 
-info "Starting Riffado..."
-docker compose up -d
+    command -v curl  >/dev/null 2>&1 || die "curl is required but not installed"
+    command -v openssl >/dev/null 2>&1 || die "openssl is required but not installed"
+    command -v docker >/dev/null 2>&1 || die "Docker is required. Install: https://docs.docker.com/get-docker/"
 
-# ---- health check ----------------------------------------------------------
-
-info "Waiting for $APP_URL/api/health (timeout ${HEALTH_TIMEOUT}s)..."
-i=0
-while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
-    if curl -fsS -o /dev/null "$APP_URL/api/health" 2>/dev/null; then
-        ok "Health check passed"
-        printf '\n%s🎙  Riffado is up.%s\n' "$BOLD" "$RESET"
-        printf '   Open %s%s/register%s to create your account.\n\n' "$BOLD" "$APP_URL" "$RESET"
-        printf '   Install dir: %s\n' "$INSTALL_DIR"
-        printf '   Logs:        cd %s && docker compose logs -f\n' "$INSTALL_DIR"
-        printf '   Upgrade:     cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
-        exit 0
+    if ! docker info >/dev/null 2>&1; then
+        die "Docker daemon is not running or your user lacks permission. Start Docker Desktop / 'sudo systemctl start docker' / add yourself to the docker group."
     fi
-    i=$((i + 1))
-    sleep 1
-done
+    ok "Docker daemon reachable"
 
-warn "Health check did not return 200 within ${HEALTH_TIMEOUT}s."
-warn "The stack may still be starting. Check logs:"
-warn "  cd $INSTALL_DIR && docker compose logs -f"
-exit 1
+    if ! docker compose version >/dev/null 2>&1; then
+        die "Docker Compose v2 is required. 'docker compose version' failed. Install: https://docs.docker.com/compose/install/"
+    fi
+    ok "Docker Compose v2 available"
+
+    # ---- prompt for install dir + APP_URL ----------------------------------
+
+    prompt INSTALL_DIR "Install directory" "$DEFAULT_DIR"
+    prompt APP_URL "Public URL where Riffado will be reachable" "$DEFAULT_APP_URL"
+
+    if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null || true)" ]; then
+        die "$INSTALL_DIR already exists and is not empty. Pick another directory or remove it first."
+    fi
+
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    ok "Using $INSTALL_DIR"
+
+    # ---- download release artifacts ----------------------------------------
+
+    if [ "$VERSION" = "{{VERSION}}" ] || [ -z "$VERSION" ]; then
+        # Should not happen — the script is rendered server-side with a version
+        # substituted in. Defend anyway.
+        BASE_URL="https://github.com/$REPO/releases/latest/download"
+        info "Downloading latest release artifacts..."
+    else
+        BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
+        info "Downloading release $VERSION artifacts..."
+    fi
+
+    curl -fsSL -o docker-compose.yml "$BASE_URL/docker-compose.yml" \
+        || die "Failed to download docker-compose.yml from $BASE_URL"
+    curl -fsSL -o .env "$BASE_URL/env.example" \
+        || die "Failed to download env.example from $BASE_URL"
+    ok "Downloaded docker-compose.yml and .env"
+
+    # ---- generate secrets --------------------------------------------------
+
+    BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+    ENCRYPTION_KEY="$(openssl rand -hex 32)"
+    POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+
+    patch_env BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
+    patch_env ENCRYPTION_KEY "$ENCRYPTION_KEY"
+    patch_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
+    patch_env APP_URL "$APP_URL"
+    if [ "$VERSION" != "{{VERSION}}" ] && [ -n "$VERSION" ]; then
+        # VERSION starts with "v"; RIFFADO_VERSION expects a bare semver.
+        patch_env RIFFADO_VERSION "${VERSION#v}"
+    fi
+    chmod 600 .env
+    ok "Generated secrets and wrote .env"
+
+    # ---- start the stack ---------------------------------------------------
+
+    info "Pulling images (this can take a minute on first run)..."
+    docker compose pull
+
+    info "Starting Riffado..."
+    docker compose up -d
+
+    # ---- health check ------------------------------------------------------
+
+    info "Waiting for $APP_URL/api/health (timeout ${HEALTH_TIMEOUT}s)..."
+    i=0
+    while [ "$i" -lt "$HEALTH_TIMEOUT" ]; do
+        if curl -fsS -o /dev/null "$APP_URL/api/health" 2>/dev/null; then
+            ok "Health check passed"
+            printf '\n%s🎙  Riffado is up.%s\n' "$BOLD" "$RESET"
+            printf '   Open %s%s/register%s to create your account.\n\n' "$BOLD" "$APP_URL" "$RESET"
+            printf '   Install dir: %s\n' "$INSTALL_DIR"
+            printf '   Logs:        cd %s && docker compose logs -f\n' "$INSTALL_DIR"
+            printf '   Upgrade:     cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
+            exit 0
+        fi
+        i=$((i + 1))
+        sleep 1
+    done
+
+    warn "Health check did not return 200 within ${HEALTH_TIMEOUT}s."
+    warn "The stack may still be starting. Check logs:"
+    warn "  cd $INSTALL_DIR && docker compose logs -f"
+    exit 1
+}
+
+# Keep this the last line: the shell has to parse all of main() before it
+# runs any of it, so a partially delivered `curl | sh` never executes.
+main "$@"
