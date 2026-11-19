@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
     const tag = (await fetchLatestReleaseTag()) ?? APP_VERSION_TAG;
-    const script = await renderInstallScript(tag);
+    const script = await renderInstallScript(tag, false);
     // Aggregate counter; no-op on self-host, swallows errors internally.
     // Awaited (not fire-and-forget) because serverless runtimes kill
     // pending promises after response flush -- losing increments.

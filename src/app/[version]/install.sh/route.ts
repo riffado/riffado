@@ -24,7 +24,7 @@ export async function GET(
             { status: 404 },
         );
     }
-    const script = await renderInstallScript(version);
+    const script = await renderInstallScript(version, true);
     await recordInstallHit(version);
     return new Response(script, { headers: INSTALL_SCRIPT_HEADERS });
 }

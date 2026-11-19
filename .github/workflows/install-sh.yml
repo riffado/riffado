@@ -10,6 +10,7 @@ on:
       - main
     paths:
       - 'scripts/install.sh'
+      - 'scripts/install-test/**'
       - 'src/lib/install-script.ts'
       - 'src/app/install.sh/**'
       - 'src/app/[version]/install.sh/**'
@@ -19,6 +20,7 @@ on:
   pull_request:
     paths:
       - 'scripts/install.sh'
+      - 'scripts/install-test/**'
       - 'src/lib/install-script.ts'
       - 'src/app/install.sh/**'
       - 'src/app/[version]/install.sh/**'
@@ -39,6 +41,38 @@ jobs:
           # Lint with `sh` posture — install.sh must run on /bin/sh, not
           # bash. Treat warnings as errors.
           shellcheck -s sh -S warning scripts/install.sh
+
+  chunked-pipe:
+    # Regression for #294: `curl | sh` delivers the script in chunks, and the
+    # installer must not touch the shell's stdin while it is still the
+    # script. Pipes the installer into dash, bash and sh split at several
+    # byte offsets, with prompts answered on a pty and with no terminal.
+    # Also covers #295: APP_PORT derived from APP_URL and the local health
+    # check on the published port. docker and curl are stubbed, so nothing
+    # is pulled or started.
+    name: Chunked pipe and ports
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on the harness
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -s sh -S warning scripts/install-test/run.sh
+      - name: Run installer harness
+        run: SHELLS="dash bash sh" scripts/install-test/run.sh
+      - name: Render the compose port mapping
+        run: |
+          # Without APP_PORT (existing installs) the app stays on 3000.
+          published() {
+            docker compose -f docker-compose.yml --env-file "$1" config --format json \
+              | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["app"]["ports"][0]["published"])'
+          }
+          printf 'APP_PORT=3555\n' > "$RUNNER_TEMP/port.env"
+          test "$(published .env.example)" = 3000
+          test "$(published /dev/null)" = 3000
+          test "$(published "$RUNNER_TEMP/port.env")" = 3555
 
   install-pinned:
     # End-to-end install against a published image. This is the regression

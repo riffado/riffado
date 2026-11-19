@@ -1,4 +1,5 @@
 import { env } from "../env";
+import { withStorageTiming } from "../status/storage";
 import { LocalStorage } from "./local-storage";
 import { S3Storage } from "./s3-storage";
 import type { S3Config, StorageProvider } from "./types";
@@ -8,7 +9,7 @@ export function createStorageProvider(): StorageProvider {
     const storageType = env.DEFAULT_STORAGE_TYPE;
 
     if (storageType === "local") {
-        return new LocalStorage();
+        return withStorageTiming(new LocalStorage());
     }
 
     if (storageType === "s3") {
@@ -31,7 +32,7 @@ export function createStorageProvider(): StorageProvider {
             );
         }
 
-        return new S3Storage(s3Config);
+        return withStorageTiming(new S3Storage(s3Config));
     }
 
     throw new Error(`Unsupported storage type: ${storageType}`);

@@ -100,7 +100,7 @@ Send a one-time verification code to the user's Plaud email. Handles regional re
 
 #### POST `/plaud/auth/verify`
 
-Verify the OTP code, obtain a long-lived access token from Plaud, and store the encrypted connection.
+Verify the OTP code, obtain the user token and refresh token (both valid 30 days) from Plaud, and store the encrypted connection.
 
 **Body:**
 ```json
@@ -122,7 +122,7 @@ Verify the OTP code, obtain a long-lived access token from Plaud, and store the 
 
 #### GET `/plaud/connection`
 
-Get current Plaud connection status.
+Get current Plaud connection status. Token values are never returned.
 
 **Response:**
 ```json
@@ -130,10 +130,16 @@ Get current Plaud connection status.
   "connected": true,
   "server": "eu",
   "plaudEmail": "user@example.com",
+  "needsReconnect": false,
+  "accessExpiresAt": "2025-01-23T12:00:00.000Z",
+  "sessionExpiresAt": "2025-02-21T12:00:00.000Z",
+  "autoRenews": true,
   "createdAt": "2025-01-22T12:00:00.000Z",
   "updatedAt": "2025-01-22T12:00:00.000Z"
 }
 ```
+
+`sessionExpiresAt` is when the Plaud sign-in ends and the user must reconnect. With `autoRenews`, Riffado refreshes the user token until then. Both expiries are `null` when unknown.
 
 #### DELETE `/plaud/connection`
 

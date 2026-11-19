@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { captureServerException } from "@/lib/posthog-server";
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 
 // ponytail: skip users synced in the last 4 min -- they likely just client-synced
@@ -50,21 +51,46 @@ export async function claimUsersForSync(): Promise<string[]> {
     return rows.map((r) => r.userId);
 }
 
-async function tick(): Promise<void> {
+type SyncResult = Awaited<ReturnType<typeof syncRecordingsForUser>>;
+
+function syncStatusOutcome(
+    result: Pick<SyncResult, "errors" | "skipped" | "needsReconnect">,
+): "success" | "failure" | "ignore" {
+    if (result.errors.length === 0) return "success";
+    if (result.skipped || result.needsReconnect) return "ignore";
+    return "failure";
+}
+
+/** One background sync pass. Exported for testing. */
+export async function tick(): Promise<void> {
     if (running) return;
     running = true;
     try {
         const userIds = await claimUsersForSync();
-        if (userIds.length === 0) return;
+        if (userIds.length === 0) {
+            recordJobSuccess("sync");
+            return;
+        }
 
         let synced = 0;
         let errors = 0;
         for (const userId of userIds) {
             try {
-                await syncRecordingsForUser(userId, "background");
-                synced++;
+                const result = await syncRecordingsForUser(
+                    userId,
+                    "background",
+                );
+                const outcome = syncStatusOutcome(result);
+                if (outcome === "success") {
+                    synced++;
+                    recordJobSuccess("sync");
+                } else if (outcome === "failure") {
+                    errors++;
+                    recordJobFailure("sync");
+                }
             } catch (error) {
                 errors++;
+                recordJobFailure("sync");
                 console.error(
                     `[background-sync] failed for user ${userId}:`,
                     error,
@@ -78,8 +104,11 @@ async function tick(): Promise<void> {
 
         if (synced > 0 || errors > 0) {
             console.log(`[background-sync] synced=${synced} errors=${errors}`);
+        } else {
+            recordJobSuccess("sync");
         }
     } catch (error) {
+        recordJobFailure("sync");
         console.error("[background-sync] tick failed:", error);
         captureServerException(error, { source: "worker:sync" });
     } finally {

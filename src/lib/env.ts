@@ -53,6 +53,27 @@ const baseEnvSchema = z.object({
     /** Trust X-Forwarded-For for IP rate limiting; only enable behind a trusted proxy. */
     RATE_LIMIT_TRUST_PROXY_HEADERS: optionalStrictBoolean,
 
+    /**
+     * Bearer token for the status checks at GET /api/status/<part>. Unset
+     * (default) makes those endpoints 404 and turns all status recording off.
+     * A malformed value (under 32 characters or containing whitespace) is
+     * treated as unset, with a warning that never includes the value.
+     */
+    STATUS_TOKEN: z
+        .string()
+        .optional()
+        .transform((val) => {
+            const trimmed = val?.trim();
+            if (!trimmed) return undefined;
+            if (trimmed.length < 32 || /\s/.test(trimmed)) {
+                console.warn(
+                    "[status] STATUS_TOKEN is set but invalid (it needs at least 32 characters and no whitespace); status checks stay disabled.",
+                );
+                return undefined;
+            }
+            return trimmed;
+        }),
+
     ENCRYPTION_KEY: z.string().optional(),
 
     DEFAULT_STORAGE_TYPE: z.enum(["local", "s3"]).optional().default("local"),
@@ -156,6 +177,14 @@ const baseEnvSchema = z.object({
                 .positive()
                 .max(25 * 1024 * 1024),
         ),
+
+    /**
+     * `auto` (default) re-encodes OpenAI-style transcription inputs above
+     * WHISPER_MAX_BYTES; `off` always sends the original file. Use `off` with a
+     * self-hosted Whisper-compatible server that has no 25 MiB request cap, where
+     * the re-encode only costs accuracy and CPU.
+     */
+    WHISPER_COMPRESS: z.enum(["auto", "off"]).optional().default("auto"),
 
     /** Starting mono Opus bitrate for oversized transcription inputs. */
     WHISPER_COMPRESS_BITRATE_KBPS: z
@@ -748,6 +777,7 @@ function validateEnv(): Env {
                 process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
             RATE_LIMIT_TRUST_PROXY_HEADERS:
                 process.env.RATE_LIMIT_TRUST_PROXY_HEADERS,
+            STATUS_TOKEN: process.env.STATUS_TOKEN,
             ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
             DEFAULT_STORAGE_TYPE: process.env.DEFAULT_STORAGE_TYPE,
             LOCAL_STORAGE_PATH: process.env.LOCAL_STORAGE_PATH,
@@ -764,6 +794,7 @@ function validateEnv(): Env {
             BACKGROUND_SYNC_INTERVAL_MS:
                 process.env.BACKGROUND_SYNC_INTERVAL_MS,
             WHISPER_MAX_BYTES: process.env.WHISPER_MAX_BYTES,
+            WHISPER_COMPRESS: process.env.WHISPER_COMPRESS,
             WHISPER_COMPRESS_BITRATE_KBPS:
                 process.env.WHISPER_COMPRESS_BITRATE_KBPS,
             WHISPER_REQUEST_TIMEOUT_MS: process.env.WHISPER_REQUEST_TIMEOUT_MS,

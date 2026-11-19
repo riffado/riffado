@@ -98,9 +98,10 @@ describe("#225 Plaud token invalidation on 401", () => {
     it("flags needsReconnect and stamps invalidatedAt on PLAUD_INVALID_TOKEN", async () => {
         mockConnectionSelects();
 
-        const setSpy = vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue(undefined),
+        const whereSpy = vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: "conn-1" }]),
         });
+        const setSpy = vi.fn().mockReturnValue({ where: whereSpy });
         (db.update as Mock).mockReturnValue({ set: setSpy });
 
         const mockPlaudClient = {
