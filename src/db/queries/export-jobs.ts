@@ -1,6 +1,18 @@
-import { and, desc, eq, isNotNull, lte, sql } from "drizzle-orm";
+import {
+    and,
+    desc,
+    eq,
+    gt,
+    isNotNull,
+    isNull,
+    lte,
+    ne,
+    or,
+    sql,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { exportJobs } from "@/db/schema";
+import { exportArchiveStorageKeySql } from "@/lib/export/storage-key";
 
 export type ExportJobStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -32,6 +44,14 @@ export const EXPORT_ARCHIVE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const EXPORT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 /** A build attempt failing this many times in a row stops retrying and sticks as `failed`. */
 export const EXPORT_MAX_ATTEMPTS = 3;
+
+function attemptStorageKeySql() {
+    return exportArchiveStorageKeySql({
+        userId: exportJobs.userId,
+        jobId: exportJobs.id,
+        claimToken: exportJobs.claimToken,
+    });
+}
 
 /** Postgres SQLSTATE for unique_violation. */
 const PG_UNIQUE_VIOLATION = "23505";
@@ -195,36 +215,68 @@ export async function claimPendingExportJobs(
  * work. Returns `false` (instead of throwing) if the claim no longer
  * matches -- the job was reclaimed as stale while this worker was still
  * building it -- so the caller can log it rather than silently
- * pretending the write landed.
+ * pretending the write landed. The claim token is cleared on completion,
+ * so no later write scoped to that claim can touch the completed row.
+ *
+ * In the same transaction, the user's older completed archives expire
+ * now, so the worker's cleanup pass deletes them and only the archive
+ * that just completed stays downloadable. Nothing is expired when the
+ * claim no longer matches, or when `retireOlderArchives` is false (the
+ * new archive is missing audio, so an older one may be more complete),
+ * so the user always keeps at least one downloadable archive.
  */
 export async function completeExportJob(input: {
     jobId: string;
+    userId: string;
     claimToken: string;
     storageKey: string;
     fileSize: number;
     recordingCount: number;
+    retireOlderArchives: boolean;
 }): Promise<boolean> {
     const completedAt = new Date();
-    const result = await db
-        .update(exportJobs)
-        .set({
-            status: "completed",
-            storageKey: input.storageKey,
-            fileSize: input.fileSize,
-            recordingCount: input.recordingCount,
-            completedAt,
-            expiresAt: new Date(
-                completedAt.getTime() + EXPORT_ARCHIVE_RETENTION_MS,
-            ),
-        })
-        .where(
-            and(
-                eq(exportJobs.id, input.jobId),
-                eq(exportJobs.claimToken, input.claimToken),
-            ),
-        )
-        .returning({ id: exportJobs.id });
-    return result.length > 0;
+    return db.transaction(async (tx) => {
+        const completed = await tx
+            .update(exportJobs)
+            .set({
+                status: "completed",
+                claimToken: null,
+                storageKey: input.storageKey,
+                fileSize: input.fileSize,
+                recordingCount: input.recordingCount,
+                completedAt,
+                expiresAt: new Date(
+                    completedAt.getTime() + EXPORT_ARCHIVE_RETENTION_MS,
+                ),
+            })
+            .where(
+                and(
+                    eq(exportJobs.id, input.jobId),
+                    eq(exportJobs.userId, input.userId),
+                    eq(exportJobs.claimToken, input.claimToken),
+                ),
+            )
+            .returning({ id: exportJobs.id });
+        if (completed.length === 0) return false;
+        if (!input.retireOlderArchives) return true;
+
+        await tx
+            .update(exportJobs)
+            .set({ expiresAt: completedAt })
+            .where(
+                and(
+                    eq(exportJobs.userId, input.userId),
+                    eq(exportJobs.status, "completed"),
+                    ne(exportJobs.id, input.jobId),
+                    lte(exportJobs.completedAt, completedAt),
+                    or(
+                        isNull(exportJobs.expiresAt),
+                        gt(exportJobs.expiresAt, completedAt),
+                    ),
+                ),
+            );
+        return true;
+    });
 }
 
 /**
@@ -237,8 +289,14 @@ export async function completeExportJob(input: {
  * durable reason the job can never succeed.
  *
  * Returns `null` if the claim token no longer matches (the job was
- * reclaimed elsewhere) -- the caller has nothing to report on a job it
- * no longer owns.
+ * reclaimed elsewhere) or the job is no longer `processing` (its
+ * completion already committed) -- the caller has nothing to report on
+ * a job it no longer owns, and a completed job is never flipped back.
+ *
+ * The failed attempt's archive key is appended to `stale_storage_keys`
+ * in the same write, so its object (possibly partial) stays discoverable
+ * by the stale-key sweep and by account deletion even if the worker
+ * dies before deleting it.
  */
 export async function recordExportJobFailure(
     jobId: string,
@@ -254,22 +312,50 @@ export async function recordExportJobFailure(
             attempts = attempts + 1,
             error_message = ${errorMessage},
             started_at = null,
+            stale_storage_keys = stale_storage_keys || to_jsonb(${attemptStorageKeySql()}),
             claim_token = case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then claim_token
                 else null
             end,
-            status = case
+            status = (case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then 'failed'
                 else 'pending'
-            end,
+            end)::export_job_status,
             completed_at = case
                 when attempts + 1 >= ${EXPORT_MAX_ATTEMPTS} then now()
                 else null
             end
-        where id = ${jobId} and claim_token = ${claimToken}
+        where id = ${jobId}
+          and status = 'processing'
+          and claim_token = ${claimToken}
         returning status, attempts
     `);
     return row ?? null;
+}
+
+/**
+ * True when the user's job row records `storageKey` as its completed
+ * archive. The worker checks this before discarding an attempt's object
+ * after a failure it could not record, so an archive whose completion
+ * committed is never deleted by the failure path.
+ */
+export async function isExportArchiveReferenced(input: {
+    jobId: string;
+    userId: string;
+    storageKey: string;
+}): Promise<boolean> {
+    const rows = await db
+        .select({ id: exportJobs.id })
+        .from(exportJobs)
+        .where(
+            and(
+                eq(exportJobs.id, input.jobId),
+                eq(exportJobs.userId, input.userId),
+                eq(exportJobs.storageKey, input.storageKey),
+            ),
+        )
+        .limit(1);
+    return rows.length > 0;
 }
 
 /**
@@ -338,7 +424,7 @@ export async function reclaimStaleProcessingExportJobs(
                 case
                     when ${exportJobs.claimToken} is not null then
                         ${exportJobs.staleStorageKeys} || to_jsonb(
-                            'exports/' || ${exportJobs.userId} || '/' || ${exportJobs.id} || '-' || ${exportJobs.claimToken} || '.zip'
+                            ${attemptStorageKeySql()}
                         )
                     else ${exportJobs.staleStorageKeys}
                 end
@@ -403,4 +489,35 @@ export async function clearStaleStorageKey(
         )
         where id = ${jobId}
     `);
+}
+
+/**
+ * Every storage key the user's export jobs may have written: completed
+ * archives, the per-claim key of any attempt still holding a claim (in
+ * flight, or failed with its partial upload), and keys recorded from
+ * reclaimed attempts. Used to delete them before the user row (and with
+ * it these rows) is deleted. Pass a transaction as `executor` to read
+ * inside it.
+ */
+export async function listExportStorageKeysForUser(
+    userId: string,
+    executor: Pick<typeof db, "execute"> = db,
+): Promise<string[]> {
+    const result = await executor.execute<{ key: string }>(sql`
+        select storage_key as key
+        from ${exportJobs}
+        where user_id = ${userId} and storage_key is not null
+        union
+        select ${attemptStorageKeySql()} as key
+        from ${exportJobs}
+        where user_id = ${userId} and claim_token is not null
+        union
+        select elem as key
+        from ${exportJobs} j, jsonb_array_elements_text(j.stale_storage_keys) elem
+        where j.user_id = ${userId}
+    `);
+    const rows = Array.isArray(result)
+        ? result
+        : ((result as { rows: { key: string }[] }).rows ?? []);
+    return rows.map((row) => row.key);
 }

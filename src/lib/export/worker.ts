@@ -6,6 +6,7 @@ import {
     completeExportJob,
     deleteExportJobRow,
     EXPORT_MAX_ATTEMPTS,
+    isExportArchiveReferenced,
     reclaimStaleProcessingExportJobs,
     recordExportJobFailure,
     selectExpiredExportJobs,
@@ -15,8 +16,14 @@ import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendExportReadyEmail } from "@/lib/notifications/email";
 import { captureServerException } from "@/lib/posthog-server";
+import {
+    deleteStorageObject,
+    deleteStorageObjectOrQueue,
+} from "@/lib/storage/delete-object";
+import { sweepStorageDeletionQueue } from "@/lib/storage/deletion-queue";
 import { createStorageProvider } from "@/lib/storage/factory";
 import { buildAndUploadExportArchive } from "./build-archive";
+import { exportArchiveStorageKey } from "./storage-key";
 
 const TICK_MS = 30 * 1000;
 // Archive builds are CPU/memory/IO heavier than a sync tick -- cap how
@@ -111,7 +118,11 @@ async function processJob(job: {
     // only ever touches *this attempt's own* upload, whether it's a
     // partial from a failed build or a finished one nobody ended up
     // using because the row moved on without it.
-    const storageKey = `exports/${job.userId}/${job.id}-${job.claimToken}.zip`;
+    const storageKey = exportArchiveStorageKey({
+        userId: job.userId,
+        jobId: job.id,
+        claimToken: job.claimToken,
+    });
 
     try {
         const result = await runWithStallGuard(
@@ -128,10 +139,12 @@ async function processJob(job: {
 
         const completed = await completeExportJob({
             jobId: job.id,
+            userId: job.userId,
             claimToken: job.claimToken,
             storageKey,
             fileSize: result.fileSize,
             recordingCount: result.recordingCount,
+            retireOlderArchives: result.audioOmittedCount === 0,
         });
 
         if (!completed) {
@@ -143,8 +156,18 @@ async function processJob(job: {
             console.warn(
                 `[export-worker] job ${job.id} finished but its claim was superseded; discarding result`,
             );
-            await storage.deleteFile(storageKey).catch(() => {});
+            await deleteStorageObjectOrQueue(
+                storage,
+                storageKey,
+                "export_cleanup",
+            );
             return;
+        }
+
+        if (result.audioOmittedCount > 0) {
+            console.warn(
+                `[export-worker] job ${job.id} completed without audio for ${result.audioOmittedCount} recording(s); keeping the user's older archives`,
+            );
         }
 
         await notifyExportReady(job.userId, job.id).catch((error) => {
@@ -161,6 +184,19 @@ async function processJob(job: {
             message,
         );
         if (outcome === null) {
+            if (
+                await isExportArchiveReferenced({
+                    jobId: job.id,
+                    userId: job.userId,
+                    storageKey,
+                })
+            ) {
+                console.warn(
+                    `[export-worker] job ${job.id} reported a failure after its completion committed; keeping the archive:`,
+                    message,
+                );
+                return;
+            }
             // Claim superseded -- another worker owns (or already resolved)
             // this job. Nothing to record against a claim we no longer
             // hold. Cleanup below still runs: `storageKey` is scoped to
@@ -189,7 +225,7 @@ async function processJob(job: {
         // upload. A retry gets a fresh claim token and therefore a fresh
         // key (see above), so this never collides with a subsequent
         // attempt's object.
-        await storage.deleteFile(storageKey).catch(() => {});
+        await deleteStorageObjectOrQueue(storage, storageKey, "export_cleanup");
     }
 }
 
@@ -221,7 +257,7 @@ async function cleanupExpired(): Promise<void> {
             // succeeds -- deleting the row first would permanently
             // orphan the archive object (no record left to retry
             // against) if the storage call then failed.
-            await storage.deleteFile(job.storageKey);
+            await deleteStorageObject(storage, job.storageKey);
             await deleteExportJobRow(job.id);
             cleaned += 1;
         } catch (error) {
@@ -247,7 +283,7 @@ async function sweepStaleStorageKeys(): Promise<void> {
             // reclaim that recorded it can't know whether the crashed
             // worker's upload ever actually landed in storage before it
             // died.
-            await storage.deleteFile(entry.key);
+            await deleteStorageObject(storage, entry.key);
             await clearStaleStorageKey(entry.jobId, entry.key);
             swept += 1;
         } catch (error) {
@@ -260,6 +296,15 @@ async function sweepStaleStorageKeys(): Promise<void> {
     if (swept > 0) {
         console.log(
             `[export-worker] swept ${swept} orphaned storage key(s) from reclaimed attempts`,
+        );
+    }
+}
+
+async function sweepQueuedStorageDeletions(): Promise<void> {
+    const result = await sweepStorageDeletionQueue(createStorageProvider());
+    if (result.deleted > 0 || result.retrying > 0 || result.failed > 0) {
+        console.log(
+            `[export-worker] storage deletion queue deleted=${result.deleted} retrying=${result.retrying} failed=${result.failed}`,
         );
     }
 }
@@ -285,6 +330,7 @@ export async function tick(): Promise<void> {
 
         await cleanupExpired();
         await sweepStaleStorageKeys();
+        await sweepQueuedStorageDeletions();
     } catch (error) {
         console.error("[export-worker] tick failed:", error);
         captureServerException(error, { source: "worker:export" });
@@ -297,7 +343,8 @@ export async function tick(): Promise<void> {
  * Start the full-data export archive worker. Runs on both hosted and
  * self-host (unlike the Plaud sync worker, this isn't hosted-only --
  * self-host users benefit from the same async, non-blocking archive
- * build). Safe to call more than once.
+ * build). Each tick also retries queued storage deletes
+ * (`sweepStorageDeletionQueue`). Safe to call more than once.
  */
 export function startExportWorker(): void {
     if (started) return;

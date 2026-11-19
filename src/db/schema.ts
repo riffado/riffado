@@ -755,6 +755,36 @@ export const exportJobs = pgTable(
     }),
 );
 
+/**
+ * Storage objects whose delete failed and must be retried, e.g. a deleted
+ * account's audio or export archives. Not user-scoped: rows outlive the
+ * user they belonged to. Only keys that can never be written again may be
+ * queued (user-namespaced keys of deleted users, per-claim export keys),
+ * so a retried delete can never remove live data. Retried by the export
+ * worker with backoff until `attempts` runs out, then kept as `failed`
+ * for an operator.
+ */
+export const storageDeletionQueue = pgTable(
+    "storage_deletion_queue",
+    {
+        storageKey: text("storage_key").primaryKey(),
+        source: varchar("source", { length: 40 }).notNull(),
+        status: varchar("status", { length: 16 }).notNull().default("pending"),
+        attempts: integer("attempts").notNull().default(0),
+        nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+        claimToken: text("claim_token"),
+        lastError: text("last_error"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        dueIdx: index("storage_deletion_queue_due_idx").on(
+            table.status,
+            table.nextAttemptAt,
+        ),
+    }),
+);
+
 export const apiRateLimitBuckets = pgTable(
     "api_rate_limit_buckets",
     {

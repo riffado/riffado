@@ -12,6 +12,7 @@ import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
 import { captureServerEvent } from "@/lib/posthog-server";
+import { deleteStorageObjectOrQueue } from "@/lib/storage/delete-object";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
 
@@ -168,16 +169,11 @@ export const POST = apiHandler(async (request: Request) => {
             isTrash: false,
         });
     } catch (dbError) {
-        // DB insert failed — clean up the already-uploaded storage file
-        // to avoid orphaned objects with no corresponding DB record.
-        try {
-            await storage.deleteFile(storageKey);
-        } catch (cleanupErr) {
-            console.error(
-                "Failed to clean up orphaned storage file after DB insert error:",
-                cleanupErr,
-            );
-        }
+        await deleteStorageObjectOrQueue(
+            storage,
+            storageKey,
+            "recording_cleanup",
+        );
         throw dbError;
     }
 

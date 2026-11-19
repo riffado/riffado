@@ -1,7 +1,10 @@
 import { and, desc, eq, sql, sum } from "drizzle-orm";
 import { db } from "@/db";
+import { listExportStorageKeysForUser } from "@/db/queries/export-jobs";
+import { enqueueStorageDeletions } from "@/db/queries/storage-deletions";
 import {
     billingCustomers,
+    exportJobs,
     foundingMemberReservations,
     recordings,
     stripeWebhookEvents,
@@ -839,8 +842,26 @@ export async function listRecordingStoragePaths(
     return rows.map((r) => r.storagePath);
 }
 
-/** Hard-delete a user while preserving any lifetime founding-capacity claim. */
-export async function deleteUser(userId: string): Promise<void> {
+/**
+ * Hard-delete a user while preserving any lifetime founding-capacity claim.
+ *
+ * The user row is locked first (`FOR UPDATE`). A concurrent recording or
+ * export-job insert needs a `FOR KEY SHARE` lock on that row for its FK
+ * check, so it waits for this transaction and then fails with an FK
+ * violation instead of adding a row (and storage key) after the scan.
+ * In the same transaction, the user's export jobs and recordings are
+ * locked and re-read, and their storage keys are queued for deletion
+ * (`storage_deletion_queue`), so the keys are queued exactly when the
+ * user row and every row that referenced them are gone. Recording paths
+ * in `deletedStorageKeys` (deleted by the caller before this call) are
+ * skipped. Export keys are always queued: an export that was in flight
+ * when the caller deleted its key may have written the object since.
+ * Queueing an object that is already gone is harmless.
+ */
+export async function deleteUser(
+    userId: string,
+    options: { deletedStorageKeys?: string[] } = {},
+): Promise<void> {
     await db.transaction(async (tx) => {
         await tx.execute(
             sql`select pg_advisory_xact_lock(hashtextextended('billing_founding_members', 0))`,
@@ -854,7 +875,8 @@ export async function deleteUser(userId: string): Promise<void> {
             })
             .from(users)
             .where(eq(users.id, userId))
-            .limit(1);
+            .limit(1)
+            .for("update");
         if (
             user &&
             (user.foundingMember || user.foundingMemberClaimedAt !== null)
@@ -887,7 +909,28 @@ export async function deleteUser(userId: string): Promise<void> {
             }
         }
 
+        await tx
+            .select({ id: exportJobs.id })
+            .from(exportJobs)
+            .where(eq(exportJobs.userId, userId))
+            .orderBy(exportJobs.id)
+            .for("update");
+        const exportKeys = await listExportStorageKeysForUser(userId, tx);
+        const recordingRows = await tx
+            .select({ storagePath: recordings.storagePath })
+            .from(recordings)
+            .where(eq(recordings.userId, userId))
+            .for("update");
+        const deleted = new Set(options.deletedStorageKeys ?? []);
+        const pendingKeys = [
+            ...recordingRows
+                .map((row) => row.storagePath)
+                .filter((path) => !deleted.has(path)),
+            ...exportKeys,
+        ];
+
         await tx.delete(users).where(eq(users.id, userId));
+        await enqueueStorageDeletions(pendingKeys, "account_deletion", tx);
     });
 }
 

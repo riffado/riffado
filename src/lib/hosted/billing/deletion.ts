@@ -5,9 +5,11 @@ import {
     deleteUser,
     listRecordingStoragePaths,
 } from "@/db/queries/billing";
+import { listExportStorageKeysForUser } from "@/db/queries/export-jobs";
 import { users } from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendAccountDeletedEmail } from "@/lib/notifications/email";
+import { deleteStorageObject } from "@/lib/storage/delete-object";
 import { createStorageProvider } from "@/lib/storage/factory";
 
 const DEFAULT_BATCH_LIMIT = 25;
@@ -15,21 +17,26 @@ const DEFAULT_BATCH_LIMIT = 25;
 export interface DeletionResult {
     /** Users hard-deleted this run. */
     deleted: number;
-    /** Users where storage cleanup partially failed but the row was deleted anyway. */
+    /** Users where some storage deletes failed and were queued for retry. */
     storagePartial: number;
     /** Users where the deletion itself threw (counted; the batch continues). */
     errors: number;
 }
 
 /**
- * Delete a single user's stored audio objects, then the user row.
+ * Delete a single user's stored objects (recording audio and export
+ * archives), then the user row.
  *
- * Storage cleanup is best-effort: a flaky storage call for one object
- * does not block the user-row delete. The intent is that the user can
- * be removed from our records; an orphan-sweeper can pick up stragglers
- * later if needed. The DB row deletion cascades through every FK-bound
- * dependent table (recordings, transcriptions, plaud connections,
- * etc.) so encrypted secrets at rest are removed in the same statement.
+ * Storage cleanup is best-effort per object: a failed delete does not
+ * block the user-row delete. `deleteUser` re-reads the user's storage
+ * keys under lock in the same transaction as the user-row delete and
+ * queues every key not deleted here in `storage_deletion_queue` (plus
+ * every export key, since an in-flight export may have written its
+ * object after it was deleted here); the export worker retries them. An
+ * object that is already gone counts as deleted. The DB row deletion
+ * cascades through every FK-bound dependent table (recordings,
+ * transcriptions, export jobs, plaud connections, etc.) so encrypted
+ * secrets at rest are removed in the same statement.
  */
 export async function deleteUserAccount(userId: string): Promise<{
     storageErrors: number;
@@ -41,23 +48,27 @@ export async function deleteUserAccount(userId: string): Promise<{
         .limit(1);
     const capturedEmail = emailRow?.email ?? null;
 
-    const paths = await listRecordingStoragePaths(userId);
+    const recordingPaths = await listRecordingStoragePaths(userId);
+    const exportKeys = await listExportStorageKeysForUser(userId);
+    const keys = [...new Set([...recordingPaths, ...exportKeys])];
     const storage = createStorageProvider();
 
+    const deletedKeys: string[] = [];
     let storageErrors = 0;
-    for (const path of paths) {
+    for (const key of keys) {
         try {
-            await storage.deleteFile(path);
+            await deleteStorageObject(storage, key);
+            deletedKeys.push(key);
         } catch (error) {
             storageErrors += 1;
             console.error(
-                `[billing-deletion] storage deleteFile failed for user=${userId} path=${path}:`,
+                `[billing-deletion] storage deleteFile failed for user=${userId} key=${key}, queued for retry:`,
                 error,
             );
         }
     }
 
-    await deleteUser(userId);
+    await deleteUser(userId, { deletedStorageKeys: deletedKeys });
 
     if (capturedEmail) {
         const base = env.APP_URL?.replace(/\/$/, "");

@@ -33,6 +33,7 @@ import {
     captureServerEvent,
     captureServerException,
 } from "@/lib/posthog-server";
+import { deleteStorageObjectOrQueue } from "@/lib/storage/delete-object";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
     claimAutoTranscribeIds,
@@ -102,6 +103,17 @@ interface ImportCandidate {
     plaudFileId: string;
     isTrans: boolean;
     isSummary: boolean;
+}
+
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
+function isForeignKeyViolation(error: unknown): boolean {
+    const code = (error as { code?: unknown })?.code;
+    const causeCode = (error as { cause?: { code?: unknown } })?.cause?.code;
+    return (
+        code === PG_FOREIGN_KEY_VIOLATION ||
+        causeCode === PG_FOREIGN_KEY_VIOLATION
+    );
 }
 
 async function storagePathReferenced(
@@ -592,15 +604,11 @@ async function processRecording(
             }
 
             if (outcome === "deleted") {
-                // Best-effort cleanup of the orphaned blob.
-                try {
-                    await storage.deleteFile(storageKey);
-                } catch (cleanupError) {
-                    console.error(
-                        `Failed to clean up orphaned storage object ${storageKey} after concurrent delete:`,
-                        cleanupError,
-                    );
-                }
+                await deleteStorageObjectOrQueue(
+                    storage,
+                    storageKey,
+                    "recording_cleanup",
+                );
                 return { status: "skipped" };
             }
 
@@ -629,10 +637,22 @@ async function processRecording(
             };
         }
 
-        const [newRecording] = await db
-            .insert(recordings)
-            .values(recordingData)
-            .returning({ id: recordings.id });
+        let newRecording: { id: string };
+        try {
+            [newRecording] = await db
+                .insert(recordings)
+                .values(recordingData)
+                .returning({ id: recordings.id });
+        } catch (insertError) {
+            if (isForeignKeyViolation(insertError)) {
+                await deleteStorageObjectOrQueue(
+                    storage,
+                    storageKey,
+                    "recording_cleanup",
+                );
+            }
+            throw insertError;
+        }
 
         seenRecordingIds.add(newRecording.id);
 
