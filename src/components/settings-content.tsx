@@ -10,27 +10,21 @@ import { ExportSection } from "./settings-sections/export-section";
 import { NotificationsSection } from "./settings-sections/notifications-section";
 import { PlaudAccountSection } from "./settings-sections/plaud-account-section";
 import { PlaybackSection } from "./settings-sections/playback-section";
-import { ProvidersSection } from "./settings-sections/providers-section";
+import {
+    type Provider,
+    ProvidersSection,
+} from "./settings-sections/providers-section";
 import { StorageSection } from "./settings-sections/storage-section";
 import { SummarySection } from "./settings-sections/summary-section";
 import { SyncSection } from "./settings-sections/sync-section";
 import { TranscriptionSection } from "./settings-sections/transcription-section";
 
-interface Provider {
-    id: string;
-    provider: string;
-    baseUrl: string | null;
-    defaultModel: string | null;
-    isDefaultTranscription: boolean;
-    isDefaultEnhancement: boolean;
-    createdAt: Date;
-}
-
-const EMPTY_PROVIDERS: Provider[] = [];
-
 interface SettingsContentProps {
     activeSection: SettingsSection;
-    initialProviders?: Provider[];
+    /** Forwarded to `ProvidersSection`; null while loading. */
+    providers: Provider[] | null;
+    /** Forwarded to `ProvidersSection`; see its prop doc. */
+    onProvidersChange: (providers: Provider[]) => void;
     onReRunOnboarding?: () => void;
     isHosted?: boolean;
     /** Forwarded to `PlaudAccountSection`; see its prop doc. */
@@ -39,7 +33,8 @@ interface SettingsContentProps {
 
 export function SettingsContent({
     activeSection,
-    initialProviders = EMPTY_PROVIDERS,
+    providers,
+    onProvidersChange,
     onReRunOnboarding,
     isHosted = false,
     onPlaudReconnected,
@@ -48,7 +43,8 @@ export function SettingsContent({
         case "providers":
             return (
                 <ProvidersSection
-                    initialProviders={initialProviders}
+                    providers={providers}
+                    onProvidersChange={onProvidersChange}
                     isHosted={isHosted}
                 />
             );
