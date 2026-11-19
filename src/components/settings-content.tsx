@@ -25,6 +25,10 @@ interface SettingsContentProps {
     providers: Provider[] | null;
     /** Forwarded to `ProvidersSection`; see its prop doc. */
     onProvidersChange: (providers: Provider[]) => void;
+    /** Forwarded to `ProvidersSection`; see its prop doc. */
+    providersLoadFailed?: boolean;
+    /** Forwarded to `ProvidersSection` as `onRetry`. */
+    onRetryProviders?: () => void;
     onReRunOnboarding?: () => void;
     isHosted?: boolean;
     /** Forwarded to `PlaudAccountSection`; see its prop doc. */
@@ -35,6 +39,8 @@ export function SettingsContent({
     activeSection,
     providers,
     onProvidersChange,
+    providersLoadFailed,
+    onRetryProviders,
     onReRunOnboarding,
     isHosted = false,
     onPlaudReconnected,
@@ -45,6 +51,8 @@ export function SettingsContent({
                 <ProvidersSection
                     providers={providers}
                     onProvidersChange={onProvidersChange}
+                    loadFailed={providersLoadFailed}
+                    onRetry={onRetryProviders}
                     isHosted={isHosted}
                 />
             );

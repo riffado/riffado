@@ -12,6 +12,7 @@ import {
     cleanup,
     fireEvent,
     render,
+    renderHook,
     screen,
     waitFor,
 } from "@testing-library/react";
@@ -24,6 +25,7 @@ vi.mock("next/navigation", () => ({
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { Workstation } from "@/components/dashboard/workstation";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useProviderList } from "@/hooks/use-provider-list";
 import { INITIAL_SETTINGS_DEFAULTS } from "@/lib/settings/initial-settings";
 
 const PROVIDERS = [
@@ -146,5 +148,83 @@ describe("Settings dialog providers on first open (#288)", () => {
         fireEvent.click(item);
         expect(await screen.findByText("OpenRouter")).not.toBeNull();
         expect(providerRequests).toBe(1);
+    });
+
+    it("shows a load error with retry instead of an empty account", async () => {
+        vi.mocked(global.fetch).mockImplementation((input) => {
+            const url = typeof input === "string" ? input : String(input);
+            if (url === "/api/settings/ai/providers") {
+                providerRequests++;
+                if (providerRequests === 1) {
+                    return Promise.resolve(
+                        new Response("boom", { status: 500 }),
+                    );
+                }
+                return Promise.resolve(jsonResponse({ providers: PROVIDERS }));
+            }
+            return Promise.resolve(jsonResponse({}));
+        });
+        renderWorkstation();
+
+        act(() => {
+            fireEvent.keyDown(window, { key: "," });
+        });
+        expect(
+            await screen.findByText("Couldn't load your AI providers."),
+        ).not.toBeNull();
+        expect(screen.queryByText("No providers configured")).toBeNull();
+
+        fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+        expect(await screen.findByText("OpenRouter")).not.toBeNull();
+        expect(providerRequests).toBe(2);
+    });
+});
+
+describe("useProviderList", () => {
+    it("keeps a saved change when an older request finishes later", async () => {
+        const { result } = renderHook(() => useProviderList());
+
+        act(() => {
+            result.current.prefetch();
+        });
+        expect(providerRequests).toBe(1);
+
+        const saved = [{ ...PROVIDERS[0], id: "cred-2", provider: "Groq" }];
+        act(() => {
+            result.current.replaceProviders(
+                saved as unknown as Parameters<
+                    typeof result.current.replaceProviders
+                >[0],
+            );
+        });
+        await act(async () => {
+            releaseProviders();
+        });
+
+        expect(result.current.providers?.map((p) => p.provider)).toEqual([
+            "Groq",
+        ]);
+    });
+
+    it("keeps the previous list when a refresh fails", async () => {
+        const { result } = renderHook(() => useProviderList());
+        act(() => {
+            result.current.prefetch();
+        });
+        await act(async () => {
+            releaseProviders();
+        });
+        expect(result.current.providers).toHaveLength(1);
+
+        vi.mocked(global.fetch).mockResolvedValue(
+            new Response("boom", { status: 500 }),
+        );
+        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+        await act(async () => {
+            result.current.prefetch();
+        });
+
+        expect(result.current.providers).toHaveLength(1);
+        expect(result.current.loadFailed).toBe(true);
     });
 });

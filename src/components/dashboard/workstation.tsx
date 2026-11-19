@@ -131,6 +131,7 @@ export function Workstation({
     const [mobileView, setMobileView] = useState<"list" | "detail">("list");
     const {
         providers,
+        loadFailed: providersLoadFailed,
         prefetch: prefetchProviders,
         replaceProviders,
     } = useProviderList();
@@ -491,6 +492,8 @@ export function Workstation({
                 onOpenChange={setSettingsOpen}
                 providers={providers}
                 onProvidersChange={replaceProviders}
+                providersLoadFailed={providersLoadFailed}
+                onRetryProviders={prefetchProviders}
                 isHosted={isHosted}
                 onReRunOnboarding={() => {
                     setSettingsOpen(false);

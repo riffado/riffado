@@ -22,6 +22,10 @@ interface SettingsDialogProps {
     providers: Provider[] | null;
     /** Receives the provider list re-read after a change in the Providers section. */
     onProvidersChange: (providers: Provider[]) => void;
+    /** True when the provider list could not be loaded. */
+    providersLoadFailed?: boolean;
+    /** Retries loading the provider list. */
+    onRetryProviders?: () => void;
     onReRunOnboarding?: () => void;
     isHosted?: boolean;
     /** Forwarded to `SettingsContent` -> `PlaudAccountSection`. */
@@ -33,6 +37,8 @@ export function SettingsDialog({
     onOpenChange,
     providers,
     onProvidersChange,
+    providersLoadFailed,
+    onRetryProviders,
     onReRunOnboarding,
     isHosted = false,
     onPlaudReconnected,
@@ -90,6 +96,8 @@ export function SettingsDialog({
                                     activeSection={activeSection}
                                     providers={providers}
                                     onProvidersChange={onProvidersChange}
+                                    providersLoadFailed={providersLoadFailed}
+                                    onRetryProviders={onRetryProviders}
                                     onReRunOnboarding={onReRunOnboarding}
                                     isHosted={isHosted}
                                     onPlaudReconnected={onPlaudReconnected}

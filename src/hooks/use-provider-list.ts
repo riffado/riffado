@@ -8,15 +8,19 @@ const FRESH_FOR_MS = 30_000;
 /**
  * Client-side copy of the user's AI providers for the Settings dialog.
  *
- * - `providers` is null until the first load finishes.
+ * - `providers` is null until the first load succeeds. A failed refresh keeps
+ *   the previous list; a failed first load leaves it null and sets
+ *   `loadFailed`, so callers never show an empty account they couldn't read.
  * - `prefetch()` loads `/api/settings/ai/providers` unless a request is
  *   already in flight or the list was loaded in the last 30 seconds. Call
- *   it on intent (hover/focus of a Settings trigger) and when Settings opens.
+ *   it on intent (hover/focus of a Settings trigger), when Settings opens,
+ *   and to retry after `loadFailed`.
  * - `replaceProviders()` stores a list the Providers section re-read after
  *   a change. Responses from requests started before it are dropped.
  */
 export function useProviderList() {
     const [providers, setProviders] = useState<Provider[] | null>(null);
+    const [loadFailed, setLoadFailed] = useState(false);
     const inFlight = useRef(false);
     const loadedAt = useRef(0);
     const generation = useRef(0);
@@ -25,6 +29,7 @@ export function useProviderList() {
         if (inFlight.current) return;
         if (Date.now() - loadedAt.current < FRESH_FOR_MS) return;
         inFlight.current = true;
+        setLoadFailed(false);
         const requestGeneration = generation.current;
         fetch("/api/settings/ai/providers")
             .then((res) => {
@@ -38,7 +43,7 @@ export function useProviderList() {
             })
             .catch(() => {
                 if (requestGeneration !== generation.current) return;
-                setProviders((prev) => prev ?? []);
+                setLoadFailed(true);
             })
             .finally(() => {
                 inFlight.current = false;
@@ -48,8 +53,9 @@ export function useProviderList() {
     const replaceProviders = useCallback((next: Provider[]) => {
         generation.current++;
         loadedAt.current = Date.now();
+        setLoadFailed(false);
         setProviders(next);
     }, []);
 
-    return { providers, prefetch, replaceProviders };
+    return { providers, loadFailed, prefetch, replaceProviders };
 }

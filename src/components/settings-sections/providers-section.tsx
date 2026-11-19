@@ -31,6 +31,10 @@ interface ProvidersSectionProps {
     providers: Provider[] | null;
     /** Receives the list re-read from the server after an add, edit, delete or default change. */
     onProvidersChange: (providers: Provider[]) => void;
+    /** True when the list could not be loaded; shows an error with `onRetry`. */
+    loadFailed?: boolean;
+    /** Retries loading the list after `loadFailed`. */
+    onRetry?: () => void;
     isHosted?: boolean;
 }
 
@@ -49,6 +53,8 @@ interface ProvidersSectionProps {
 export function ProvidersSection({
     providers,
     onProvidersChange,
+    loadFailed = false,
+    onRetry,
     isHosted = false,
 }: ProvidersSectionProps) {
     const confirm = useConfirm();
@@ -180,9 +186,26 @@ export function ProvidersSection({
                     </button>
                 </div>
 
-                {aiSubSection === "providers" && providers === null && (
-                    <ProvidersListSkeleton />
-                )}
+                {aiSubSection === "providers" &&
+                    providers === null &&
+                    (loadFailed ? (
+                        <div className="rounded-lg border p-4 text-sm">
+                            <p className="mb-3 text-muted-foreground">
+                                Couldn't load your AI providers.
+                            </p>
+                            {onRetry && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={onRetry}
+                                >
+                                    Try again
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        <ProvidersListSkeleton />
+                    ))}
 
                 {aiSubSection === "providers" && providers !== null && (
                     <ProvidersList
