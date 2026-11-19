@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { recordingAudioPlaybackPath } from "@/lib/recordings/filename";
 import type { Recording } from "@/types/recording";
 
 export const PLAYBACK_SPEED_OPTIONS = [
@@ -12,6 +13,33 @@ export const PLAYBACK_SPEED_OPTIONS = [
     { label: "1.5x", value: 1.5 },
     { label: "2x", value: 2.0 },
 ] as const;
+
+const SOURCE_REFRESH_COOLDOWN_MS = 30 * 1000;
+
+const STREAM_MODE_SESSION_KEY = "riffado:audio-stream-mode";
+
+let streamModeWithoutSessionStorage = false;
+
+function isStreamModeEnabled(): boolean {
+    try {
+        return window.sessionStorage.getItem(STREAM_MODE_SESSION_KEY) === "1";
+    } catch {
+        return streamModeWithoutSessionStorage;
+    }
+}
+
+function enableStreamMode(): void {
+    streamModeWithoutSessionStorage = true;
+    try {
+        window.sessionStorage.setItem(STREAM_MODE_SESSION_KEY, "1");
+    } catch {}
+}
+
+function playbackSource(recordingId: string): string {
+    return recordingAudioPlaybackPath(recordingId, {
+        stream: isStreamModeEnabled(),
+    });
+}
 
 interface Options {
     recording: Recording;
@@ -49,6 +77,12 @@ export function usePlaybackEngine({
     const [autoPlayNext] = useState(initialAutoPlayNext);
     const audioRef = useRef<HTMLAudioElement>(null);
     const isSeekingRef = useRef(false);
+    const isPlayingRef = useRef(false);
+    const lastSourceRefreshRef = useRef(0);
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
     // Reset transport state and re-point src whenever the recording
     // *id* changes. Filename edits must not remount playback.
@@ -58,7 +92,7 @@ export function usePlaybackEngine({
         setIsPlaying(false);
         if (audioRef.current) {
             audioRef.current.currentTime = 0;
-            audioRef.current.src = `/api/recordings/${recording.id}/audio`;
+            audioRef.current.src = playbackSource(recording.id);
             audioRef.current.load();
         }
     }, [recording.id]);
@@ -83,6 +117,13 @@ export function usePlaybackEngine({
         if (!audioRef.current) return;
         const audio = audioRef.current;
         const recordingId = recording.id;
+        const redirectSource = recordingAudioPlaybackPath(recordingId, {
+            stream: false,
+        });
+        const streamSource = recordingAudioPlaybackPath(recordingId, {
+            stream: true,
+        });
+        let sourceLoaded = audio.readyState >= HTMLMediaElement.HAVE_METADATA;
 
         const updateTime = () => {
             if (!isSeekingRef.current) {
@@ -104,17 +145,64 @@ export function usePlaybackEngine({
             isSeekingRef.current = false;
             setCurrentTime(audio.currentTime);
         };
+        let pendingResumeAt: number | null = null;
+        const restorePosition = () => {
+            if (pendingResumeAt === null) return;
+            audio.currentTime = pendingResumeAt;
+            pendingResumeAt = null;
+            if (isPlayingRef.current) {
+                audio.play().catch(() => setIsPlaying(false));
+            }
+        };
+        const reloadFrom = (source: string) => {
+            if (pendingResumeAt === null) {
+                pendingResumeAt = audio.currentTime;
+            }
+            sourceLoaded = false;
+            audio.src = source;
+            audio.load();
+        };
+        const handleSourceLoaded = () => {
+            sourceLoaded = true;
+            if (audio.getAttribute("src") === streamSource) {
+                enableStreamMode();
+            }
+        };
+        const handleError = () => {
+            if (audio.getAttribute("src") === streamSource) {
+                setIsPlaying(false);
+                return;
+            }
+            const now = Date.now();
+            const canRefresh =
+                sourceLoaded &&
+                now - lastSourceRefreshRef.current >=
+                    SOURCE_REFRESH_COOLDOWN_MS;
+            if (canRefresh) {
+                lastSourceRefreshRef.current = now;
+                reloadFrom(redirectSource);
+                return;
+            }
+            reloadFrom(streamSource);
+        };
 
-        if (audio.src !== `/api/recordings/${recordingId}/audio`) {
-            audio.src = `/api/recordings/${recordingId}/audio`;
+        const currentSource = audio.getAttribute("src");
+        if (
+            currentSource !== redirectSource &&
+            currentSource !== streamSource
+        ) {
+            audio.src = playbackSource(recordingId);
             audio.load();
         }
 
         audio.addEventListener("timeupdate", updateTime);
+        audio.addEventListener("loadedmetadata", handleSourceLoaded);
+        audio.addEventListener("loadedmetadata", restorePosition);
         audio.addEventListener("loadedmetadata", updateDuration);
         audio.addEventListener("durationchange", updateDuration);
         audio.addEventListener("ended", handleEnded);
         audio.addEventListener("seeked", handleSeeked);
+        audio.addEventListener("error", handleError);
 
         if (audio.duration && !Number.isNaN(audio.duration)) {
             setDuration(audio.duration);
@@ -122,10 +210,13 @@ export function usePlaybackEngine({
 
         return () => {
             audio.removeEventListener("timeupdate", updateTime);
+            audio.removeEventListener("loadedmetadata", handleSourceLoaded);
+            audio.removeEventListener("loadedmetadata", restorePosition);
             audio.removeEventListener("loadedmetadata", updateDuration);
             audio.removeEventListener("durationchange", updateDuration);
             audio.removeEventListener("ended", handleEnded);
             audio.removeEventListener("seeked", handleSeeked);
+            audio.removeEventListener("error", handleError);
         };
     }, [recording.id, autoPlayNext, onEnded]);
 

@@ -1,11 +1,18 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import {
+    access,
+    mkdir,
+    readFile,
+    stat,
+    unlink,
+    writeFile,
+} from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import type { Readable } from "node:stream";
+import { type Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { env } from "../env";
 import { StorageRootMissingError } from "./errors";
-import type { StorageProvider } from "./types";
+import type { ByteRange, StorageProvider, UploadStreamOptions } from "./types";
 
 /**
  * Local filesystem storage provider
@@ -111,7 +118,7 @@ export class LocalStorage implements StorageProvider {
         }
     }
 
-    async downloadStream(key: string): Promise<Readable> {
+    async downloadStream(key: string, range?: ByteRange): Promise<Readable> {
         // Existence check up front so callers get a clean rejection
         // instead of a stream that errors after they've already started
         // piping it (e.g. mid-way through an archive entry).
@@ -121,15 +128,29 @@ export class LocalStorage implements StorageProvider {
         } catch (error) {
             throw await this.explainMissing(error);
         }
-        return createReadStream(filePath);
+        return createReadStream(
+            filePath,
+            range ? { start: range.start, end: range.end } : undefined,
+        );
+    }
+
+    async getObjectSize(key: string): Promise<number> {
+        const filePath = this.getFilePath(key);
+        try {
+            return (await stat(filePath)).size;
+        } catch (error) {
+            throw await this.explainMissing(error);
+        }
     }
 
     async uploadStream(
         key: string,
         stream: Readable,
         contentType: string,
+        options: UploadStreamOptions = {},
     ): Promise<string> {
         void contentType;
+        const { onProgress } = options;
         try {
             await this.ensureBaseDir();
             const filePath = this.getFilePath(key);
@@ -139,7 +160,21 @@ export class LocalStorage implements StorageProvider {
             } catch {
                 await mkdir(fileDir, { recursive: true });
             }
-            await pipeline(stream, createWriteStream(filePath));
+            const sink = createWriteStream(filePath);
+            if (onProgress) {
+                await pipeline(
+                    stream,
+                    new Transform({
+                        transform(chunk, _encoding, callback) {
+                            callback(null, chunk);
+                            onProgress();
+                        },
+                    }),
+                    sink,
+                );
+            } else {
+                await pipeline(stream, sink);
+            }
             return key;
         } catch (error) {
             throw new Error(

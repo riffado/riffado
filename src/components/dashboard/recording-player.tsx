@@ -113,12 +113,7 @@ export function RecordingPlayer({
                     waveformPeaks={waveformPeaks}
                 />
 
-                <audio
-                    ref={audioRef}
-                    src={`/api/recordings/${recording.id}/audio`}
-                    preload="metadata"
-                    className="hidden"
-                >
+                <audio ref={audioRef} preload="metadata" className="hidden">
                     <track kind="captions" />
                 </audio>
             </CardContent>
