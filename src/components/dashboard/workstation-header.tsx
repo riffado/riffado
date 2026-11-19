@@ -30,6 +30,8 @@ interface Props {
     onUploadInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onOpenPalette: () => void;
     onOpenSettings: () => void;
+    /** Called on hover or focus of the Settings entry so its data can load before the click. */
+    onSettingsIntent: () => void;
     onOpenShortcuts: () => void;
 }
 
@@ -63,6 +65,7 @@ export function WorkstationHeader({
     onUploadInputChange,
     onOpenPalette,
     onOpenSettings,
+    onSettingsIntent,
     onOpenShortcuts,
 }: Props) {
     return (
@@ -140,6 +143,7 @@ export function WorkstationHeader({
                     initialTheme={initialTheme}
                     userEmail={userEmail}
                     onOpenSettings={onOpenSettings}
+                    onSettingsIntent={onSettingsIntent}
                     onOpenShortcuts={onOpenShortcuts}
                 />
             </div>
