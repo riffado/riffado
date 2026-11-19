@@ -208,8 +208,19 @@ export const plaudConnections = pgTable("plaud_connections", {
     userId: text("user_id")
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
-    // Encrypted bearer token (long-lived ≈300 days per Plaud's JWT claims)
+    // Encrypted Plaud user token (UT). Lifetime varies by source: 24 hours
+    // from the Plaud web app cookie, 30 days from the email-code login, and
+    // ~300 days for legacy tokens issued before Plaud added refresh tokens.
     bearerToken: text("bearer_token").notNull(),
+    // Encrypted Plaud refresh token, used to mint a fresh UT before it
+    // expires. Null for legacy and pasted connections. A refresh never moves
+    // sessionExpiresAt later than the stored value.
+    refreshToken: text("refresh_token"),
+    // When the stored UT expires. Null when unknown.
+    accessExpiresAt: timestamp("access_expires_at"),
+    // When the Plaud sign-in ends for good (refresh token expiry, else UT
+    // expiry). The user must reconnect after this. Null when unknown.
+    sessionExpiresAt: timestamp("session_expires_at"),
     // Regional API server base URL (e.g. https://api-euc1.plaud.ai for EU users)
     apiBase: text("api_base").notNull().default("https://api.plaud.ai"),
     // Email of the linked Plaud account (captured during OTP flow). Null for

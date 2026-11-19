@@ -16,6 +16,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { formatDateTime } from "@/lib/format-date";
+import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
 import { PLAUD_SERVERS, type PlaudServerKey } from "@/lib/plaud/servers";
 
 interface ConnectionInfo {
@@ -23,6 +25,9 @@ interface ConnectionInfo {
     server?: PlaudServerKey;
     plaudEmail?: string | null;
     needsReconnect?: boolean;
+    accessExpiresAt?: string | null;
+    sessionExpiresAt?: string | null;
+    autoRenews?: boolean;
     createdAt?: string;
     updatedAt?: string;
     apiBase?: string;
@@ -166,6 +171,16 @@ export function PlaudAccountSection({
 
     const currentEmail = info?.plaudEmail ?? null;
     const currentEmailDisplay = currentEmail ?? "the current account";
+    const connectionState = info?.connected
+        ? plaudConnectionBannerState({
+              needsReconnect: info.needsReconnect === true,
+              sessionExpiresAt: info.sessionExpiresAt,
+              now: Date.now(),
+          })
+        : null;
+    const sessionEndsOn = info?.sessionExpiresAt
+        ? formatDateTime(info.sessionExpiresAt, "absolute")
+        : null;
 
     return (
         <div className="space-y-6">
@@ -212,19 +227,30 @@ export function PlaudAccountSection({
                                         </>
                                     )}
                                 </p>
+                                {sessionEndsOn && connectionState === null && (
+                                    <p className="text-sm text-muted-foreground">
+                                        Connected until {sessionEndsOn}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
-                        {info.needsReconnect && (
+                        {connectionState === "reconnect" && (
                             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
                                 Plaud stopped accepting this sign-in, so syncing
-                                is paused. Reconnect to resume — your recordings
+                                is paused. Reconnect to resume. Your recordings
                                 stay put.
+                            </p>
+                        )}
+                        {connectionState === "ending-soon" && (
+                            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
+                                Your Plaud connection ends on {sessionEndsOn}.
+                                Reconnect to keep syncing.
                             </p>
                         )}
 
                         <div className="flex flex-wrap gap-2">
-                            {info.needsReconnect && (
+                            {connectionState !== null && (
                                 <Button
                                     onClick={() => setReconnectDialogOpen(true)}
                                 >

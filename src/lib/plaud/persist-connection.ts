@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { acquirePlaudConnectLock } from "@/db/queries/plaud-locks";
 import { plaudConnections, plaudDevices } from "@/db/schema";
@@ -8,12 +8,14 @@ import {
     captureServerException,
 } from "@/lib/posthog-server";
 import type { PlaudDeviceListResponse } from "@/types/plaud";
+import type { PlaudTokenSet } from "./auth";
 import { PlaudClient } from "./client";
 import { listPlaudWorkspaces, pickPersonalWorkspaceId } from "./workspace";
 
 export interface PersistPlaudConnectionInput {
     userId: string;
-    accessToken: string;
+    /** User token plus optional refresh token and expiries. Tokens are encrypted before storage. */
+    tokens: PlaudTokenSet;
     apiBase: string;
     plaudEmail: string | null;
     /** How this connection was established. Drives the `plaud_connected` event's `method` property. */
@@ -28,11 +30,12 @@ export interface PersistPlaudConnectionResult {
 /** Validate a Plaud user token and persist the connection. Idempotent. */
 export async function persistPlaudConnection({
     userId,
-    accessToken,
+    tokens,
     apiBase,
     plaudEmail,
     method,
 }: PersistPlaudConnectionInput): Promise<PersistPlaudConnectionResult> {
+    const { accessToken } = tokens;
     let resolvedWorkspaceId: string | null = null;
     try {
         const list = await listPlaudWorkspaces(accessToken, apiBase);
@@ -66,7 +69,12 @@ export async function persistPlaudConnection({
         throw err;
     }
 
-    const encryptedAccessToken = encrypt(accessToken);
+    const tokenColumns = {
+        bearerToken: encrypt(accessToken),
+        refreshToken: tokens.refreshToken ? encrypt(tokens.refreshToken) : null,
+        accessExpiresAt: tokens.accessExpiresAt,
+        sessionExpiresAt: tokens.sessionExpiresAt,
+    };
 
     await db.transaction(async (tx) => {
         await acquirePlaudConnectLock(tx, userId);
@@ -81,7 +89,7 @@ export async function persistPlaudConnection({
             await tx
                 .update(plaudConnections)
                 .set({
-                    bearerToken: encryptedAccessToken,
+                    ...tokenColumns,
                     apiBase,
                     plaudEmail,
                     workspaceId: resolvedWorkspaceId,
@@ -99,7 +107,7 @@ export async function persistPlaudConnection({
         } else {
             await tx.insert(plaudConnections).values({
                 userId,
-                bearerToken: encryptedAccessToken,
+                ...tokenColumns,
                 apiBase,
                 plaudEmail,
                 workspaceId: resolvedWorkspaceId,
@@ -150,4 +158,124 @@ export async function persistPlaudConnection({
         devices: deviceList.data_devices,
         workspaceId: resolvedWorkspaceId,
     };
+}
+
+export interface PersistRefreshedPlaudTokensInput {
+    userId: string;
+    connectionId: string;
+    /** Encrypted refresh token exactly as read from the row before refreshing. */
+    storedRefreshToken: string;
+    /** Refreshed tokens. The refresh token is re-encrypted on every write. */
+    tokens: PlaudTokenSet & { refreshToken: string };
+}
+
+/** Encrypted tokens as written to `plaud_connections` by a refresh. */
+export interface StoredPlaudTokenCiphertexts {
+    bearerToken: string;
+    refreshToken: string;
+}
+
+/**
+ * Store the tokens returned by a refresh, scoped by user and connection id.
+ * Compare-and-swap on `storedRefreshToken`: encryption uses a random IV, so
+ * a reconnect or another refresh changes the stored ciphertext and turns
+ * this write into a no-op. `sessionExpiresAt` never moves later than the
+ * stored value, and a known value is never replaced with null. Returns the
+ * ciphertexts written, or null when the row was not updated.
+ */
+export async function persistRefreshedPlaudTokens({
+    userId,
+    connectionId,
+    storedRefreshToken,
+    tokens,
+}: PersistRefreshedPlaudTokensInput): Promise<StoredPlaudTokenCiphertexts | null> {
+    const stored: StoredPlaudTokenCiphertexts = {
+        bearerToken: encrypt(tokens.accessToken),
+        refreshToken: encrypt(tokens.refreshToken),
+    };
+    const updated = await db
+        .update(plaudConnections)
+        .set({
+            ...stored,
+            accessExpiresAt: tokens.accessExpiresAt,
+            ...(tokens.sessionExpiresAt
+                ? {
+                      sessionExpiresAt: sql`least(${plaudConnections.sessionExpiresAt}, ${tokens.sessionExpiresAt.toISOString()}::timestamp)`,
+                  }
+                : {}),
+            updatedAt: new Date(),
+        })
+        .where(
+            and(
+                eq(plaudConnections.id, connectionId),
+                eq(plaudConnections.userId, userId),
+                eq(plaudConnections.refreshToken, storedRefreshToken),
+            ),
+        )
+        .returning({ id: plaudConnections.id });
+
+    return updated.length > 0 ? stored : null;
+}
+
+export interface MarkPlaudConnectionInvalidatedInput {
+    userId: string;
+    connectionId: string;
+    /** Encrypted user token the failing client was built from or last stored. */
+    bearerToken: string;
+}
+
+/**
+ * Flag the connection as needing a reconnect, scoped by user and connection
+ * id. Compare-and-swap on `bearerToken`, so a failure from a stale read
+ * never flags a connection that a reconnect or another refresh has since
+ * replaced. Returns true when the row was updated.
+ */
+export async function markPlaudConnectionInvalidated({
+    userId,
+    connectionId,
+    bearerToken,
+}: MarkPlaudConnectionInvalidatedInput): Promise<boolean> {
+    const updated = await db
+        .update(plaudConnections)
+        .set({ invalidatedAt: new Date() })
+        .where(
+            and(
+                eq(plaudConnections.id, connectionId),
+                eq(plaudConnections.userId, userId),
+                eq(plaudConnections.bearerToken, bearerToken),
+            ),
+        )
+        .returning({ id: plaudConnections.id });
+
+    return updated.length > 0;
+}
+
+export interface BackfillPlaudTokenExpiriesInput {
+    userId: string;
+    connectionId: string;
+    accessExpiresAt: Date;
+    sessionExpiresAt: Date | null;
+}
+
+/**
+ * Record expiries for a connection stored before they were tracked. Only
+ * writes while `accessExpiresAt` is still null, so it never overwrites a
+ * value set by a connect or refresh.
+ */
+export async function backfillPlaudTokenExpiries({
+    userId,
+    connectionId,
+    accessExpiresAt,
+    sessionExpiresAt,
+}: BackfillPlaudTokenExpiriesInput): Promise<void> {
+    await db
+        .update(plaudConnections)
+        .set({ accessExpiresAt, sessionExpiresAt })
+        .where(
+            and(
+                eq(plaudConnections.id, connectionId),
+                eq(plaudConnections.userId, userId),
+                isNull(plaudConnections.accessExpiresAt),
+            ),
+        );
 }

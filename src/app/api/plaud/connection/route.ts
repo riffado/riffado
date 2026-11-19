@@ -20,6 +20,11 @@ export const GET = apiHandler(async (request: Request) => {
     }
 
     const server = serverKeyFromApiBase(connection.apiBase);
+    const autoRenews =
+        connection.refreshToken != null &&
+        connection.invalidatedAt == null &&
+        (connection.sessionExpiresAt == null ||
+            connection.sessionExpiresAt.getTime() > Date.now());
 
     return NextResponse.json({
         connected: true,
@@ -29,6 +34,9 @@ export const GET = apiHandler(async (request: Request) => {
         // uses this to prompt a reconnect. Cleared on the next good sync or
         // on reconnect.
         needsReconnect: connection.invalidatedAt != null,
+        accessExpiresAt: connection.accessExpiresAt,
+        sessionExpiresAt: connection.sessionExpiresAt,
+        autoRenews,
         createdAt: connection.createdAt,
         updatedAt: connection.updatedAt,
         // Include the raw URL so the UI can populate the custom field

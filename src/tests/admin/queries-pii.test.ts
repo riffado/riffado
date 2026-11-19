@@ -30,10 +30,12 @@ describe("admin queries PII guard", () => {
         "aiEnhancements.actionItems",
         "aiEnhancements.keyPoints",
         "plaudConnections.bearerToken",
+        "plaudConnections.refreshToken",
         "apiCredentials.apiKey",
         "recordings.filename",
         // Raw SQL aliases for those columns (in case someone bypasses drizzle).
         "bearer_token",
+        "refresh_token",
         "api_key",
     ];
 

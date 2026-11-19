@@ -77,6 +77,12 @@ interface WorkstationProps {
      */
     plaudNeedsReconnect: boolean;
     /**
+     * When the Plaud sign-in ends for good (ISO string), or null when
+     * unknown. Lets the reconnect banner warn before the connection ends.
+     * Server-supplied.
+     */
+    plaudSessionExpiresAt: string | null;
+    /**
      * True when running in Riffado's hosted mode (`IS_HOSTED=true`).
      * Forwarded into SettingsDialog so hosted-only UI gating reflects
      * the deployment mode. Server-supplied; never derive client-side.
@@ -109,6 +115,7 @@ export function Workstation({
     userEmail = null,
     initialSettings,
     plaudNeedsReconnect,
+    plaudSessionExpiresAt,
     isHosted,
 }: WorkstationProps) {
     const { refresh } = useRouter();
@@ -249,6 +256,7 @@ export function Workstation({
     const showReconnect = reconnectOverride ?? plaudNeedsReconnect;
 
     const handleReconnected = useCallback(() => {
+        setReconnectOverride(false);
         refresh();
         manualSync();
     }, [refresh, manualSync]);
@@ -383,6 +391,7 @@ export function Workstation({
 
                     <PlaudReconnectBanner
                         show={showReconnect}
+                        sessionExpiresAt={plaudSessionExpiresAt}
                         onReconnected={handleReconnected}
                     />
 

@@ -20,6 +20,7 @@ export interface PlaudUpdateFilenameResponse {
 
 export const DEFAULT_PLAUD_API_BASE = PLAUD_SERVERS[DEFAULT_SERVER_KEY].apiBase;
 const MAX_RETRIES = 3;
+const MAX_AUTH_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
 
 function sleep(ms: number): Promise<void> {
@@ -48,22 +49,50 @@ function plaudHttpError(status: number, msg: string): AppError {
     });
 }
 
+/**
+ * True when `err` means Plaud rejected the token outright
+ * (`PLAUD_INVALID_TOKEN`), as opposed to a rate limit, upstream or network
+ * failure that may succeed on a later attempt.
+ */
+export function isPlaudTokenRejection(err: unknown): boolean {
+    return (
+        err instanceof AppError && err.code === ErrorCode.PLAUD_INVALID_TOKEN
+    );
+}
+
+export interface PlaudClientOptions {
+    /**
+     * Returns a fresh user token when Plaud answers 401 to the user token, or
+     * to a workspace token that was already re-minted once. At most one call
+     * is in flight per client; once it settles, a later 401 on the new token
+     * may refresh again. A `PLAUD_INVALID_TOKEN` rejection leaves the
+     * original 401 in place and is not retried; any other rejection is
+     * rethrown to the caller and a later 401 may try again.
+     */
+    refreshUserToken?: () => Promise<string>;
+}
+
 export class PlaudClient {
-    private readonly userToken: string;
+    private userToken: string;
     private readonly apiBase: string;
+    private readonly refreshUserToken?: () => Promise<string>;
+    private userTokenRefresh?: Promise<void>;
     private workspaceToken?: string;
     private resolvedWorkspaceId?: string;
     private workspaceFetchInFlight?: Promise<void>;
     private workspaceFallbackToUt = false;
+    private workspaceRemintUsed = false;
 
     constructor(
         userToken: string,
         apiBase: string = DEFAULT_PLAUD_API_BASE,
         workspaceId?: string | null,
+        options: PlaudClientOptions = {},
     ) {
         this.userToken = userToken;
         this.apiBase = apiBase;
         this.resolvedWorkspaceId = workspaceId ?? undefined;
+        this.refreshUserToken = options.refreshUserToken;
     }
 
     get workspaceId(): string | undefined {
@@ -104,10 +133,65 @@ export class PlaudClient {
         }
     }
 
+    private async recoverFromUnauthorized(
+        usedBearer: string,
+    ): Promise<boolean> {
+        if (usedBearer !== (this.workspaceToken ?? this.userToken)) {
+            return true;
+        }
+        if (usedBearer === this.workspaceToken && !this.workspaceRemintUsed) {
+            this.workspaceRemintUsed = true;
+            this.workspaceToken = undefined;
+            return true;
+        }
+        return this.refreshAfterUnauthorized(usedBearer);
+    }
+
+    private async refreshAfterUnauthorized(
+        usedBearer: string,
+    ): Promise<boolean> {
+        if (!this.refreshUserToken) return false;
+        if (!this.userTokenRefresh) {
+            const attempt = this.refreshUserToken().then((token) => {
+                this.userToken = token;
+                this.workspaceToken = undefined;
+                this.workspaceFallbackToUt = false;
+            });
+            this.userTokenRefresh = attempt;
+            attempt.then(
+                () => {
+                    if (this.userTokenRefresh === attempt) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+                (err: unknown) => {
+                    if (
+                        !isPlaudTokenRejection(err) &&
+                        this.userTokenRefresh === attempt
+                    ) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+            );
+        }
+        try {
+            await this.userTokenRefresh;
+        } catch (err) {
+            if (!isPlaudTokenRejection(err)) throw err;
+            console.warn(
+                "[plaud] user token refresh after 401 was rejected:",
+                err instanceof Error ? err.message : err,
+            );
+            return false;
+        }
+        return (this.workspaceToken ?? this.userToken) !== usedBearer;
+    }
+
     private async request<T>(
         endpoint: string,
         options?: RequestInit,
         retryCount = 0,
+        authRetries = 0,
     ): Promise<T> {
         await this.ensureWorkspaceToken();
 
@@ -132,7 +216,12 @@ export class PlaudClient {
                         ? Number.parseInt(retryAfter, 10) * 1000
                         : INITIAL_RETRY_DELAY * 2 ** retryCount;
                     await sleep(delay);
-                    return this.request<T>(endpoint, options, retryCount + 1);
+                    return this.request<T>(
+                        endpoint,
+                        options,
+                        retryCount + 1,
+                        authRetries,
+                    );
                 }
                 const retryAfter = response.headers.get("Retry-After");
                 throw new AppError(
@@ -142,6 +231,20 @@ export class PlaudClient {
                     retryAfter
                         ? { retryAfter: Number.parseInt(retryAfter, 10) }
                         : undefined,
+                );
+            }
+
+            if (
+                response.status === 401 &&
+                authRetries < MAX_AUTH_RETRIES &&
+                (await this.recoverFromUnauthorized(bearer))
+            ) {
+                await response.body?.cancel().catch(() => undefined);
+                return this.request<T>(
+                    endpoint,
+                    options,
+                    retryCount,
+                    authRetries + 1,
                 );
             }
 
@@ -158,7 +261,12 @@ export class PlaudClient {
                 ) {
                     const delay = INITIAL_RETRY_DELAY * 2 ** retryCount;
                     await sleep(delay);
-                    return this.request<T>(endpoint, options, retryCount + 1);
+                    return this.request<T>(
+                        endpoint,
+                        options,
+                        retryCount + 1,
+                        authRetries,
+                    );
                 }
 
                 throw plaudHttpError(response.status, upstreamMsg);
@@ -173,7 +281,12 @@ export class PlaudClient {
             ) {
                 const delay = INITIAL_RETRY_DELAY * 2 ** retryCount;
                 await sleep(delay);
-                return this.request<T>(endpoint, options, retryCount + 1);
+                return this.request<T>(
+                    endpoint,
+                    options,
+                    retryCount + 1,
+                    authRetries,
+                );
             }
 
             if (error instanceof AppError) throw error;

@@ -25,6 +25,10 @@ import {
     selectContentItems,
 } from "@/lib/plaud/content";
 import {
+    type MarkPlaudConnectionInvalidatedInput,
+    markPlaudConnectionInvalidated,
+} from "@/lib/plaud/persist-connection";
+import {
     captureServerEvent,
     captureServerException,
 } from "@/lib/posthog-server";
@@ -624,6 +628,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         errors: [],
         pendingTranscriptionIds: [],
     };
+    let invalidationTarget: MarkPlaudConnectionInvalidatedInput | null = null;
 
     try {
         const [connection] = await db
@@ -682,11 +687,17 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             barkPushUrl: settings?.barkPushUrl || null,
         };
 
-        const plaudClient = await createPlaudClient(
-            connection.bearerToken,
-            connection.apiBase,
-            connection.workspaceId,
-        );
+        const target: MarkPlaudConnectionInvalidatedInput = {
+            userId,
+            connectionId: connection.id,
+            bearerToken: connection.bearerToken,
+        };
+        invalidationTarget = target;
+        const plaudClient = await createPlaudClient(connection, {
+            onTokensStored: (bearerToken) => {
+                target.bearerToken = bearerToken;
+            },
+        });
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
@@ -899,26 +910,36 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             error instanceof Error ? error.message : String(error);
 
         // A 401 from Plaud means the stored token is no longer accepted
-        // (expired ~300-day UT, a mistakenly-pasted 24h workspace token that
-        // has now died, or a revoked token). Mark the connection so the
+        // (an expired user token with no working refresh token, a
+        // mistakenly-pasted 24h workspace token that has now died, or a
+        // revoked token). Mark the connection so the
         // dashboard can prompt a reconnect instead of silently failing every
         // sync. The row and synced recordings are preserved.
         if (
             error instanceof AppError &&
             error.code === ErrorCode.PLAUD_INVALID_TOKEN
         ) {
-            result.needsReconnect = true;
-            try {
-                await db
-                    .update(plaudConnections)
-                    .set({ invalidatedAt: new Date() })
-                    .where(eq(plaudConnections.userId, userId));
-            } catch (stampError) {
-                console.error(
-                    "Failed to mark Plaud connection as invalidated:",
-                    stampError,
-                );
+            let replaced = false;
+            if (invalidationTarget) {
+                try {
+                    replaced =
+                        !(await markPlaudConnectionInvalidated(
+                            invalidationTarget,
+                        ));
+                } catch (stampError) {
+                    console.error(
+                        "Failed to mark Plaud connection as invalidated:",
+                        stampError,
+                    );
+                }
             }
+            if (replaced) {
+                result.errors.push(
+                    "Your Plaud connection changed during this sync. Sync again to use it.",
+                );
+                return result;
+            }
+            result.needsReconnect = true;
             result.errors.push(
                 "Plaud rejected the stored token. Reconnect your Plaud account.",
             );

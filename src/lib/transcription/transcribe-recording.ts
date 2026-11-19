@@ -688,11 +688,8 @@ async function transcribeRecordingInner(
                                 .limit(1);
 
                             if (connection) {
-                                const plaudClient = await createPlaudClient(
-                                    connection.bearerToken,
-                                    connection.apiBase,
-                                    connection.workspaceId,
-                                );
+                                const plaudClient =
+                                    await createPlaudClient(connection);
                                 await plaudClient.updateFilename(
                                     recording.plaudFileId,
                                     generatedTitle,
