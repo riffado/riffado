@@ -12,6 +12,8 @@
 - Imported Plaud summaries render as Markdown, and transcripts are grouped by speaker ([#302](https://github.com/riffado/riffado/pull/302), based on [#265](https://github.com/riffado/riffado/pull/265) by [@4dmrkey](https://github.com/4dmrkey)).
 - `WHISPER_COMPRESS=off` skips the 25 MiB re-encode for self-hosted Whisper-compatible servers. Only safe when every transcription provider is self-hosted ([#324](https://github.com/riffado/riffado/pull/324) by [@ddunford](https://github.com/ddunford)).
 - Optional per-feature status checks at `GET /api/status/<part>` (sign-in, Plaud, sync, storage, emails, transcription, webhooks, auto-transcribe, payments) for an external status monitor such as Kener. Adds the `status_minute_buckets` and `status_job_runs` tables (migration `0039`) and the optional `STATUS_TOKEN`, passed through `docker-compose.yml`. Inert unless `STATUS_TOKEN` is set ([#343](https://github.com/riffado/riffado/pull/343)).
+- Settings shows when the Plaud connection ends, and the dashboard warns three days before ([#346](https://github.com/riffado/riffado/pull/346)).
+- Failed storage deletes (account deletion, export attempts, upload clean-up) are retried by the export worker from a new `storage_deletion_queue` table (migration `0041`) ([#347](https://github.com/riffado/riffado/pull/347)).
 
 ### Fixed
 - Changing the default summary prompt in Settings → Summary wiped any custom summary prompts on every save, since the request always sent `customPrompts: []` instead of the current list ([#199](https://github.com/riffado/riffado/issues/199)).
@@ -30,14 +32,18 @@
 - `curl -fsSL https://riffado.com/install.sh | sh` could hang forever after the prompts ([#294](https://github.com/riffado/riffado/issues/294)).
 - The installer now publishes the port named in `APP_URL` (localhost or an IP with an explicit port) and health-checks `http://127.0.0.1:<port>`; previously any port other than 3000 failed the health check ([#295](https://github.com/riffado/riffado/issues/295)).
 - Version-pinned installs (`riffado.com/vX.Y.Z/install.sh`) installed the latest release instead of the pinned one ([#344](https://github.com/riffado/riffado/pull/344)).
+- Plaud now issues 24-hour web sign-ins and 30-day email-code sign-ins with refresh tokens; Riffado assumed ~300-day tokens, so Riffado Connector connections died after a day. Riffado now stores Plaud's refresh token (encrypted) and renews the access token until the 30-day sign-in ends. Connections made with Riffado Connector 0.2.4 or newer last up to 30 days. Adds migration `0040` (`plaud_connections.refresh_token`, `access_expires_at`, `session_expires_at`) ([#346](https://github.com/riffado/riffado/pull/346)).
+- Export archives: only the newest complete archive is kept per user, archives are deleted with the account, and a failed export build is requeued instead of staying stuck in `processing` ([#347](https://github.com/riffado/riffado/pull/347)).
+- In-app playback no longer downloads the whole recording for every seek: S3 storage serves a 15-minute presigned URL, and other requests stream with proper `Range` support. If the browser can't reach the storage endpoint (for example MinIO on the Docker network), playback falls back to streaming through Riffado ([#347](https://github.com/riffado/riffado/pull/347)).
 
 ### Changed
 - Migration `0036_wide_raider` upgrades `stripe_webhook_events` to a durable Stripe event inbox. Inert on self-host unless hosted billing is configured.
 - Removes optional `RYBBIT_SITE_ID` / `RYBBIT_HOST` and the `/api/int/*` analytics proxy. Adds optional `.env.example` vars `OA_TRACKING_KEY` / `OA_HOST` for hosted-only cookieless Open Analytics. Inert unless `IS_HOSTED=true`.
 - `docker-compose.yml` changes: a `storage` named volume mounted at `/app/storage`, `SMTP_*` and `STATUS_TOKEN` passed through to the app, and the published port is now `${APP_PORT:-3000}:3000`. Existing installs without `APP_PORT` stay on 3000. Copy the new file over yours when upgrading.
-- Upgrading runs migrations `0037` to `0039`, all additive.
+- Upgrading runs migrations `0037` to `0041`, all additive.
 - OpenAI-compatible and Gemini transcription no longer use the SDK's automatic retries, so a finished upload is never sent twice. HTTP 429, refused connections and unknown hosts are retried up to twice (honouring `Retry-After`, capped at 30s); dropped connections only within 5 seconds of starting. 5xx responses and timeouts are not retried.
 - `NON_INTERACTIVE` is now honoured by the installer: `1`/`true` takes every default, `0`/`false` requires a terminal.
+- Paste-token instructions point at the `pld_ut` cookie; tokens from the current Plaud web app last about a day ([#346](https://github.com/riffado/riffado/pull/346)).
 
 ### Security
 - Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
