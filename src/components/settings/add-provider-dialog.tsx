@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
+import { ChatGptConnectPanel } from "@/components/settings/chatgpt-connect-panel";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
 import {
     Dialog,
@@ -24,6 +25,7 @@ import {
     findPreset,
     getVisiblePresets,
     supportsEnhancement,
+    usesChatGptSignIn,
 } from "@/lib/ai/provider-presets";
 
 interface AddProviderDialogProps {
@@ -44,7 +46,27 @@ export function AddProviderDialog({
     onSuccess,
     isHosted = false,
 }: AddProviderDialogProps) {
-    const visiblePresets = getVisiblePresets({ isHosted });
+    // The ChatGPT preset only appears when the operator opted in with
+    // ENABLE_CHATGPT_PLAN_USAGE; the server is the source of truth.
+    const [chatGptEnabled, setChatGptEnabled] = useState(false);
+    useEffect(() => {
+        if (!open || isHosted) return;
+        let cancelled = false;
+        fetch("/api/settings/ai/chatgpt/status")
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!cancelled) setChatGptEnabled(data?.enabled === true);
+            })
+            .catch(() => {
+                if (!cancelled) setChatGptEnabled(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, isHosted]);
+    const visiblePresets = getVisiblePresets({ isHosted }).filter(
+        (preset) => chatGptEnabled || !preset.usesChatGptSignIn,
+    );
     const [provider, setProvider] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
@@ -123,7 +145,7 @@ export function AddProviderDialog({
                     <DialogTitle>Add AI Provider</DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-4">
                     <div className="space-y-2">
                         <Label>Provider</Label>
                         <Select
@@ -146,106 +168,138 @@ export function AddProviderDialog({
                         </Select>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
-                        <Input
-                            id="apiKey"
-                            type="password"
-                            placeholder={
-                                selectedPreset?.placeholder || "Your API key"
-                            }
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
+                    {usesChatGptSignIn(provider) ? (
+                        <ChatGptConnectPanel
+                            onConnected={() => {
+                                onSuccess();
+                                onOpenChange(false);
+                                setProvider("");
+                                setApiKey("");
+                                setBaseUrl("");
+                                setDefaultModel("");
+                                setIsDefaultTranscription(false);
+                                setIsDefaultEnhancement(false);
+                            }}
+                            onCancel={() => onOpenChange(false)}
                         />
-                    </div>
+                    ) : (
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="apiKey">API Key</Label>
+                                <Input
+                                    id="apiKey"
+                                    type="password"
+                                    placeholder={
+                                        selectedPreset?.placeholder ||
+                                        "Your API key"
+                                    }
+                                    value={apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    disabled={isLoading}
+                                    className="font-mono text-sm"
+                                />
+                            </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
-                        <Input
-                            id="baseUrl"
-                            type="text"
-                            placeholder="https://api.example.com/v1"
-                            value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                        {isHosted && (
-                            <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
-                                <code className="font-mono">
-                                    docker compose up
-                                </code>
-                                ).
-                            </p>
-                        )}
-                    </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="baseUrl">
+                                    Base URL (Optional)
+                                </Label>
+                                <Input
+                                    id="baseUrl"
+                                    type="text"
+                                    placeholder="https://api.example.com/v1"
+                                    value={baseUrl}
+                                    onChange={(e) => setBaseUrl(e.target.value)}
+                                    disabled={isLoading}
+                                    className="font-mono text-sm"
+                                />
+                                {isHosted && (
+                                    <p className="text-xs text-muted-foreground">
+                                        We can&apos;t reach{" "}
+                                        <code className="font-mono">
+                                            localhost
+                                        </code>{" "}
+                                        or other private addresses from the
+                                        hosted app. To use LM Studio or Ollama,
+                                        self-host Riffado (
+                                        <code className="font-mono">
+                                            docker compose up
+                                        </code>
+                                        ).
+                                    </p>
+                                )}
+                            </div>
 
-                    <TranscriptionModelPicker
-                        preset={selectedPreset}
-                        apiKey={apiKey}
-                        baseUrl={baseUrl}
-                        value={defaultModel}
-                        onChange={setDefaultModel}
-                        disabled={isLoading}
-                    />
-
-                    <Panel variant="inset" className="space-y-2 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultTranscription}
-                                onChange={(e) =>
-                                    setIsDefaultTranscription(e.target.checked)
-                                }
+                            <TranscriptionModelPicker
+                                preset={selectedPreset}
+                                apiKey={apiKey}
+                                baseUrl={baseUrl}
+                                value={defaultModel}
+                                onChange={setDefaultModel}
                                 disabled={isLoading}
                             />
-                            <span>Use for transcription</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultEnhancement}
-                                onChange={(e) =>
-                                    setIsDefaultEnhancement(e.target.checked)
-                                }
-                                disabled={
-                                    isLoading || !supportsEnhancement(provider)
-                                }
-                            />
-                            <span>Use for AI enhancements</span>
-                        </label>
-                        {provider && !supportsEnhancement(provider) && (
-                            <p className="text-xs text-muted-foreground pl-6">
-                                {provider} transcribes only.
-                            </p>
-                        )}
-                    </Panel>
 
-                    <div className="flex gap-2">
-                        <MetalButton
-                            type="button"
-                            onClick={() => onOpenChange(false)}
-                            disabled={isLoading}
-                            className="flex-1"
-                        >
-                            Cancel
-                        </MetalButton>
-                        <MetalButton
-                            type="submit"
-                            variant="cyan"
-                            disabled={isLoading}
-                            className="flex-1"
-                        >
-                            {isLoading ? "Adding..." : "Add Provider"}
-                        </MetalButton>
-                    </div>
-                </form>
+                            <Panel
+                                variant="inset"
+                                className="space-y-2 text-sm"
+                            >
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isDefaultTranscription}
+                                        onChange={(e) =>
+                                            setIsDefaultTranscription(
+                                                e.target.checked,
+                                            )
+                                        }
+                                        disabled={isLoading}
+                                    />
+                                    <span>Use for transcription</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={isDefaultEnhancement}
+                                        onChange={(e) =>
+                                            setIsDefaultEnhancement(
+                                                e.target.checked,
+                                            )
+                                        }
+                                        disabled={
+                                            isLoading ||
+                                            !supportsEnhancement(provider)
+                                        }
+                                    />
+                                    <span>Use for AI enhancements</span>
+                                </label>
+                                {provider && !supportsEnhancement(provider) && (
+                                    <p className="text-xs text-muted-foreground pl-6">
+                                        {provider} transcribes only.
+                                    </p>
+                                )}
+                            </Panel>
+
+                            <div className="flex gap-2">
+                                <MetalButton
+                                    type="button"
+                                    onClick={() => onOpenChange(false)}
+                                    disabled={isLoading}
+                                    className="flex-1"
+                                >
+                                    Cancel
+                                </MetalButton>
+                                <MetalButton
+                                    type="submit"
+                                    variant="cyan"
+                                    disabled={isLoading}
+                                    className="flex-1"
+                                >
+                                    {isLoading ? "Adding..." : "Add Provider"}
+                                </MetalButton>
+                            </div>
+                        </form>
+                    )}
+                </div>
             </DialogContent>
         </Dialog>
     );

@@ -15,6 +15,12 @@ vi.mock("@/db", () => ({
     },
 }));
 
+// The ChatGPT feature gate reads validated env; not under test here.
+vi.mock("@/lib/ai/chatgpt/feature", () => ({
+    isChatGptPlanUsageEnabled: () => false,
+    assertChatGptPlanUsageEnabled: vi.fn(),
+}));
+
 vi.mock("@/lib/encryption", () => ({
     decrypt: vi.fn().mockReturnValue("fake-api-key"),
 }));

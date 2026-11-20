@@ -47,6 +47,7 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-}
+      ENABLE_CHATGPT_PLAN_USAGE: ${ENABLE_CHATGPT_PLAN_USAGE:-}
 
       # Maximum duration of each server transcription request, including its response body.
       WHISPER_REQUEST_TIMEOUT_MS: ${WHISPER_REQUEST_TIMEOUT_MS:-3600000}

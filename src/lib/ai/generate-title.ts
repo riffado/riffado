@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { OpenAI } from "openai";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
+import { runChatGptCompletion } from "@/lib/ai/chatgpt/connect";
+import { isChatGptProvider } from "@/lib/ai/chatgpt/shared";
 import { supportsEnhancement } from "@/lib/ai/provider-presets";
 import { decrypt } from "@/lib/encryption";
 import { decryptJsonField } from "@/lib/encryption/fields";
@@ -81,15 +83,6 @@ export async function generateTitleFromTranscription(
             return null;
         }
 
-        // Decrypt API key
-        const apiKey = decrypt(credentials.apiKey);
-
-        // Create OpenAI client
-        const openai = new OpenAI({
-            apiKey,
-            baseURL: credentials.baseUrl || undefined,
-        });
-
         // Use a lightweight model for title generation
         // Prefer chat models (gpt-4o-mini, gpt-3.5-turbo) over Whisper models
         // Fallback to default model if no specific model is set
@@ -128,25 +121,43 @@ export async function generateTitleFromTranscription(
             ? `${baseSystem} ${languageDirective}`
             : baseSystem;
 
-        const response = await openai.chat.completions.create(
-            buildChatCompletionParams({
-                model,
-                messages: [
-                    {
-                        role: "system",
-                        content: systemContent,
-                    },
-                    {
-                        role: "user",
-                        content: prompt,
-                    },
-                ],
-                temperature: 0.7,
-                maxTokens: 50, // Titles should be short
-            }),
-        );
+        let title: string | null;
+        if (isChatGptProvider(credentials.provider)) {
+            // ChatGPT plan usage: Responses API on the user's subscription.
+            // No token cap is sent (plan usage only accepts the documented
+            // request shape); the 60-char trim below bounds the result.
+            const result = await runChatGptCompletion(credentials, {
+                model: credentials.defaultModel,
+                instructions: systemContent,
+                input: prompt,
+            });
+            title = result.text.trim() || null;
+        } else {
+            const openai = new OpenAI({
+                apiKey: decrypt(credentials.apiKey),
+                baseURL: credentials.baseUrl || undefined,
+            });
 
-        const title = response.choices[0]?.message?.content?.trim() || null;
+            const response = await openai.chat.completions.create(
+                buildChatCompletionParams({
+                    model,
+                    messages: [
+                        {
+                            role: "system",
+                            content: systemContent,
+                        },
+                        {
+                            role: "user",
+                            content: prompt,
+                        },
+                    ],
+                    temperature: 0.7,
+                    maxTokens: 50, // Titles should be short
+                }),
+            );
+
+            title = response.choices[0]?.message?.content?.trim() || null;
+        }
 
         if (!title) {
             return null;
