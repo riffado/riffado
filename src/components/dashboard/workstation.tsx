@@ -19,6 +19,7 @@ import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { useAutoSync } from "@/hooks/use-auto-sync";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
+import { useProviderList } from "@/hooks/use-provider-list";
 import { useTheme } from "@/hooks/use-theme";
 import { useTranscribeQueue } from "@/hooks/use-transcribe-queue";
 import { useUploadQueue } from "@/hooks/use-upload-queue";
@@ -40,18 +41,6 @@ interface TranscriptionData {
     text?: string;
     language?: string;
 }
-
-interface Provider {
-    id: string;
-    provider: string;
-    baseUrl: string | null;
-    defaultModel: string | null;
-    isDefaultTranscription: boolean;
-    isDefaultEnhancement: boolean;
-    createdAt: Date;
-}
-
-const EMPTY_PROVIDERS: Provider[] = [];
 
 interface WorkstationProps {
     recordings: Recording[];
@@ -140,7 +129,17 @@ export function Workstation({
     // toggle between them instead of stacking. Desktop ignores this
     // state entirely (both panes render via the grid).
     const [mobileView, setMobileView] = useState<"list" | "detail">("list");
-    const [providers, setProviders] = useState<Provider[]>(EMPTY_PROVIDERS);
+    const {
+        providers,
+        loadFailed: providersLoadFailed,
+        prefetch: prefetchProviders,
+        replaceProviders,
+    } = useProviderList();
+
+    const openSettings = useCallback(() => {
+        prefetchProviders();
+        setSettingsOpen(true);
+    }, [prefetchProviders]);
 
     const { theme, setTheme } = useTheme(initialSettings.theme);
     const listRef = useRef<RecordingListHandle>(null);
@@ -261,18 +260,6 @@ export function Workstation({
         manualSync();
     }, [refresh, manualSync]);
 
-    // Settings dialog needs the provider list at open-time so the
-    // Providers section seeds correctly. Fetching on open (rather
-    // than on mount) avoids loading a list the user may never see.
-    useEffect(() => {
-        if (settingsOpen) {
-            fetch("/api/settings/ai/providers")
-                .then((res) => res.json())
-                .then((data) => setProviders(data.providers || []))
-                .catch(() => setProviders([]));
-        }
-    }, [settingsOpen]);
-
     const {
         isUploading,
         pendingUploads,
@@ -360,7 +347,7 @@ export function Workstation({
         onFocusSearch: () => listRef.current?.focusSearch(),
         onOpenPalette: () => setPaletteOpen(true),
         onOpenShortcuts: () => setShortcutsOpen(true),
-        onOpenSettings: () => setSettingsOpen(true),
+        onOpenSettings: openSettings,
         enabled:
             !settingsOpen && !onboardingOpen && !paletteOpen && !shortcutsOpen,
     });
@@ -385,7 +372,8 @@ export function Workstation({
                         onTriggerUpload={triggerUpload}
                         onUploadInputChange={handleUpload}
                         onOpenPalette={() => setPaletteOpen(true)}
-                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenSettings={openSettings}
+                        onSettingsIntent={prefetchProviders}
                         onOpenShortcuts={() => setShortcutsOpen(true)}
                     />
 
@@ -488,7 +476,7 @@ export function Workstation({
                 }}
                 onSync={handleSync}
                 onUpload={triggerUpload}
-                onOpenSettings={() => setSettingsOpen(true)}
+                onOpenSettings={openSettings}
                 onOpenShortcuts={() => setShortcutsOpen(true)}
                 onSetTheme={setTheme}
                 onTranscribeRecording={transcribeById}
@@ -502,7 +490,10 @@ export function Workstation({
             <SettingsDialog
                 open={settingsOpen}
                 onOpenChange={setSettingsOpen}
-                initialProviders={providers}
+                providers={providers}
+                onProvidersChange={replaceProviders}
+                providersLoadFailed={providersLoadFailed}
+                onRetryProviders={prefetchProviders}
                 isHosted={isHosted}
                 onReRunOnboarding={() => {
                     setSettingsOpen(false);

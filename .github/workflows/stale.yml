@@ -13,11 +13,11 @@ jobs:
     steps:
       - uses: actions/stale@v9
         with:
-          exempt-issue-labels: do-not-stale,enhancement
+          exempt-issue-labels: do-not-stale,enhancement,bug,task
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
           days-before-stale: 30
           days-before-close: 14
           stale-issue-message: "This issue is stale because it has been open for 30 days with no activity. It will be closed in 14 days if there is no activity."
           close-issue-message: "This issue was closed because it has been inactive for 14 days since being marked as stale."
-          stale-pr-message: "This PR is stale because it has been open for 30 days with no activity. It will be closed in 14 days if there is no activity."
-          close-pr-message: "This PR was closed because it has been inactive for 14 days since being marked as stale."
           repo-token: ${{ secrets.GITHUB_TOKEN }}
