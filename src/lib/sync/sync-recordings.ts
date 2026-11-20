@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq, isNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -115,23 +116,24 @@ function isForeignKeyViolation(error: unknown): boolean {
     );
 }
 
-async function storagePathHeldByOtherRecording(
+async function storagePathReferenced(
     userId: string,
     storagePath: string,
-    exceptRecordingId: string,
+    exceptRecordingId?: string,
 ): Promise<boolean> {
-    const [other] = await db
+    const conditions = [
+        eq(recordings.userId, userId),
+        eq(recordings.storagePath, storagePath),
+    ];
+    if (exceptRecordingId) {
+        conditions.push(ne(recordings.id, exceptRecordingId));
+    }
+    const [row] = await db
         .select({ id: recordings.id })
         .from(recordings)
-        .where(
-            and(
-                eq(recordings.userId, userId),
-                eq(recordings.storagePath, storagePath),
-                ne(recordings.id, exceptRecordingId),
-            ),
-        )
+        .where(and(...conditions))
         .limit(1);
-    return Boolean(other);
+    return Boolean(row);
 }
 
 async function allocateStorageKey(
@@ -168,16 +170,98 @@ async function resolveStorageKey(
     existingRecording: { id: string; storagePath: string | null } | undefined,
     fileExtension: string,
     plaudFileId: string,
-): Promise<string> {
-    if (existingRecording?.storagePath) {
-        const shared = await storagePathHeldByOtherRecording(
+    requireMatchingExtension: boolean,
+): Promise<{ key: string; replacedPath?: string }> {
+    const existingPath = existingRecording?.storagePath;
+    if (existingRecording && existingPath) {
+        if (
+            requireMatchingExtension &&
+            !existingPath.toLowerCase().endsWith(`.${fileExtension}`)
+        ) {
+            return {
+                key: await allocateStorageKey(
+                    userId,
+                    plaudFileId,
+                    fileExtension,
+                ),
+                replacedPath: existingPath,
+            };
+        }
+        const shared = await storagePathReferenced(
             userId,
-            existingRecording.storagePath,
+            existingPath,
             existingRecording.id,
         );
-        if (!shared) return existingRecording.storagePath;
+        if (!shared) return { key: existingPath };
     }
-    return allocateStorageKey(userId, plaudFileId, fileExtension);
+    return {
+        key: await allocateStorageKey(userId, plaudFileId, fileExtension),
+    };
+}
+
+async function deleteReplacedAudio(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+    storageType: string,
+): Promise<void> {
+    if (storageType !== env.DEFAULT_STORAGE_TYPE) return;
+    try {
+        if (await storagePathReferenced(userId, storagePath)) return;
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to delete replaced storage object ${storagePath}:`,
+            error,
+        );
+        captureServerException(
+            new Error("Failed to delete replaced recording audio"),
+            { source: "sync:delete-replaced-audio", storageType },
+        );
+    }
+}
+
+async function deleteUnreferencedUpload(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+): Promise<void> {
+    try {
+        if (await storagePathReferenced(userId, storagePath)) return;
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to clean up storage object ${storagePath} after a concurrent replace:`,
+            error,
+        );
+    }
+}
+
+interface RecordingMetadata {
+    deviceSn: string;
+    timezone: number | null;
+    zonemins: number | null;
+    scene: number | null;
+}
+
+function recordingMetadata(
+    plaudRecording: PlaudRecording,
+    existing: RecordingMetadata | undefined,
+): RecordingMetadata {
+    const listed = {
+        deviceSn: plaudRecording.serial_number,
+        timezone: plaudRecording.timezone,
+        zonemins: plaudRecording.zonemins,
+        scene: plaudRecording.scene,
+    };
+    if (!existing || plaudRecording.source !== "v4") return listed;
+    const zoneKnown = plaudRecording.timezone_iana !== undefined;
+    return {
+        deviceSn: listed.deviceSn || existing.deviceSn,
+        timezone: zoneKnown ? listed.timezone : existing.timezone,
+        zonemins: zoneKnown ? listed.zonemins : existing.zonemins,
+        scene: existing.scene,
+    };
 }
 
 /**
@@ -288,14 +372,39 @@ async function hasUnseenPlaudContentGaps(
  * Mutable per-sync-run flag. Once a new recording is blocked by the
  * storage cap, every subsequent new recording in the same run is skipped
  * without re-querying the user's byte total (new recordings only grow
- * storage, so once over cap it stays over within the run).
+ * storage, so once over cap it stays over within the run). `pendingBytes`
+ * counts new recordings admitted by the cap but not yet persisted, so the
+ * concurrent recordings of a batch cannot all pass against the same total.
  */
 interface CapState {
     blocked: boolean;
+    pendingBytes: number;
+}
+
+async function reserveStorageBytes(
+    capState: CapState,
+    userId: string,
+    bytes: number,
+): Promise<boolean> {
+    capState.pendingBytes += bytes;
+    let allowed: boolean;
+    try {
+        ({ allowed } = await enforceStorageCap({
+            userId,
+            additionalBytes: capState.pendingBytes,
+        }));
+    } catch (error) {
+        capState.pendingBytes -= bytes;
+        throw error;
+    }
+    if (allowed) return true;
+    capState.pendingBytes -= bytes;
+    capState.blocked = true;
+    return false;
 }
 
 async function processRecording(
-    plaudRecording: PlaudRecording,
+    listedRecording: PlaudRecording,
     context: SyncContext,
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
@@ -309,6 +418,8 @@ async function processRecording(
     importCandidate?: ImportCandidate;
     capExceeded?: boolean;
 }> {
+    let plaudRecording = listedRecording;
+    let reservedBytes = 0;
     try {
         const [existingRecording] = await db
             .select()
@@ -360,6 +471,8 @@ async function processRecording(
             return { status: "skipped" };
         }
 
+        plaudRecording = await plaudClient.hydrateRecording(plaudRecording);
+
         // Storage cap: gate NEW recordings before spending Plaud egress.
         // Updates replace an existing blob (roughly size-neutral) and are
         // left untouched so a near-cap user can still receive edits.
@@ -367,89 +480,145 @@ async function processRecording(
             if (capState.blocked) {
                 return { status: "skipped", capExceeded: true };
             }
-            const cap = await enforceStorageCap({
-                userId: context.userId,
-                additionalBytes: plaudRecording.filesize,
-            });
-            if (!cap.allowed) {
-                capState.blocked = true;
+            if (
+                !(await reserveStorageBytes(
+                    capState,
+                    context.userId,
+                    plaudRecording.filesize,
+                ))
+            ) {
                 return { status: "skipped", capExceeded: true };
             }
+            reservedBytes += plaudRecording.filesize;
         }
 
+        const isV4 = plaudRecording.source === "v4";
         const audioBuffer = await plaudClient.downloadRecording(
             plaudRecording.id,
             false,
         );
 
+        if (!existingRecording) {
+            let unreservedBytes: number | undefined;
+            if (!plaudRecording.filesize) {
+                unreservedBytes = audioBuffer.length;
+            } else if (isV4 && audioBuffer.length > reservedBytes) {
+                unreservedBytes = audioBuffer.length - reservedBytes;
+            }
+            if (unreservedBytes !== undefined) {
+                if (
+                    !(await reserveStorageBytes(
+                        capState,
+                        context.userId,
+                        unreservedBytes,
+                    ))
+                ) {
+                    return { status: "skipped", capExceeded: true };
+                }
+                reservedBytes += unreservedBytes;
+            }
+        }
+
         const sniffed = sniffAudio(audioBuffer);
         const fileExtension = sniffed.extension;
-        const storageKey = await resolveStorageKey(
+        const { key: storageKey, replacedPath } = await resolveStorageKey(
             context.userId,
             existingRecording,
             fileExtension,
             plaudRecording.id,
+            isV4,
         );
         const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
         const recordingData = {
             userId: context.userId,
-            deviceSn: plaudRecording.serial_number,
+            ...recordingMetadata(plaudRecording, existingRecording),
             plaudFileId: plaudRecording.id,
             filename: encryptText(plaudRecording.filename),
             duration: plaudRecording.duration,
             startTime: new Date(plaudRecording.start_time),
             endTime: new Date(plaudRecording.end_time),
-            filesize: plaudRecording.filesize,
-            fileMd5: plaudRecording.file_md5,
+            filesize: isV4
+                ? audioBuffer.length
+                : plaudRecording.filesize || audioBuffer.length,
+            fileMd5:
+                plaudRecording.file_md5 ||
+                createHash("md5").update(audioBuffer).digest("hex"),
             storageType: env.DEFAULT_STORAGE_TYPE,
             storagePath: storageKey,
             downloadedAt: new Date(),
             plaudVersion: versionKey,
-            timezone: plaudRecording.timezone,
-            zonemins: plaudRecording.zonemins,
-            scene: plaudRecording.scene,
             isTrash: plaudRecording.is_trash,
         };
 
         if (existingRecording) {
             // Re-check under FOR UPDATE: a concurrent DELETE may have
             // tombstoned the row during the download/upload above.
-            const updated = await db.transaction(async (tx) => {
-                const [locked] = await tx
-                    .select({ deletedAt: recordings.deletedAt })
-                    .from(recordings)
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    )
-                    .for("update")
-                    .limit(1);
+            const outcome = await db.transaction(
+                async (tx): Promise<"updated" | "deleted" | "moved"> => {
+                    const [locked] = await tx
+                        .select({
+                            deletedAt: recordings.deletedAt,
+                            storagePath: recordings.storagePath,
+                        })
+                        .from(recordings)
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                            ),
+                        )
+                        .for("update")
+                        .limit(1);
 
-                if (!locked || locked.deletedAt) return false;
+                    if (!locked || locked.deletedAt) return "deleted";
+                    if (locked.storagePath !== existingRecording.storagePath) {
+                        return "moved";
+                    }
 
-                await tx
-                    .update(recordings)
-                    .set({ ...recordingData, updatedAt: new Date() })
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    );
-                return true;
-            });
+                    await tx
+                        .update(recordings)
+                        .set({ ...recordingData, updatedAt: new Date() })
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                                eq(
+                                    recordings.storagePath,
+                                    existingRecording.storagePath,
+                                ),
+                            ),
+                        );
+                    return "updated";
+                },
+            );
 
-            if (!updated) {
+            if (outcome === "moved") {
+                await deleteUnreferencedUpload(
+                    storage,
+                    context.userId,
+                    storageKey,
+                );
+                return { status: "skipped" };
+            }
+
+            if (outcome === "deleted") {
                 await deleteStorageObjectOrQueue(
                     storage,
                     storageKey,
                     "recording_cleanup",
                 );
                 return { status: "skipped" };
+            }
+
+            if (replacedPath) {
+                await deleteReplacedAudio(
+                    storage,
+                    context.userId,
+                    replacedPath,
+                    existingRecording.storageType,
+                );
             }
 
             await emitEvent(
@@ -503,6 +672,8 @@ async function processRecording(
             status: "error",
             error: `Failed to sync ${plaudRecording.filename}: ${error}`,
         };
+    } finally {
+        capState.pendingBytes -= reservedBytes;
     }
 }
 
@@ -721,7 +892,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
-        const capState: CapState = { blocked: false };
+        const capState: CapState = { blocked: false, pendingBytes: 0 };
         const seenRecordingIds = new Set<string>();
 
         let page = 0;

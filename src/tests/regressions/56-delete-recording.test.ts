@@ -150,6 +150,7 @@ describe("Issue #56 — delete recording tombstone", () => {
     };
     let plaudClientMock: {
         getRecordings: Mock;
+        hydrateRecording: Mock;
         downloadRecording: Mock;
     };
 
@@ -166,6 +167,7 @@ describe("Issue #56 — delete recording tombstone", () => {
             getRecordings: vi.fn().mockResolvedValue({
                 data_file_list: [mockPlaudRecording],
             }),
+            hydrateRecording: vi.fn(async (r: unknown) => r),
             downloadRecording: vi.fn().mockResolvedValue(Buffer.from("audio")),
         };
         (createPlaudClient as Mock).mockResolvedValue(plaudClientMock);

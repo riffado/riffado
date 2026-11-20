@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     enqueueStorageDeletions: vi.fn(),
     plaudClient: {
         getRecordings: vi.fn(),
+        hydrateRecording: vi.fn(async (r: unknown) => r),
         downloadRecording: vi.fn(),
         workspaceId: null,
     },
