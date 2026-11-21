@@ -19,6 +19,7 @@ vi.mock("@/db/schema", () => ({
     plaudConnections: {
         userId: "user_id",
         lastSync: "last_sync",
+        invalidatedAt: "invalidated_at",
     },
     users: {
         id: "id",

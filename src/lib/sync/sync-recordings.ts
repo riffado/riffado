@@ -793,7 +793,10 @@ export async function syncRecordingsForUser(
         // 2 users are lawyers/journalists) that must never leave this
         // process into third-party telemetry. Only a count crosses that
         // boundary.
-        if (result.errors.length > 0 && !result.skipped) {
+        if (
+            result.errors.length > (result.needsReconnect ? 1 : 0) &&
+            !result.skipped
+        ) {
             captureServerException(
                 new Error(
                     `Sync completed with ${result.errors.length} error(s)`,

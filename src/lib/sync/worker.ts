@@ -9,6 +9,7 @@ import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 // ponytail: skip users synced in the last 4 min -- they likely just client-synced
 const STALE_THRESHOLD_MS = 4 * 60 * 1000;
 const MAX_USERS_PER_TICK = 20;
+const INVALIDATED_RETRY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Claim users due for a server-side sync tick.
@@ -21,13 +22,24 @@ const MAX_USERS_PER_TICK = 20;
  * to gate on, and unattended background sync is the whole point of running
  * the container without a browser open (#159).
  *
+ * Connections flagged for reconnect (`invalidatedAt` set) are retried at
+ * most once a day; each failed attempt re-stamps the flag, and a reconnect or
+ * successful sync clears it (#361).
+ *
  * Exported for testing.
  */
 export async function claimUsersForSync(): Promise<string[]> {
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+    const invalidatedRetryThreshold = new Date(
+        Date.now() - INVALIDATED_RETRY_MS,
+    );
 
     const conditions = [
         isNull(users.suspendedAt),
+        or(
+            isNull(plaudConnections.invalidatedAt),
+            lt(plaudConnections.invalidatedAt, invalidatedRetryThreshold),
+        ),
         or(
             isNull(plaudConnections.lastSync),
             lt(plaudConnections.lastSync, staleThreshold),
@@ -74,6 +86,7 @@ export async function tick(): Promise<void> {
 
         let synced = 0;
         let errors = 0;
+        let reconnect = 0;
         for (const userId of userIds) {
             try {
                 const result = await syncRecordingsForUser(
@@ -87,6 +100,8 @@ export async function tick(): Promise<void> {
                 } else if (outcome === "failure") {
                     errors++;
                     recordJobFailure("sync");
+                } else if (result.needsReconnect) {
+                    reconnect++;
                 }
             } catch (error) {
                 errors++;
@@ -102,9 +117,12 @@ export async function tick(): Promise<void> {
             }
         }
 
-        if (synced > 0 || errors > 0) {
-            console.log(`[background-sync] synced=${synced} errors=${errors}`);
-        } else {
+        if (synced > 0 || errors > 0 || reconnect > 0) {
+            console.log(
+                `[background-sync] synced=${synced} errors=${errors} reconnect=${reconnect}`,
+            );
+        }
+        if (synced === 0 && errors === 0) {
             recordJobSuccess("sync");
         }
     } catch (error) {
