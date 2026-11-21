@@ -1,4 +1,4 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { emailSuppressions } from "@/db/schema";
 
@@ -31,6 +31,26 @@ export async function suppressEmail(
         });
 }
 
+/**
+ * Records a permanent mail-server rejection. An existing `unsubscribe`,
+ * `complaint` or `manual` row keeps its reason and note; only an existing
+ * `bounce` row has its note refreshed.
+ */
+export async function recordBounce(email: string, note: string): Promise<void> {
+    await db
+        .insert(emailSuppressions)
+        .values({
+            email: email.toLowerCase(),
+            reason: "bounce",
+            note,
+        })
+        .onConflictDoUpdate({
+            target: emailSuppressions.email,
+            set: { note },
+            setWhere: eq(emailSuppressions.reason, "bounce"),
+        });
+}
+
 /** Returns the subset of `emails` that are suppressed. */
 export async function findSuppressedEmails(
     emails: readonly string[],
@@ -42,6 +62,39 @@ export async function findSuppressedEmails(
         .from(emailSuppressions)
         .where(inArray(emailSuppressions.email, normalized));
     return new Set(rows.map((r) => r.email));
+}
+
+/**
+ * Returns the subset of `emails` suppressed because the mail server rejected
+ * them permanently. Unsubscribes and complaints only stop campaign mail.
+ */
+export async function findBouncedEmails(
+    emails: readonly string[],
+): Promise<Set<string>> {
+    if (emails.length === 0) return new Set();
+    const normalized = emails.map((e) => e.toLowerCase());
+    const rows = await db
+        .select({ email: emailSuppressions.email })
+        .from(emailSuppressions)
+        .where(
+            and(
+                inArray(emailSuppressions.email, normalized),
+                eq(emailSuppressions.reason, "bounce"),
+            ),
+        );
+    return new Set(rows.map((r) => r.email));
+}
+
+/** Removes a bounce suppression for `email`; other reasons are kept. */
+export async function clearBouncedEmail(email: string): Promise<void> {
+    await db
+        .delete(emailSuppressions)
+        .where(
+            and(
+                eq(emailSuppressions.email, email.toLowerCase()),
+                eq(emailSuppressions.reason, "bounce"),
+            ),
+        );
 }
 
 export async function isSuppressed(email: string): Promise<boolean> {
