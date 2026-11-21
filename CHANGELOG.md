@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] - 2026-11-21
 
 ### Added
 - Custom summary prompts are now reachable from Settings → Summary: create, edit, view, and delete custom prompts, and select one as the default alongside the built-in presets. The per-recording summary dropdown also lists custom prompts and now initializes to the saved default instead of always defaulting to "General Summary" ([#199](https://github.com/riffado/riffado/issues/199)).
@@ -291,7 +291,8 @@
 - Environment variable validation
 - Path traversal protection
 
-[unreleased]: https://github.com/riffado/riffado/compare/v0.6.4...HEAD
+[unreleased]: https://github.com/riffado/riffado/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/riffado/riffado/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/riffado/riffado/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/riffado/riffado/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/riffado/riffado/compare/v0.6.1...v0.6.2
