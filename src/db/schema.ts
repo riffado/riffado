@@ -208,8 +208,19 @@ export const plaudConnections = pgTable("plaud_connections", {
     userId: text("user_id")
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
-    // Encrypted bearer token (long-lived ≈300 days per Plaud's JWT claims)
+    // Encrypted Plaud user token (UT). Lifetime varies by source: 24 hours
+    // from the Plaud web app cookie, 30 days from the email-code login, and
+    // ~300 days for legacy tokens issued before Plaud added refresh tokens.
     bearerToken: text("bearer_token").notNull(),
+    // Encrypted Plaud refresh token, used to mint a fresh UT before it
+    // expires. Null for legacy and pasted connections. A refresh never moves
+    // sessionExpiresAt later than the stored value.
+    refreshToken: text("refresh_token"),
+    // When the stored UT expires. Null when unknown.
+    accessExpiresAt: timestamp("access_expires_at"),
+    // When the Plaud sign-in ends for good (refresh token expiry, else UT
+    // expiry). The user must reconnect after this. Null when unknown.
+    sessionExpiresAt: timestamp("session_expires_at"),
     // Regional API server base URL (e.g. https://api-euc1.plaud.ai for EU users)
     apiBase: text("api_base").notNull().default("https://api.plaud.ai"),
     // Email of the linked Plaud account (captured during OTP flow). Null for
@@ -744,6 +755,36 @@ export const exportJobs = pgTable(
     }),
 );
 
+/**
+ * Storage objects whose delete failed and must be retried, e.g. a deleted
+ * account's audio or export archives. Not user-scoped: rows outlive the
+ * user they belonged to. Only keys that can never be written again may be
+ * queued (user-namespaced keys of deleted users, per-claim export keys),
+ * so a retried delete can never remove live data. Retried by the export
+ * worker with backoff until `attempts` runs out, then kept as `failed`
+ * for an operator.
+ */
+export const storageDeletionQueue = pgTable(
+    "storage_deletion_queue",
+    {
+        storageKey: text("storage_key").primaryKey(),
+        source: varchar("source", { length: 40 }).notNull(),
+        status: varchar("status", { length: 16 }).notNull().default("pending"),
+        attempts: integer("attempts").notNull().default(0),
+        nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+        claimToken: text("claim_token"),
+        lastError: text("last_error"),
+        createdAt: timestamp("created_at").notNull().defaultNow(),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        dueIdx: index("storage_deletion_queue_due_idx").on(
+            table.status,
+            table.nextAttemptAt,
+        ),
+    }),
+);
+
 export const apiRateLimitBuckets = pgTable(
     "api_rate_limit_buckets",
     {
@@ -1029,3 +1070,45 @@ export const emailLog = pgTable(
         ),
     }),
 );
+
+/**
+ * Status page traffic counters, one row per (part, minute). Every process
+ * aggregates outcomes in memory and adds them here once a minute, so the
+ * counts and the latency histogram sum across processes. The verdict
+ * columns hold the worst raw verdict reason per state for the sustain rule.
+ * Rows older than about a day are pruned. Written only when STATUS_TOKEN is set.
+ */
+export const statusMinuteBuckets = pgTable(
+    "status_minute_buckets",
+    {
+        part: varchar("part", { length: 40 }).notNull(),
+        minute: timestamp("minute").notNull(),
+        ok: integer("ok").notNull().default(0),
+        err: integer("err").notNull().default(0),
+        latencyBuckets: integer("latency_buckets")
+            .array()
+            .notNull()
+            .default(sql`'{}'::integer[]`),
+        verdictOk: text("verdict_ok"),
+        verdictSlow: text("verdict_slow"),
+        verdictDown: text("verdict_down"),
+        updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.part, table.minute] }),
+        minuteIdx: index("status_minute_buckets_minute_idx").on(table.minute),
+    }),
+);
+
+/**
+ * Last success / failure of each background job, for the status page's
+ * freshness checks. One row per job name. Written only when STATUS_TOKEN
+ * is set.
+ */
+export const statusJobRuns = pgTable("status_job_runs", {
+    job: varchar("job", { length: 40 }).primaryKey(),
+    lastSuccessAt: timestamp("last_success_at"),
+    lastErrorAt: timestamp("last_error_at"),
+    failingSince: timestamp("failing_since"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

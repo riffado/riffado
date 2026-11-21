@@ -2,17 +2,57 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-21
+
+### Fixed
+- An email the mail server rejected permanently (5xx for every recipient) was retried on every trigger, so the same message could be resent every few minutes. The address is now recorded as a bounce in the existing `email_suppressions` table and later transactional mail skips it. Verification, password reset and email-change mail are still sent, and a later successful send clears the bounce ([#360](https://github.com/riffado/riffado/issues/360)).
+- When Plaud rejects the token while minting a workspace token, the stored refresh token is tried once before falling back. Background sync retries connections that need a reconnect at most once a day instead of every tick, and its log line reports `reconnect=N` ([#361](https://github.com/riffado/riffado/issues/361)).
+
+## [0.7.0] - 2026-11-21
+
 ### Added
 - Custom summary prompts are now reachable from Settings → Summary: create, edit, view, and delete custom prompts, and select one as the default alongside the built-in presets. The per-recording summary dropdown also lists custom prompts and now initializes to the saved default instead of always defaulting to "General Summary" ([#199](https://github.com/riffado/riffado/issues/199)).
 - Download the original audio file from the recording player and the recording row menu (`GET /api/recordings/[id]/audio?download=1`) ([#229](https://github.com/riffado/riffado/issues/229)).
 - Inline rename for recording titles. Click the title in the player (or the recording page heading), edit, and press Enter. Persists via `PATCH /api/recordings/[id]` ([#217](https://github.com/riffado/riffado/issues/217)).
+- Auto-summary after transcription: an opt-in per-user setting that generates a summary with the chosen prompt once a transcript lands. Capped per user by the optional `AUTO_SUMMARY_RATE_LIMIT_PER_HOUR` (default 60); a capped run fires a `summary.failed` webhook. Adds migration `0037` (`user_settings.auto_summarize`, `auto_summarize_preset`) ([#167](https://github.com/riffado/riffado/issues/167)).
+- ElevenLabs Scribe as a transcription provider, with speaker separation settings. Adds migration `0038` (`user_settings.speaker_diarization`, `diarization_speaker_count`) ([#304](https://github.com/riffado/riffado/pull/304), based on [#297](https://github.com/riffado/riffado/pull/297) by [@L480](https://github.com/L480)).
+- China mainland Plaud accounts (`api.plaud.cn`) ([#303](https://github.com/riffado/riffado/pull/303), based on [#273](https://github.com/riffado/riffado/pull/273) by [@x-kerry](https://github.com/x-kerry)).
+- Imported Plaud summaries render as Markdown, and transcripts are grouped by speaker ([#302](https://github.com/riffado/riffado/pull/302), based on [#265](https://github.com/riffado/riffado/pull/265) by [@4dmrkey](https://github.com/4dmrkey)).
+- `WHISPER_COMPRESS=off` skips the 25 MiB re-encode for self-hosted Whisper-compatible servers. Only safe when every transcription provider is self-hosted ([#324](https://github.com/riffado/riffado/pull/324) by [@ddunford](https://github.com/ddunford)).
+- Optional per-feature status checks at `GET /api/status/<part>` (sign-in, Plaud, sync, storage, emails, transcription, webhooks, auto-transcribe, payments) for an external status monitor such as Kener. Adds the `status_minute_buckets` and `status_job_runs` tables (migration `0039`) and the optional `STATUS_TOKEN`, passed through `docker-compose.yml`. Inert unless `STATUS_TOKEN` is set ([#343](https://github.com/riffado/riffado/pull/343)).
+- Settings shows when the Plaud connection ends, and the dashboard warns three days before ([#346](https://github.com/riffado/riffado/pull/346)).
+- Failed storage deletes (account deletion, export attempts, upload clean-up) are retried by the export worker from a new `storage_deletion_queue` table (migration `0041`) ([#347](https://github.com/riffado/riffado/pull/347)).
 
 ### Fixed
 - Changing the default summary prompt in Settings → Summary wiped any custom summary prompts on every save, since the request always sent `customPrompts: []` instead of the current list ([#199](https://github.com/riffado/riffado/issues/199)).
+- A failed save or delete of a custom summary prompt now rolls back, and the settings fetch no longer overwrites a prompt you just picked ([#272](https://github.com/riffado/riffado/pull/272)).
+- 0.6.x Docker images crashed on startup on some hosts (`EISDIR` in the instrumentation hook, from a Bun regression). The image now pins `oven/bun:1.4.0` ([#290](https://github.com/riffado/riffado/issues/290), [#284](https://github.com/riffado/riffado/pull/284)).
+- Long recordings no longer fail at the OpenAI SDK's 10-minute default. `WHISPER_REQUEST_TIMEOUT_MS` (default 60 min) also covers chat-style providers such as OpenRouter ([#219](https://github.com/riffado/riffado/issues/219)).
+- Long transcriptions were still cut off at Bun's 300-second fetch default. The request deadline now applies on Bun and Node for OpenAI-compatible, Gemini, ElevenLabs and Mynah calls ([#311](https://github.com/riffado/riffado/pull/311) by [@SergMedin](https://github.com/SergMedin), reported in [#325](https://github.com/riffado/riffado/pull/325) by [@ddunford](https://github.com/ddunford)).
+- Plaud recordings served as `.mp3` that are really Ogg/Opus are detected and transcoded, so OpenRouter and other providers accept them ([#160](https://github.com/riffado/riffado/issues/160)).
+- Self-host: storage now persists across container recreation, SMTP settings reach the container, and auto-transcribe retries instead of skipping a recording for good ([#241](https://github.com/riffado/riffado/issues/241)).
+- Auto-transcribe stops retrying a recording after a permanent provider failure (for example 413 or 422) and backs off on temporary ones, at most six attempts ([#305](https://github.com/riffado/riffado/issues/305), [#306](https://github.com/riffado/riffado/pull/306) by [@vicmike](https://github.com/vicmike)).
+- Two Retry clicks on the same recording now share one transcription instead of running twice ([#285](https://github.com/riffado/riffado/pull/285)).
+- Sync reaches older recordings, so their Plaud-native transcripts and summaries get imported ([#274](https://github.com/riffado/riffado/issues/274)).
+- Switching recordings while a summary is generating no longer shows it on the wrong recording ([#283](https://github.com/riffado/riffado/issues/283)).
+- OpenAI diarized transcription normalizes audio to mono 16 kHz, splits long recordings, and shows timestamps per speaker turn ([#291](https://github.com/riffado/riffado/issues/291), [#301](https://github.com/riffado/riffado/pull/301), based on [#292](https://github.com/riffado/riffado/pull/292) by [@surekap](https://github.com/surekap)).
+- The Docker healthcheck could never fail, so a dead container reported healthy, and the standalone server never listened on `127.0.0.1`. The image now binds `0.0.0.0` and the compose healthcheck probes loopback with a timeout ([#307](https://github.com/riffado/riffado/issues/307), [#329](https://github.com/riffado/riffado/pull/329) by [@Pierre-Saigot](https://github.com/Pierre-Saigot), [#309](https://github.com/riffado/riffado/pull/309) by [@rubicon](https://github.com/rubicon)).
+- `curl -fsSL https://riffado.com/install.sh | sh` could hang forever after the prompts ([#294](https://github.com/riffado/riffado/issues/294)).
+- The installer now publishes the port named in `APP_URL` (localhost or an IP with an explicit port) and health-checks `http://127.0.0.1:<port>`; previously any port other than 3000 failed the health check ([#295](https://github.com/riffado/riffado/issues/295)).
+- Version-pinned installs (`riffado.com/vX.Y.Z/install.sh`) installed the latest release instead of the pinned one ([#344](https://github.com/riffado/riffado/pull/344)).
+- Sync imported nothing for Plaud accounts migrated to Plaud 4.0: Plaud answers the legacy file endpoints with status `-1800907`, and sync reported success while importing nothing. Riffado now detects the migration and switches to Plaud's 4.0 file API, matching existing recordings so nothing is re-imported, downloading the transcoded audio when available, and keeping title sync working ([#327](https://github.com/riffado/riffado/issues/327), [#337](https://github.com/riffado/riffado/issues/337), [#328](https://github.com/riffado/riffado/pull/328) by [@Pierre-Saigot](https://github.com/Pierre-Saigot), with fixes from [@nadelacruz-00](https://github.com/nadelacruz-00)).
+- Plaud now issues 24-hour web sign-ins and 30-day email-code sign-ins with refresh tokens; Riffado assumed ~300-day tokens, so Riffado Connector connections died after a day. Riffado now stores Plaud's refresh token (encrypted) and renews the access token until the 30-day sign-in ends. Connections made with Riffado Connector 0.2.4 or newer last up to 30 days. Adds migration `0040` (`plaud_connections.refresh_token`, `access_expires_at`, `session_expires_at`) ([#346](https://github.com/riffado/riffado/pull/346)).
+- Export archives: only the newest complete archive is kept per user, archives are deleted with the account, and a failed export build is requeued instead of staying stuck in `processing` ([#347](https://github.com/riffado/riffado/pull/347)).
+- In-app playback no longer downloads the whole recording for every seek: S3 storage serves a 15-minute presigned URL, and other requests stream with proper `Range` support. If the browser can't reach the storage endpoint (for example MinIO on the Docker network), playback falls back to streaming through Riffado ([#347](https://github.com/riffado/riffado/pull/347)).
 
 ### Changed
 - Migration `0036_wide_raider` upgrades `stripe_webhook_events` to a durable Stripe event inbox. Inert on self-host unless hosted billing is configured.
 - Removes optional `RYBBIT_SITE_ID` / `RYBBIT_HOST` and the `/api/int/*` analytics proxy. Adds optional `.env.example` vars `OA_TRACKING_KEY` / `OA_HOST` for hosted-only cookieless Open Analytics. Inert unless `IS_HOSTED=true`.
+- `docker-compose.yml` changes: a `storage` named volume mounted at `/app/storage`, `SMTP_*` and `STATUS_TOKEN` passed through to the app, and the published port is now `${APP_PORT:-3000}:3000`. Existing installs without `APP_PORT` stay on 3000. Copy the new file over yours when upgrading.
+- Upgrading runs migrations `0037` to `0041`, all additive.
+- OpenAI-compatible and Gemini transcription no longer use the SDK's automatic retries, so a finished upload is never sent twice. HTTP 429, refused connections and unknown hosts are retried up to twice (honouring `Retry-After`, capped at 30s); dropped connections only within 5 seconds of starting. 5xx responses and timeouts are not retried.
+- `NON_INTERACTIVE` is now honoured by the installer: `1`/`true` takes every default, `0`/`false` requires a terminal.
+- Paste-token instructions point at the `pld_ut` cookie; tokens from the current Plaud web app last about a day ([#346](https://github.com/riffado/riffado/pull/346)).
 
 ### Security
 - Official `docker-compose.yml` publishes Postgres on `127.0.0.1:5432` only.
@@ -259,7 +299,9 @@
 - Environment variable validation
 - Path traversal protection
 
-[unreleased]: https://github.com/riffado/riffado/compare/v0.6.4...HEAD
+[unreleased]: https://github.com/riffado/riffado/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/riffado/riffado/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/riffado/riffado/compare/v0.6.4...v0.7.0
 [0.6.4]: https://github.com/riffado/riffado/compare/v0.6.3...v0.6.4
 [0.6.3]: https://github.com/riffado/riffado/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/riffado/riffado/compare/v0.6.1...v0.6.2

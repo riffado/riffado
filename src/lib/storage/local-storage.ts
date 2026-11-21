@@ -1,10 +1,18 @@
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import {
+    access,
+    mkdir,
+    readFile,
+    stat,
+    unlink,
+    writeFile,
+} from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
-import type { Readable } from "node:stream";
+import { type Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { env } from "../env";
-import type { StorageProvider } from "./types";
+import { StorageRootMissingError } from "./errors";
+import type { ByteRange, StorageProvider, UploadStreamOptions } from "./types";
 
 /**
  * Local filesystem storage provider
@@ -25,6 +33,20 @@ export class LocalStorage implements StorageProvider {
             await access(this.baseDir);
         } catch {
             await mkdir(this.baseDir, { recursive: true });
+        }
+    }
+
+    private async explainMissing(error: unknown): Promise<unknown> {
+        if ((error as { code?: unknown } | null)?.code !== "ENOENT") {
+            return error;
+        }
+        try {
+            await access(this.baseDir);
+            return error;
+        } catch (rootError) {
+            return new StorageRootMissingError(this.baseDir, {
+                cause: rootError,
+            });
         }
     }
 
@@ -79,6 +101,7 @@ export class LocalStorage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to upload file to local storage: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -90,25 +113,44 @@ export class LocalStorage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to download file from local storage: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: await this.explainMissing(error) },
             );
         }
     }
 
-    async downloadStream(key: string): Promise<Readable> {
+    async downloadStream(key: string, range?: ByteRange): Promise<Readable> {
         // Existence check up front so callers get a clean rejection
         // instead of a stream that errors after they've already started
         // piping it (e.g. mid-way through an archive entry).
         const filePath = this.getFilePath(key);
-        await access(filePath);
-        return createReadStream(filePath);
+        try {
+            await access(filePath);
+        } catch (error) {
+            throw await this.explainMissing(error);
+        }
+        return createReadStream(
+            filePath,
+            range ? { start: range.start, end: range.end } : undefined,
+        );
+    }
+
+    async getObjectSize(key: string): Promise<number> {
+        const filePath = this.getFilePath(key);
+        try {
+            return (await stat(filePath)).size;
+        } catch (error) {
+            throw await this.explainMissing(error);
+        }
     }
 
     async uploadStream(
         key: string,
         stream: Readable,
         contentType: string,
+        options: UploadStreamOptions = {},
     ): Promise<string> {
         void contentType;
+        const { onProgress } = options;
         try {
             await this.ensureBaseDir();
             const filePath = this.getFilePath(key);
@@ -118,20 +160,45 @@ export class LocalStorage implements StorageProvider {
             } catch {
                 await mkdir(fileDir, { recursive: true });
             }
-            await pipeline(stream, createWriteStream(filePath));
+            const sink = createWriteStream(filePath);
+            if (onProgress) {
+                await pipeline(
+                    stream,
+                    new Transform({
+                        transform(chunk, _encoding, callback) {
+                            callback(null, chunk);
+                            onProgress();
+                        },
+                    }),
+                    sink,
+                );
+            } else {
+                await pipeline(stream, sink);
+            }
             return key;
         } catch (error) {
             throw new Error(
                 `Failed to stream upload to local storage: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
 
     async exists(key: string): Promise<boolean> {
+        let filePath: string;
         try {
-            await access(this.getFilePath(key));
-            return true;
+            filePath = this.getFilePath(key);
         } catch {
+            return false;
+        }
+        try {
+            await access(filePath);
+            return true;
+        } catch (error) {
+            const code = (error as { code?: unknown } | null)?.code;
+            if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+            const explained = await this.explainMissing(error);
+            if (explained instanceof StorageRootMissingError) throw explained;
             return false;
         }
     }
@@ -148,6 +215,7 @@ export class LocalStorage implements StorageProvider {
         } catch (error) {
             throw new Error(
                 `Failed to delete file from local storage: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: await this.explainMissing(error) },
             );
         }
     }

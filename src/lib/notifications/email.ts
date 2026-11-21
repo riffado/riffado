@@ -1,8 +1,15 @@
 import nodemailer from "nodemailer";
 import React from "react";
 import { claimEmailSend, releaseEmailSend } from "@/db/queries/email-log";
+import {
+    clearBouncedEmail,
+    findBouncedEmails,
+    recordBounce,
+} from "@/db/queries/email-suppressions";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
+import { isPermanentSmtpRejection, judgeSmtpSend } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 import { AccountDeletedEmail } from "./email-templates/account-deleted";
 import { EmailChangeConfirmEmail } from "./email-templates/email-change-confirm";
 import { ExportReadyEmail } from "./email-templates/export-ready";
@@ -26,9 +33,26 @@ interface EmailOptions {
     subject: string;
     html: string;
     text?: string;
+    bypassSuppression?: boolean;
 }
 
+type EmailDeliveryResult =
+    | "sent"
+    | "transient_failure"
+    | "permanent_failure"
+    | "suppressed";
+
 let transporter: nodemailer.Transporter | null = null;
+
+function plainTextFallback(html: string): string {
+    let text = html;
+    let previous: string;
+    do {
+        previous = text;
+        text = text.replace(/<[^>]*>/g, "");
+    } while (text !== previous);
+    return text;
+}
 
 function getTransporter(): nodemailer.Transporter | null {
     // Return null if SMTP is not configured
@@ -52,11 +76,57 @@ function getTransporter(): nodemailer.Transporter | null {
     return transporter;
 }
 
-/**
- * Send an email notification using SMTP
- * @returns true if successful, false otherwise
- */
-export async function sendEmail(options: EmailOptions): Promise<boolean> {
+function maskEmail(address: string): string {
+    const at = address.lastIndexOf("@");
+    if (at < 1) return "***";
+    return `${address[0]}***${address.slice(at)}`;
+}
+
+function smtpResponseText(error: unknown): string {
+    if (error !== null && typeof error === "object") {
+        const { response, message } = error as {
+            response?: unknown;
+            message?: unknown;
+        };
+        if (typeof response === "string" && response.length > 0) {
+            return response;
+        }
+        if (typeof message === "string" && message.length > 0) return message;
+    }
+    return "SMTP permanent recipient rejection";
+}
+
+function isSenderOrRelayRejection(error: unknown): boolean {
+    const text = smtpResponseText(error)
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\S+@\S+/g, " ");
+    return /\b(sender|relay|relaying)\b/i.test(text);
+}
+
+function errorLabel(error: unknown): string {
+    if (error === null || typeof error !== "object") return "unknown";
+    const { cause, name } = error as { cause?: unknown; name?: unknown };
+    if (cause !== null && typeof cause === "object") {
+        const { code } = cause as { code?: unknown };
+        if (typeof code === "string") return code;
+    }
+    return typeof name === "string" ? name : "unknown";
+}
+
+async function clearBounceAfterSend(recipient: string): Promise<void> {
+    try {
+        await clearBouncedEmail(recipient);
+    } catch (error) {
+        console.error(
+            `Failed to clear bounce suppression: ${errorLabel(error)}`,
+        );
+    }
+}
+
+async function deliverEmail(
+    options: EmailOptions,
+): Promise<EmailDeliveryResult> {
+    const recipient = options.to.trim();
     try {
         const mailer = getTransporter();
 
@@ -64,26 +134,85 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
             console.warn(
                 "Email notification skipped: SMTP not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD environment variables.",
             );
-            return false;
+            return "transient_failure";
+        }
+
+        if (!options.bypassSuppression) {
+            let bounced: Set<string>;
+            try {
+                bounced = await findBouncedEmails([recipient]);
+            } catch (lookupError) {
+                console.error(
+                    `Email suppression lookup failed: ${errorLabel(lookupError)}`,
+                );
+                return "transient_failure";
+            }
+            if (bounced.has(recipient.toLowerCase())) {
+                console.warn(
+                    `Email skipped: recipient ${maskEmail(recipient)} is suppressed.`,
+                );
+                return "suppressed";
+            }
         }
 
         const fromEmail =
             env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
 
-        await mailer.sendMail({
-            from: fromEmail,
-            to: options.to,
-            replyTo: env.SMTP_REPLY_TO,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ""), // Strip HTML if no text provided
-        });
+        await trackCall(
+            "emails",
+            () =>
+                mailer.sendMail({
+                    from: fromEmail,
+                    to: options.to,
+                    replyTo: env.SMTP_REPLY_TO,
+                    subject: options.subject,
+                    html: options.html,
+                    text: options.text || plainTextFallback(options.html),
+                }),
+            judgeSmtpSend,
+        );
 
-        return true;
+        return "sent";
     } catch (error) {
         console.error("Failed to send email:", error);
-        return false;
+        if (
+            !isPermanentSmtpRejection(error) ||
+            isSenderOrRelayRejection(error)
+        ) {
+            return "transient_failure";
+        }
+        try {
+            await recordBounce(recipient, smtpResponseText(error));
+            console.warn(
+                `Email recipient ${maskEmail(recipient)} permanently rejected by the mail server; suppressed.`,
+            );
+        } catch (suppressError) {
+            console.error(
+                `Failed to suppress recipient: ${errorLabel(suppressError)}`,
+            );
+        }
+        return "permanent_failure";
     }
+}
+
+async function deliverAndClear(
+    options: EmailOptions,
+): Promise<EmailDeliveryResult> {
+    const result = await deliverEmail(options);
+    if (result === "sent" && options.bypassSuppression) {
+        await clearBounceAfterSend(options.to.trim());
+    }
+    return result;
+}
+
+/**
+ * Send an email notification using SMTP. Recipients the mail server has
+ * permanently rejected are suppressed and skipped on later sends, except
+ * when `bypassSuppression` is set.
+ * @returns true if sent, false otherwise
+ */
+export async function sendEmail(options: EmailOptions): Promise<boolean> {
+    return (await deliverAndClear(options)) === "sent";
 }
 
 /**
@@ -102,14 +231,19 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
     const fromEmail = env.SMTP_FROM || env.SMTP_USER || "noreply@riffado.com";
 
     try {
-        await mailer.sendMail({
-            from: fromEmail,
-            to: options.to,
-            replyTo: env.SMTP_REPLY_TO,
-            subject: options.subject,
-            html: options.html,
-            text: options.text || options.html.replace(/<[^>]*>/g, ""),
-        });
+        await trackCall(
+            "emails",
+            () =>
+                mailer.sendMail({
+                    from: fromEmail,
+                    to: options.to,
+                    replyTo: env.SMTP_REPLY_TO,
+                    subject: options.subject,
+                    html: options.html,
+                    text: options.text || plainTextFallback(options.html),
+                }),
+            judgeSmtpSend,
+        );
     } catch (error) {
         const err = error as Error & { code?: string; command?: string };
         let errorMessage = "Failed to send email";
@@ -129,15 +263,13 @@ export async function sendEmailWithError(options: EmailOptions): Promise<void> {
 
         throw new Error(errorMessage);
     }
+
+    await clearBounceAfterSend(options.to.trim());
 }
 
 /**
  * Claim a once-only `(userId, kind)` email slot, build + send it, and
- * release the claim if the send fails (transient SMTP error) or `build`
- * throws (e.g. a render exception). Without the release, a single
- * transient failure permanently drops that email -- the claim row
- * already exists, so every future retry sees `claimed: false` and
- * skips sending forever.
+ * release the claim if the send fails transiently or `build` throws.
  */
 async function sendClaimedEmail(
     claim: { userId: string; kind: string },
@@ -147,9 +279,9 @@ async function sendClaimedEmail(
     if (!claimed) return false;
     try {
         const options = await build();
-        const sent = await sendEmail(options);
-        if (!sent) await releaseEmailSend(claim);
-        return sent;
+        const result = await deliverAndClear(options);
+        if (result === "transient_failure") await releaseEmailSend(claim);
+        return result === "sent";
     } catch (error) {
         await releaseEmailSend(claim);
         throw error;
@@ -229,6 +361,7 @@ If you didn't request a password reset, you can safely ignore this email -- your
         subject,
         html,
         text,
+        bypassSuppression: true,
     });
 }
 
@@ -363,6 +496,7 @@ export async function sendVerifyEmail(input: {
         to: input.email,
         subject: "Confirm your Riffado email",
         html,
+        bypassSuppression: true,
     });
 }
 
@@ -394,6 +528,7 @@ export async function sendEmailChangeConfirm(input: {
         to: input.sendTo,
         subject: "Confirm your new Riffado email",
         html,
+        bypassSuppression: true,
     });
 }
 

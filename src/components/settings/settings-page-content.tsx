@@ -2,21 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { type Provider, SettingsDialog } from "@/components/settings-dialog";
-
-const EMPTY_PROVIDERS: Provider[] = [];
+import { SettingsDialog } from "@/components/settings-dialog";
+import type { Provider } from "@/components/settings-sections/providers-section";
 
 interface SettingsPageContentProps {
-    initialProviders?: Provider[];
+    initialProviders: Provider[];
     isHosted?: boolean;
 }
 
 export function SettingsPageContent({
-    initialProviders = EMPTY_PROVIDERS,
+    initialProviders,
     isHosted = false,
 }: SettingsPageContentProps) {
     const { push } = useRouter();
     const [open, setOpen] = useState(true);
+    const [providers, setProviders] = useState(initialProviders);
 
     const handleOpenChange = (newOpen: boolean) => {
         setOpen(newOpen);
@@ -30,7 +30,8 @@ export function SettingsPageContent({
         <SettingsDialog
             open={open}
             onOpenChange={handleOpenChange}
-            initialProviders={initialProviders}
+            providers={providers}
+            onProvidersChange={setProviders}
             isHosted={isHosted}
         />
     );

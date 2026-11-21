@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
@@ -9,11 +10,65 @@ import {
     buildDownloadFilename,
     contentDispositionAttachment,
     isAudioDownloadRequest,
+    isAudioStreamRequest,
 } from "@/lib/recordings/filename";
+import { isStorageObjectMissingError } from "@/lib/storage/errors";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import type { ByteRange } from "@/lib/storage/types";
 import { getAudioMimeType } from "@/lib/utils";
 
 type IdContext = { params: Promise<{ id: string }> };
+
+const PLAYBACK_URL_TTL_SECONDS = 15 * 60;
+
+const SINGLE_BYTE_RANGE = /^bytes=(\d*)-(\d*)$/;
+
+const MEDIA_ELEMENT_DESTINATIONS = new Set(["audio", "video"]);
+
+function isMediaElementRequest(request: Request): boolean {
+    const destination = request.headers.get("sec-fetch-dest");
+    return destination !== null && MEDIA_ELEMENT_DESTINATIONS.has(destination);
+}
+
+function parseRange(
+    header: string | null,
+    size: number,
+): ByteRange | "unsatisfiable" | null {
+    if (!header) return null;
+    const match = SINGLE_BYTE_RANGE.exec(header.trim());
+    if (!match) return null;
+    const [, startText, endText] = match;
+    if (startText === "") {
+        if (endText === "") return null;
+        const suffixLength = Number(endText);
+        if (suffixLength === 0 || size === 0) return "unsatisfiable";
+        return { start: Math.max(0, size - suffixLength), end: size - 1 };
+    }
+    const start = Number(startText);
+    if (endText !== "" && Number(endText) < start) return null;
+    if (start >= size) return "unsatisfiable";
+    const requestedEnd = endText === "" ? size - 1 : Number(endText);
+    return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+async function readAudio<T>(read: () => Promise<T>): Promise<T> {
+    try {
+        return await read();
+    } catch (error) {
+        if (isStorageObjectMissingError(error)) {
+            throw new AppError(
+                ErrorCode.RECORDING_NOT_FOUND,
+                "Recording audio not found",
+                404,
+            );
+        }
+        throw error;
+    }
+}
+
+function toBody(stream: Readable): ReadableStream {
+    return Readable.toWeb(stream) as ReadableStream;
+}
 
 export const GET = apiHandler<IdContext>(async (request, context) => {
     const session = await requireApiSession(request);
@@ -41,12 +96,29 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
     }
 
     const storage = await createUserStorageProvider(session.user.id);
-    const audioBuffer = await storage.downloadFile(recording.storagePath);
     const contentType = getAudioMimeType(recording.storagePath);
-    const fileSize = audioBuffer.length;
     const wantsDownload = isAudioDownloadRequest(request);
 
-    const downloadHeaders: Record<string, string> = wantsDownload
+    if (
+        !wantsDownload &&
+        !isAudioStreamRequest(request) &&
+        storage.getDirectDownloadUrl &&
+        isMediaElementRequest(request)
+    ) {
+        const url = await storage.getDirectDownloadUrl(recording.storagePath, {
+            expiresInSeconds: PLAYBACK_URL_TTL_SECONDS,
+            contentType,
+        });
+        const redirect = NextResponse.redirect(url, 302);
+        redirect.headers.set("Cache-Control", "private, no-store");
+        return redirect;
+    }
+
+    const fileSize = await readAudio(() =>
+        storage.getObjectSize(recording.storagePath),
+    );
+
+    const cacheHeaders: Record<string, string> = wantsDownload
         ? {
               "Content-Disposition": contentDispositionAttachment(
                   buildDownloadFilename(
@@ -57,60 +129,49 @@ export const GET = apiHandler<IdContext>(async (request, context) => {
               ),
               "Cache-Control": "private, no-store",
           }
-        : {
-              "Cache-Control": "public, max-age=31536000, immutable",
-          };
+        : { "Cache-Control": "private, max-age=300", Vary: "Sec-Fetch-Dest" };
 
     // Attachment downloads always return the full file so the saved
     // copy is complete. Range is still honored for in-app playback.
-    const rangeHeader = wantsDownload ? null : request.headers.get("range");
+    const range = wantsDownload
+        ? null
+        : parseRange(request.headers.get("range"), fileSize);
 
-    if (rangeHeader) {
-        const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-
-        if (rangeMatch) {
-            const start = Number.parseInt(rangeMatch[1], 10);
-            const end = rangeMatch[2]
-                ? Number.parseInt(rangeMatch[2], 10)
-                : fileSize - 1;
-
-            if (
-                start < 0 ||
-                start >= fileSize ||
-                end < 0 ||
-                end >= fileSize ||
-                start > end
-            ) {
-                return new NextResponse(null, {
-                    status: 416,
-                    headers: {
-                        "Content-Range": `bytes */${fileSize}`,
-                    },
-                });
-            }
-
-            const chunkSize = end - start + 1;
-            const chunk = audioBuffer.slice(start, end + 1);
-
-            return new NextResponse(new Uint8Array(chunk), {
-                status: 206,
-                headers: {
-                    "Content-Type": contentType,
-                    "Content-Length": chunkSize.toString(),
-                    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-                    "Accept-Ranges": "bytes",
-                    ...downloadHeaders,
-                },
-            });
-        }
+    if (range === "unsatisfiable") {
+        return new NextResponse(null, {
+            status: 416,
+            headers: {
+                "Content-Range": `bytes */${fileSize}`,
+                "Cache-Control": "private, no-store",
+            },
+        });
     }
 
-    return new NextResponse(new Uint8Array(audioBuffer), {
+    if (range) {
+        const stream = await readAudio(() =>
+            storage.downloadStream(recording.storagePath, range),
+        );
+        return new NextResponse(toBody(stream), {
+            status: 206,
+            headers: {
+                "Content-Type": contentType,
+                "Content-Length": (range.end - range.start + 1).toString(),
+                "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+                "Accept-Ranges": "bytes",
+                ...cacheHeaders,
+            },
+        });
+    }
+
+    const stream = await readAudio(() =>
+        storage.downloadStream(recording.storagePath),
+    );
+    return new NextResponse(toBody(stream), {
         headers: {
             "Content-Type": contentType,
             "Content-Length": fileSize.toString(),
             "Accept-Ranges": "bytes",
-            ...downloadHeaders,
+            ...cacheHeaders,
         },
     });
 });

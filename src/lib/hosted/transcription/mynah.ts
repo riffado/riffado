@@ -6,7 +6,10 @@ import {
     reserveMynah,
 } from "@/lib/hosted/billing/enforcement";
 import { captureServerException } from "@/lib/posthog-server";
+import { judgeMynahResponse } from "@/lib/status/outcomes";
+import { trackCall } from "@/lib/status/record";
 import { createUserStorageProvider } from "@/lib/storage/factory";
+import { fetchTranscription } from "@/lib/transcription/fetch";
 
 /** Thrown when the user's Mynah second budget is exhausted for the cycle. */
 export class MynahBudgetExhaustedError extends Error {
@@ -31,6 +34,14 @@ export interface MynahTranscribeInput {
     /** Recording duration in milliseconds; drives the reserved second count. */
     durationMs: number;
     language?: string;
+}
+
+/**
+ * Whole seconds a recording reserves against the Mynah counter: the
+ * duration rounded up, never less than one.
+ */
+export function mynahSecondsForDuration(durationMs: number): number {
+    return Math.max(1, Math.ceil(durationMs / 1000));
 }
 
 // Mirrors `PlaudClient`'s retry pattern (src/lib/plaud/client.ts) -- a
@@ -75,7 +86,9 @@ interface PostTranscriptionRequestInput {
  * POST the transcription request to Mynah, retrying transient gateway
  * failures (502/503/504/524) with exponential backoff before giving up.
  * Non-transient failures (4xx, or 5xx after retries are exhausted) throw
- * a status-only `Error` -- the upstream body can contain internal Mynah
+ * a status-only `Error` carrying `status`, so callers can tell a
+ * permanent rejection from a transient one -- the upstream body can
+ * contain internal Mynah
  * diagnostics, so the detail is logged server-side only, not propagated
  * to the client.
  *
@@ -95,20 +108,30 @@ async function postTranscriptionRequest(
     const idempotencyKey = randomUUID();
     let attempt = 0;
     for (;;) {
-        const res = await fetch(`${mynahBaseUrl}/v1/audio/transcriptions`, {
-            method: "POST",
-            headers: {
-                authorization: `Bearer ${mynahServiceToken}`,
-                "content-type": "application/json",
-                "x-riffado-user-id": userId,
-                "idempotency-key": idempotencyKey,
-            },
-            body: JSON.stringify({
-                url,
-                response_format: "verbose_json",
-                ...(language ? { language } : {}),
-            }),
-        });
+        const res = await trackCall(
+            "transcription",
+            () =>
+                fetchTranscription(
+                    `${mynahBaseUrl}/v1/audio/transcriptions`,
+                    {
+                        method: "POST",
+                        headers: {
+                            authorization: `Bearer ${mynahServiceToken}`,
+                            "content-type": "application/json",
+                            "x-riffado-user-id": userId,
+                            "idempotency-key": idempotencyKey,
+                        },
+                        body: JSON.stringify({
+                            url,
+                            response_format: "verbose_json",
+                            ...(language ? { language } : {}),
+                        }),
+                    },
+                    env.WHISPER_REQUEST_TIMEOUT_MS,
+                    { retry: false },
+                ),
+            judgeMynahResponse,
+        );
 
         if (res.ok) {
             return (await res.json()) as {
@@ -137,8 +160,9 @@ async function postTranscriptionRequest(
         console.error(
             `[mynah] transcription request failed (${res.status}) for user ${userId}: ${detail.slice(0, 2000)}`,
         );
-        const upstreamError = new Error(
-            `Mynah transcription failed (${res.status})`,
+        const upstreamError = Object.assign(
+            new Error(`Mynah transcription failed (${res.status})`),
+            { status: res.status },
         );
         captureServerException(upstreamError, {
             source: "mynah",
@@ -170,7 +194,7 @@ export async function transcribeViaMynah(
         throw new Error("Mynah transcription is not configured");
     }
 
-    const seconds = Math.max(1, Math.ceil(input.durationMs / 1000));
+    const seconds = mynahSecondsForDuration(input.durationMs);
     const reservation = await reserveMynah({ userId: input.userId, seconds });
     if (!reservation.reserved) {
         throw new MynahBudgetExhaustedError();

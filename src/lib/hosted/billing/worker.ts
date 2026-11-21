@@ -1,5 +1,7 @@
 import { env } from "@/lib/env";
 import { captureServerException } from "@/lib/posthog-server";
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
+import type { StatusJob } from "@/lib/status/types";
 import { closeDueCycles } from "./cycle-close";
 import { processDueAccountDeletions } from "./deletion";
 import { reconcileExpiredFoundingReservations } from "./founding-reservations";
@@ -21,10 +23,20 @@ let tickCount = 0;
  * (before that phase's internal per-item try/catch even starts) can't
  * block the other, unrelated phases in the same tick from running.
  */
-async function runPhase(name: string, phase: () => Promise<void>) {
+async function runPhase<T>(
+    name: string,
+    phase: () => Promise<T>,
+    job?: StatusJob,
+    failed: (result: T) => boolean = () => false,
+) {
     try {
-        await phase();
+        const result = await phase();
+        if (job) {
+            if (failed(result)) recordJobFailure(job);
+            else recordJobSuccess(job);
+        }
     } catch (error) {
+        if (job) recordJobFailure(job);
         console.error(`[billing-worker] phase "${name}" failed:`, error);
         captureServerException(error, {
             source: "worker:billing",
@@ -54,14 +66,20 @@ export async function tick(): Promise<void> {
             }
         });
 
-        await runPhase("trial-lapse", async () => {
-            const lapse = await processExpiredTrials();
-            if (lapse.lapsed > 0 || lapse.errors > 0) {
-                console.log(
-                    `[billing-worker] trial-lapse lapsed=${lapse.lapsed} errors=${lapse.errors}`,
-                );
-            }
-        });
+        await runPhase(
+            "trial-lapse",
+            async () => {
+                const lapse = await processExpiredTrials();
+                if (lapse.lapsed > 0 || lapse.errors > 0) {
+                    console.log(
+                        `[billing-worker] trial-lapse lapsed=${lapse.lapsed} errors=${lapse.errors}`,
+                    );
+                }
+                return lapse;
+            },
+            "billing-lapse",
+            (lapse) => lapse.errors > 0,
+        );
 
         await runPhase("deletion", async () => {
             const deletion = await processDueAccountDeletions();

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, eq, isNull, ne, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -14,6 +15,7 @@ import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
+import { mynahSecondsForDuration } from "@/lib/hosted/transcription/mynah";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -25,16 +27,28 @@ import {
     selectContentItems,
 } from "@/lib/plaud/content";
 import {
+    type MarkPlaudConnectionInvalidatedInput,
+    markPlaudConnectionInvalidated,
+} from "@/lib/plaud/persist-connection";
+import {
     captureServerEvent,
     captureServerException,
 } from "@/lib/posthog-server";
+import { deleteStorageObjectOrQueue } from "@/lib/storage/delete-object";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import {
     claimAutoTranscribeIds,
     listAutoTranscribeRetryIds,
     noteAutoTranscribeOutcome,
+    recordAutoTranscribeStatus,
     releaseAutoTranscribeIds,
 } from "@/lib/sync/auto-transcribe-state";
+import {
+    filterIdsWithinMynahBudget,
+    getRemainingMynahSeconds,
+    loadRecordingDurationsMs,
+    maxDurationMsForMynahSeconds,
+} from "@/lib/sync/mynah-budget";
 import {
     upsertEnhancement,
     upsertTranscription,
@@ -79,6 +93,8 @@ const inFlightSyncs = new Map<string, Promise<SyncResult>>();
 interface SyncContext {
     userId: string;
     autoTranscribe: boolean;
+    /** `userSettings.defaultTranscriptionProviderId`; drives the Mynah budget pre-check. */
+    defaultTranscriptionProviderId: string | null;
     /** Master opt-in: import Plaud's native transcript/summary on sync (#204). */
     importPlaudContent: boolean;
     /** 'plaud_only' (default) | 'keep_both' — see runSyncRecordingsForUser. */
@@ -98,23 +114,35 @@ interface ImportCandidate {
     isSummary: boolean;
 }
 
-async function storagePathHeldByOtherRecording(
+const PG_FOREIGN_KEY_VIOLATION = "23503";
+
+function isForeignKeyViolation(error: unknown): boolean {
+    const code = (error as { code?: unknown })?.code;
+    const causeCode = (error as { cause?: { code?: unknown } })?.cause?.code;
+    return (
+        code === PG_FOREIGN_KEY_VIOLATION ||
+        causeCode === PG_FOREIGN_KEY_VIOLATION
+    );
+}
+
+async function storagePathReferenced(
     userId: string,
     storagePath: string,
-    exceptRecordingId: string,
+    exceptRecordingId?: string,
 ): Promise<boolean> {
-    const [other] = await db
+    const conditions = [
+        eq(recordings.userId, userId),
+        eq(recordings.storagePath, storagePath),
+    ];
+    if (exceptRecordingId) {
+        conditions.push(ne(recordings.id, exceptRecordingId));
+    }
+    const [row] = await db
         .select({ id: recordings.id })
         .from(recordings)
-        .where(
-            and(
-                eq(recordings.userId, userId),
-                eq(recordings.storagePath, storagePath),
-                ne(recordings.id, exceptRecordingId),
-            ),
-        )
+        .where(and(...conditions))
         .limit(1);
-    return Boolean(other);
+    return Boolean(row);
 }
 
 async function allocateStorageKey(
@@ -151,16 +179,98 @@ async function resolveStorageKey(
     existingRecording: { id: string; storagePath: string | null } | undefined,
     fileExtension: string,
     plaudFileId: string,
-): Promise<string> {
-    if (existingRecording?.storagePath) {
-        const shared = await storagePathHeldByOtherRecording(
+    requireMatchingExtension: boolean,
+): Promise<{ key: string; replacedPath?: string }> {
+    const existingPath = existingRecording?.storagePath;
+    if (existingRecording && existingPath) {
+        if (
+            requireMatchingExtension &&
+            !existingPath.toLowerCase().endsWith(`.${fileExtension}`)
+        ) {
+            return {
+                key: await allocateStorageKey(
+                    userId,
+                    plaudFileId,
+                    fileExtension,
+                ),
+                replacedPath: existingPath,
+            };
+        }
+        const shared = await storagePathReferenced(
             userId,
-            existingRecording.storagePath,
+            existingPath,
             existingRecording.id,
         );
-        if (!shared) return existingRecording.storagePath;
+        if (!shared) return { key: existingPath };
     }
-    return allocateStorageKey(userId, plaudFileId, fileExtension);
+    return {
+        key: await allocateStorageKey(userId, plaudFileId, fileExtension),
+    };
+}
+
+async function deleteReplacedAudio(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+    storageType: string,
+): Promise<void> {
+    if (storageType !== env.DEFAULT_STORAGE_TYPE) return;
+    try {
+        if (await storagePathReferenced(userId, storagePath)) return;
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to delete replaced storage object ${storagePath}:`,
+            error,
+        );
+        captureServerException(
+            new Error("Failed to delete replaced recording audio"),
+            { source: "sync:delete-replaced-audio", storageType },
+        );
+    }
+}
+
+async function deleteUnreferencedUpload(
+    storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
+    userId: string,
+    storagePath: string,
+): Promise<void> {
+    try {
+        if (await storagePathReferenced(userId, storagePath)) return;
+        await storage.deleteFile(storagePath);
+    } catch (error) {
+        console.error(
+            `Failed to clean up storage object ${storagePath} after a concurrent replace:`,
+            error,
+        );
+    }
+}
+
+interface RecordingMetadata {
+    deviceSn: string;
+    timezone: number | null;
+    zonemins: number | null;
+    scene: number | null;
+}
+
+function recordingMetadata(
+    plaudRecording: PlaudRecording,
+    existing: RecordingMetadata | undefined,
+): RecordingMetadata {
+    const listed = {
+        deviceSn: plaudRecording.serial_number,
+        timezone: plaudRecording.timezone,
+        zonemins: plaudRecording.zonemins,
+        scene: plaudRecording.scene,
+    };
+    if (!existing || plaudRecording.source !== "v4") return listed;
+    const zoneKnown = plaudRecording.timezone_iana !== undefined;
+    return {
+        deviceSn: listed.deviceSn || existing.deviceSn,
+        timezone: zoneKnown ? listed.timezone : existing.timezone,
+        zonemins: zoneKnown ? listed.zonemins : existing.zonemins,
+        scene: existing.scene,
+    };
 }
 
 /**
@@ -271,14 +381,39 @@ async function hasUnseenPlaudContentGaps(
  * Mutable per-sync-run flag. Once a new recording is blocked by the
  * storage cap, every subsequent new recording in the same run is skipped
  * without re-querying the user's byte total (new recordings only grow
- * storage, so once over cap it stays over within the run).
+ * storage, so once over cap it stays over within the run). `pendingBytes`
+ * counts new recordings admitted by the cap but not yet persisted, so the
+ * concurrent recordings of a batch cannot all pass against the same total.
  */
 interface CapState {
     blocked: boolean;
+    pendingBytes: number;
+}
+
+async function reserveStorageBytes(
+    capState: CapState,
+    userId: string,
+    bytes: number,
+): Promise<boolean> {
+    capState.pendingBytes += bytes;
+    let allowed: boolean;
+    try {
+        ({ allowed } = await enforceStorageCap({
+            userId,
+            additionalBytes: capState.pendingBytes,
+        }));
+    } catch (error) {
+        capState.pendingBytes -= bytes;
+        throw error;
+    }
+    if (allowed) return true;
+    capState.pendingBytes -= bytes;
+    capState.blocked = true;
+    return false;
 }
 
 async function processRecording(
-    plaudRecording: PlaudRecording,
+    listedRecording: PlaudRecording,
     context: SyncContext,
     plaudClient: Awaited<ReturnType<typeof createPlaudClient>>,
     storage: Awaited<ReturnType<typeof createUserStorageProvider>>,
@@ -292,6 +427,8 @@ async function processRecording(
     importCandidate?: ImportCandidate;
     capExceeded?: boolean;
 }> {
+    let plaudRecording = listedRecording;
+    let reservedBytes = 0;
     try {
         const [existingRecording] = await db
             .select()
@@ -343,6 +480,8 @@ async function processRecording(
             return { status: "skipped" };
         }
 
+        plaudRecording = await plaudClient.hydrateRecording(plaudRecording);
+
         // Storage cap: gate NEW recordings before spending Plaud egress.
         // Updates replace an existing blob (roughly size-neutral) and are
         // left untouched so a near-cap user can still receive edits.
@@ -350,93 +489,145 @@ async function processRecording(
             if (capState.blocked) {
                 return { status: "skipped", capExceeded: true };
             }
-            const cap = await enforceStorageCap({
-                userId: context.userId,
-                additionalBytes: plaudRecording.filesize,
-            });
-            if (!cap.allowed) {
-                capState.blocked = true;
+            if (
+                !(await reserveStorageBytes(
+                    capState,
+                    context.userId,
+                    plaudRecording.filesize,
+                ))
+            ) {
                 return { status: "skipped", capExceeded: true };
             }
+            reservedBytes += plaudRecording.filesize;
         }
 
+        const isV4 = plaudRecording.source === "v4";
         const audioBuffer = await plaudClient.downloadRecording(
             plaudRecording.id,
             false,
         );
 
+        if (!existingRecording) {
+            let unreservedBytes: number | undefined;
+            if (!plaudRecording.filesize) {
+                unreservedBytes = audioBuffer.length;
+            } else if (isV4 && audioBuffer.length > reservedBytes) {
+                unreservedBytes = audioBuffer.length - reservedBytes;
+            }
+            if (unreservedBytes !== undefined) {
+                if (
+                    !(await reserveStorageBytes(
+                        capState,
+                        context.userId,
+                        unreservedBytes,
+                    ))
+                ) {
+                    return { status: "skipped", capExceeded: true };
+                }
+                reservedBytes += unreservedBytes;
+            }
+        }
+
         const sniffed = sniffAudio(audioBuffer);
         const fileExtension = sniffed.extension;
-        const storageKey = await resolveStorageKey(
+        const { key: storageKey, replacedPath } = await resolveStorageKey(
             context.userId,
             existingRecording,
             fileExtension,
             plaudRecording.id,
+            isV4,
         );
         const contentType = sniffed.contentType;
         await storage.uploadFile(storageKey, audioBuffer, contentType);
 
         const recordingData = {
             userId: context.userId,
-            deviceSn: plaudRecording.serial_number,
+            ...recordingMetadata(plaudRecording, existingRecording),
             plaudFileId: plaudRecording.id,
             filename: encryptText(plaudRecording.filename),
             duration: plaudRecording.duration,
             startTime: new Date(plaudRecording.start_time),
             endTime: new Date(plaudRecording.end_time),
-            filesize: plaudRecording.filesize,
-            fileMd5: plaudRecording.file_md5,
+            filesize: isV4
+                ? audioBuffer.length
+                : plaudRecording.filesize || audioBuffer.length,
+            fileMd5:
+                plaudRecording.file_md5 ||
+                createHash("md5").update(audioBuffer).digest("hex"),
             storageType: env.DEFAULT_STORAGE_TYPE,
             storagePath: storageKey,
             downloadedAt: new Date(),
             plaudVersion: versionKey,
-            timezone: plaudRecording.timezone,
-            zonemins: plaudRecording.zonemins,
-            scene: plaudRecording.scene,
             isTrash: plaudRecording.is_trash,
         };
 
         if (existingRecording) {
             // Re-check under FOR UPDATE: a concurrent DELETE may have
             // tombstoned the row during the download/upload above.
-            const updated = await db.transaction(async (tx) => {
-                const [locked] = await tx
-                    .select({ deletedAt: recordings.deletedAt })
-                    .from(recordings)
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    )
-                    .for("update")
-                    .limit(1);
+            const outcome = await db.transaction(
+                async (tx): Promise<"updated" | "deleted" | "moved"> => {
+                    const [locked] = await tx
+                        .select({
+                            deletedAt: recordings.deletedAt,
+                            storagePath: recordings.storagePath,
+                        })
+                        .from(recordings)
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                            ),
+                        )
+                        .for("update")
+                        .limit(1);
 
-                if (!locked || locked.deletedAt) return false;
+                    if (!locked || locked.deletedAt) return "deleted";
+                    if (locked.storagePath !== existingRecording.storagePath) {
+                        return "moved";
+                    }
 
-                await tx
-                    .update(recordings)
-                    .set({ ...recordingData, updatedAt: new Date() })
-                    .where(
-                        and(
-                            eq(recordings.id, existingRecording.id),
-                            eq(recordings.userId, context.userId),
-                        ),
-                    );
-                return true;
-            });
+                    await tx
+                        .update(recordings)
+                        .set({ ...recordingData, updatedAt: new Date() })
+                        .where(
+                            and(
+                                eq(recordings.id, existingRecording.id),
+                                eq(recordings.userId, context.userId),
+                                eq(
+                                    recordings.storagePath,
+                                    existingRecording.storagePath,
+                                ),
+                            ),
+                        );
+                    return "updated";
+                },
+            );
 
-            if (!updated) {
-                // Best-effort cleanup of the orphaned blob.
-                try {
-                    await storage.deleteFile(storageKey);
-                } catch (cleanupError) {
-                    console.error(
-                        `Failed to clean up orphaned storage object ${storageKey} after concurrent delete:`,
-                        cleanupError,
-                    );
-                }
+            if (outcome === "moved") {
+                await deleteUnreferencedUpload(
+                    storage,
+                    context.userId,
+                    storageKey,
+                );
                 return { status: "skipped" };
+            }
+
+            if (outcome === "deleted") {
+                await deleteStorageObjectOrQueue(
+                    storage,
+                    storageKey,
+                    "recording_cleanup",
+                );
+                return { status: "skipped" };
+            }
+
+            if (replacedPath) {
+                await deleteReplacedAudio(
+                    storage,
+                    context.userId,
+                    replacedPath,
+                    existingRecording.storageType,
+                );
             }
 
             await emitEvent(
@@ -455,10 +646,22 @@ async function processRecording(
             };
         }
 
-        const [newRecording] = await db
-            .insert(recordings)
-            .values(recordingData)
-            .returning({ id: recordings.id });
+        let newRecording: { id: string };
+        try {
+            [newRecording] = await db
+                .insert(recordings)
+                .values(recordingData)
+                .returning({ id: recordings.id });
+        } catch (insertError) {
+            if (isForeignKeyViolation(insertError)) {
+                await deleteStorageObjectOrQueue(
+                    storage,
+                    storageKey,
+                    "recording_cleanup",
+                );
+            }
+            throw insertError;
+        }
 
         seenRecordingIds.add(newRecording.id);
 
@@ -478,6 +681,8 @@ async function processRecording(
             status: "error",
             error: `Failed to sync ${plaudRecording.filename}: ${error}`,
         };
+    } finally {
+        capState.pendingBytes -= reservedBytes;
     }
 }
 
@@ -597,16 +802,16 @@ export async function syncRecordingsForUser(
         // 2 users are lawyers/journalists) that must never leave this
         // process into third-party telemetry. Only a count crosses that
         // boundary.
-        if (result.errors.length > 0 && !result.skipped) {
+        const errorCount =
+            result.errors.length - (result.needsReconnect ? 1 : 0);
+        if (errorCount > 0 && !result.skipped) {
             captureServerException(
-                new Error(
-                    `Sync completed with ${result.errors.length} error(s)`,
-                ),
+                new Error(`Sync completed with ${errorCount} error(s)`),
                 {
                     source: "sync",
                     distinctId: userId,
                     trigger,
-                    errorCount: result.errors.length,
+                    errorCount,
                 },
             );
         }
@@ -623,6 +828,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         errors: [],
         pendingTranscriptionIds: [],
     };
+    let invalidationTarget: MarkPlaudConnectionInvalidatedInput | null = null;
 
     try {
         const [connection] = await db
@@ -672,6 +878,8 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
+            defaultTranscriptionProviderId:
+                settings?.defaultTranscriptionProviderId ?? null,
             importPlaudContent: settings?.importPlaudContent ?? false,
             transcriptMode: settings?.transcriptMode ?? "plaud_only",
             emailNotifications: settings?.emailNotifications ?? false,
@@ -681,15 +889,21 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             barkPushUrl: settings?.barkPushUrl || null,
         };
 
-        const plaudClient = await createPlaudClient(
-            connection.bearerToken,
-            connection.apiBase,
-            connection.workspaceId,
-        );
+        const target: MarkPlaudConnectionInvalidatedInput = {
+            userId,
+            connectionId: connection.id,
+            bearerToken: connection.bearerToken,
+        };
+        invalidationTarget = target;
+        const plaudClient = await createPlaudClient(connection, {
+            onTokensStored: (bearerToken) => {
+                target.bearerToken = bearerToken;
+            },
+        });
         const storage = await createUserStorageProvider(userId);
         const allNewRecordingNames: string[] = [];
         const importCandidates: ImportCandidate[] = [];
-        const capState: CapState = { blocked: false };
+        const capState: CapState = { blocked: false, pendingBytes: 0 };
         const seenRecordingIds = new Set<string>();
 
         let page = 0;
@@ -866,10 +1080,18 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         // 'keep_both' runs anyway so both coexist. Recordings whose Plaud
         // transcript wasn't ready/failed fall back here naturally.
         if (context.autoTranscribe) {
+            const remainingMynahSeconds = await getRemainingMynahSeconds({
+                userId,
+                providerPointer: context.defaultTranscriptionProviderId,
+            });
+            const maxDurationMs = maxDurationMsForMynahSeconds(
+                remainingMynahSeconds,
+            );
             let retryIds: string[] = [];
             try {
                 retryIds = await listAutoTranscribeRetryIds(userId, {
                     transcriptMode: context.transcriptMode,
+                    ...(maxDurationMs !== undefined && { maxDurationMs }),
                 });
             } catch (error) {
                 console.error("Auto-transcribe retry lookup failed:", error);
@@ -883,7 +1105,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     : mergedIds.filter(
                           (id) => !plaudTranscriptImported.has(id),
                       );
-            const idsToTranscribe = claimAutoTranscribeIds(eligibleIds);
+            const affordableIds = await filterIdsWithinMynahBudget({
+                userId,
+                remainingSeconds: remainingMynahSeconds,
+                ids: eligibleIds,
+            });
+            const idsToTranscribe = claimAutoTranscribeIds(affordableIds);
 
             if (idsToTranscribe.length > 0) {
                 queueTranscriptions(userId, idsToTranscribe).catch((error) => {
@@ -898,26 +1125,36 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
             error instanceof Error ? error.message : String(error);
 
         // A 401 from Plaud means the stored token is no longer accepted
-        // (expired ~300-day UT, a mistakenly-pasted 24h workspace token that
-        // has now died, or a revoked token). Mark the connection so the
+        // (an expired user token with no working refresh token, a
+        // mistakenly-pasted 24h workspace token that has now died, or a
+        // revoked token). Mark the connection so the
         // dashboard can prompt a reconnect instead of silently failing every
         // sync. The row and synced recordings are preserved.
         if (
             error instanceof AppError &&
             error.code === ErrorCode.PLAUD_INVALID_TOKEN
         ) {
-            result.needsReconnect = true;
-            try {
-                await db
-                    .update(plaudConnections)
-                    .set({ invalidatedAt: new Date() })
-                    .where(eq(plaudConnections.userId, userId));
-            } catch (stampError) {
-                console.error(
-                    "Failed to mark Plaud connection as invalidated:",
-                    stampError,
-                );
+            let replaced = false;
+            if (invalidationTarget) {
+                try {
+                    replaced =
+                        !(await markPlaudConnectionInvalidated(
+                            invalidationTarget,
+                        ));
+                } catch (stampError) {
+                    console.error(
+                        "Failed to mark Plaud connection as invalidated:",
+                        stampError,
+                    );
+                }
             }
+            if (replaced) {
+                result.errors.push(
+                    "Your Plaud connection changed during this sync. Sync again to use it.",
+                );
+                return result;
+            }
+            result.needsReconnect = true;
             result.errors.push(
                 "Plaud rejected the stored token. Reconnect your Plaud account.",
             );
@@ -933,15 +1170,66 @@ async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
+    let durationsMs: Map<string, number> | undefined;
+    let exhaustedAtSeconds: number | undefined;
     try {
         for (const recordingId of recordingIds) {
+            if (exhaustedAtSeconds !== undefined) {
+                const durationMs = durationsMs?.get(recordingId);
+                if (
+                    durationMs === undefined ||
+                    mynahSecondsForDuration(durationMs) >= exhaustedAtSeconds
+                ) {
+                    continue;
+                }
+            }
             try {
                 const outcome = await transcribeRecording(userId, recordingId, {
                     trigger: "sync",
                 });
-                noteAutoTranscribeOutcome(userId, recordingId, outcome.success);
+                if (outcome.errorCode === "MYNAH_BUDGET_EXHAUSTED") {
+                    try {
+                        durationsMs ??= await loadRecordingDurationsMs(
+                            userId,
+                            recordingIds,
+                        );
+                    } catch (lookupError) {
+                        console.error(
+                            "Mynah budget duration lookup failed:",
+                            lookupError,
+                        );
+                        durationsMs = new Map();
+                    }
+                    const failedMs = durationsMs.get(recordingId);
+                    const failedSeconds =
+                        failedMs === undefined
+                            ? 0
+                            : mynahSecondsForDuration(failedMs);
+                    exhaustedAtSeconds = Math.min(
+                        exhaustedAtSeconds ?? failedSeconds,
+                        failedSeconds,
+                    );
+                }
+                const stopped = noteAutoTranscribeOutcome(
+                    userId,
+                    recordingId,
+                    outcome.success,
+                    outcome.failureKind,
+                );
+                recordAutoTranscribeStatus(outcome);
+                if (stopped) {
+                    console.warn(
+                        `Auto-transcribe stopped for recording ${recordingId} (${outcome.failureKind}, status ${outcome.providerStatus ?? "none"}): ${(outcome.error ?? "unknown error").slice(0, 200)}. Use Re-transcribe to retry.`,
+                    );
+                }
             } catch (error) {
-                noteAutoTranscribeOutcome(userId, recordingId, false);
+                noteAutoTranscribeOutcome(
+                    userId,
+                    recordingId,
+                    false,
+                    "transient",
+                );
+                recordAutoTranscribeStatus(null);
                 console.error(
                     `Auto-transcription failed for recording ${recordingId}:`,
                     error,

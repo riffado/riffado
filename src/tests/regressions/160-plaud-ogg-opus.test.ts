@@ -217,6 +217,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 getRecordings: vi.fn().mockResolvedValue({
                     data_file_list: [mockPlaudRecording],
                 }),
+                hydrateRecording: vi.fn(async (r: unknown) => r),
                 downloadRecording: vi.fn().mockResolvedValue(oggBuffer),
             });
         }
@@ -297,20 +298,21 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
             expect(storage.uploadFile).not.toHaveBeenCalled();
         });
 
-        function stubUpdateTransaction() {
+        function stubUpdateTransaction(lockedPath: string) {
             const setPayloads: Array<{ storagePath?: string }> = [];
             (db.transaction as Mock).mockImplementation(
-                async (cb: (tx: unknown) => Promise<boolean>) => {
+                async (cb: (tx: unknown) => Promise<unknown>) => {
                     const tx = {
                         select: vi.fn().mockReturnValue({
                             from: vi.fn().mockReturnValue({
                                 where: vi.fn().mockReturnValue({
                                     for: vi.fn().mockReturnValue({
-                                        limit: vi
-                                            .fn()
-                                            .mockResolvedValue([
-                                                { deletedAt: null },
-                                            ]),
+                                        limit: vi.fn().mockResolvedValue([
+                                            {
+                                                deletedAt: null,
+                                                storagePath: lockedPath,
+                                            },
+                                        ]),
                                     }),
                                 }),
                             }),
@@ -360,7 +362,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 ],
                 [],
             ]);
-            const { setPayloads } = stubUpdateTransaction();
+            const { setPayloads } = stubUpdateTransaction(oldPath);
 
             const result = await syncRecordingsForUser(mockUserId);
 
@@ -395,7 +397,7 @@ describe("issue #160 — Plaud .mp3 that is actually Ogg/Opus", () => {
                 [{ id: "other-rec" }],
                 [],
             ]);
-            const { setPayloads } = stubUpdateTransaction();
+            const { setPayloads } = stubUpdateTransaction(sharedPath);
 
             const result = await syncRecordingsForUser(mockUserId);
 

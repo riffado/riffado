@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { OpenAI } from "openai";
 import { db } from "@/db";
 import {
     aiEnhancements,
@@ -15,10 +14,7 @@ import { decrypt } from "@/lib/encryption";
 import { decryptText, encryptText } from "@/lib/encryption/fields";
 import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
-import {
-    isMynahConfigured,
-    transcribeViaMynah,
-} from "@/lib/hosted/transcription/mynah";
+import { transcribeViaMynah } from "@/lib/hosted/transcription/mynah";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import {
     captureServerEvent,
@@ -37,18 +33,23 @@ import {
 } from "@/lib/transcription/audio-file";
 import { chatTranscribe } from "@/lib/transcription/chat-transcribe";
 import { maybeCompressForWhisper } from "@/lib/transcription/compress-audio";
+import { selectTranscriptionProvider } from "@/lib/transcription/effective-provider";
 import {
     ELEVENLABS_MAX_FILE_BYTES,
     ElevenLabsFileTooLargeError,
     elevenLabsTranscribe,
 } from "@/lib/transcription/elevenlabs-transcribe";
 import {
+    classifyTranscribeError,
+    type TranscribeFailureKind,
+} from "@/lib/transcription/failure-kind";
+import {
     buildTranscriptionParams,
     getResponseFormat,
     parseTranscriptionResponse,
 } from "@/lib/transcription/format";
 import { geminiTranscribe } from "@/lib/transcription/gemini-transcribe";
-import { isRiffadoIncludedProviderId } from "@/lib/transcription/included-provider";
+import { createTranscriptionClient } from "@/lib/transcription/openai-client";
 import { transcribeOpenAIDiarized } from "@/lib/transcription/openai-diarized-transcribe";
 import { upsertTranscription } from "@/lib/transcription/persist";
 import { emitEvent } from "@/lib/webhooks/emit";
@@ -237,6 +238,19 @@ export interface TranscribeResult {
     success: boolean;
     error?: string;
     errorCode?: TranscribeErrorCode;
+    /**
+     * Present when the provider call itself failed. Unset for account-level
+     * failures (no provider, lockout, budget) that the user resolves.
+     */
+    failureKind?: TranscribeFailureKind;
+    /** Upstream HTTP status of a failed provider call, when known. */
+    providerStatus?: number;
+    /**
+     * Set with a failed provider call: true when the managed provider
+     * (Mynah) handled it, so a 401/403 is our service token being refused
+     * rather than the user's own key.
+     */
+    managedProvider?: boolean;
     /** Present on success. Plaintext transcript. */
     text?: string;
     /** Present on success when the provider returned a language. */
@@ -271,6 +285,7 @@ async function transcribeRecordingInner(
     recordingId: string,
     opts: TranscribeOptions = {},
 ): Promise<TranscribeResult> {
+    let usedManaged = false;
     try {
         // Hosted lockout: a lapsed account is read-only. No-op on
         // self-host (isHostedLockedOut always false there).
@@ -372,28 +387,35 @@ async function transcribeRecordingInner(
         const autoSummarize = settings?.autoSummarize ?? false;
         const autoSummarizePreset = settings?.autoSummarizePreset ?? null;
         const pointer = settings?.defaultTranscriptionProviderId ?? null;
-        const requested = opts.providerId || pointer || null;
-        const useManaged = isRiffadoIncludedProviderId(requested);
+        const selection = selectTranscriptionProvider({
+            explicitProviderId: opts.providerId,
+            pointer,
+            hasLegacyDefaultCredential: Boolean(legacyDefaultCredentials),
+        });
 
         void quality;
 
         let credentials: typeof apiCredentials.$inferSelect | undefined;
-        if (!useManaged && requested) {
-            [credentials] = await db
-                .select()
-                .from(apiCredentials)
-                .where(
-                    and(
-                        eq(apiCredentials.id, requested),
-                        eq(apiCredentials.userId, userId),
-                    ),
-                )
-                .limit(1);
-        } else if (!useManaged) {
-            credentials = legacyDefaultCredentials;
+        if (selection.kind === "credential") {
+            const credentialId = selection.credentialId;
+            if (credentialId) {
+                [credentials] = await db
+                    .select()
+                    .from(apiCredentials)
+                    .where(
+                        and(
+                            eq(apiCredentials.id, credentialId),
+                            eq(apiCredentials.userId, userId),
+                        ),
+                    )
+                    .limit(1);
+            } else {
+                credentials = legacyDefaultCredentials;
+            }
         }
 
         const runManagedTranscription = async () => {
+            usedManaged = true;
             const input = {
                 userId,
                 storagePath: recording.storagePath,
@@ -415,14 +437,7 @@ async function transcribeRecordingInner(
         let persistProvider: string;
         let persistModel: string;
 
-        if (useManaged) {
-            if (!isMynahConfigured()) {
-                return {
-                    success: false,
-                    error: "No transcription API configured",
-                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
-                };
-            }
+        if (selection.kind === "managed") {
             const result = await runManagedTranscription();
             transcriptionText = result.text;
             detectedLanguage = result.detectedLanguage;
@@ -512,14 +527,15 @@ async function transcribeRecordingInner(
                         audioBuffer,
                         contentType,
                         language: defaultLanguage,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
                     transcriptionText = result.text;
                     detectedLanguage = result.detectedLanguage;
                 } else {
-                    const openai = new OpenAI({
+                    const openai = createTranscriptionClient({
                         apiKey,
                         baseURL: credentials.baseUrl || undefined,
-                        timeout: env.WHISPER_REQUEST_TIMEOUT_MS,
+                        timeoutMs: env.WHISPER_REQUEST_TIMEOUT_MS,
                     });
 
                     if (transcriptionStyle === "chat") {
@@ -581,18 +597,11 @@ async function transcribeRecordingInner(
                 }
             }
         } else {
-            if (requested || !isMynahConfigured()) {
-                return {
-                    success: false,
-                    error: "No transcription API configured",
-                    errorCode: "NO_TRANSCRIPTION_PROVIDER",
-                };
-            }
-            const result = await runManagedTranscription();
-            transcriptionText = result.text;
-            detectedLanguage = result.detectedLanguage;
-            persistProvider = result.provider;
-            persistModel = result.model;
+            return {
+                success: false,
+                error: "No transcription API configured",
+                errorCode: "NO_TRANSCRIPTION_PROVIDER",
+            };
         }
 
         // Persist the user's own ('riffado') transcript via the shared,
@@ -668,11 +677,8 @@ async function transcribeRecordingInner(
                                 .limit(1);
 
                             if (connection) {
-                                const plaudClient = await createPlaudClient(
-                                    connection.bearerToken,
-                                    connection.apiBase,
-                                    connection.workspaceId,
-                                );
+                                const plaudClient =
+                                    await createPlaudClient(connection);
                                 await plaudClient.updateFilename(
                                     recording.plaudFileId,
                                     generatedTitle,
@@ -781,8 +787,10 @@ async function transcribeRecordingInner(
             detectedLanguage,
         };
     } catch (error) {
-        console.error("Error transcribing recording:", error);
         if (isMynahBudgetExhausted(error)) {
+            console.info(
+                `Mynah budget exhausted for recording ${recordingId} (trigger ${opts.trigger ?? "manual"})`,
+            );
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: "included_transcription_budget_exhausted",
             });
@@ -797,6 +805,8 @@ async function transcribeRecordingInner(
                 errorCode: "MYNAH_BUDGET_EXHAUSTED",
             };
         }
+        console.error("Error transcribing recording:", error);
+        const failure = classifyTranscribeError(error);
         if (error instanceof ElevenLabsFileTooLargeError) {
             await emitEvent("transcription.failed", userId, recordingId, {
                 error: error.message,
@@ -805,6 +815,7 @@ async function transcribeRecordingInner(
                 success: false,
                 error: error.message,
                 errorCode: "FILE_TOO_LARGE",
+                failureKind: failure.kind,
             };
         }
         captureServerException(error, {
@@ -820,6 +831,9 @@ async function transcribeRecordingInner(
             error:
                 error instanceof Error ? error.message : "Transcription failed",
             errorCode: "TRANSCRIPTION_FAILED",
+            failureKind: failure.kind,
+            providerStatus: failure.status,
+            managedProvider: usedManaged,
         };
     }
 }

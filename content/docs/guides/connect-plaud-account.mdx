@@ -18,8 +18,8 @@ in from Riffado directly:
 3. Paste it into Riffado.
 
 The code is forwarded to Plaud's servers and **never stored locally**.
-After login, the returned access token is encrypted with AES-256-GCM
-before it hits the database — see
+After login, the returned access and refresh tokens are encrypted with
+AES-256-GCM before they hit the database. See
 [Encryption at rest](../reference/encryption-at-rest) for what that
 covers.
 
@@ -47,40 +47,58 @@ Install the [Riffado Connector](https://github.com/riffado/connector/releases/la
 browser extension (AGPL-3.0) — grab the latest release from GitHub and
 load it as an unpacked extension. With the extension installed, the
 connect screen surfaces a **Sign in with Plaud** button. You sign in to
-`web.plaud.ai` the way you normally do; the extension forwards the
-resulting access token to your Riffado instance. No copy-pasting, no
-devtools.
+`web.plaud.ai` the way you normally do and the extension forwards the
+resulting sign-in to your Riffado instance. No copy-pasting, no devtools.
+
+Riffado Connector 0.2.4 or newer forwards the access token and the
+refresh token, which keeps you connected for up to 30 days. Older
+versions forward only the access token, so the connection lasts about a
+day. Google and Apple accounts can't use the email code, so for them the
+connector is the way to stay connected for 30 days.
 
 ### Manual fallback: paste the token
 
-If you can't or won't install the extension:
+If you can't or won't install the extension, you can paste the access
+token by hand. It lasts 24 hours, so syncing stops a day later until you
+reconnect. Prefer the connector or the email code.
 
 1. Open [web.plaud.ai](https://web.plaud.ai) in a tab and sign in with
    Google or Apple as usual.
-2. Open browser devtools (F12 / Cmd+Option+I) → **Network** tab. Refresh
-   the page.
-3. Click any request whose host starts with `api.plaud.ai`,
-   `api-euc1.plaud.ai`, or `api-apse1.plaud.ai`.
-4. Under **Headers → Request Headers**, find `Authorization`. Copy
-   everything after `Bearer ` — the long `eyJ…` JWT.
-5. In Riffado, switch to the **Paste token** tab, pick the region that
-   matches the host you copied the token from (EU if it was
-   `api-euc1.plaud.ai`, APAC for `api-apse1.plaud.ai`, otherwise
-   Global), and paste.
+2. Open browser devtools (F12 / Cmd+Option+I) → **Application** →
+   **Cookies** → `https://web.plaud.ai`.
+3. Copy the value of the `pld_ut` cookie (the long `eyJ…` JWT).
+4. Find your region: switch devtools to **Network**, refresh the page,
+   and look at which `api*.plaud.ai` host the requests go to.
+   `api-euc1.plaud.ai` is EU, `api-apse1.plaud.ai` is APAC, and
+   `api.plaud.ai` is Global.
+5. In Riffado, switch to the **Paste token** tab, pick that region, and
+   paste.
 
+Don't copy the `Authorization` header from a `/device/list` or
+`/file/simple/web` request. That's a workspace token Riffado can't use.
 The pasted token is encrypted at rest the same way as a code-flow token.
 
-## What about refresh tokens?
+## How long does a connection last?
 
-Plaud's API does not issue refresh tokens. The OTP login response
-contains only an access token, which is a long-lived JWT (roughly 300
-days observed). When it expires, the dashboard surfaces a reconnect
-banner and you repeat whichever flow above you used originally. There is
-no background refresh to fail silently.
+- **Email code:** 30 days. Only for Plaud accounts that sign in with
+  email and password; Google and Apple accounts can't use it.
+- **Sign in with Plaud (connector):** up to 30 days with Riffado
+  Connector 0.2.4 or newer, which forwards the refresh token. Riffado
+  renews the 24-hour access token in the background until then. Older
+  connector versions connect for about a day.
+- **Pasted token:** 24 hours.
+
+Plaud's refresh tokens never extend a sign-in past its original end. If
+you connected with the connector or a pasted token, signing out of
+`web.plaud.ai` in that browser ends Riffado's connection too.
+Settings → Plaud account shows when your connection ends, and the
+dashboard shows a reconnect banner three days before. Repeat whichever
+flow above you used originally. Tokens issued by Plaud before it added
+refresh tokens last about 300 days and keep working until they expire.
 
 ## Switching accounts
 
 You can disconnect or switch the connected Plaud account at any time
-from **Settings → Plaud account**. The encrypted bearer token is
+from **Settings → Plaud account**. The encrypted tokens are
 deleted; previously synced recordings stay where they are (you own that
 data on your own storage).

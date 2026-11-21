@@ -16,9 +16,19 @@ export function isValidVersionTag(value: string): boolean {
     return VERSION_RE.test(value);
 }
 
-export async function renderInstallScript(version: string): Promise<string> {
+/**
+ * Render the installer for a release tag. `pinned` marks the version-pinned
+ * route: the script then downloads that release's artifacts and pins
+ * `RIFFADO_VERSION`; otherwise it installs the latest release.
+ */
+export async function renderInstallScript(
+    version: string,
+    pinned: boolean,
+): Promise<string> {
     const script = await loadScript();
-    return script.replaceAll("{{VERSION}}", version);
+    return script
+        .replaceAll("{{VERSION}}", version)
+        .replaceAll("{{PINNED}}", pinned ? "1" : "0");
 }
 
 export async function fetchLatestReleaseTag(): Promise<string | null> {

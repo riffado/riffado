@@ -3,7 +3,7 @@
  *   "[Bug]: Plaud no longer has long-lived bearer tokens available"
  *
  * Root cause (verified from a HAR of an Apple-SSO web.plaud.ai session):
- * Plaud issues two JWTs. The long-lived user token (UT, ~300 days) still
+ * Plaud issues two JWTs. The user token (UT) still
  * exists and rides on identity endpoints (/user/me, /team-app/workspaces/list).
  * A short-lived workspace token (WT, ~24h, carries `ut_ref`/`wid`/`wtype`
  * claims) rides on the data endpoints users inspect (/device/list,
@@ -194,7 +194,7 @@ describe("POST /api/plaud/auth/connect-token (workspace-token guard)", () => {
         const body = await res.json();
         expect(body.code).toBe(ErrorCode.PLAUD_WORKSPACE_TOKEN_PASTED);
         expect(body.error).toMatch(/workspace token/i);
-        expect(body.error).toMatch(/pld_tokenstr/);
+        expect(body.error).toMatch(/pld_ut/);
         // No Plaud round-trip — the guard short-circuits.
         expect(mockFetch).not.toHaveBeenCalled();
     });

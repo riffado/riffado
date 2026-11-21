@@ -1,7 +1,7 @@
 import { Readable } from "node:stream";
 import unzipper from "unzipper";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { StorageProvider } from "@/lib/storage/types";
+import type { StorageProvider, UploadStreamOptions } from "@/lib/storage/types";
 
 const { dbMock } = vi.hoisted(() => ({ dbMock: { select: vi.fn() } }));
 
@@ -36,6 +36,10 @@ class FakeStorage implements StorageProvider {
     files = new Map<string, Buffer>();
     /** Paths that `exists()` reports present but `downloadStream()` returns a `StuckReadable` for. */
     stuckPaths = new Set<string>();
+    /** Paths whose `exists()` rejects, as when the storage itself is unreachable. */
+    unreachablePaths = new Set<string>();
+    /** Paths whose stream emits some bytes and then errors. */
+    interruptedPaths = new Set<string>();
 
     async uploadFile(key: string, buffer: Buffer): Promise<string> {
         this.files.set(key, buffer);
@@ -48,15 +52,19 @@ class FakeStorage implements StorageProvider {
     }
     async downloadStream(key: string): Promise<Readable> {
         if (this.stuckPaths.has(key)) return new StuckReadable();
+        if (this.interruptedPaths.has(key)) return interruptedReadable();
         const buf = this.files.get(key);
         if (!buf) throw new Error(`not found: ${key}`);
         return Readable.from(buf);
     }
+    uploadOptions: UploadStreamOptions | undefined;
     async uploadStream(
         key: string,
         stream: Readable,
         _contentType: string,
+        options?: UploadStreamOptions,
     ): Promise<string> {
+        this.uploadOptions = options;
         const chunks: Buffer[] = [];
         for await (const chunk of stream) {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -65,7 +73,19 @@ class FakeStorage implements StorageProvider {
         return key;
     }
     async exists(key: string): Promise<boolean> {
-        return this.files.has(key) || this.stuckPaths.has(key);
+        if (this.unreachablePaths.has(key)) {
+            throw new Error("connect ECONNREFUSED");
+        }
+        return (
+            this.files.has(key) ||
+            this.stuckPaths.has(key) ||
+            this.interruptedPaths.has(key)
+        );
+    }
+    async getObjectSize(key: string): Promise<number> {
+        const buf = this.files.get(key);
+        if (!buf) throw new Error(`not found: ${key}`);
+        return buf.length;
     }
     async getSignedUrl(): Promise<string> {
         return "https://example.com/signed";
@@ -97,6 +117,20 @@ class StuckReadable extends Readable {
     ): void {
         // Deliberately never calls `_callback`.
     }
+}
+
+function interruptedReadable(): Readable {
+    let sent = false;
+    return new Readable({
+        read() {
+            if (sent) {
+                this.destroy(new Error("socket hang up"));
+                return;
+            }
+            sent = true;
+            this.push(Buffer.from("partial"));
+        },
+    });
 }
 
 interface ZipEntry {
@@ -168,6 +202,7 @@ describe("buildAndUploadExportArchive", () => {
         });
 
         expect(result.recordingCount).toBe(1);
+        expect(result.audioOmittedCount).toBe(0);
         expect(result.fileSize).toBeGreaterThan(0);
         expect(storage.uploaded).not.toBeNull();
 
@@ -251,10 +286,108 @@ describe("buildAndUploadExportArchive", () => {
         );
         expect(manifest.recordings[0].audio.included).toBe(false);
         expect(manifest.recordings[0].audio.reason).toBeTruthy();
+        expect(result.audioOmittedCount).toBe(1);
+        expect(manifest.audioOmittedCount).toBe(1);
         // No audio entry should have been written for this recording.
         expect([...entries.keys()].some((n) => n.includes("audio"))).toBe(
             false,
         );
+    });
+
+    it("counts audio it could not check or that was cut short as omitted, in the result and the manifest", async () => {
+        storage.files.set("audio/ok.mp3", Buffer.from("complete"));
+        storage.unreachablePaths.add("audio/unreachable.mp3");
+        storage.interruptedPaths.add("audio/interrupted.mp3");
+        const recording = (id: string, storagePath: string) => ({
+            id,
+            userId: "user-1",
+            filename: "enc-filename",
+            startTime: new Date("2026-01-01T00:00:00Z"),
+            endTime: new Date("2026-01-01T00:01:00Z"),
+            duration: 1000,
+            filesize: 10,
+            deviceSn: "SN1",
+            storagePath,
+        });
+        mockSelectSequence([
+            [
+                recording("rec-ok", "audio/ok.mp3"),
+                recording("rec-unreachable", "audio/unreachable.mp3"),
+                recording("rec-interrupted", "audio/interrupted.mp3"),
+            ],
+            [],
+            [],
+        ]);
+
+        const result = await buildAndUploadExportArchive({
+            userId: "user-1",
+            storage,
+            storageKey: "exports/user-1/job-6.zip",
+        });
+
+        expect(result.audioOmittedCount).toBe(2);
+        const entries = await readZipEntries(storage.uploaded as Buffer);
+        const manifest = JSON.parse(
+            entries.get("manifest.json")?.buffer.toString("utf-8") ?? "{}",
+        );
+        expect(manifest.audioOmittedCount).toBe(2);
+        const audioById = Object.fromEntries(
+            manifest.recordings.map(
+                (entry: {
+                    id: string;
+                    audio: {
+                        included: boolean;
+                        path: string | null;
+                        reason?: string;
+                    };
+                }) => [entry.id, entry.audio],
+            ),
+        );
+        expect(audioById["rec-ok"].included).toBe(true);
+        expect(audioById["rec-unreachable"]).toMatchObject({
+            included: false,
+            reason: expect.stringContaining("Audio storage unavailable"),
+        });
+        expect(audioById["rec-interrupted"]).toMatchObject({
+            included: false,
+            path: null,
+            reason: expect.stringContaining("interrupted"),
+        });
+        // A streamed zip cannot drop an entry it has started writing, so
+        // the cut-short audio stays in the archive with only the bytes
+        // read before the error; the manifest (path null) is what marks
+        // it as not included. Unreachable audio never gets an entry.
+        const audioEntries = [...entries.keys()].filter((name) =>
+            name.includes("/audio."),
+        );
+        expect(audioEntries.sort()).toEqual(
+            [
+                "2026-01-01T00-00-00-000Z_rec-interrupted/audio.mp3",
+                "2026-01-01T00-00-00-000Z_rec-ok/audio.mp3",
+            ].sort(),
+        );
+        expect(
+            entries
+                .get("2026-01-01T00-00-00-000Z_rec-interrupted/audio.mp3")
+                ?.buffer.toString(),
+        ).toBe("partial");
+        expect(audioById["rec-ok"].path).toBe(
+            "2026-01-01T00-00-00-000Z_rec-ok/audio.mp3",
+        );
+    });
+
+    it("hands its progress callback to the upload so in-flight upload parts count as progress", async () => {
+        mockSelectSequence([[], [], []]);
+        const onProgress = vi.fn();
+
+        await buildAndUploadExportArchive({
+            userId: "user-1",
+            storage,
+            storageKey: "exports/user-1/job-7.zip",
+            onProgress,
+        });
+
+        expect(storage.uploadOptions?.onProgress).toBe(onProgress);
     });
 
     it("aborts and rejects immediately when the signal is already aborted", async () => {

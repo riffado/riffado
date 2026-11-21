@@ -28,6 +28,8 @@ interface UserMenuProps {
     initialTheme: "light" | "dark" | "system";
     userEmail: string | null;
     onOpenSettings: () => void;
+    /** Called on hover or focus of the Settings item so its data can load before the click. */
+    onSettingsIntent: () => void;
     onOpenShortcuts: () => void;
 }
 
@@ -51,6 +53,7 @@ export function UserMenu({
     initialTheme,
     userEmail,
     onOpenSettings,
+    onSettingsIntent,
     onOpenShortcuts,
 }: UserMenuProps) {
     const { push, refresh } = useRouter();
@@ -93,7 +96,11 @@ export function UserMenu({
                 </div>
 
                 <div className="p-1">
-                    <DropdownMenuItem onSelect={onOpenSettings}>
+                    <DropdownMenuItem
+                        onSelect={onOpenSettings}
+                        onPointerEnter={onSettingsIntent}
+                        onFocus={onSettingsIntent}
+                    >
                         <Settings />
                         <span className="flex-1">Settings</span>
                         <Kbd>,</Kbd>

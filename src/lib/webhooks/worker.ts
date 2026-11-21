@@ -11,6 +11,7 @@ import {
 } from "@/db/queries/webhook-deliveries";
 import { webhookDeliveries, webhookEndpoints } from "@/db/schema";
 import { captureServerException } from "@/lib/posthog-server";
+import { recordJobFailure, recordJobSuccess } from "@/lib/status/record";
 import {
     createOutboundWebhookPayload,
     createStoredWebhookPayload,
@@ -362,7 +363,9 @@ export async function deliverDueWebhooks(): Promise<void> {
                 result,
             );
         }
+        recordJobSuccess("webhooks");
     } catch (error) {
+        recordJobFailure("webhooks");
         console.error("Webhook delivery worker failed:", error);
         captureServerException(error, { source: "worker:webhooks" });
     } finally {

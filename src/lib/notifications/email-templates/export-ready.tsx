@@ -24,7 +24,8 @@ export function ExportReadyEmail({ downloadUrl }: Props) {
                 </Button>
             </Section>
             <Text style={emailStyles.text}>
-                The download link stays active for 7 days.
+                The download link stays active for 7 days, or until you create a
+                newer backup that includes all your audio.
             </Text>
         </EmailLayout>
     );

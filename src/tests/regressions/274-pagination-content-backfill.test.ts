@@ -303,6 +303,7 @@ function mockPlaudPages(
         getRecordings,
         getFileDetail,
         fetchContentLink,
+        hydrateRecording: vi.fn(async (r: unknown) => r),
         downloadRecording: vi.fn(),
     });
     return { getRecordings, getFileDetail };

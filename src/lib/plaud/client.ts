@@ -4,13 +4,33 @@ import type {
     PlaudApiError,
     PlaudDeviceListResponse,
     PlaudFileDetailResponse,
+    PlaudRecording,
     PlaudRecordingsResponse,
     PlaudTempUrlResponse,
+    PlaudV4ContentUrlResponse,
+    PlaudV4FileDetailResponse,
+    PlaudV4FolderChildrenResponse,
+    PlaudV4Node,
+    PlaudV4RecordingsResponse,
+    PlaudV4RenameResponse,
 } from "@/types/plaud";
 import { plaudFetch } from "./fetch";
 import { safeParseJson } from "./parse";
 import { DEFAULT_SERVER_KEY, PLAUD_SERVERS, PLAUD_USER_AGENT } from "./servers";
+import {
+    applyPlaudV4Detail,
+    isPlaudV4MigratedResponse,
+    mapPlaudV4Item,
+    PLAUD_V4_VERSION_CONFLICT_STATUS,
+    plaudV4AudioCandidates,
+    plaudV4DetailToLegacy,
+    recordingIdToPlaudV4FileId,
+    sortPlaudRecordings,
+} from "./v4";
 import { resolveWorkspaceToken } from "./workspace";
+
+const V4_PAGE_SIZE = 50;
+const V4_MAX_PAGES = 400;
 
 export interface PlaudUpdateFilenameResponse {
     status: number;
@@ -20,6 +40,7 @@ export interface PlaudUpdateFilenameResponse {
 
 export const DEFAULT_PLAUD_API_BASE = PLAUD_SERVERS[DEFAULT_SERVER_KEY].apiBase;
 const MAX_RETRIES = 3;
+const MAX_AUTH_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
 
 function sleep(ms: number): Promise<void> {
@@ -48,22 +69,75 @@ function plaudHttpError(status: number, msg: string): AppError {
     });
 }
 
+/**
+ * True when `err` means Plaud rejected the token outright
+ * (`PLAUD_INVALID_TOKEN`), as opposed to a rate limit, upstream or network
+ * failure that may succeed on a later attempt.
+ */
+export function isPlaudTokenRejection(err: unknown): boolean {
+    return (
+        err instanceof AppError && err.code === ErrorCode.PLAUD_INVALID_TOKEN
+    );
+}
+
+const loggedWorkspaceFallbacks = new Set<string>();
+
+export interface PlaudClientOptions {
+    /**
+     * Returns a fresh user token when Plaud answers 401 to the user token, or
+     * to a workspace token that was already re-minted once. Also called once
+     * per client when Plaud rejects a user token that was not just refreshed
+     * on the workspace-token mint; any failure there falls back to the user
+     * token, and a transient failure is rethrown by the next 401 instead of
+     * refreshing again. At most one call is in flight per client; once it
+     * settles, a later 401 on the new token may refresh again. A
+     * `PLAUD_INVALID_TOKEN` rejection leaves the original 401 in place and is
+     * not retried; any other rejection on a data request is rethrown to the
+     * caller and a later 401 may try again.
+     */
+    refreshUserToken?: () => Promise<string>;
+    /**
+     * Stored connection id. Limits the user-token fallback warning to once
+     * per connection and error code per process until a workspace token is
+     * minted again.
+     */
+    connectionId?: string;
+    /** True when `userToken` was just refreshed, so a mint 401 does not refresh it again. */
+    userTokenFresh?: boolean;
+}
+
 export class PlaudClient {
-    private readonly userToken: string;
+    private userToken: string;
     private readonly apiBase: string;
+    private readonly refreshUserToken?: () => Promise<string>;
+    private readonly connectionId?: string;
+    private userTokenRefresh?: Promise<void>;
     private workspaceToken?: string;
     private resolvedWorkspaceId?: string;
     private workspaceFetchInFlight?: Promise<void>;
     private workspaceFallbackToUt = false;
+    private workspaceRemintUsed = false;
+    private mintRefreshUsed = false;
+    private mintRefreshError?: unknown;
+    private v4Mode = false;
+    private v4ListCache?: PlaudRecording[];
+    private readonly v4DetailCache = new Map<
+        string,
+        NonNullable<PlaudV4FileDetailResponse["data"]>
+    >();
 
     constructor(
         userToken: string,
         apiBase: string = DEFAULT_PLAUD_API_BASE,
         workspaceId?: string | null,
+        options: PlaudClientOptions = {},
     ) {
         this.userToken = userToken;
         this.apiBase = apiBase;
         this.resolvedWorkspaceId = workspaceId ?? undefined;
+        this.refreshUserToken = options.refreshUserToken;
+        this.connectionId = options.connectionId;
+        this.mintRefreshUsed = options.userTokenFresh ?? false;
     }
 
     get workspaceId(): string | undefined {
@@ -72,6 +146,11 @@ export class PlaudClient {
 
     get usingUserTokenFallback(): boolean {
         return this.workspaceFallbackToUt;
+    }
+
+    /** True once Plaud reported the account as migrated to 4.0. */
+    get usingPlaudV4(): boolean {
+        return this.v4Mode;
     }
 
     private async ensureWorkspaceToken(): Promise<void> {
@@ -87,27 +166,135 @@ export class PlaudClient {
     }
 
     private async fetchWorkspaceToken(): Promise<void> {
+        let mintError: unknown;
         try {
-            const { workspaceToken, workspaceId } = await resolveWorkspaceToken(
-                this.userToken,
-                this.apiBase,
-                this.resolvedWorkspaceId,
-            );
-            this.workspaceToken = workspaceToken;
-            this.resolvedWorkspaceId = workspaceId;
+            await this.mintWorkspaceToken();
+            return;
         } catch (err) {
+            mintError = err;
+        }
+        if (
+            isPlaudTokenRejection(mintError) &&
+            (await this.refreshBeforeFallback())
+        ) {
+            try {
+                await this.mintWorkspaceToken();
+                return;
+            } catch (err) {
+                mintError = err;
+            }
+        }
+        this.fallBackToUserToken(mintError);
+    }
+
+    private async mintWorkspaceToken(): Promise<void> {
+        const { workspaceToken, workspaceId } = await resolveWorkspaceToken(
+            this.userToken,
+            this.apiBase,
+            this.resolvedWorkspaceId,
+        );
+        this.workspaceToken = workspaceToken;
+        this.resolvedWorkspaceId = workspaceId;
+        if (this.connectionId) {
+            const prefix = `${this.connectionId}:`;
+            for (const key of loggedWorkspaceFallbacks) {
+                if (key.startsWith(prefix)) {
+                    loggedWorkspaceFallbacks.delete(key);
+                }
+            }
+        }
+    }
+
+    private async refreshBeforeFallback(): Promise<boolean> {
+        if (!this.refreshUserToken || this.mintRefreshUsed) return false;
+        this.mintRefreshUsed = true;
+        try {
+            return await this.refreshAfterUnauthorized(this.userToken);
+        } catch (err) {
+            this.mintRefreshError = err;
+            return false;
+        }
+    }
+
+    private fallBackToUserToken(err: unknown): void {
+        this.workspaceFallbackToUt = true;
+        if (this.connectionId) {
+            const code = err instanceof AppError ? err.code : "unknown";
+            const key = `${this.connectionId}:${code}`;
+            if (loggedWorkspaceFallbacks.has(key)) return;
+            loggedWorkspaceFallbacks.add(key);
+        }
+        console.warn(
+            "[plaud] workspace token mint failed, falling back to user token:",
+            err instanceof Error ? err.message : err,
+        );
+    }
+
+    private async recoverFromUnauthorized(
+        usedBearer: string,
+    ): Promise<boolean> {
+        if (usedBearer !== (this.workspaceToken ?? this.userToken)) {
+            return true;
+        }
+        if (usedBearer === this.workspaceToken && !this.workspaceRemintUsed) {
+            this.workspaceRemintUsed = true;
+            this.workspaceToken = undefined;
+            return true;
+        }
+        return this.refreshAfterUnauthorized(usedBearer);
+    }
+
+    private async refreshAfterUnauthorized(
+        usedBearer: string,
+    ): Promise<boolean> {
+        if (!this.refreshUserToken) return false;
+        if (this.mintRefreshError !== undefined) {
+            const err = this.mintRefreshError;
+            this.mintRefreshError = undefined;
+            throw err;
+        }
+        if (!this.userTokenRefresh) {
+            const attempt = this.refreshUserToken().then((token) => {
+                this.userToken = token;
+                this.workspaceToken = undefined;
+                this.workspaceFallbackToUt = false;
+                this.mintRefreshUsed = true;
+            });
+            this.userTokenRefresh = attempt;
+            attempt.then(
+                () => {
+                    if (this.userTokenRefresh === attempt) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+                (err: unknown) => {
+                    if (
+                        !isPlaudTokenRejection(err) &&
+                        this.userTokenRefresh === attempt
+                    ) {
+                        this.userTokenRefresh = undefined;
+                    }
+                },
+            );
+        }
+        try {
+            await this.userTokenRefresh;
+        } catch (err) {
+            if (!isPlaudTokenRejection(err)) throw err;
             console.warn(
-                "[plaud] workspace token mint failed, falling back to user token:",
+                "[plaud] user token refresh after 401 was rejected:",
                 err instanceof Error ? err.message : err,
             );
-            this.workspaceFallbackToUt = true;
+            return false;
         }
+        return (this.workspaceToken ?? this.userToken) !== usedBearer;
     }
 
     private async request<T>(
         endpoint: string,
         options?: RequestInit,
         retryCount = 0,
+        authRetries = 0,
     ): Promise<T> {
         await this.ensureWorkspaceToken();
 
@@ -132,7 +319,12 @@ export class PlaudClient {
                         ? Number.parseInt(retryAfter, 10) * 1000
                         : INITIAL_RETRY_DELAY * 2 ** retryCount;
                     await sleep(delay);
-                    return this.request<T>(endpoint, options, retryCount + 1);
+                    return this.request<T>(
+                        endpoint,
+                        options,
+                        retryCount + 1,
+                        authRetries,
+                    );
                 }
                 const retryAfter = response.headers.get("Retry-After");
                 throw new AppError(
@@ -142,6 +334,20 @@ export class PlaudClient {
                     retryAfter
                         ? { retryAfter: Number.parseInt(retryAfter, 10) }
                         : undefined,
+                );
+            }
+
+            if (
+                response.status === 401 &&
+                authRetries < MAX_AUTH_RETRIES &&
+                (await this.recoverFromUnauthorized(bearer))
+            ) {
+                await response.body?.cancel().catch(() => undefined);
+                return this.request<T>(
+                    endpoint,
+                    options,
+                    retryCount,
+                    authRetries + 1,
                 );
             }
 
@@ -158,7 +364,12 @@ export class PlaudClient {
                 ) {
                     const delay = INITIAL_RETRY_DELAY * 2 ** retryCount;
                     await sleep(delay);
-                    return this.request<T>(endpoint, options, retryCount + 1);
+                    return this.request<T>(
+                        endpoint,
+                        options,
+                        retryCount + 1,
+                        authRetries,
+                    );
                 }
 
                 throw plaudHttpError(response.status, upstreamMsg);
@@ -173,7 +384,12 @@ export class PlaudClient {
             ) {
                 const delay = INITIAL_RETRY_DELAY * 2 ** retryCount;
                 await sleep(delay);
-                return this.request<T>(endpoint, options, retryCount + 1);
+                return this.request<T>(
+                    endpoint,
+                    options,
+                    retryCount + 1,
+                    authRetries,
+                );
             }
 
             if (error instanceof AppError) throw error;
@@ -215,17 +431,175 @@ export class PlaudClient {
         sortBy: string = "edit_time",
         isDesc: boolean = true,
     ): Promise<PlaudRecordingsResponse> {
-        const params = new URLSearchParams({
-            skip: skip.toString(),
-            limit: limit.toString(),
-            is_trash: isTrash.toString(),
-            sort_by: sortBy,
-            is_desc: isDesc.toString(),
-        });
+        if (!this.v4Mode) {
+            const params = new URLSearchParams({
+                skip: skip.toString(),
+                limit: limit.toString(),
+                is_trash: isTrash.toString(),
+                sort_by: sortBy,
+                is_desc: isDesc.toString(),
+            });
 
-        return this.request<PlaudRecordingsResponse>(
-            `/file/simple/web?${params.toString()}`,
+            const body = await this.request<PlaudRecordingsResponse>(
+                `/file/simple/web?${params.toString()}`,
+            );
+            if (Array.isArray(body?.data_file_list)) return body;
+            if (!isPlaudV4MigratedResponse(body)) {
+                throw new AppError(
+                    ErrorCode.PLAUD_API_ERROR,
+                    body?.msg ||
+                        "Plaud returned an invalid recordings list response.",
+                    400,
+                    { plaudStatus: body?.status },
+                );
+            }
+            this.v4Mode = true;
+        }
+
+        if (isTrash !== 0) {
+            return {
+                status: 0,
+                msg: "success",
+                data_file_total: 0,
+                data_file_list: [],
+            };
+        }
+        const all = sortPlaudRecordings(
+            await this.listAllRecordingsV4(),
+            sortBy,
+            isDesc,
         );
+        return {
+            status: 0,
+            msg: "success",
+            data_file_total: all.length,
+            data_file_list: all.slice(skip, skip + limit),
+        };
+    }
+
+    private async listAllRecordingsV4(): Promise<PlaudRecording[]> {
+        if (this.v4ListCache) return this.v4ListCache;
+
+        const out: PlaudRecording[] = [];
+        let cursor: string | undefined;
+        for (let page = 0; page < V4_MAX_PAGES; page++) {
+            const params = new URLSearchParams({
+                sort_by: "created",
+                sort_order: "desc",
+                page_size: V4_PAGE_SIZE.toString(),
+            });
+            if (cursor) params.set("cursor", cursor);
+
+            const body = await this.request<PlaudV4RecordingsResponse>(
+                `/file-app/v4/recordings/all?${params.toString()}`,
+            );
+            if (body?.status !== 0 || !Array.isArray(body.data?.items)) {
+                throw new AppError(
+                    ErrorCode.PLAUD_API_ERROR,
+                    body?.msg ||
+                        "Plaud returned an invalid v4 recordings response.",
+                    400,
+                    { plaudStatus: body?.status },
+                );
+            }
+            for (const item of body.data.items) {
+                if (item?.file_id) out.push(mapPlaudV4Item(item));
+            }
+            const next = body.data.next_cursor;
+            if (!next || body.data.items.length === 0) break;
+            cursor = next;
+        }
+
+        this.v4ListCache = out;
+        return out;
+    }
+
+    private async getFileDetailV4(
+        recordingId: string,
+        { fresh = false }: { fresh?: boolean } = {},
+    ): Promise<NonNullable<PlaudV4FileDetailResponse["data"]>> {
+        const fileId = recordingIdToPlaudV4FileId(recordingId);
+        const cached = this.v4DetailCache.get(fileId);
+        if (cached && !fresh) return cached;
+
+        const body = await this.request<PlaudV4FileDetailResponse>(
+            `/file-app/v4/files/detail/${encodeURIComponent(fileId)}`,
+        );
+        if (body?.status !== 0 || !body.data) {
+            throw new AppError(
+                ErrorCode.PLAUD_API_ERROR,
+                body?.msg || "Plaud returned an invalid v4 file detail.",
+                400,
+                { plaudStatus: body?.status },
+            );
+        }
+        this.v4DetailCache.set(fileId, body.data);
+        return body.data;
+    }
+
+    /**
+     * Complete a recording listed through the v4 API (device serial, size,
+     * timezone) from its v4 detail. No-op for legacy listings, so callers
+     * can invoke it unconditionally before downloading.
+     */
+    async hydrateRecording(recording: PlaudRecording): Promise<PlaudRecording> {
+        if (recording.source !== "v4") return recording;
+        const detail = await this.getFileDetailV4(recording.id);
+        return applyPlaudV4Detail(recording, detail);
+    }
+
+    private async getAudioUrlV4(recordingId: string): Promise<string> {
+        const detail = await this.getFileDetailV4(recordingId);
+        for (const audio of plaudV4AudioCandidates(detail)) {
+            if (audio.content_url) return audio.content_url;
+            if (!audio.content_id) continue;
+            const urls = await this.resolveContentUrlsV4([audio.content_id]);
+            const url = urls[audio.content_id];
+            if (url) return url;
+        }
+
+        throw new AppError(
+            ErrorCode.PLAUD_API_ERROR,
+            "Plaud has no downloadable audio for this recording yet.",
+            400,
+        );
+    }
+
+    private async resolveContentUrlsV4(
+        contentIds: string[],
+    ): Promise<Record<string, string>> {
+        if (contentIds.length === 0) return {};
+        const body = await this.request<PlaudV4ContentUrlResponse>(
+            "/file-app/v4/files/content/url",
+            {
+                method: "POST",
+                body: JSON.stringify({ content_ids: contentIds }),
+            },
+        );
+        return body?.status === 0 ? (body.data?.url_map ?? {}) : {};
+    }
+
+    private async withContentUrlsV4(
+        detail: NonNullable<PlaudV4FileDetailResponse["data"]>,
+    ): Promise<NonNullable<PlaudV4FileDetailResponse["data"]>> {
+        const objects = detail.objects ?? [];
+        const missing = objects.flatMap((o) =>
+            (o.object_type === "TRANSCRIPT" || o.object_type === "SUMMARY") &&
+            !o.content_url &&
+            o.content_id
+                ? [o.content_id]
+                : [],
+        );
+        if (missing.length === 0) return detail;
+        const urls = await this.resolveContentUrlsV4(missing);
+        return {
+            ...detail,
+            objects: objects.map((o) =>
+                !o.content_url && o.content_id && urls[o.content_id]
+                    ? { ...o, content_url: urls[o.content_id] }
+                    : o,
+            ),
+        };
     }
 
     async getTempUrl(
@@ -246,11 +620,31 @@ export class PlaudClient {
         preferOpus: boolean = true,
     ): Promise<Buffer> {
         try {
-            const tempUrlResponse = await this.getTempUrl(fileId, preferOpus);
-            const downloadUrl =
-                preferOpus && tempUrlResponse.temp_url_opus
-                    ? tempUrlResponse.temp_url_opus
-                    : tempUrlResponse.temp_url;
+            let downloadUrl: string | undefined;
+            if (!this.v4Mode) {
+                const tempUrlResponse = await this.getTempUrl(
+                    fileId,
+                    preferOpus,
+                );
+                if (isPlaudV4MigratedResponse(tempUrlResponse)) {
+                    this.v4Mode = true;
+                } else {
+                    downloadUrl =
+                        preferOpus && tempUrlResponse.temp_url_opus
+                            ? tempUrlResponse.temp_url_opus
+                            : tempUrlResponse.temp_url;
+                }
+            }
+            if (this.v4Mode) {
+                downloadUrl = await this.getAudioUrlV4(fileId);
+            }
+            if (!downloadUrl) {
+                throw new AppError(
+                    ErrorCode.PLAUD_API_ERROR,
+                    "Plaud did not return a download URL for this recording.",
+                    400,
+                );
+            }
 
             const response = await plaudFetch(downloadUrl);
             if (!response.ok) {
@@ -280,9 +674,22 @@ export class PlaudClient {
      * links to their bodies. Goes through `request`, so it inherits
      * workspace-token auth, retry/backoff, and 401 → PLAUD_INVALID_TOKEN.
      * NOTE: the response shape is unverified (see #204 / Phase 0).
+     * On Plaud 4.0 accounts a fresh v4 detail (current presigned links) is
+     * mapped onto the same shape.
      */
     async getFileDetail(fileId: string): Promise<PlaudFileDetailResponse> {
-        return this.request<PlaudFileDetailResponse>(`/file/detail/${fileId}`);
+        if (!this.v4Mode) {
+            const body = await this.request<PlaudFileDetailResponse>(
+                `/file/detail/${fileId}`,
+            );
+            if (!isPlaudV4MigratedResponse(body)) return body;
+            this.v4Mode = true;
+        }
+        return plaudV4DetailToLegacy(
+            await this.withContentUrlsV4(
+                await this.getFileDetailV4(fileId, { fresh: true }),
+            ),
+        );
     }
 
     /**
@@ -332,10 +739,137 @@ export class PlaudClient {
         fileId: string,
         filename: string,
     ): Promise<PlaudUpdateFilenameResponse> {
-        return this.request<PlaudUpdateFilenameResponse>(`/file/${fileId}`, {
-            method: "PATCH",
-            body: JSON.stringify({ filename }),
+        if (!this.v4Mode) {
+            const body = await this.request<PlaudUpdateFilenameResponse>(
+                `/file/${fileId}`,
+                {
+                    method: "PATCH",
+                    body: JSON.stringify({ filename }),
+                },
+            );
+            if (!isPlaudV4MigratedResponse(body)) return body;
+            this.v4Mode = true;
+        }
+        return this.renameV4(fileId, filename);
+    }
+
+    private async renameV4(
+        recordingId: string,
+        name: string,
+    ): Promise<PlaudUpdateFilenameResponse> {
+        let fileNode: PlaudV4Node | undefined;
+        const renamed = await this.renameNodeV4(name, async () => {
+            const detail = await this.getFileDetailV4(recordingId, {
+                fresh: true,
+            });
+            fileNode = detail.node ?? undefined;
+            return { nodeId: fileNode?.node_id, version: fileNode?.version_ms };
         });
+
+        const folder = fileNode?.folder;
+        const previousName = fileNode?.name;
+        if (
+            folder?.folder_id &&
+            folder.name &&
+            folder.name === previousName &&
+            folder.name !== name
+        ) {
+            const folderId = folder.folder_id;
+            const parentId = fileNode?.breadcrumbs?.[0]?.node_id;
+            let fromResponse = renamed?.data?.parent_items?.find(
+                (p) => p.node_id === folderId && p.name !== undefined,
+            );
+            try {
+                await this.renameNodeV4(name, async () => {
+                    const current =
+                        fromResponse ??
+                        (parentId
+                            ? await this.findChildV4(parentId, folderId)
+                            : undefined);
+                    fromResponse = undefined;
+                    if (!current || current.name !== previousName) {
+                        return { skip: true };
+                    }
+                    return { nodeId: folderId, version: current.version_ms };
+                });
+            } catch (err) {
+                console.warn(
+                    "[plaud] v4 folder rename failed:",
+                    err instanceof Error ? err.message : err,
+                );
+            }
+        }
+
+        return { status: 0, msg: "success", data_file: renamed?.data };
+    }
+
+    private async renameNodeV4(
+        name: string,
+        resolve: () => Promise<{
+            nodeId?: string;
+            version?: number;
+            skip?: boolean;
+        }>,
+    ): Promise<PlaudV4RenameResponse | undefined> {
+        let lastStatus: number | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const { nodeId, version, skip } = await resolve();
+            if (skip) return undefined;
+            if (!nodeId || version === undefined) {
+                throw new AppError(
+                    ErrorCode.PLAUD_API_ERROR,
+                    "Plaud returned no node version to rename.",
+                    400,
+                );
+            }
+            const body = await this.request<PlaudV4RenameResponse>(
+                `/file-app/v4/nodes/rename/${encodeURIComponent(nodeId)}`,
+                {
+                    method: "PATCH",
+                    body: JSON.stringify({ name, origin_version: version }),
+                },
+            );
+            if (body?.status === 0) return body;
+            lastStatus = body?.status;
+            if (body?.status !== PLAUD_V4_VERSION_CONFLICT_STATUS) {
+                throw new AppError(
+                    ErrorCode.PLAUD_API_ERROR,
+                    body?.msg || "Plaud rejected the rename.",
+                    400,
+                    { plaudStatus: body?.status },
+                );
+            }
+        }
+        throw new AppError(
+            ErrorCode.PLAUD_API_ERROR,
+            "Plaud rename failed: node version conflict.",
+            400,
+            { plaudStatus: lastStatus },
+        );
+    }
+
+    private async findChildV4(
+        parentId: string,
+        childId: string,
+    ): Promise<PlaudV4Node | undefined> {
+        let cursor: string | undefined;
+        for (let page = 0; page < 10; page++) {
+            const params = new URLSearchParams({
+                node_id: parentId,
+                page_size: V4_PAGE_SIZE.toString(),
+            });
+            if (cursor) params.set("cursor", cursor);
+            const body = await this.request<PlaudV4FolderChildrenResponse>(
+                `/file-app/v4/folders/children?${params.toString()}`,
+            );
+            const items = body?.data?.items ?? [];
+            const hit = items.find((i) => i.node_id === childId);
+            if (hit) return hit;
+            const next = body?.data?.next_cursor;
+            if (!next || items.length === 0) return undefined;
+            cursor = next;
+        }
+        return undefined;
     }
 }
 
