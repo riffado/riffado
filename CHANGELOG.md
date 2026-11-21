@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- An email the mail server rejected permanently (5xx for every recipient) was retried on every trigger, so the same message could be resent every few minutes. The address is now recorded as a bounce in the existing `email_suppressions` table and later transactional mail skips it. Verification, password reset and email-change mail are still sent, and a later successful send clears the bounce ([#360](https://github.com/riffado/riffado/issues/360)).
+- When Plaud rejects the token while minting a workspace token, the stored refresh token is tried once before falling back. Background sync retries connections that need a reconnect at most once a day instead of every tick, and its log line reports `reconnect=N` ([#361](https://github.com/riffado/riffado/issues/361)).
+
 ## [0.7.0] - 2026-11-21
 
 ### Added
