@@ -176,12 +176,15 @@ export function recordAutoTranscribeStatus(
  * the newest window is full, are filled from that user's oldest
  * still-eligible failures that are neither stopped nor backing off, so a
  * stream of newer recordings cannot starve retries. Deleted or
- * already-transcribed failures are dropped, stopped ones included.
+ * already-transcribed failures are dropped, stopped ones included. With
+ * `maxDurationMs`, only recordings that fit are selected, so ones too long
+ * for the caller's budget never occupy the window.
  */
 export async function listAutoTranscribeRetryIds(
     userId: string,
     options: Omit<AutoTranscribeRetryOptions, "excludeIds" | "onlyIds"> = {},
 ): Promise<string[]> {
+    const { maxDurationMs, ...baseOptions } = options;
     const fresh = await listUntranscribedRecordingIds(userId, {
         ...options,
         excludeIds: excludeIdsForUser(userId),
@@ -199,7 +202,7 @@ export async function listAutoTranscribeRetryIds(
     let stillEligible: string[];
     try {
         stillEligible = await listUntranscribedRecordingIds(userId, {
-            ...options,
+            ...baseOptions,
             excludeIds: [...inFlightAutoTranscribeIds],
             onlyIds: candidates,
             limit: candidates.length,
@@ -223,10 +226,27 @@ export async function listAutoTranscribeRetryIds(
     }
 
     const now = Date.now();
-    const retryable = candidates.filter((id) => {
+    let retryable = candidates.filter((id) => {
         const state = failed.get(id);
         return state !== undefined && !state.stopped && state.retryAt <= now;
     });
+    if (retryable.length > 0 && maxDurationMs !== undefined) {
+        try {
+            const fitting = new Set(
+                await listUntranscribedRecordingIds(userId, {
+                    ...baseOptions,
+                    excludeIds: [...inFlightAutoTranscribeIds],
+                    onlyIds: retryable,
+                    maxDurationMs,
+                    limit: retryable.length,
+                }),
+            );
+            retryable = retryable.filter((id) => fitting.has(id));
+        } catch (error) {
+            console.error("Auto-transcribe duration filter failed:", error);
+            return fresh;
+        }
+    }
     if (retryable.length === 0) return fresh;
 
     const reserve =

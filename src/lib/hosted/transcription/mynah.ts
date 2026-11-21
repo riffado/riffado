@@ -36,6 +36,14 @@ export interface MynahTranscribeInput {
     language?: string;
 }
 
+/**
+ * Whole seconds a recording reserves against the Mynah counter: the
+ * duration rounded up, never less than one.
+ */
+export function mynahSecondsForDuration(durationMs: number): number {
+    return Math.max(1, Math.ceil(durationMs / 1000));
+}
+
 // Mirrors `PlaudClient`'s retry pattern (src/lib/plaud/client.ts) -- a
 // transient gateway failure (Cloudflare 524 timeout, 502/503 during a
 // deploy) shouldn't fail the whole transcription and burn the user's turn
@@ -186,7 +194,7 @@ export async function transcribeViaMynah(
         throw new Error("Mynah transcription is not configured");
     }
 
-    const seconds = Math.max(1, Math.ceil(input.durationMs / 1000));
+    const seconds = mynahSecondsForDuration(input.durationMs);
     const reservation = await reserveMynah({ userId: input.userId, seconds });
     if (!reservation.reserved) {
         throw new MynahBudgetExhaustedError();
