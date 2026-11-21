@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { emailLogMock, renderMock, smtpMock, nodemailerMock } = vi.hoisted(
-    () => ({
+const { emailLogMock, suppressionsMock, renderMock, smtpMock, nodemailerMock } =
+    vi.hoisted(() => ({
         emailLogMock: {
             claimEmailSend: vi.fn(),
             releaseEmailSend: vi.fn(),
+        },
+        suppressionsMock: {
+            findBouncedEmails: vi.fn().mockResolvedValue(new Set<string>()),
+            suppressEmail: vi.fn().mockResolvedValue(undefined),
+            clearBouncedEmail: vi.fn().mockResolvedValue(undefined),
         },
         renderMock: {
             renderEmailHtml: vi.fn().mockResolvedValue("<html></html>"),
@@ -13,10 +18,10 @@ const { emailLogMock, renderMock, smtpMock, nodemailerMock } = vi.hoisted(
         nodemailerMock: {
             sendMail: vi.fn().mockResolvedValue({ messageId: "m1" }),
         },
-    }),
-);
+    }));
 
 vi.mock("@/db/queries/email-log", () => emailLogMock);
+vi.mock("@/db/queries/email-suppressions", () => suppressionsMock);
 vi.mock("@/lib/notifications/render-email", () => renderMock);
 vi.mock("@/lib/smtp", () => smtpMock);
 vi.mock("@/lib/env", () => ({

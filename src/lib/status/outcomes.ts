@@ -109,27 +109,29 @@ function isPermanentRecipientRejection(error: unknown): boolean {
 }
 
 /**
- * SMTP send outcome. Only a permanent recipient rejection (a 5xx answer to
- * RCPT TO for every recipient, as nodemailer's EENVELOPE lists them) is a
- * bad address rather than an email outage; a refused sender, temporary
- * (4xx) rejections and everything else are errors.
+ * Whether an SMTP send error is a permanent recipient rejection: a 5xx
+ * answer to RCPT TO for every recipient, as nodemailer's EENVELOPE lists
+ * them. A refused sender, temporary (4xx) rejections, connection errors and
+ * everything else are not.
+ */
+export function isPermanentSmtpRejection(error: unknown): boolean {
+    if (!isPermanentRecipientRejection(error)) return false;
+    const { code, rejectedErrors } = error as SmtpErrorShape;
+    if (code !== "EENVELOPE") return true;
+    return (
+        Array.isArray(rejectedErrors) &&
+        rejectedErrors.length > 0 &&
+        rejectedErrors.every(isPermanentRecipientRejection)
+    );
+}
+
+/**
+ * SMTP send outcome. Only a permanent recipient rejection is a bad address
+ * rather than an email outage; everything else that failed is an error.
  */
 export function judgeSmtpSend<T>(settled: Settled<T>): CallOutcome {
     if (settled.ok) return "ok";
-    const error = settled.error;
-    if (!isPermanentRecipientRejection(error)) return "error";
-    const { code, rejectedErrors } = error as SmtpErrorShape;
-    if (
-        code === "EENVELOPE" &&
-        !(
-            Array.isArray(rejectedErrors) &&
-            rejectedErrors.length > 0 &&
-            rejectedErrors.every(isPermanentRecipientRejection)
-        )
-    ) {
-        return "error";
-    }
-    return "ok";
+    return isPermanentSmtpRejection(settled.error) ? "ok" : "error";
 }
 
 /**
