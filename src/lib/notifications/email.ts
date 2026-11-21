@@ -4,7 +4,7 @@ import { claimEmailSend, releaseEmailSend } from "@/db/queries/email-log";
 import {
     clearBouncedEmail,
     findBouncedEmails,
-    suppressEmail,
+    recordBounce,
 } from "@/db/queries/email-suppressions";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
@@ -97,7 +97,10 @@ function smtpResponseText(error: unknown): string {
 }
 
 function isSenderOrRelayRejection(error: unknown): boolean {
-    return /\b(sender|relay)\b/i.test(smtpResponseText(error));
+    const text = smtpResponseText(error)
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\S+@\S+/g, " ");
+    return /\b(sender|relay|relaying)\b/i.test(text);
 }
 
 function errorLabel(error: unknown): string {
@@ -179,7 +182,7 @@ async function deliverEmail(
             return "transient_failure";
         }
         try {
-            await suppressEmail(recipient, "bounce", smtpResponseText(error));
+            await recordBounce(recipient, smtpResponseText(error));
             console.warn(
                 `Email recipient ${maskEmail(recipient)} permanently rejected by the mail server; suppressed.`,
             );

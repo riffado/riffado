@@ -21,11 +21,15 @@ const { emailLogMock, suppressionsMock, renderMock, smtpMock, nodemailerMock } =
                                 ),
                         ),
                 ),
-                suppressEmail: vi.fn(
-                    async (email: string, reason: string, note?: string) => {
-                        suppressed.set(email.toLowerCase(), { reason, note });
-                    },
-                ),
+                recordBounce: vi.fn(async (email: string, note: string) => {
+                    const key = email.toLowerCase();
+                    const existing = suppressed.get(key);
+                    if (!existing) {
+                        suppressed.set(key, { reason: "bounce", note });
+                    } else if (existing.reason === "bounce") {
+                        suppressed.set(key, { reason: "bounce", note });
+                    }
+                }),
                 clearBouncedEmail: vi.fn(async (email: string) => {
                     const key = email.toLowerCase();
                     if (suppressed.get(key)?.reason === "bounce") {
@@ -144,9 +148,8 @@ describe("#360 permanent SMTP rejection", () => {
         );
 
         expect(await sendEmail(message())).toBe(false);
-        expect(suppressionsMock.suppressEmail).toHaveBeenCalledWith(
+        expect(suppressionsMock.recordBounce).toHaveBeenCalledWith(
             ADDRESS,
-            "bounce",
             SMTP_RESPONSE,
         );
         expect(nodemailerMock.sendMail).toHaveBeenCalledTimes(1);
@@ -193,7 +196,7 @@ describe("#360 permanent SMTP rejection", () => {
         );
 
         expect(await sendEmail(message())).toBe(false);
-        expect(suppressionsMock.suppressEmail).not.toHaveBeenCalled();
+        expect(suppressionsMock.recordBounce).not.toHaveBeenCalled();
 
         nodemailerMock.sendMail.mockResolvedValueOnce({ messageId: "m1" });
         expect(await sendEmail(message())).toBe(true);
@@ -204,14 +207,14 @@ describe("#360 permanent SMTP rejection", () => {
         nodemailerMock.sendMail.mockRejectedValueOnce(connectionRefused());
 
         expect(await sendEmail(message())).toBe(false);
-        expect(suppressionsMock.suppressEmail).not.toHaveBeenCalled();
+        expect(suppressionsMock.recordBounce).not.toHaveBeenCalled();
     });
 
     it("returns the permanent failure even if persisting the suppression fails", async () => {
         nodemailerMock.sendMail.mockRejectedValueOnce(
             rcptRejection(550, SMTP_RESPONSE),
         );
-        suppressionsMock.suppressEmail.mockRejectedValueOnce(
+        suppressionsMock.recordBounce.mockRejectedValueOnce(
             new Error(`insert failed, params: ${ADDRESS}`, {
                 cause: Object.assign(new Error("connection terminated"), {
                     code: "57P01",
@@ -232,18 +235,93 @@ describe("#360 permanent SMTP rejection", () => {
             553,
         ],
         ["a relay denial", "554 5.7.1 Relay access denied", 554],
+        ["relaying not allowed", "554 5.7.1 Relaying not allowed", 554],
     ])("does not suppress on %s", async (_label, response, responseCode) => {
         nodemailerMock.sendMail.mockRejectedValueOnce(
             rcptRejection(responseCode, response),
         );
 
         expect(await sendEmail(message())).toBe(false);
-        expect(suppressionsMock.suppressEmail).not.toHaveBeenCalled();
+        expect(suppressionsMock.recordBounce).not.toHaveBeenCalled();
         expect(suppressionsMock.suppressed.has(ADDRESS)).toBe(false);
 
         nodemailerMock.sendMail.mockResolvedValueOnce({ messageId: "m1" });
         expect(await sendEmail(message())).toBe(true);
         expect(nodemailerMock.sendMail).toHaveBeenCalledTimes(2);
+    });
+
+    it("suppresses a 550 whose only 'sender' is inside an address", async () => {
+        const response =
+            "550 5.1.1 <sender@example.com>: Recipient address rejected: User unknown";
+        nodemailerMock.sendMail.mockRejectedValueOnce(
+            rcptRejection(550, response),
+        );
+
+        expect(await sendEmail(message())).toBe(false);
+        expect(suppressionsMock.recordBounce).toHaveBeenCalledWith(
+            ADDRESS,
+            response,
+        );
+        expect(suppressionsMock.suppressed.get(ADDRESS)?.reason).toBe("bounce");
+    });
+
+    it("suppresses a 550 that names a relay-like address without angle brackets", async () => {
+        const response =
+            "550 5.1.1 relay@example.com Recipient address rejected: User unknown";
+        nodemailerMock.sendMail.mockRejectedValueOnce(
+            rcptRejection(550, response),
+        );
+
+        expect(await sendEmail(message())).toBe(false);
+        expect(suppressionsMock.recordBounce).toHaveBeenCalledTimes(1);
+    });
+
+    describe("an address with a campaign suppression", () => {
+        beforeEach(() => {
+            suppressionsMock.suppressed.set(ADDRESS, {
+                reason: "unsubscribe",
+                note: "list-unsubscribe",
+            });
+        });
+
+        it("keeps its reason and note after a 550", async () => {
+            nodemailerMock.sendMail.mockRejectedValueOnce(
+                rcptRejection(550, SMTP_RESPONSE),
+            );
+
+            expect(await sendEmail(message())).toBe(false);
+            expect(suppressionsMock.recordBounce).toHaveBeenCalledTimes(1);
+            expect(suppressionsMock.suppressed.get(ADDRESS)).toEqual({
+                reason: "unsubscribe",
+                note: "list-unsubscribe",
+            });
+        });
+
+        it("is not deleted by a later successful bypass send", async () => {
+            nodemailerMock.sendMail.mockResolvedValueOnce({ messageId: "m1" });
+
+            expect(
+                await sendPasswordResetEmail(ADDRESS, "https://app/reset"),
+            ).toBe(true);
+            expect(suppressionsMock.clearBouncedEmail).toHaveBeenCalledWith(
+                ADDRESS,
+            );
+            expect(suppressionsMock.suppressed.get(ADDRESS)?.reason).toBe(
+                "unsubscribe",
+            );
+        });
+
+        it("keeps the claim after a 550 so the retry loop stops", async () => {
+            nodemailerMock.sendMail.mockRejectedValueOnce(
+                rcptRejection(550, SMTP_RESPONSE),
+            );
+
+            expect(await sendOverCapEmail(overCapInput)).toBe(false);
+            expect(emailLogMock.releaseEmailSend).not.toHaveBeenCalled();
+            expect(suppressionsMock.suppressed.get(ADDRESS)?.reason).toBe(
+                "unsubscribe",
+            );
+        });
     });
 
     it("releases the claim after a sender rejection", async () => {

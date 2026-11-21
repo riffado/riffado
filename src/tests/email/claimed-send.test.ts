@@ -8,7 +8,7 @@ const { emailLogMock, suppressionsMock, renderMock, smtpMock, nodemailerMock } =
         },
         suppressionsMock: {
             findBouncedEmails: vi.fn().mockResolvedValue(new Set<string>()),
-            suppressEmail: vi.fn().mockResolvedValue(undefined),
+            recordBounce: vi.fn().mockResolvedValue(undefined),
             clearBouncedEmail: vi.fn().mockResolvedValue(undefined),
         },
         renderMock: {

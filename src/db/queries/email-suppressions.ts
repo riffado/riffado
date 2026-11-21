@@ -31,6 +31,26 @@ export async function suppressEmail(
         });
 }
 
+/**
+ * Records a permanent mail-server rejection. An existing `unsubscribe`,
+ * `complaint` or `manual` row keeps its reason and note; only an existing
+ * `bounce` row has its note refreshed.
+ */
+export async function recordBounce(email: string, note: string): Promise<void> {
+    await db
+        .insert(emailSuppressions)
+        .values({
+            email: email.toLowerCase(),
+            reason: "bounce",
+            note,
+        })
+        .onConflictDoUpdate({
+            target: emailSuppressions.email,
+            set: { note },
+            setWhere: eq(emailSuppressions.reason, "bounce"),
+        });
+}
+
 /** Returns the subset of `emails` that are suppressed. */
 export async function findSuppressedEmails(
     emails: readonly string[],
