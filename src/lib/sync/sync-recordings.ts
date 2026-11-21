@@ -15,6 +15,7 @@ import { isHostedLockedOut } from "@/lib/entitlements";
 import { env } from "@/lib/env";
 import { AppError, ErrorCode } from "@/lib/errors";
 import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
+import { mynahSecondsForDuration } from "@/lib/hosted/transcription/mynah";
 import { sendNewRecordingBarkNotification } from "@/lib/notifications/bark";
 import { sendNewRecordingEmail } from "@/lib/notifications/email";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
@@ -42,6 +43,10 @@ import {
     recordAutoTranscribeStatus,
     releaseAutoTranscribeIds,
 } from "@/lib/sync/auto-transcribe-state";
+import {
+    filterIdsWithinMynahBudget,
+    loadRecordingDurationsMs,
+} from "@/lib/sync/mynah-budget";
 import {
     upsertEnhancement,
     upsertTranscription,
@@ -86,6 +91,8 @@ const inFlightSyncs = new Map<string, Promise<SyncResult>>();
 interface SyncContext {
     userId: string;
     autoTranscribe: boolean;
+    /** `userSettings.defaultTranscriptionProviderId`; drives the Mynah budget pre-check. */
+    defaultTranscriptionProviderId: string | null;
     /** Master opt-in: import Plaud's native transcript/summary on sync (#204). */
     importPlaudContent: boolean;
     /** 'plaud_only' (default) | 'keep_both' — see runSyncRecordingsForUser. */
@@ -869,6 +876,8 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         const context: SyncContext = {
             userId,
             autoTranscribe: settings?.autoTranscribe ?? false,
+            defaultTranscriptionProviderId:
+                settings?.defaultTranscriptionProviderId ?? null,
             importPlaudContent: settings?.importPlaudContent ?? false,
             transcriptMode: settings?.transcriptMode ?? "plaud_only",
             emailNotifications: settings?.emailNotifications ?? false,
@@ -1086,7 +1095,12 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                     : mergedIds.filter(
                           (id) => !plaudTranscriptImported.has(id),
                       );
-            const idsToTranscribe = claimAutoTranscribeIds(eligibleIds);
+            const affordableIds = await filterIdsWithinMynahBudget({
+                userId,
+                providerPointer: context.defaultTranscriptionProviderId,
+                ids: eligibleIds,
+            });
+            const idsToTranscribe = claimAutoTranscribeIds(affordableIds);
 
             if (idsToTranscribe.length > 0) {
                 queueTranscriptions(userId, idsToTranscribe).catch((error) => {
@@ -1146,12 +1160,46 @@ async function queueTranscriptions(
     userId: string,
     recordingIds: string[],
 ): Promise<void> {
+    let durationsMs: Map<string, number> | undefined;
+    let exhaustedAtSeconds: number | undefined;
     try {
         for (const recordingId of recordingIds) {
+            if (exhaustedAtSeconds !== undefined) {
+                const durationMs = durationsMs?.get(recordingId);
+                if (
+                    durationMs === undefined ||
+                    mynahSecondsForDuration(durationMs) >= exhaustedAtSeconds
+                ) {
+                    continue;
+                }
+            }
             try {
                 const outcome = await transcribeRecording(userId, recordingId, {
                     trigger: "sync",
                 });
+                if (outcome.errorCode === "MYNAH_BUDGET_EXHAUSTED") {
+                    try {
+                        durationsMs ??= await loadRecordingDurationsMs(
+                            userId,
+                            recordingIds,
+                        );
+                    } catch (lookupError) {
+                        console.error(
+                            "Mynah budget duration lookup failed:",
+                            lookupError,
+                        );
+                        durationsMs = new Map();
+                    }
+                    const failedMs = durationsMs.get(recordingId);
+                    const failedSeconds =
+                        failedMs === undefined
+                            ? 0
+                            : mynahSecondsForDuration(failedMs);
+                    exhaustedAtSeconds = Math.min(
+                        exhaustedAtSeconds ?? failedSeconds,
+                        failedSeconds,
+                    );
+                }
                 const stopped = noteAutoTranscribeOutcome(
                     userId,
                     recordingId,
