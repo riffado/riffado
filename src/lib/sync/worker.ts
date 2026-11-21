@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -9,6 +9,7 @@ import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 // ponytail: skip users synced in the last 4 min -- they likely just client-synced
 const STALE_THRESHOLD_MS = 4 * 60 * 1000;
 const MAX_USERS_PER_TICK = 20;
+const INVALIDATED_RETRY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Claim users due for a server-side sync tick.
@@ -21,13 +22,26 @@ const MAX_USERS_PER_TICK = 20;
  * to gate on, and unattended background sync is the whole point of running
  * the container without a browser open (#159).
  *
+ * Connections flagged for reconnect (`invalidatedAt` set) are retried at
+ * most once a day: claiming one re-stamps `invalidatedAt` with a conditional
+ * update, so a retry that fails for any reason is not claimed again for
+ * another day and only one process retries it. A reconnect or successful
+ * sync clears the flag (#361).
+ *
  * Exported for testing.
  */
 export async function claimUsersForSync(): Promise<string[]> {
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+    const invalidatedRetryThreshold = new Date(
+        Date.now() - INVALIDATED_RETRY_MS,
+    );
 
     const conditions = [
         isNull(users.suspendedAt),
+        or(
+            isNull(plaudConnections.invalidatedAt),
+            lt(plaudConnections.invalidatedAt, invalidatedRetryThreshold),
+        ),
         or(
             isNull(plaudConnections.lastSync),
             lt(plaudConnections.lastSync, staleThreshold),
@@ -38,7 +52,11 @@ export async function claimUsersForSync(): Promise<string[]> {
     }
 
     const rows = await db
-        .select({ userId: plaudConnections.userId })
+        .select({
+            userId: plaudConnections.userId,
+            connectionId: plaudConnections.id,
+            invalidatedAt: plaudConnections.invalidatedAt,
+        })
         .from(plaudConnections)
         .innerJoin(users, eq(users.id, plaudConnections.userId))
         .where(and(...conditions))
@@ -48,7 +66,31 @@ export async function claimUsersForSync(): Promise<string[]> {
         .orderBy(asc(plaudConnections.lastSync))
         .limit(MAX_USERS_PER_TICK);
 
-    return rows.map((r) => r.userId);
+    const retries = rows.filter((r) => r.invalidatedAt);
+    if (retries.length === 0) return rows.map((r) => r.userId);
+
+    const stamped = await db
+        .update(plaudConnections)
+        .set({ invalidatedAt: new Date() })
+        .where(
+            and(
+                inArray(
+                    plaudConnections.id,
+                    retries.map((r) => r.connectionId),
+                ),
+                inArray(
+                    plaudConnections.userId,
+                    retries.map((r) => r.userId),
+                ),
+                lt(plaudConnections.invalidatedAt, invalidatedRetryThreshold),
+            ),
+        )
+        .returning({ id: plaudConnections.id });
+    const reclaimed = new Set(stamped.map((r) => r.id));
+
+    return rows
+        .filter((r) => !r.invalidatedAt || reclaimed.has(r.connectionId))
+        .map((r) => r.userId);
 }
 
 type SyncResult = Awaited<ReturnType<typeof syncRecordingsForUser>>;
@@ -74,6 +116,7 @@ export async function tick(): Promise<void> {
 
         let synced = 0;
         let errors = 0;
+        let reconnect = 0;
         for (const userId of userIds) {
             try {
                 const result = await syncRecordingsForUser(
@@ -87,6 +130,8 @@ export async function tick(): Promise<void> {
                 } else if (outcome === "failure") {
                     errors++;
                     recordJobFailure("sync");
+                } else if (result.needsReconnect) {
+                    reconnect++;
                 }
             } catch (error) {
                 errors++;
@@ -102,9 +147,12 @@ export async function tick(): Promise<void> {
             }
         }
 
-        if (synced > 0 || errors > 0) {
-            console.log(`[background-sync] synced=${synced} errors=${errors}`);
-        } else {
+        if (synced > 0 || errors > 0 || reconnect > 0) {
+            console.log(
+                `[background-sync] synced=${synced} errors=${errors} reconnect=${reconnect}`,
+            );
+        }
+        if (synced === 0 && errors === 0) {
             recordJobSuccess("sync");
         }
     } catch (error) {

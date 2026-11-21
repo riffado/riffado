@@ -160,7 +160,8 @@ export interface CreatePlaudClientOptions {
  * Build a `PlaudClient` from a stored connection. When the connection has a
  * refresh token, refreshes the user token first if it expires within
  * `PLAUD_ACCESS_REFRESH_WINDOW_MS`, and lets the client refresh again on a
- * 401. At most one refresh is in flight; once one succeeds, or fails for a
+ * 401, including a 401 on the workspace-token mint. At most one refresh is
+ * in flight; once one succeeds, or fails for a
  * transient reason (rate limit, upstream or network error), a later 401 may
  * refresh again. A rejected refresh is not retried. Refreshed tokens are
  * stored encrypted, scoped by user and connection id. Throws
@@ -188,6 +189,7 @@ export async function createPlaudClient(
             accessToken,
             connection.apiBase,
             connection.workspaceId,
+            { connectionId: connection.id },
         );
     }
 
@@ -224,9 +226,11 @@ export async function createPlaudClient(
     };
 
     let userToken = accessToken;
+    let userTokenFresh = false;
     if (shouldRefreshPlaudAccessToken(accessExpiresAt)) {
         try {
             userToken = await refreshOnce();
+            userTokenFresh = true;
         } catch (err) {
             const stillValid =
                 accessExpiresAt !== null &&
@@ -245,6 +249,8 @@ export async function createPlaudClient(
         connection.workspaceId,
         {
             refreshUserToken: refreshOnce,
+            connectionId: connection.id,
+            userTokenFresh,
         },
     );
 }

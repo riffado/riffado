@@ -80,28 +80,45 @@ export function isPlaudTokenRejection(err: unknown): boolean {
     );
 }
 
+const loggedWorkspaceFallbacks = new Set<string>();
+
 export interface PlaudClientOptions {
     /**
      * Returns a fresh user token when Plaud answers 401 to the user token, or
-     * to a workspace token that was already re-minted once. At most one call
-     * is in flight per client; once it settles, a later 401 on the new token
-     * may refresh again. A `PLAUD_INVALID_TOKEN` rejection leaves the
-     * original 401 in place and is not retried; any other rejection is
-     * rethrown to the caller and a later 401 may try again.
+     * to a workspace token that was already re-minted once. Also called once
+     * per client when Plaud rejects a user token that was not just refreshed
+     * on the workspace-token mint; any failure there falls back to the user
+     * token, and a transient failure is rethrown by the next 401 instead of
+     * refreshing again. At most one call is in flight per client; once it
+     * settles, a later 401 on the new token may refresh again. A
+     * `PLAUD_INVALID_TOKEN` rejection leaves the original 401 in place and is
+     * not retried; any other rejection on a data request is rethrown to the
+     * caller and a later 401 may try again.
      */
     refreshUserToken?: () => Promise<string>;
+    /**
+     * Stored connection id. Limits the user-token fallback warning to once
+     * per connection and error code per process until a workspace token is
+     * minted again.
+     */
+    connectionId?: string;
+    /** True when `userToken` was just refreshed, so a mint 401 does not refresh it again. */
+    userTokenFresh?: boolean;
 }
 
 export class PlaudClient {
     private userToken: string;
     private readonly apiBase: string;
     private readonly refreshUserToken?: () => Promise<string>;
+    private readonly connectionId?: string;
     private userTokenRefresh?: Promise<void>;
     private workspaceToken?: string;
     private resolvedWorkspaceId?: string;
     private workspaceFetchInFlight?: Promise<void>;
     private workspaceFallbackToUt = false;
     private workspaceRemintUsed = false;
+    private mintRefreshUsed = false;
+    private mintRefreshError?: unknown;
     private v4Mode = false;
     private v4ListCache?: PlaudRecording[];
     private readonly v4DetailCache = new Map<
@@ -119,6 +136,8 @@ export class PlaudClient {
         this.apiBase = apiBase;
         this.resolvedWorkspaceId = workspaceId ?? undefined;
         this.refreshUserToken = options.refreshUserToken;
+        this.connectionId = options.connectionId;
+        this.mintRefreshUsed = options.userTokenFresh ?? false;
     }
 
     get workspaceId(): string | undefined {
@@ -147,21 +166,68 @@ export class PlaudClient {
     }
 
     private async fetchWorkspaceToken(): Promise<void> {
+        let mintError: unknown;
         try {
-            const { workspaceToken, workspaceId } = await resolveWorkspaceToken(
-                this.userToken,
-                this.apiBase,
-                this.resolvedWorkspaceId,
-            );
-            this.workspaceToken = workspaceToken;
-            this.resolvedWorkspaceId = workspaceId;
+            await this.mintWorkspaceToken();
+            return;
         } catch (err) {
-            console.warn(
-                "[plaud] workspace token mint failed, falling back to user token:",
-                err instanceof Error ? err.message : err,
-            );
-            this.workspaceFallbackToUt = true;
+            mintError = err;
         }
+        if (
+            isPlaudTokenRejection(mintError) &&
+            (await this.refreshBeforeFallback())
+        ) {
+            try {
+                await this.mintWorkspaceToken();
+                return;
+            } catch (err) {
+                mintError = err;
+            }
+        }
+        this.fallBackToUserToken(mintError);
+    }
+
+    private async mintWorkspaceToken(): Promise<void> {
+        const { workspaceToken, workspaceId } = await resolveWorkspaceToken(
+            this.userToken,
+            this.apiBase,
+            this.resolvedWorkspaceId,
+        );
+        this.workspaceToken = workspaceToken;
+        this.resolvedWorkspaceId = workspaceId;
+        if (this.connectionId) {
+            const prefix = `${this.connectionId}:`;
+            for (const key of loggedWorkspaceFallbacks) {
+                if (key.startsWith(prefix)) {
+                    loggedWorkspaceFallbacks.delete(key);
+                }
+            }
+        }
+    }
+
+    private async refreshBeforeFallback(): Promise<boolean> {
+        if (!this.refreshUserToken || this.mintRefreshUsed) return false;
+        this.mintRefreshUsed = true;
+        try {
+            return await this.refreshAfterUnauthorized(this.userToken);
+        } catch (err) {
+            this.mintRefreshError = err;
+            return false;
+        }
+    }
+
+    private fallBackToUserToken(err: unknown): void {
+        this.workspaceFallbackToUt = true;
+        if (this.connectionId) {
+            const code = err instanceof AppError ? err.code : "unknown";
+            const key = `${this.connectionId}:${code}`;
+            if (loggedWorkspaceFallbacks.has(key)) return;
+            loggedWorkspaceFallbacks.add(key);
+        }
+        console.warn(
+            "[plaud] workspace token mint failed, falling back to user token:",
+            err instanceof Error ? err.message : err,
+        );
     }
 
     private async recoverFromUnauthorized(
@@ -182,11 +248,17 @@ export class PlaudClient {
         usedBearer: string,
     ): Promise<boolean> {
         if (!this.refreshUserToken) return false;
+        if (this.mintRefreshError !== undefined) {
+            const err = this.mintRefreshError;
+            this.mintRefreshError = undefined;
+            throw err;
+        }
         if (!this.userTokenRefresh) {
             const attempt = this.refreshUserToken().then((token) => {
                 this.userToken = token;
                 this.workspaceToken = undefined;
                 this.workspaceFallbackToUt = false;
+                this.mintRefreshUsed = true;
             });
             this.userTokenRefresh = attempt;
             attempt.then(

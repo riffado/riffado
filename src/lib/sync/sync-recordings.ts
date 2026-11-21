@@ -802,16 +802,16 @@ export async function syncRecordingsForUser(
         // 2 users are lawyers/journalists) that must never leave this
         // process into third-party telemetry. Only a count crosses that
         // boundary.
-        if (result.errors.length > 0 && !result.skipped) {
+        const errorCount =
+            result.errors.length - (result.needsReconnect ? 1 : 0);
+        if (errorCount > 0 && !result.skipped) {
             captureServerException(
-                new Error(
-                    `Sync completed with ${result.errors.length} error(s)`,
-                ),
+                new Error(`Sync completed with ${errorCount} error(s)`),
                 {
                     source: "sync",
                     distinctId: userId,
                     trigger,
-                    errorCount: result.errors.length,
+                    errorCount,
                 },
             );
         }

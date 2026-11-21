@@ -17,8 +17,10 @@ const { dbMock, envMock, syncMock } = vi.hoisted(() => ({
 vi.mock("@/db", () => ({ db: dbMock }));
 vi.mock("@/db/schema", () => ({
     plaudConnections: {
+        id: "id",
         userId: "user_id",
         lastSync: "last_sync",
+        invalidatedAt: "invalidated_at",
     },
     users: {
         id: "id",
