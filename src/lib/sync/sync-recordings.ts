@@ -45,7 +45,9 @@ import {
 } from "@/lib/sync/auto-transcribe-state";
 import {
     filterIdsWithinMynahBudget,
+    getRemainingMynahSeconds,
     loadRecordingDurationsMs,
+    maxDurationMsForMynahSeconds,
 } from "@/lib/sync/mynah-budget";
 import {
     upsertEnhancement,
@@ -1078,10 +1080,18 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
         // 'keep_both' runs anyway so both coexist. Recordings whose Plaud
         // transcript wasn't ready/failed fall back here naturally.
         if (context.autoTranscribe) {
+            const remainingMynahSeconds = await getRemainingMynahSeconds({
+                userId,
+                providerPointer: context.defaultTranscriptionProviderId,
+            });
+            const maxDurationMs = maxDurationMsForMynahSeconds(
+                remainingMynahSeconds,
+            );
             let retryIds: string[] = [];
             try {
                 retryIds = await listAutoTranscribeRetryIds(userId, {
                     transcriptMode: context.transcriptMode,
+                    ...(maxDurationMs !== undefined && { maxDurationMs }),
                 });
             } catch (error) {
                 console.error("Auto-transcribe retry lookup failed:", error);
@@ -1097,7 +1107,7 @@ async function runSyncRecordingsForUser(userId: string): Promise<SyncResult> {
                       );
             const affordableIds = await filterIdsWithinMynahBudget({
                 userId,
-                providerPointer: context.defaultTranscriptionProviderId,
+                remainingSeconds: remainingMynahSeconds,
                 ids: eligibleIds,
             });
             const idsToTranscribe = claimAutoTranscribeIds(affordableIds);

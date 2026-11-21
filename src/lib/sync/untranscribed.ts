@@ -5,6 +5,7 @@ import {
     exists,
     inArray,
     isNull,
+    lte,
     not,
     notInArray,
 } from "drizzle-orm";
@@ -19,6 +20,8 @@ export type AutoTranscribeRetryOptions = {
     excludeIds?: readonly string[];
     /** When set, only these recording ids are considered. */
     onlyIds?: readonly string[];
+    /** When set, only recordings at most this long (milliseconds) are considered. */
+    maxDurationMs?: number;
     limit?: number;
 };
 
@@ -64,6 +67,9 @@ export async function listUntranscribedRecordingIds(
     }
     if (onlyIds.length > 0) {
         conditions.push(inArray(recordings.id, [...onlyIds]));
+    }
+    if (options.maxDurationMs !== undefined) {
+        conditions.push(lte(recordings.duration, options.maxDurationMs));
     }
 
     const rows = await db

@@ -98,6 +98,7 @@ import { env } from "@/lib/env";
 import { closeCycleForUser } from "@/lib/hosted/billing/cycle-close";
 import { createPlaudClient } from "@/lib/plaud/client-factory";
 import { resetAutoTranscribeStateForTests } from "@/lib/sync/auto-transcribe-state";
+import { maxDurationMsForMynahSeconds } from "@/lib/sync/mynah-budget";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 import {
     type AutoTranscribeRetryOptions,
@@ -130,9 +131,15 @@ function fakeUntranscribedLookup(
 ): Promise<string[]> {
     const exclude = new Set(options.excludeIds ?? []);
     const only = options.onlyIds ? new Set(options.onlyIds) : undefined;
+    const maxMs = options.maxDurationMs;
     return Promise.resolve(
         untranscribed
-            .filter((id) => !exclude.has(id) && (!only || only.has(id)))
+            .filter(
+                (id) =>
+                    !exclude.has(id) &&
+                    (!only || only.has(id)) &&
+                    (maxMs === undefined || (durationsMs[id] ?? 0) <= maxMs),
+            )
             .slice(0, options.limit ?? 5),
     );
 }
@@ -273,6 +280,80 @@ describe("#359 auto-transcribe respects the Mynah budget", () => {
         expect(closeCycleForUser).toHaveBeenCalledWith(USER_ID);
         expect(getUserBillingState).toHaveBeenCalledTimes(2);
         expect(transcribedIds()).toEqual(["rec-a"]);
+    });
+
+    it("reads the billing state again when another worker did the reset", async () => {
+        untranscribed = ["rec-a"];
+        durationsMs = { "rec-a": SHORT_MS };
+        remainingSeconds = 0;
+        (closeCycleForUser as Mock).mockImplementation(async () => {
+            remainingSeconds = 7200;
+            return false;
+        });
+
+        await runSync();
+
+        expect(closeCycleForUser).toHaveBeenCalledWith(USER_ID);
+        expect(getUserBillingState).toHaveBeenCalledTimes(2);
+        expect(transcribedIds()).toEqual(["rec-a"]);
+    });
+
+    it("reaches an older short recording when the five newest are too long", async () => {
+        untranscribed = [
+            "long-1",
+            "long-2",
+            "long-3",
+            "long-4",
+            "long-5",
+            "old-short",
+        ];
+        durationsMs = {
+            "long-1": LONG_MS,
+            "long-2": LONG_MS,
+            "long-3": LONG_MS,
+            "long-4": LONG_MS,
+            "long-5": LONG_MS,
+            "old-short": SHORT_MS,
+        };
+        remainingSeconds = 120;
+
+        await runSync();
+
+        expect(transcribedIds()).toEqual(["old-short"]);
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledWith(
+            USER_ID,
+            expect.objectContaining({ maxDurationMs: 120_000 }),
+        );
+    });
+
+    it("selects nothing when the budget is used up", async () => {
+        untranscribed = ["rec-a"];
+        durationsMs = { "rec-a": 0 };
+        remainingSeconds = 0;
+
+        await runSync();
+
+        expect(transcribeRecording).not.toHaveBeenCalled();
+        expect(listUntranscribedRecordingIds).toHaveBeenCalledWith(
+            USER_ID,
+            expect.objectContaining({ maxDurationMs: -1 }),
+        );
+    });
+
+    it("does not limit the selection when the default is the user's own credential", async () => {
+        settingsRow = {
+            autoTranscribe: true,
+            defaultTranscriptionProviderId: "cred-own",
+        };
+        untranscribed = ["rec-a"];
+        durationsMs = { "rec-a": LONG_MS };
+
+        await runSync();
+
+        expect(transcribedIds()).toEqual(["rec-a"]);
+        const options = (listUntranscribedRecordingIds as Mock).mock
+            .calls[0][1] as AutoTranscribeRetryOptions;
+        expect(options.maxDurationMs).toBeUndefined();
     });
 
     it("applies a reset whose due time has passed", async () => {
@@ -437,5 +518,21 @@ describe("#359 auto-transcribe respects the Mynah budget", () => {
         await runSync();
 
         expect(transcribedIds()).toContain("rec-2");
+    });
+});
+
+describe("#359: maxDurationMsForMynahSeconds", () => {
+    it("has no limit when the budget does not apply", () => {
+        expect(maxDurationMsForMynahSeconds(null)).toBeUndefined();
+    });
+
+    it("converts whole remaining seconds to milliseconds", () => {
+        expect(maxDurationMsForMynahSeconds(120)).toBe(120_000);
+        expect(maxDurationMsForMynahSeconds(1)).toBe(1000);
+    });
+
+    it("matches nothing when less than one second is left", () => {
+        expect(maxDurationMsForMynahSeconds(0)).toBe(-1);
+        expect(maxDurationMsForMynahSeconds(-5)).toBe(-1);
     });
 });
