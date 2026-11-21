@@ -45,12 +45,37 @@
     --auth-brand: oklch(0.3438 0.0269 95.7226);
     --auth-brand-foreground: oklch(0.9818 0.0054 95.0986);
 
+    /* Redesign palette (docs/design/DESIGN.md section 3). Theme-stable. */
+    --ink: #141413;
+    --night: #262624;
+    --night-deep: #1a1915;
+    --night-raised: #30302e;
+    --night-border: #3e3e38;
+    --night-text: #c3c0b6;
+    --terracotta: #c96442;
+    --terracotta-bright: #d97757;
+    --terracotta-wash: #f3e3da;
+    --status-ready: #11ad32;
+    --status-working: #d9a514;
+
+    /* Corner radii. Values assume continuous (squircle) corners; the
+       .squircle utility scales them down where corner-shape is unsupported. */
+    --radius-inner: 12px;
+    --radius-control: 15px;
+    --radius-card: 30px;
+    --radius-sheet: 56px;
+
     --font-sans:
-        ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        var(--font-funnel-sans), ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+        "Segoe UI Symbol", "Noto Color Emoji";
+    --font-display: var(--font-funnel-display), var(--font-sans);
+    --font-dot: var(--font-doto), var(--font-mono);
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-mono:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
+        var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
     --radius: 0.5rem;
     --shadow-x: 0;
     --shadow-y: 1px;
@@ -195,10 +220,23 @@
     --color-sidebar-ring: var(--sidebar-ring);
     --color-auth-brand: var(--auth-brand);
     --color-auth-brand-foreground: var(--auth-brand-foreground);
+    --color-ink: var(--ink);
+    --color-night: var(--night);
+    --color-night-deep: var(--night-deep);
+    --color-night-raised: var(--night-raised);
+    --color-night-border: var(--night-border);
+    --color-night-text: var(--night-text);
+    --color-terracotta: var(--terracotta);
+    --color-terracotta-bright: var(--terracotta-bright);
+    --color-terracotta-wash: var(--terracotta-wash);
+    --color-status-ready: var(--status-ready);
+    --color-status-working: var(--status-working);
 
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
     --font-serif: var(--font-serif);
+    --font-display: var(--font-display);
+    --font-dot: var(--font-dot);
 
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
@@ -344,6 +382,12 @@
         html {
             scroll-behavior: auto;
         }
+    }
+
+    /* Doto always renders with round dots to match the logo. */
+    .font-dot {
+        font-variation-settings: "ROND" 100;
+        font-variant-numeric: tabular-nums;
     }
 
     html::-webkit-scrollbar-thumb {
@@ -984,6 +1028,23 @@
 
         .settings-panel {
             width: 100%;
+        }
+    }
+
+    /* Continuous corners. Radius tokens are tuned for squircles, which read
+       tighter than circular arcs; without support, scale them down. */
+    .squircle {
+        /* biome-ignore lint/correctness/noUnknownProperty: corner-shape (CSS Borders 4) is newer than Biome's property list */
+        corner-shape: squircle;
+    }
+
+    /* biome-ignore lint/correctness/noUnknownProperty: corner-shape (CSS Borders 4) is newer than Biome's property list */
+    @supports not (corner-shape: squircle) {
+        .squircle {
+            --radius-inner: 8px;
+            --radius-control: 10px;
+            --radius-card: 20px;
+            --radius-sheet: 38px;
         }
     }
 
