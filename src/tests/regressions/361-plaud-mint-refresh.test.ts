@@ -10,9 +10,12 @@
  * This file pins: refresh-then-mint before the fallback, at most one refresh
  * per mint rejection, no refresh of a token that was just refreshed, a
  * transient refresh failure falling back instead of failing the request, the
- * once-per-connection-and-code fallback warning, the worker retrying
- * invalidated connections at most once a day, and the `reconnect=N` tick
- * count without exception capture.
+ * once-per-connection-and-code fallback warning, a 401 on workspace
+ * discovery taking the same refresh path as a 401 on the mint, the worker
+ * retrying invalidated connections at most once a day (re-stamping the flag
+ * with a conditional update when it claims one, so a retry that fails for
+ * any reason waits another day and only one process retries), and the
+ * `reconnect=N` tick count without exception capture.
  */
 
 import type { SQL } from "drizzle-orm";
@@ -82,6 +85,7 @@ import {
     createPlaudClient,
     type PlaudConnectionCredentials,
 } from "@/lib/plaud/client-factory";
+import { listPlaudWorkspaces } from "@/lib/plaud/workspace";
 import { captureServerException } from "@/lib/posthog-server";
 import { syncRecordingsForUser } from "@/lib/sync/sync-recordings";
 import { claimUsersForSync, tick } from "@/lib/sync/worker";
@@ -207,6 +211,7 @@ function makeConnection(input: {
     accessToken: string;
     refreshToken: string | null;
     accessExpiresInSec?: number;
+    workspaceId?: string | null;
 }): PlaudConnectionCredentials {
     return {
         id: input.id,
@@ -218,20 +223,33 @@ function makeConnection(input: {
         ),
         sessionExpiresAt: new Date((nowSec() + 20 * DAY) * 1000),
         apiBase: API_BASE,
-        workspaceId: "ws_personal",
+        workspaceId:
+            input.workspaceId === undefined ? "ws_personal" : input.workspaceId,
     };
 }
 
 /** `db.update().set().where()` is awaitable and exposes `.returning()`. */
-function mockUpdates(connectionId: string): { set: Mock } {
-    const returning = vi.fn().mockResolvedValue([{ id: connectionId }]);
-    const where = vi.fn(() =>
+function mockUpdates(
+    connectionId: string,
+    returned: { id: string }[] = [{ id: connectionId }],
+): { set: Mock; where: Mock } {
+    const returning = vi.fn().mockResolvedValue(returned);
+    const where = vi.fn((_where: SQL) =>
         Object.assign(Promise.resolve(undefined), { returning }),
     );
     const set = vi.fn().mockReturnValue({ where });
     (db.update as Mock).mockReturnValue({ set });
-    return { set };
+    return { set, where };
 }
+
+const workspacesOk: RouteHandler = () =>
+    jsonResponse({
+        status: 0,
+        msg: "success",
+        data: {
+            workspaces: [{ workspace_id: "ws_personal", workspace_type: "0" }],
+        },
+    });
 
 describe("#361 workspace-token mint rejected", () => {
     it("refreshes once, re-mints with the new user token and does not fall back", async () => {
@@ -466,6 +484,64 @@ describe("#361 workspace-token mint rejected", () => {
     });
 });
 
+describe("#361 workspace discovery rejected", () => {
+    it("classifies a 401 from the workspace list as a token rejection", async () => {
+        routeFetch({ "/team-app/workspaces/list": unauthorized });
+
+        await expect(
+            listPlaudWorkspaces(makeUserToken("ut"), API_BASE),
+        ).rejects.toMatchObject({
+            code: ErrorCode.PLAUD_INVALID_TOKEN,
+            statusCode: 401,
+        });
+    });
+
+    it("refreshes, then lists workspaces and mints with the new user token", async () => {
+        const id = "conn-discovery-refresh";
+        mockUpdates(id);
+        const oldUt = makeUserToken("old-ut");
+        const newUt = makeUserToken("new-ut");
+        routeFetch({
+            "/auth/refresh-user-token": () =>
+                jsonResponse({
+                    status: 0,
+                    access_token: newUt,
+                    refresh_token: makeRefreshToken("new-rt"),
+                }),
+            "/team-app/workspaces/list": acceptOnly([newUt], workspacesOk),
+            "/workspace/token/": acceptOnly([newUt], () =>
+                jsonResponse({
+                    status: 0,
+                    data: { workspace_token: "wt.fresh" },
+                }),
+            ),
+            "/device/list": acceptOnly(["wt.fresh"], devicesOk),
+        });
+
+        const client = await createPlaudClient(
+            makeConnection({
+                id,
+                accessToken: oldUt,
+                refreshToken: makeRefreshToken("old-rt"),
+                workspaceId: null,
+            }),
+        );
+        const devices = await client.listDevices();
+
+        expect(devices.data_devices).toHaveLength(1);
+        expect(callsTo("/auth/refresh-user-token")).toHaveLength(1);
+        expect(bearersTo("/team-app/workspaces/list")).toEqual([
+            `Bearer ${oldUt}`,
+            `Bearer ${newUt}`,
+        ]);
+        expect(bearersTo("/workspace/token/")).toEqual([`Bearer ${newUt}`]);
+        expect(bearersTo("/device/list")).toEqual(["Bearer wt.fresh"]);
+        expect(client.workspaceId).toBe("ws_personal");
+        expect(client.usingUserTokenFallback).toBe(false);
+        expect(fallbackWarnings()).toHaveLength(0);
+    });
+});
+
 describe("#361 fallback warning", () => {
     it("logs once per connection across client instances in one process", async () => {
         const ut = makeUserToken("ut");
@@ -572,6 +648,122 @@ describe("#361 background worker", () => {
         expect(threshold).toBeDefined();
     });
 
+    it("claims a due invalidated connection only after re-stamping it with a conditional update", async () => {
+        const stale = new Date(Date.now() - 2 * DAY * 1000);
+        (db.select as Mock).mockReturnValueOnce(
+            selectChain([
+                {
+                    userId: "user-ok",
+                    connectionId: "conn-ok",
+                    invalidatedAt: null,
+                },
+                {
+                    userId: USER_ID,
+                    connectionId: "conn-stale",
+                    invalidatedAt: stale,
+                },
+            ]),
+        );
+        const updates = mockUpdates("conn-stale");
+
+        const before = Date.now();
+        const claimed = await claimUsersForSync();
+
+        expect(claimed).toEqual(["user-ok", USER_ID]);
+        expect(updates.set).toHaveBeenCalledTimes(1);
+        const stamp = updates.set.mock.calls[0][0] as { invalidatedAt: Date };
+        expect(stamp.invalidatedAt.getTime()).toBeGreaterThanOrEqual(before);
+        const { sql, params } = new PgDialect().sqlToQuery(
+            updates.where.mock.calls[0][0] as SQL,
+        );
+        expect(sql).toMatch(/"plaud_connections"."id" in \(\$\d+\)/);
+        expect(sql).toMatch(/"plaud_connections"."user_id" in \(\$\d+\)/);
+        expect(sql).toMatch(/"plaud_connections"."invalidated_at" < \$\d+/);
+        expect(params).toContain("conn-stale");
+        expect(params).not.toContain("conn-ok");
+        expect(params).toContain(USER_ID);
+        expect(
+            params.some(
+                (p) =>
+                    typeof p === "string" &&
+                    Math.abs(Date.parse(p) - (before - DAY * 1000)) < 60_000,
+            ),
+        ).toBe(true);
+    });
+
+    it("skips an invalidated connection that another process re-stamped first", async () => {
+        (db.select as Mock).mockReturnValueOnce(
+            selectChain([
+                {
+                    userId: "user-ok",
+                    connectionId: "conn-ok",
+                    invalidatedAt: null,
+                },
+                {
+                    userId: USER_ID,
+                    connectionId: "conn-stale",
+                    invalidatedAt: new Date(Date.now() - 2 * DAY * 1000),
+                },
+            ]),
+        );
+        mockUpdates("conn-stale", []);
+
+        expect(await claimUsersForSync()).toEqual(["user-ok"]);
+    });
+
+    it("does not touch the database again when no claimed connection is invalidated", async () => {
+        (db.select as Mock).mockReturnValueOnce(
+            selectChain([
+                {
+                    userId: "user-ok",
+                    connectionId: "conn-ok",
+                    invalidatedAt: null,
+                },
+            ]),
+        );
+
+        expect(await claimUsersForSync()).toEqual(["user-ok"]);
+        expect(db.update).not.toHaveBeenCalled();
+    });
+
+    it("keeps the fresh stamp when the daily retry fails with a network error", async () => {
+        const id = "conn-retry-network";
+        const connection = makeConnection({
+            id,
+            accessToken: makeUserToken("retry-ut"),
+            refreshToken: null,
+        });
+        (db.select as Mock)
+            .mockReturnValueOnce(
+                selectChain([
+                    {
+                        userId: USER_ID,
+                        connectionId: id,
+                        invalidatedAt: new Date(Date.now() - 2 * DAY * 1000),
+                    },
+                ]),
+            )
+            .mockReturnValueOnce(selectChain([connection]))
+            .mockReturnValueOnce(selectChain([{ id: "settings-1" }]))
+            .mockReturnValueOnce(selectChain([{ email: "me@example.com" }]));
+        const updates = mockUpdates(id);
+        mockFetch.mockRejectedValue(new Error("socket hang up"));
+
+        await tick();
+
+        expect(mockFetch).toHaveBeenCalled();
+        expect(updates.set).toHaveBeenCalledTimes(1);
+        expect(updates.set).toHaveBeenCalledWith({
+            invalidatedAt: expect.any(Date),
+        });
+        expect(updates.set.mock.invocationCallOrder[0]).toBeLessThan(
+            mockFetch.mock.invocationCallOrder[0],
+        );
+        expect(logSpy).toHaveBeenCalledWith(
+            "[background-sync] synced=0 errors=1 reconnect=0",
+        );
+    });
+
     it("counts a rejected sign-in as reconnect, not errors or synced, without exception capture", async () => {
         const id = "conn-tick";
         const connection = makeConnection({
@@ -642,5 +834,10 @@ describe("#361 background worker", () => {
         expect(result.needsReconnect).toBe(true);
         expect(result.errors.length).toBeGreaterThan(1);
         expect(captureServerException).toHaveBeenCalledTimes(1);
+        const operational = result.errors.length - 1;
+        expect(captureServerException).toHaveBeenCalledWith(
+            new Error(`Sync completed with ${operational} error(s)`),
+            expect.objectContaining({ errorCount: operational }),
+        );
     });
 });

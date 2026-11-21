@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { db } from "@/db";
 import { plaudConnections, users } from "@/db/schema";
 import { env } from "@/lib/env";
@@ -23,8 +23,10 @@ const INVALIDATED_RETRY_MS = 24 * 60 * 60 * 1000;
  * the container without a browser open (#159).
  *
  * Connections flagged for reconnect (`invalidatedAt` set) are retried at
- * most once a day; each failed attempt re-stamps the flag, and a reconnect or
- * successful sync clears it (#361).
+ * most once a day: claiming one re-stamps `invalidatedAt` with a conditional
+ * update, so a retry that fails for any reason is not claimed again for
+ * another day and only one process retries it. A reconnect or successful
+ * sync clears the flag (#361).
  *
  * Exported for testing.
  */
@@ -50,7 +52,11 @@ export async function claimUsersForSync(): Promise<string[]> {
     }
 
     const rows = await db
-        .select({ userId: plaudConnections.userId })
+        .select({
+            userId: plaudConnections.userId,
+            connectionId: plaudConnections.id,
+            invalidatedAt: plaudConnections.invalidatedAt,
+        })
         .from(plaudConnections)
         .innerJoin(users, eq(users.id, plaudConnections.userId))
         .where(and(...conditions))
@@ -60,7 +66,31 @@ export async function claimUsersForSync(): Promise<string[]> {
         .orderBy(asc(plaudConnections.lastSync))
         .limit(MAX_USERS_PER_TICK);
 
-    return rows.map((r) => r.userId);
+    const retries = rows.filter((r) => r.invalidatedAt);
+    if (retries.length === 0) return rows.map((r) => r.userId);
+
+    const stamped = await db
+        .update(plaudConnections)
+        .set({ invalidatedAt: new Date() })
+        .where(
+            and(
+                inArray(
+                    plaudConnections.id,
+                    retries.map((r) => r.connectionId),
+                ),
+                inArray(
+                    plaudConnections.userId,
+                    retries.map((r) => r.userId),
+                ),
+                lt(plaudConnections.invalidatedAt, invalidatedRetryThreshold),
+            ),
+        )
+        .returning({ id: plaudConnections.id });
+    const reclaimed = new Set(stamped.map((r) => r.id));
+
+    return rows
+        .filter((r) => !r.invalidatedAt || reclaimed.has(r.connectionId))
+        .map((r) => r.userId);
 }
 
 type SyncResult = Awaited<ReturnType<typeof syncRecordingsForUser>>;
