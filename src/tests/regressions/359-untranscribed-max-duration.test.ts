@@ -4,6 +4,8 @@
  * cannot occupy the newest-first window and hide older ones that fit.
  */
 
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@/db", () => ({
@@ -88,6 +90,11 @@ describe("#359: untranscribed query duration cap", () => {
         const outer = whereExprs[whereExprs.length - 1];
         expect(exprReferences(outer, recordings.duration)).toBe(true);
         expect(exprReferences(outer, 123_456)).toBe(true);
+
+        const query = new PgDialect().sqlToQuery(outer as SQL);
+        const match = query.sql.match(/"recordings"\."duration" <= \$(\d+)/);
+        expect(match).not.toBeNull();
+        expect(query.params[Number(match?.[1]) - 1]).toBe(123_456);
     });
 
     it("does not filter on recordings.duration without maxDurationMs", async () => {
