@@ -45,6 +45,7 @@
         "@aws-sdk/s3-request-presigner": "^3.1083.0",
         "@bprogress/next": "^3.2.12",
         "@google/generative-ai": "^0.24.1",
+        "@modelcontextprotocol/server": "^2.4.0",
         "@radix-ui/react-accordion": "^1.2.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -84,7 +85,7 @@
         "stripe": "^22.3.0",
         "tailwind-merge": "^3.4.0",
         "undici": "^7.28.0",
-        "zod": "^4.1.12"
+        "zod": "^4.6.7"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.7",
