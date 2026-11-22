@@ -149,9 +149,12 @@ Title prefixes match commit prefixes. Labels: `bug`, `enhancement`, `task`, `tri
 
 Include `closes #<n>` or `fixes #<n>` in the commit message — GitHub auto-closes when merged to `main`.
 
-### TODOs
+### TODOs and task tracking
 
-Plans and TODOs that need to survive a session belong in GitHub Issues, not in code comments or `plans/*.md`.
+- **GitHub Issues** (public): bugs, feature requests and tasks anyone could pick up or should be able to see. Use the issue templates. Commits reference them with `closes #<n>`.
+- **Linear** (private, Perier workspace, Riffado project): internal planning, the redesign plan, hosted pricing and billing decisions, competitor notes, and community reply drafts. GitHub issues sync into Linear one-way, so Linear also shows the public backlog.
+- Never copy private Linear content into public issues, commits or PRs.
+- Plans and TODOs that need to outlast a session go in one of these two places, never in code comments or `plans/*.md`.
 
 ## Changelog
 

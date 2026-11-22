@@ -4,7 +4,7 @@ Living record of design decisions for the 2026 redesign (web, iOS, Android).
 Source of truth for visuals: Paper file `riffado` (pages: 01 Foundations, 02 Web app, 03 Mobile app).
 Update this file in the same session a decision is made. If a rule here and a design disagree, fix one of them before moving on.
 
-Last updated: 2026-10-02
+Last updated: 2026-11-21
 
 ---
 
@@ -33,19 +33,34 @@ Last updated: 2026-10-02
 | AI for Ask & summaries (Settings) | Three choices: Sign in with ChatGPT (uses the ChatGPT plan), your own API key, or a model on your server. Always state what gets sent (transcript text only, never audio, and to whom). Transcription is a separate setting; Mynah lives there only. |
 | Ask | Thin client over the same tools agents use. Every claim carries a numbered citation; sources list recording + quote + play-from-timestamp. Scope selector (e.g. This week) and the model in use ("Answers with ChatGPT") are always visible in the composer, so the user knows what is searched and who answers. Mobile: Ask tab with a glass composer above the tab bar and history behind a clock button. Follow-up suggestions only after an answer, labelled "Ask next". |
 | First run | Empty states teach the one next action and show only what is real: no folder/recorder/count chrome when there is nothing. Mobile: recorder photo + "Your first recording" + upload fallback. Web: "Get the app" (QR, pairs the recorder and signs in to this server) + "Upload audio". |
+| Web-only v1 source | Plaud account sync. Plaud is named factually ("Syncs from your Plaud account"), never as something we replace. Connection method order follows success rate: Sign in with Plaud first, Email code and Paste token as other options (Monarch's "best connection first" pattern). |
+| Recording sources | A recorder always shows how its recordings arrive: "Via Plaud" today, "Via iPhone" once the app ships. Settings > Recorders is structured as Sources > Plaud account so the app becomes a second source, not a redesign. The app is not mentioned in the UI until it ships. |
+| Connect Plaud dialog | Not-installed state leads: three numbered steps (add Riffado Connector, sign in to Plaud as usual, come back connected), one ink button, the honest "up to 30 days" note, then Email code and Paste a token as rows on a quiet footer. Reconnect reuses the same dialog with the account email and Plaud server shown. |
+| Included AI for summaries (hosted, paid plan) | Planned (2026-11-21): the paid plan includes AI for summaries and titles. Shown as the first option in AI for summaries ("Included with your plan") with a usage line in plain units and its reset date, and as a meter in Plan & usage. It is not Mynah (Mynah stays transcription only) and is never offered on self-host. Own API key and a model on your server stay available next to it. Don't state the vendor or region behind it until verified. |
+| Phone browser | The phone-browser web app uses the same layout and components as the `app ·` screens minus native chrome (no Liquid Glass, plain top bar, non-glass night player), so the Expo app can reuse them. |
 | Server is not home-screen content | People rarely switch servers. The server lives in You / Settings. It appears on the home screen only when something is wrong (unreachable, auth expired) as a banner that says what is safe and what happens next. Per-recording location ("Your server", "On this phone") stays on rows and detail. |
 
 ## 2a. Release scope
 
-Goal: ship v1 as soon as possible. Rule: v1 = the core loop end to end (recorder -> phone -> your server -> transcript + summary -> read and listen) plus a reskin of features that already exist. Anything needing new backend work is post-v1. Artboards in Paper are prefixed `v1 ·` or `later ·`.
+Goal: ship v1 as soon as possible. Rule: v1 = the core loop end to end plus a reskin of features that already exist. Artboards in Paper are prefixed `v1 ·`, `app ·` or `later ·`.
 
-**v1 mobile:** Welcome, Allow Bluetooth (pre-permission, before the system prompt), Sign in (self-host, email + password, matches current auth), Create Riffado Cloud account, Choose a home (Riffado Cloud / Your own server), Connect server, Pair (auto-detect + not-found fallback), Transfer, Transfer interrupted (recorder out of range: paused, nothing lost, resumes), Library (processing states, unreachable banner, first run), Recording (Overview, Transcript with speaker labels, glass mini player), Recorders, You/Settings (not designed yet). Tab bar: Library, Recorders, You. You screen: profile, Server group (server, transcription, summaries; each opens details), On this phone (Upload on Wi-Fi only, Remove audio after upload), Sign out.
+Features that don't exist yet are still designed (2026-11-21: they are planned, not cut). Decided 2026-11-22: each one ships as a vertical slice (UI, backend, export/backup) behind a flag, and no entry point appears in production before its destination works.
 
-**v1 web:** Library (All / Untranscribed filters), Recording (Overview, Transcript, player, Share, download, rename), Processing states, First run, Settings: Account, Recorders, Server & storage, Transcription, AI for summaries (own API key or model on your server), API & webhooks, Export & backup. Sidebar: Search, Library, Recorders, account.
+Task tracking: the build plan lives in Linear (Riffado project, INT-51 and its sub-issues), not in this repo.
+
+**Decided 2026-10-03: v1 is web-only.** The Apple developer account is gone, so the phone app (and with it the direct Bluetooth connection) is postponed. Recordings reach Riffado through Plaud account sync, which already exists (`plaud-connect-tabs.tsx`: Sign in with Plaud via the connector, Email code, Paste token). v1 loop: recorder -> Plaud account -> sync -> your server -> transcript + summary -> read and listen, in a desktop or phone browser.
+
+- `app ·` artboards: designed for the phone app. Kept unchanged; they are what we build once the iOS app is back. Do not delete or edit them to fit web-only.
+- `v1 ·` web artboards that assumed the phone get a web-only sibling next to them (sync instead of "waiting on phone", Connect Plaud instead of "Get the app").
+- No PWA work in v1: the manifest and `appleWebApp` meta already exist, and nothing in v1 needs install-only features.
+
+**app (phone, postponed):** Welcome, Allow Bluetooth (pre-permission, before the system prompt), Sign in (self-host, email + password, matches current auth), Create Riffado Cloud account, Choose a home (Riffado Cloud / Your own server), Connect server, Pair (auto-detect + not-found fallback), Transfer, Transfer interrupted (recorder out of range: paused, nothing lost, resumes), Library (processing states, unreachable banner, first run), Recording (Overview, Transcript with speaker labels, glass mini player), Recorders, You/Settings (not designed yet). Tab bar: Library, Recorders, You. You screen: profile, Server group (server, transcription, summaries; each opens details), On this phone (Upload on Wi-Fi only, Remove audio after upload), Sign out.
+
+**v1 web:** Connect Plaud (first run + Settings), sync status and Sync now, Reconnect when the Plaud token expires, Library (All / Untranscribed filters), Recording (Overview, Transcript, player, Share, download, rename), Processing states, First run, Settings: Account, Plan & usage (hosted), Recorders, Server & storage, Transcription, AI for summaries (included with plan on hosted, own API key, or model on your server), API & webhooks, Export & backup. Sidebar: Search, Library, Recorders, account. Phone browser: Library and Recording.
 
 **Post-v1:** Ask (web + mobile), Highlights, marking moments, speaker naming + voice match, corrections glossary, folders, MCP/agent connections and phone approval, Sign in with ChatGPT (PR #321), phone-mic recording + live transcription, Photo/Note capture, "Only this phone" home (needs on-device transcription), summary styles, automations, share sheet, transcription language display.
 
-Mobile stack: Expo (decided 2026-10-02). Glass via `expo-glass-effect` behind a single `GlassSurface` wrapper. Build tasks: `docs/design/v1-tasks.md` (local, not yet published as issues).
+Mobile stack: Expo (decided 2026-10-02). Glass via `expo-glass-effect` behind a single `GlassSurface` wrapper.
 
 Decided 2026-10-02: Sign in with ChatGPT, phone-mic recording and "Only this phone" are all post-v1.
 
