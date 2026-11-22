@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
@@ -25,6 +24,7 @@ import {
     getVisiblePresets,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
+import { toast } from "@/lib/toast";
 
 interface AddProviderDialogProps {
     open: boolean;

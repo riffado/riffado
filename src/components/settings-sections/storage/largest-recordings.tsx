@@ -26,31 +26,33 @@ export function LargestRecordings({ items }: LargestRecordingsProps) {
     if (items.length === 0) return null;
 
     return (
-        <div className="rounded-lg border bg-card">
-            <div className="px-4 pt-3 pb-2">
-                <div className="text-sm font-medium">Largest recordings</div>
-                <div className="text-xs text-muted-foreground">
-                    Open a recording to preview it before deleting
-                </div>
+        <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-0.5">
+                <h3 className="text-row font-semibold text-strong">
+                    Largest recordings
+                </h3>
+                <p className="text-ui text-subtle">
+                    Open one to listen before you delete it
+                </p>
             </div>
-            <ul className="divide-y">
+            <ul className="flex flex-col divide-y divide-hairline border-y border-hairline">
                 {items.map((r, i) => (
                     <li key={r.id}>
                         <Link
                             href={`/recordings/${r.id}`}
-                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent/50 transition-colors text-sm"
+                            className="flex items-center gap-3 py-3 text-ui outline-none transition-colors hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50"
                         >
                             <span
                                 className={`size-2.5 shrink-0 rounded-sm ${BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length]}`}
                                 aria-hidden="true"
                             />
-                            <span className="min-w-0 flex-1 truncate">
+                            <span className="min-w-0 flex-1 truncate font-medium text-strong">
                                 {r.filename}
                             </span>
-                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            <span className="shrink-0 text-small text-subtle tabular-nums">
                                 {formatDurationMs(r.duration)}
                             </span>
-                            <span className="shrink-0 text-xs font-medium tabular-nums w-20 text-right">
+                            <span className="w-20 shrink-0 text-right text-small font-medium text-strong tabular-nums">
                                 {formatBytes(r.filesize)}
                             </span>
                         </Link>

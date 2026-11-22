@@ -2,7 +2,6 @@
 
 import { AlertTriangle, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
@@ -27,6 +26,7 @@ import {
     isLocalPreset,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
+import { toast } from "@/lib/toast";
 
 interface Provider {
     id: string;

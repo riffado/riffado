@@ -1,18 +1,17 @@
 "use client";
 
-import { Pencil, Plus, Trash2, Webhook } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsRowsSkeleton } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
+import { StatusDot } from "@/components/ui/status-dot";
+import { toast } from "@/lib/toast";
 import { WebhookDeliveriesDialog } from "./webhook-deliveries-dialog";
 import { WebhookEditorDialog } from "./webhook-editor-dialog";
-import {
-    DEFAULT_WEBHOOK_EVENTS,
-    formatWebhookDate,
-    type WebhookEndpoint,
-} from "./webhook-types";
+import { DEFAULT_WEBHOOK_EVENTS, type WebhookEndpoint } from "./webhook-types";
 
 export function WebhooksSection() {
     const confirm = useConfirm();
@@ -73,34 +72,28 @@ export function WebhooksSection() {
     };
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Webhooks"
-                description="Outbound HTTP notifications for recording, transcript, and summary events."
-                icon={Webhook}
-                action={
-                    <Button size="sm" onClick={() => openEditor(null)}>
-                        <Plus className="size-4" />
-                        Add Webhook
-                    </Button>
-                }
-            />
-
+        <SettingsGroup
+            title="Webhooks"
+            description="Tell another app when something happens, like a transcript being ready"
+            action={
+                <Button
+                    variant="quiet"
+                    size="compact"
+                    onClick={() => openEditor(null)}
+                >
+                    <Plus />
+                    Add webhook
+                </Button>
+            }
+        >
             {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-                </div>
+                <SettingsRowsSkeleton rows={1} />
             ) : webhooks.length === 0 ? (
-                <div className="text-center py-12 border rounded-lg">
-                    <Webhook className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No webhooks</h3>
-                    <Button size="sm" onClick={() => openEditor(null)}>
-                        <Plus className="size-4" />
-                        Add Webhook
-                    </Button>
-                </div>
+                <p className="border-y border-hairline py-4 text-ui text-subtle">
+                    No webhooks yet
+                </p>
             ) : (
-                <div className="space-y-3">
+                <ul className="flex flex-col divide-y divide-hairline border-y border-hairline">
                     {webhooks.map((webhook) => (
                         <WebhookRow
                             key={webhook.id}
@@ -110,7 +103,7 @@ export function WebhooksSection() {
                             onShowDeliveries={setDeliveryWebhook}
                         />
                     ))}
-                </div>
+                </ul>
             )}
 
             <WebhookEditorDialog
@@ -125,8 +118,30 @@ export function WebhooksSection() {
                 webhook={deliveryWebhook}
                 onClose={() => setDeliveryWebhook(null)}
             />
-        </div>
+        </SettingsGroup>
     );
+}
+
+/** "transcription.completed" -> "Transcription completed". */
+function eventLabel(event: string): string {
+    const words = event.replace(/[._]/g, " ");
+    return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function eventsSummary(events: string[]): string {
+    const labels = events.map(eventLabel);
+    if (labels.length <= 3) return labels.join(" · ");
+    return `${labels.slice(0, 2).join(" · ")} and ${labels.length - 2} more`;
+}
+
+function deliveryLine(webhook: WebhookEndpoint): string {
+    if (!webhook.lastDeliveryAt) return "Never delivered";
+    const when = formatDistanceToNow(new Date(webhook.lastDeliveryAt), {
+        addSuffix: true,
+    });
+    return webhook.lastDeliveryStatus === "failed"
+        ? `Last delivery failed ${when}`
+        : `Last delivered ${when}`;
 }
 
 /**
@@ -144,70 +159,58 @@ function WebhookRow({
     onDelete: (webhookId: string) => void;
     onShowDeliveries: (webhook: WebhookEndpoint) => void;
 }) {
+    const tone = !webhook.enabled
+        ? "idle"
+        : webhook.lastDeliveryStatus === "failed"
+          ? "attention"
+          : "ready";
     return (
-        <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-            <div className="min-w-0 space-y-2">
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <h3 className="min-w-0 truncate font-medium">
-                        {webhook.description || webhook.url}
-                    </h3>
-                    <span
-                        className={`rounded border px-2 py-0.5 text-xs ${
-                            webhook.enabled
-                                ? "text-primary"
-                                : "text-muted-foreground"
-                        }`}
-                    >
-                        {webhook.enabled ? "Enabled" : "Disabled"}
-                    </span>
-                    {webhook.lastDeliveryStatus && (
-                        <span className="rounded border px-2 py-0.5 text-xs">
-                            {webhook.lastDeliveryStatus}
+        <li className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3.5">
+            <div className="flex min-w-0 flex-1 basis-64 items-center gap-4">
+                <StatusDot tone={tone} />
+                <div className="flex min-w-0 flex-col gap-0.5">
+                    {webhook.description && (
+                        <span className="truncate text-row font-semibold text-strong">
+                            {webhook.description}
                         </span>
                     )}
+                    <span className="truncate font-mono text-small leading-4 text-strong">
+                        {webhook.url}
+                    </span>
+                    <span className="text-small leading-4 text-subtle">
+                        {webhook.enabled ? "" : "Paused · "}
+                        {eventsSummary(webhook.events)}
+                    </span>
                 </div>
-                <p className="break-all font-mono text-xs text-muted-foreground">
-                    {webhook.url}
-                </p>
-                <div className="flex flex-wrap gap-1">
-                    {webhook.events.map((event) => (
-                        <span
-                            key={event}
-                            className="rounded bg-muted px-2 py-0.5 text-xs"
-                        >
-                            {event}
-                        </span>
-                    ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                    Last delivery: {formatWebhookDate(webhook.lastDeliveryAt)}
-                </p>
             </div>
-            <div className="flex gap-2">
+            <span className="text-small leading-4 text-subtle">
+                {deliveryLine(webhook)}
+            </span>
+            <div className="flex shrink-0 items-center gap-1">
                 <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="compact"
                     onClick={() => onShowDeliveries(webhook)}
                 >
                     Deliveries
                 </Button>
                 <Button
-                    variant="outline"
-                    size="icon"
+                    variant="ghost"
+                    size="icon-compact"
                     onClick={() => onEdit(webhook)}
                     aria-label="Edit webhook"
                 >
-                    <Pencil className="size-4" />
+                    <Pencil />
                 </Button>
                 <Button
-                    variant="outline"
-                    size="icon"
+                    variant="ghost"
+                    size="icon-compact"
                     onClick={() => onDelete(webhook.id)}
                     aria-label="Delete webhook"
                 >
-                    <Trash2 className="size-4 text-destructive" />
+                    <Trash2 />
                 </Button>
             </div>
-        </div>
+        </li>
     );
 }

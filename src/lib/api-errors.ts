@@ -1,6 +1,6 @@
-import { toast } from "sonner";
 import type { ErrorCode } from "@/lib/errors";
 import { buildReportBugUrl } from "@/lib/report-bug";
+import { toast } from "@/lib/toast";
 
 export interface ApiErrorBody {
     error: string;

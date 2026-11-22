@@ -11,19 +11,31 @@ const toneClass: Record<StatusTone, string> = {
     idle: "border-[1.5px] border-muted-foreground bg-transparent",
 };
 
-/** A 7px status dot. Status is never shown as a filled container. */
+const sizeClass = {
+    default: "size-[7px]",
+    small: "size-1.5",
+} as const;
+
+/**
+ * A status dot: 7px by default, 6px (`small`) on secondary status lines
+ * such as a recorder's connection. Status is never shown as a filled
+ * container.
+ */
 export function StatusDot({
     tone,
+    size = "default",
     className,
 }: {
     tone: StatusTone;
+    size?: keyof typeof sizeClass;
     className?: string;
 }) {
     return (
         <span
             aria-hidden="true"
             className={cn(
-                "inline-block size-[7px] shrink-0 rounded-full",
+                "inline-block shrink-0 rounded-full",
+                sizeClass[size],
                 toneClass[tone],
                 className,
             )}

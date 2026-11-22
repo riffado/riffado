@@ -6,6 +6,7 @@ import {
     isThisYear,
     isToday,
     isYesterday,
+    subDays,
 } from "date-fns";
 import type { DateTimeFormat } from "@/types/common";
 
@@ -59,4 +60,32 @@ export function dateGroupLabel(date: Date | string): string {
         return "Earlier this month";
     }
     return isThisYear(d) ? format(d, "MMMM") : format(d, "MMMM yyyy");
+}
+
+/** How long ago a sync happened, for sync status copy: "4 min ago". */
+export function formatSyncedAgo(date: Date, now: number): string {
+    const ts = date.getTime();
+    if (!Number.isFinite(ts)) return "";
+    const minutes = Math.floor((now - ts) / 60_000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? "day" : "days"} ago`;
+}
+
+/**
+ * Time detail for a recording row's metadata line. Rows sit under a day
+ * group, so recent rows show the time of day, the rest of the week the
+ * weekday, and older rows the date.
+ */
+export function formatRowTime(date: Date | string, now: Date): string {
+    const d = typeof date === "string" ? new Date(date) : date;
+    if (isSameDay(d, now) || isSameDay(d, subDays(now, 1))) {
+        return format(d, "HH:mm");
+    }
+    const days = differenceInDays(now, d);
+    if (days >= 0 && days < 7) return format(d, "EEE");
+    return isThisYear(d) ? format(d, "MMM d") : format(d, "MMM d, yyyy");
 }

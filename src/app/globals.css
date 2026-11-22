@@ -57,11 +57,32 @@
     --terracotta-wash: #f3e3da;
     --status-ready: #11ad32;
     --status-working: #d9a514;
+    /* Strongest text and played dots on night surfaces. */
+    --night-foreground: #faf9f5;
+    /* Unplayed dots on night surfaces. */
+    --night-dim: #6b6a63;
+
+    /* Redesign text and surface roles (DESIGN.md section 3). Theme-aware:
+       the light values match the Paper tokens, .dark remaps them. */
+    --surface: var(--sidebar);
+    --strong: var(--ink);
+    --subtle: #535146;
+    /* Settings: hairline between stacked rows (Paper --color-secondary). */
+    --hairline: var(--secondary);
+
+    /* Recording view: the white reading surface and the floating night
+       player that sits on it. */
+    --reader: #ffffff;
+    --player-surface: var(--night);
+    --player-shadow:
+        0 12px 40px rgb(20 20 19 / 0.22), 0 2px 6px rgb(20 20 19 / 0.12);
 
     /* Corner radii. Values assume continuous (squircle) corners; the
        .squircle utility scales them down where corner-shape is unsupported. */
+    --radius-small: 10px;
     --radius-inner: 12px;
     --radius-control: 15px;
+    --radius-item: 18px;
     --radius-card: 30px;
     --radius-sheet: 56px;
 
@@ -159,6 +180,14 @@
     --sidebar-border: oklch(0.9401 0 0);
     --sidebar-ring: oklch(0.7731 0 0);
 
+    --strong: var(--card-foreground);
+    --subtle: var(--foreground);
+    --hairline: var(--border);
+
+    --reader: var(--card);
+    --player-surface: var(--night-raised);
+    --player-shadow: 0 12px 40px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
+
     /* Hardware Design System Colors (Dark Mode) */
     --app-background: var(--background);
     --rack-background: var(--card);
@@ -226,11 +255,62 @@
     --color-night-raised: var(--night-raised);
     --color-night-border: var(--night-border);
     --color-night-text: var(--night-text);
+    --color-night-foreground: var(--night-foreground);
+    --color-night-dim: var(--night-dim);
     --color-terracotta: var(--terracotta);
     --color-terracotta-bright: var(--terracotta-bright);
     --color-terracotta-wash: var(--terracotta-wash);
     --color-status-ready: var(--status-ready);
     --color-status-working: var(--status-working);
+    --color-surface: var(--surface);
+    --color-strong: var(--strong);
+    --color-subtle: var(--subtle);
+    --color-hairline: var(--hairline);
+
+    /* Settings type roles (Paper settings artboards). */
+    --text-page-title: 44px;
+    --text-page-title--line-height: 46px;
+    --text-page-title--letter-spacing: -0.04em;
+    --text-section-title: 22px;
+    --text-section-title--line-height: 28px;
+    --text-section-title--letter-spacing: -0.02em;
+    --text-plan-title: 28px;
+    --text-plan-title--line-height: 34px;
+    --text-plan-title--letter-spacing: -0.03em;
+    --text-option: 16px;
+    --text-option--line-height: 20px;
+    --text-row: 15px;
+    --text-row--line-height: 18px;
+    --text-meter: 28px;
+    --text-meter--line-height: 28px;
+    --text-meter-large: 32px;
+    --text-meter-large--line-height: 32px;
+    --color-reader: var(--reader);
+    --color-player: var(--player-surface);
+    --shadow-player: var(--player-shadow);
+
+    --text-small: 13px;
+    --text-small--line-height: 19px;
+    --text-ui: 14px;
+    --text-ui--line-height: 18px;
+    --text-pane-title: 26px;
+    --text-pane-title--line-height: 32px;
+    --text-pane-title--letter-spacing: -0.03em;
+    --text-reading: 17px;
+    --text-reading--line-height: 26px;
+    --text-display: 48px;
+    --text-display--line-height: 50px;
+    --text-display--letter-spacing: -0.045em;
+    --text-document-title: 60px;
+    --text-document-title--line-height: 60px;
+    --text-document-title--letter-spacing: -0.045em;
+    --text-document-title-compact: 34px;
+    --text-document-title-compact--line-height: 36px;
+    --text-document-title-compact--letter-spacing: -0.04em;
+    --text-lead: 19px;
+    --text-lead--line-height: 31px;
+    --text-transcript: 17px;
+    --text-transcript--line-height: 28px;
 
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
@@ -1041,8 +1121,10 @@
     /* biome-ignore lint/correctness/noUnknownProperty: corner-shape (CSS Borders 4) is newer than Biome's property list */
     @supports not (corner-shape: squircle) {
         .squircle {
+            --radius-small: 7px;
             --radius-inner: 8px;
             --radius-control: 10px;
+            --radius-item: 12px;
             --radius-card: 20px;
             --radius-sheet: 38px;
         }

@@ -3,7 +3,6 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import {
     Dialog,
     DialogContent,
@@ -18,6 +17,7 @@ import {
     OnboardingStepWelcome,
 } from "@/components/onboarding-steps";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/lib/toast";
 
 type OnboardingStep = "welcome" | "plaud" | "ai-provider" | "complete";
 
@@ -154,10 +154,22 @@ export function OnboardingDialog({
                         <OnboardingStepAiProvider
                             hasOwnProvider={hasOwnProvider}
                             hasIncludedProvider={hasIncludedProvider}
-                            onGoToSettings={() => {
+                            onGoToSettings={async () => {
                                 onOpenChange(false);
-                                window.location.href =
-                                    "/dashboard?settings=providers";
+                                // Settings only opens once onboarding is
+                                // done (it redirects to the dashboard
+                                // otherwise). Leaving for Settings here is
+                                // the user's way out of the last step.
+                                await fetch("/api/settings/user", {
+                                    method: "PUT",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                        onboardingCompleted: true,
+                                    }),
+                                }).catch(() => {});
+                                window.location.href = "/settings#providers";
                             }}
                         />
                     )}

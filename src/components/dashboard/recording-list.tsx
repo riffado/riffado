@@ -1,6 +1,5 @@
 "use client";
 
-import { Mic } from "lucide-react";
 import type * as React from "react";
 import {
     useCallback,
@@ -16,12 +15,17 @@ import {
 } from "@/components/dashboard/pending-upload-row";
 import {
     type ListDensity,
+    ListViewMenu,
     RecordingListToolbar,
     type SortOrder,
 } from "@/components/dashboard/recording-list-toolbar";
 import { RecordingRow } from "@/components/dashboard/recording-row";
-import { Card, CardContent } from "@/components/ui/card";
-import { dateGroupLabel } from "@/lib/format-date";
+import { FilterGroup } from "@/components/ui/filter-group";
+import {
+    dateGroupLabel,
+    formatDateTime,
+    formatRowTime,
+} from "@/lib/format-date";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
@@ -30,6 +34,14 @@ export type {
     ListDensity,
     SortOrder,
 } from "@/components/dashboard/recording-list-toolbar";
+
+/** Which recordings the list shows. */
+export type LibraryFilter = "all" | "untranscribed";
+
+const FILTER_OPTIONS = [
+    { value: "all", label: "All" },
+    { value: "untranscribed", label: "Untranscribed" },
+] as const satisfies readonly { value: LibraryFilter; label: string }[];
 
 interface TranscriptionData {
     text?: string;
@@ -42,6 +54,16 @@ interface RecordingListProps {
     currentRecording: Recording | null;
     pendingUploads: PendingUpload[];
     inFlightActions: Map<string, "transcribing" | "summarizing">;
+    /** Recorder names keyed by serial number, for the row metadata line. */
+    deviceNames: Map<string, string>;
+    query: string;
+    onQueryChange: (next: string) => void;
+    filter: LibraryFilter;
+    onFilterChange: (next: LibraryFilter) => void;
+    /** Sync status and actions shown next to the pane title on `lg`+. */
+    headerActions: React.ReactNode;
+    /** Notice shown between the header and the rows (e.g. reconnect). */
+    banner: React.ReactNode;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
     initialDateTimeFormat: DateTimeFormat;
@@ -52,6 +74,8 @@ interface RecordingListProps {
 
 export interface RecordingListHandle {
     focusSearch: () => void;
+    /** Selects the first recording the list currently shows. */
+    selectFirst: () => void;
     next: () => void;
     prev: () => void;
 }
@@ -79,12 +103,25 @@ function transcriptSnippet(
     return `${stripped.slice(0, maxChars - 1).trimEnd()}\u2026`;
 }
 
+function emptyMessage(query: string, filter: LibraryFilter): string {
+    if (query) return "No recordings match your search.";
+    if (filter === "untranscribed") return "Every recording is transcribed.";
+    return "No recordings yet.";
+}
+
 export function RecordingList({
     recordings,
     transcriptions,
     currentRecording,
     pendingUploads,
     inFlightActions,
+    deviceNames,
+    query,
+    onQueryChange,
+    filter,
+    onFilterChange,
+    headerActions,
+    banner,
     onSelect,
     onDelete,
     initialDateTimeFormat,
@@ -96,7 +133,6 @@ export function RecordingList({
     const [dateTimeFormat] = useState<DateTimeFormat>(initialDateTimeFormat);
     const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
     const [density, setDensity] = useState<ListDensity>(initialDensity);
-    const [query, setQuery] = useState("");
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
     const searchRef = useRef<HTMLInputElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
@@ -120,15 +156,21 @@ export function RecordingList({
         [],
     );
 
+    const isTranscribed = useCallback(
+        (r: Recording) =>
+            r.hasTranscript === true || !!transcriptions.get(r.id)?.text,
+        [transcriptions],
+    );
+
     const filtered = useMemo(() => {
         const q = query.trim().toLowerCase();
-        const base = q
-            ? recordings.filter((r) => {
-                  if (r.filename.toLowerCase().includes(q)) return true;
-                  const t = transcriptions.get(r.id);
-                  return !!t?.text && t.text.toLowerCase().includes(q);
-              })
-            : recordings;
+        const base = recordings.filter((r) => {
+            if (filter === "untranscribed" && isTranscribed(r)) return false;
+            if (!q) return true;
+            if (r.filename.toLowerCase().includes(q)) return true;
+            const t = transcriptions.get(r.id);
+            return !!t?.text && t.text.toLowerCase().includes(q);
+        });
 
         const sorted = [...base];
         switch (sortOrder) {
@@ -151,12 +193,13 @@ export function RecordingList({
                 break;
         }
         return sorted;
-    }, [recordings, transcriptions, query, sortOrder]);
+    }, [recordings, transcriptions, query, filter, sortOrder, isTranscribed]);
 
     const visible = filtered.slice(0, visibleCount);
+    const isGrouped = sortOrder !== "name";
 
     const grouped = useMemo(() => {
-        if (sortOrder === "name") {
+        if (!isGrouped) {
             return [{ label: null as string | null, items: visible }];
         }
         const groups: { label: string; items: Recording[] }[] = [];
@@ -170,7 +213,7 @@ export function RecordingList({
             }
         }
         return groups;
-    }, [visible, sortOrder]);
+    }, [visible, isGrouped]);
 
     // Reset visibleCount when the filter changes so search results
     // aren't accidentally truncated.
@@ -208,6 +251,10 @@ export function RecordingList({
         ref,
         () => ({
             focusSearch: () => searchRef.current?.focus(),
+            selectFirst: () => {
+                const target = filtered[0];
+                if (target) onSelect(target);
+            },
             next: () => {
                 const list = filtered;
                 if (list.length === 0) return;
@@ -243,90 +290,105 @@ export function RecordingList({
     );
 
     const isCompact = density === "compact";
-    const rowPadding = isCompact ? "px-4 py-2" : "px-4 py-3";
+    const now = new Date();
+    const rowMeta = (r: Recording): string => {
+        const time =
+            isGrouped && dateTimeFormat === "relative"
+                ? formatRowTime(r.startTime, now)
+                : formatDateTime(r.startTime, dateTimeFormat);
+        const device = r.deviceSn ? deviceNames.get(r.deviceSn) : undefined;
+        return device ? `${time} \u00b7 ${device}` : time;
+    };
 
     return (
-        <Card hasNoPadding>
-            <CardContent className="p-0">
-                <RecordingListToolbar
-                    query={query}
-                    onQueryChange={setQuery}
-                    onEnterSelectFirst={() => {
-                        if (filtered.length > 0) onSelect(filtered[0]);
-                    }}
-                    searchRef={searchRef}
-                    filteredCount={filtered.length}
-                    totalCount={recordings.length}
-                    sortOrder={sortOrder}
-                    onSortOrderChange={setSortOrderPersisted}
-                    density={density}
-                    onDensityChange={setDensityPersisted}
-                />
+        <div className="flex flex-col lg:h-full lg:min-h-0">
+            <div className="flex flex-col gap-4 pb-3.5 lg:px-6 lg:pt-6.5">
+                <div className="hidden items-baseline justify-between gap-3 lg:flex">
+                    <h1 className="font-display text-pane-title font-semibold text-strong">
+                        Library
+                    </h1>
+                    {headerActions}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                    <FilterGroup
+                        aria-label="Show recordings"
+                        value={filter}
+                        onValueChange={onFilterChange}
+                        options={FILTER_OPTIONS}
+                    />
+                    <ListViewMenu
+                        sortOrder={sortOrder}
+                        onSortOrderChange={setSortOrderPersisted}
+                        density={density}
+                        onDensityChange={setDensityPersisted}
+                    />
+                </div>
+            </div>
 
-                {pendingUploads.length > 0 && (
-                    <div className="divide-y bg-muted/30">
-                        {pendingUploads.map((p) => (
-                            <PendingUploadRow
-                                key={p.id}
-                                upload={p}
-                                rowPadding={rowPadding}
-                            />
-                        ))}
-                    </div>
-                )}
+            {banner}
 
-                <div>
+            <RecordingListToolbar
+                query={query}
+                onQueryChange={onQueryChange}
+                onEnterSelectFirst={() => {
+                    if (filtered.length > 0) onSelect(filtered[0]);
+                }}
+                searchRef={searchRef}
+                filteredCount={filtered.length}
+                totalCount={recordings.length}
+            />
+
+            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
+                <div className="flex flex-col gap-0.5 pb-4 lg:px-2.5">
+                    {pendingUploads.map((p) => (
+                        <PendingUploadRow
+                            key={p.id}
+                            upload={p}
+                            isCompact={isCompact}
+                        />
+                    ))}
+
                     {grouped.map((group, gi) => (
                         <div
                             key={group.label ?? `__ungrouped-${gi.toString()}`}
+                            className="flex flex-col gap-0.5"
                         >
                             {group.label && (
-                                <div className="sticky top-0 z-10 bg-background/85 px-4 pt-2 pb-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider text-muted-foreground/70 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+                                <div className="z-10 bg-background px-3.5 pt-3.5 pb-1.5 text-xs font-medium text-muted-foreground lg:sticky lg:top-0">
                                     {group.label}
                                 </div>
                             )}
-                            <div className="divide-y">
-                                {group.items.map((recording) => (
-                                    <RecordingRow
-                                        key={recording.id}
-                                        recording={recording}
-                                        isSelected={
-                                            currentRecording?.id ===
-                                            recording.id
-                                        }
-                                        inFlight={inFlightActions.get(
-                                            recording.id,
-                                        )}
-                                        snippet={transcriptSnippet(
-                                            transcriptions.get(recording.id)
-                                                ?.text,
-                                        )}
-                                        isCompact={isCompact}
-                                        rowPadding={rowPadding}
-                                        dateTimeFormat={dateTimeFormat}
-                                        onSelect={onSelect}
-                                        onDelete={onDelete}
-                                        registerRef={registerRowRef}
-                                    />
-                                ))}
-                            </div>
+                            {group.items.map((recording) => (
+                                <RecordingRow
+                                    key={recording.id}
+                                    recording={recording}
+                                    isSelected={
+                                        currentRecording?.id === recording.id
+                                    }
+                                    hasTranscript={isTranscribed(recording)}
+                                    inFlight={inFlightActions.get(recording.id)}
+                                    snippet={transcriptSnippet(
+                                        transcriptions.get(recording.id)?.text,
+                                    )}
+                                    meta={rowMeta(recording)}
+                                    isCompact={isCompact}
+                                    onSelect={onSelect}
+                                    onDelete={onDelete}
+                                    registerRef={registerRowRef}
+                                />
+                            ))}
                         </div>
                     ))}
 
                     {filtered.length === 0 && pendingUploads.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <Mic className="mb-2 size-8 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">
-                                {query
-                                    ? "No recordings match your search."
-                                    : "No recordings yet."}
-                            </p>
-                        </div>
+                        <p className="px-3.5 py-10 text-center text-small text-muted-foreground">
+                            {emptyMessage(query, filter)}
+                        </p>
                     )}
 
                     <div ref={sentinelRef} className="h-4" aria-hidden="true" />
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }

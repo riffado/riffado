@@ -9,6 +9,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface Props {
     isAdmin: boolean;
@@ -23,20 +24,22 @@ interface Props {
         error?: string;
     } | null;
     onSync: () => void;
+    /** False hides the sync button (no Plaud connection to sync from). */
+    showSync: boolean;
     isUploading: boolean;
     isProcessing: boolean;
-    uploadInputRef: React.RefObject<HTMLInputElement | null>;
     onTriggerUpload: () => void;
-    onUploadInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onOpenPalette: () => void;
     onOpenSettings: () => void;
     /** Called on hover or focus of the Settings entry so its data can load before the click. */
     onSettingsIntent: () => void;
     onOpenShortcuts: () => void;
+    className?: string;
 }
 
 /**
- * Sticky page header for the dashboard workstation.
+ * Sticky page header for the dashboard workstation below `lg`. On `lg`+
+ * the sidebar and the list pane header take over its actions.
  *
  * Title left, actions right, always one row. On mobile the buttons
  * collapse to icon-only (per-button `sm:` overrides) so the whole bar
@@ -58,21 +61,26 @@ export function WorkstationHeader({
     isAutoSyncing,
     lastSyncResult,
     onSync,
+    showSync,
     isUploading,
     isProcessing,
-    uploadInputRef,
     onTriggerUpload,
-    onUploadInputChange,
     onOpenPalette,
     onOpenSettings,
     onSettingsIntent,
     onOpenShortcuts,
+    className,
 }: Props) {
     return (
-        <div className="sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+        <div
+            className={cn(
+                "sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70",
+                className,
+            )}
+        >
             <div className="flex min-w-0 items-baseline gap-3">
                 <h1 className="truncate text-xl font-semibold leading-tight sm:text-2xl md:text-3xl">
-                    Recordings
+                    Library
                 </h1>
                 {/*
                   Recording count lives in the list pane's own meta row
@@ -102,20 +110,15 @@ export function WorkstationHeader({
                         Search recordings, transcripts, and actions
                     </TooltipContent>
                 </Tooltip>
-                <SyncButton
-                    lastSyncTime={lastSyncTime}
-                    nextSyncTime={nextSyncTime}
-                    isAutoSyncing={isAutoSyncing}
-                    lastSyncResult={lastSyncResult}
-                    onSync={onSync}
-                />
-                <input
-                    ref={uploadInputRef}
-                    type="file"
-                    accept="audio/*"
-                    className="hidden"
-                    onChange={onUploadInputChange}
-                />
+                {showSync ? (
+                    <SyncButton
+                        lastSyncTime={lastSyncTime}
+                        nextSyncTime={nextSyncTime}
+                        isAutoSyncing={isAutoSyncing}
+                        lastSyncResult={lastSyncResult}
+                        onSync={onSync}
+                    />
+                ) : null}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button

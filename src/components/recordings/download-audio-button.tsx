@@ -9,11 +9,22 @@ import {
 } from "@/components/ui/tooltip";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 
-export function DownloadAudioButton({ recordingId }: { recordingId: string }) {
+export function DownloadAudioButton({
+    recordingId,
+    className,
+}: {
+    recordingId: string;
+    className?: string;
+}) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>
-                <Button asChild variant="ghost" size="icon-sm">
+                <Button
+                    asChild
+                    variant="ghost"
+                    size="icon-sm"
+                    className={className}
+                >
                     <a
                         href={recordingAudioDownloadPath(recordingId)}
                         download

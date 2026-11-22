@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useState } from "react";
-import { toast } from "sonner";
 import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { sendVerificationEmail, signUp } from "@/lib/auth-client";
+import { toast } from "@/lib/toast";
 
 const RESEND_COOLDOWN_MS = 30_000;
 

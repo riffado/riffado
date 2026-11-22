@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { RecordingRowLayout } from "@/components/dashboard/recording-row";
+import { formatBytes } from "@/lib/format-bytes";
 
 export interface PendingUpload {
     id: string;
@@ -9,28 +9,21 @@ export interface PendingUpload {
     filesize: number;
 }
 
-function formatSize(bytes: number) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export function PendingUploadRow({
     upload,
-    rowPadding,
+    isCompact,
 }: {
     upload: PendingUpload;
-    rowPadding: string;
+    isCompact: boolean;
 }) {
     return (
-        <div className={cn("flex items-center gap-3", rowPadding)}>
-            <Loader2 className="size-4 animate-spin text-primary" />
-            <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-muted-foreground">
-                    {upload.filename}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                    Uploading… {formatSize(upload.filesize)}
-                </p>
-            </div>
+        <div aria-busy="true">
+            <RecordingRowLayout
+                tone="working"
+                title={upload.filename}
+                detail={`Uploading… ${formatBytes(upload.filesize)}`}
+                isCompact={isCompact}
+            />
         </div>
     );
 }

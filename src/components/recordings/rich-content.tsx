@@ -63,7 +63,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-accent-cyan underline underline-offset-2"
+                        className="text-strong underline underline-offset-2"
                     >
                         {m[12]}
                     </a>
@@ -119,7 +119,10 @@ export function RichMarkdown({
         if (para.length) {
             const key = `p${b++}`;
             blocks.push(
-                <p key={key} className="leading-relaxed my-2">
+                <p
+                    key={key}
+                    className="my-2 leading-relaxed first:mt-0 last:mb-0"
+                >
                     {renderInline(para.join(" "), key)}
                 </p>,
             );
@@ -140,10 +143,10 @@ export function RichMarkdown({
                             type="checkbox"
                             checked={it.check}
                             readOnly
-                            className="mt-1.5 shrink-0 accent-accent-cyan"
+                            className="mt-1.5 shrink-0 accent-ink"
                         />
                     ) : ordered ? null : (
-                        <span className="mt-1.5 size-1.5 rounded-full bg-accent-cyan shrink-0" />
+                        <span className="mt-[0.5lh] size-1.5 shrink-0 -translate-y-1/2 rounded-full bg-muted-foreground" />
                     );
                 return (
                     <li
@@ -190,7 +193,7 @@ export function RichMarkdown({
             blocks.push(
                 <blockquote
                     key={key}
-                    className="my-2 border-l-2 border-accent-cyan/60 pl-3 italic text-muted-foreground"
+                    className="my-2 border-l-2 border-border pl-3 italic text-muted-foreground"
                 >
                     {renderInline(quote.join(" "), key)}
                 </blockquote>,

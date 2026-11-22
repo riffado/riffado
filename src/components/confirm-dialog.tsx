@@ -8,7 +8,6 @@ import {
     useRef,
     useState,
 } from "react";
-import { toast } from "sonner";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,6 +18,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /**

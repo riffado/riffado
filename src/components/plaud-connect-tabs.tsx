@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +10,7 @@ import {
     PLAUD_SERVERS,
     type PlaudServerKey,
 } from "@/lib/plaud/servers";
+import { toast } from "@/lib/toast";
 
 const CONNECTOR_CHROME_URL =
     "https://github.com/riffado/connector#installation";
@@ -34,7 +34,9 @@ declare global {
     }
 }
 
-type Mode = "connector" | "email" | "token";
+/** Connection method tabs offered by `PlaudConnectTabs`. */
+export type PlaudConnectMode = "connector" | "email" | "token";
+type Mode = PlaudConnectMode;
 type EmailStep = "email" | "code";
 
 const RESEND_COOLDOWN_MS = 30_000;
@@ -80,9 +82,14 @@ function regionLabel(base: string): string {
 
 interface PlaudConnectTabsProps {
     onConnected: () => void;
+    /** Tab shown when the component mounts. Defaults to the connector. */
+    initialMode?: PlaudConnectMode;
 }
 
-export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
+export function PlaudConnectTabs({
+    onConnected,
+    initialMode = "connector",
+}: PlaudConnectTabsProps) {
     const [hasConnector, setHasConnector] = useState<boolean>(false);
     useEffect(() => {
         let cancelled = false;
@@ -101,7 +108,7 @@ export function PlaudConnectTabs({ onConnected }: PlaudConnectTabsProps) {
         };
     }, []);
 
-    const [mode, setMode] = useState<Mode>("connector");
+    const [mode, setMode] = useState<Mode>(initialMode);
 
     const tabs: { key: Mode; label: string }[] = [
         { key: "connector", label: "Sign in with Plaud" },

@@ -1,19 +1,22 @@
 "use client";
 
-import { Monitor } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+} from "@/components/settings/toggle-row";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { toast } from "@/lib/toast";
 
 const dateTimeFormatOptions = [
     {
@@ -160,158 +163,163 @@ export function DisplaySection() {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Display"
-                description="How dates, lists, and the overall UI present themselves."
-                icon={Monitor}
-            />
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="date-time-format">Date/time format</Label>
-                    <Select
-                        value={dateTimeFormat}
-                        onValueChange={(value) => {
-                            setDateTimeFormat(value);
-                            handleDisplaySettingChange({
-                                dateTimeFormat: value,
-                            });
-                        }}
-                        disabled={isSavingSettings}
-                    >
-                        <SelectTrigger id="date-time-format" className="w-full">
-                            <SelectValue>
-                                {dateTimeFormatOptions.find(
-                                    (opt) => opt.value === dateTimeFormat,
-                                )?.label || "Relative"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {dateTimeFormatOptions.map((option) => (
-                                <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    <div>
-                                        <div>{option.label}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {option.description}
-                                        </div>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="sort-order">
-                        Recording list sort order
-                    </Label>
-                    <Select
-                        value={recordingListSortOrder}
-                        onValueChange={(value) => {
-                            setRecordingListSortOrder(value);
-                            handleDisplaySettingChange({
-                                recordingListSortOrder: value,
-                            });
-                        }}
-                        disabled={isSavingSettings}
-                    >
-                        <SelectTrigger id="sort-order" className="w-full">
-                            <SelectValue>
-                                {sortOrderOptions.find(
-                                    (opt) =>
-                                        opt.value === recordingListSortOrder,
-                                )?.label || "Newest first"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {sortOrderOptions.map((option) => (
-                                <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    {option.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="items-per-page">Items per page</Label>
-                    <Input
-                        id="items-per-page"
-                        type="number"
-                        min={10}
-                        max={100}
-                        value={itemsPerPage}
-                        onChange={(e) => {
-                            const value = parseInt(e.target.value, 10);
-                            if (
-                                !Number.isNaN(value) &&
-                                value >= 10 &&
-                                value <= 100
-                            ) {
-                                setItemsPerPage(value);
-                                handleDisplaySettingChange(
-                                    { itemsPerPage: value },
-                                    500,
-                                );
-                            }
-                        }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                        Number of recordings to display per page (10-100)
-                    </p>
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="theme">Theme</Label>
-                    <Select
-                        value={theme}
-                        onValueChange={(value) => {
-                            setTheme(value);
-                            handleDisplaySettingChange({ theme: value });
-                        }}
-                        disabled={isSavingSettings}
-                    >
-                        <SelectTrigger id="theme" className="w-full">
-                            <SelectValue>
-                                {themeOptions.find((opt) => opt.value === theme)
-                                    ?.label || "System"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {themeOptions.map((option) => (
-                                <SelectItem
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    <div>
-                                        <div>{option.label}</div>
-                                        {option.description && (
-                                            <div className="text-xs text-muted-foreground">
-                                                {option.description}
+        <SettingsGroup
+            title="Display"
+            description="How dates, lists and the app look"
+        >
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={4} />
+            ) : (
+                <SettingsRows>
+                    <SettingsRow
+                        label="Dates and times"
+                        controlId="date-time-format"
+                        control={
+                            <Select
+                                value={dateTimeFormat}
+                                onValueChange={(value) => {
+                                    setDateTimeFormat(value);
+                                    handleDisplaySettingChange({
+                                        dateTimeFormat: value,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
+                            >
+                                <SettingsSelectTrigger id="date-time-format">
+                                    <SelectValue>
+                                        {dateTimeFormatOptions.find(
+                                            (opt) =>
+                                                opt.value === dateTimeFormat,
+                                        )?.label || "Relative"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {dateTimeFormatOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            <div>
+                                                <div>{option.label}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {option.description}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-        </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                    <SettingsRow
+                        label="Recording order"
+                        controlId="sort-order"
+                        control={
+                            <Select
+                                value={recordingListSortOrder}
+                                onValueChange={(value) => {
+                                    setRecordingListSortOrder(value);
+                                    handleDisplaySettingChange({
+                                        recordingListSortOrder: value,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
+                            >
+                                <SettingsSelectTrigger id="sort-order">
+                                    <SelectValue>
+                                        {sortOrderOptions.find(
+                                            (opt) =>
+                                                opt.value ===
+                                                recordingListSortOrder,
+                                        )?.label || "Newest first"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {sortOrderOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                    <SettingsRow
+                        label="Recordings per page"
+                        description="Between 10 and 100"
+                        controlId="items-per-page"
+                        control={
+                            <Input
+                                id="items-per-page"
+                                type="number"
+                                min={10}
+                                max={100}
+                                value={itemsPerPage}
+                                onChange={(e) => {
+                                    const value = parseInt(e.target.value, 10);
+                                    if (
+                                        !Number.isNaN(value) &&
+                                        value >= 10 &&
+                                        value <= 100
+                                    ) {
+                                        setItemsPerPage(value);
+                                        handleDisplaySettingChange(
+                                            { itemsPerPage: value },
+                                            500,
+                                        );
+                                    }
+                                }}
+                                className="squircle h-9.5 w-24 rounded-[var(--radius-control)] border-border text-right tabular-nums"
+                            />
+                        }
+                    />
+                    <SettingsRow
+                        label="Theme"
+                        controlId="theme"
+                        control={
+                            <Select
+                                value={theme}
+                                onValueChange={(value) => {
+                                    setTheme(value);
+                                    handleDisplaySettingChange({
+                                        theme: value,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
+                            >
+                                <SettingsSelectTrigger id="theme">
+                                    <SelectValue>
+                                        {themeOptions.find(
+                                            (opt) => opt.value === theme,
+                                        )?.label || "System"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {themeOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value}
+                                        >
+                                            <div>
+                                                <div>{option.label}</div>
+                                                {option.description && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {option.description}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                </SettingsRows>
+            )}
+        </SettingsGroup>
     );
 }

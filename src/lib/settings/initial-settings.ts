@@ -16,6 +16,8 @@ export interface InitialSettings {
     syncOnVisibilityChange: boolean;
     syncNotifications: boolean;
     browserNotifications: boolean;
+    /** Plays a short sound for errors and newly synced recordings. */
+    notificationSound: boolean;
     /**
      * True once the user has clicked through the onboarding dialog's
      * "Get Started" step. Drives the mandatory onboarding gate in
@@ -42,6 +44,7 @@ export const INITIAL_SETTINGS_DEFAULTS: InitialSettings = {
     syncOnVisibilityChange: true,
     syncNotifications: true,
     browserNotifications: true,
+    notificationSound: true,
     onboardingCompleted: false,
 };
 
@@ -79,6 +82,8 @@ export function initialSettingsFromRow(row: Row): InitialSettings {
         browserNotifications:
             r?.browserNotifications ??
             INITIAL_SETTINGS_DEFAULTS.browserNotifications,
+        notificationSound:
+            r?.notificationSound ?? INITIAL_SETTINGS_DEFAULTS.notificationSound,
         onboardingCompleted:
             r?.onboardingCompleted ??
             INITIAL_SETTINGS_DEFAULTS.onboardingCompleted,

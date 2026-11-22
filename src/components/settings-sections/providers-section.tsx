@@ -1,16 +1,23 @@
 "use client";
 
-import { Bot, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Info, KeyRound, Monitor, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
 import { AddProviderDialog } from "@/components/settings/add-provider-dialog";
 import { EditProviderDialog } from "@/components/settings/edit-provider-dialog";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
-import { PromptManager } from "@/components/settings-sections/prompt-manager";
+import { OptionCard, OptionCardGroup } from "@/components/settings/option-card";
+import {
+    credentialsInOrder,
+    fetchProviders,
+    isLocalProvider,
+    providerSummaryLine,
+    saveDefaultSummaries,
+} from "@/components/settings/provider-actions";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsCard } from "@/components/settings/settings-card";
 import { Button } from "@/components/ui/button";
-
-type AISubSection = "providers" | "prompts";
+import { supportsEnhancement } from "@/lib/ai/provider-presets";
+import { toast } from "@/lib/toast";
 
 /** A row in the AI Providers list, as returned by `/api/settings/ai/providers`. */
 export interface Provider {
@@ -39,16 +46,25 @@ interface ProvidersSectionProps {
 }
 
 /**
- * AI Providers settings section.
+ * The provider that actually writes summaries and titles, matching
+ * `generate-summary`: the flagged enhancement default if it can chat,
+ * otherwise the oldest provider that can.
+ */
+function summariesProviderId(providers: Provider[]): string | undefined {
+    const capable = credentialsInOrder(providers).filter((p) =>
+        supportsEnhancement(p.provider),
+    );
+    return (capable.find((p) => p.isDefaultEnhancement) ?? capable[0])?.id;
+}
+
+/**
+ * The user's own AI providers: one list shared by transcription and
+ * summaries. Each provider is an option card; the selected one writes
+ * summaries and titles. Adding, editing and deleting happen here; the
+ * transcription choice lives on the Transcription page.
  *
- * Two tabs:
- *  - "Providers": the configured AI providers (transcription / enhancement)
- *    plus the AddProviderDialog and EditProviderDialog.
- *  - "Prompts": delegated entirely to <PromptManager />, which owns its own
- *    settings round-trip + custom prompt CRUD.
- *
- * The parent owns the provider list. After a change the section re-reads
- * the list and hands it back through `onProvidersChange`.
+ * Mynah (the managed provider) is transcription only and never appears
+ * here.
  */
 export function ProvidersSection({
     providers,
@@ -64,14 +80,10 @@ export function ProvidersSection({
         null,
     );
     const [deletingId, setDeletingId] = useState<string | null>(null);
-    const [aiSubSection, setAiSubSection] = useState<AISubSection>("providers");
 
     const refreshProviders = async () => {
         try {
-            const response = await fetch("/api/settings/ai/providers");
-            if (!response.ok) throw new Error("Failed to fetch");
-            const data = (await response.json()) as { providers: Provider[] };
-            onProvidersChange(data.providers);
+            onProvidersChange(await fetchProviders());
         } catch {
             toast.error("Failed to refresh providers");
         }
@@ -82,28 +94,27 @@ export function ProvidersSection({
         setIsEditProviderOpen(true);
     };
 
-    const handleSetDefaultTranscription = (providerId: string) => {
+    const handleSelectForSummaries = (providerId: string) => {
+        if (!providers) return;
+        const provider = providers.find((p) => p.id === providerId);
+        if (!provider) return;
+        const previous = providers;
+        onProvidersChange(
+            providers.map((p) => ({
+                ...p,
+                isDefaultEnhancement: p.id === providerId,
+            })),
+        );
         void (async () => {
             try {
-                const res = await fetch(
-                    "/api/settings/ai/providers/default-transcription",
-                    {
-                        method: "PUT",
-                        headers: { "content-type": "application/json" },
-                        body: JSON.stringify({ providerId }),
-                    },
-                );
-                if (!res.ok) {
-                    const b = (await res.json().catch(() => ({}))) as {
-                        error?: string;
-                    };
-                    throw new Error(b.error ?? `HTTP ${res.status}`);
-                }
-                toast.success("Default transcription provider updated");
+                await saveDefaultSummaries(provider);
                 await refreshProviders();
             } catch (e) {
+                onProvidersChange(previous);
                 toast.error(
-                    e instanceof Error ? e.message : "Failed to update default",
+                    e instanceof Error
+                        ? e.message
+                        : "Failed to update provider",
                 );
             }
         })();
@@ -139,87 +150,134 @@ export function ProvidersSection({
         });
     };
 
+    const credentials = providers ? credentialsInOrder(providers) : [];
+    const selectedId = providers ? summariesProviderId(providers) : undefined;
+
     return (
         <>
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <SettingsSectionHeader
-                        title="AI Providers"
-                        description="Connect transcription and summary providers. Anything OpenAI-compatible works."
-                        icon={Bot}
-                    />
-                    {aiSubSection === "providers" && (
-                        <Button
-                            onClick={() => setIsAddProviderOpen(true)}
-                            size="sm"
-                        >
-                            <Plus className="size-4 mr-2" />
-                            Add Provider
-                        </Button>
-                    )}
-                </div>
-
-                {/* Tabs */}
-                <div className="flex gap-2 border-b">
-                    <button
-                        type="button"
-                        onClick={() => setAiSubSection("providers")}
-                        className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                            aiSubSection === "providers"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
+            <SettingsGroup
+                title="Providers"
+                description="Shared by transcription and summaries"
+                action={
+                    <Button
+                        variant="ink"
+                        size="compact"
+                        onClick={() => setIsAddProviderOpen(true)}
                     >
-                        Providers
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setAiSubSection("prompts")}
-                        className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                            aiSubSection === "prompts"
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                        <Sparkles className="size-4 inline mr-2" />
-                        Prompts
-                    </button>
-                </div>
-
-                {aiSubSection === "providers" &&
-                    providers === null &&
+                        <Plus />
+                        Add provider
+                    </Button>
+                }
+            >
+                {providers === null &&
                     (loadFailed ? (
-                        <div className="rounded-lg border p-4 text-sm">
-                            <p className="mb-3 text-muted-foreground">
-                                Couldn't load your AI providers.
-                            </p>
-                            {onRetry && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={onRetry}
-                                >
-                                    Try again
-                                </Button>
-                            )}
-                        </div>
+                        <SettingsCard
+                            title="Couldn't load your AI providers."
+                            action={
+                                onRetry && (
+                                    <Button
+                                        variant="quiet"
+                                        size="compact"
+                                        onClick={onRetry}
+                                    >
+                                        Try again
+                                    </Button>
+                                )
+                            }
+                        />
                     ) : (
                         <ProvidersListSkeleton />
                     ))}
 
-                {aiSubSection === "providers" && providers !== null && (
-                    <ProvidersList
-                        providers={providers}
-                        deletingId={deletingId}
-                        onAdd={() => setIsAddProviderOpen(true)}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        onSetDefault={handleSetDefaultTranscription}
+                {providers !== null && credentials.length === 0 && (
+                    <SettingsCard
+                        title="No providers yet"
+                        description="Add one to write summaries and titles. Any OpenAI-compatible service works, or a model on your own server"
                     />
                 )}
 
-                {aiSubSection === "prompts" && <PromptManager />}
-            </div>
+                {credentials.length > 0 && (
+                    <OptionCardGroup
+                        label="Provider for summaries and titles"
+                        value={selectedId}
+                        onValueChange={handleSelectForSummaries}
+                    >
+                        {credentials.map((provider) => {
+                            const canSummarize = supportsEnhancement(
+                                provider.provider,
+                            );
+                            const details = [
+                                providerSummaryLine(provider),
+                                canSummarize ? null : "Transcribes only",
+                                provider.isDefaultTranscription
+                                    ? "Used for transcription"
+                                    : null,
+                            ]
+                                .filter(Boolean)
+                                .join(" · ");
+                            return (
+                                <OptionCard
+                                    key={provider.id}
+                                    value={provider.id}
+                                    selected={provider.id === selectedId}
+                                    disabled={!canSummarize}
+                                    icon={
+                                        isLocalProvider(provider)
+                                            ? Monitor
+                                            : KeyRound
+                                    }
+                                    title={provider.provider}
+                                    description={details || undefined}
+                                    onSelect={handleSelectForSummaries}
+                                    actions={
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-compact"
+                                                onClick={() =>
+                                                    handleEdit(provider)
+                                                }
+                                                aria-label={`Edit ${provider.provider}`}
+                                            >
+                                                <Pencil />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-compact"
+                                                onClick={() =>
+                                                    handleDelete(provider.id)
+                                                }
+                                                disabled={
+                                                    deletingId === provider.id
+                                                }
+                                                aria-label={`Delete ${provider.provider}`}
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </>
+                                    }
+                                />
+                            );
+                        })}
+                    </OptionCardGroup>
+                )}
+
+                <div className="squircle flex gap-3.5 rounded-[var(--radius-card)] bg-surface px-4.5 py-4">
+                    <Info
+                        className="mt-0.5 size-4.5 shrink-0 text-foreground"
+                        aria-hidden="true"
+                    />
+                    <div className="flex flex-col gap-0.75">
+                        <p className="text-ui font-semibold text-strong">
+                            What gets sent
+                        </p>
+                        <p className="text-ui leading-5 text-subtle">
+                            For summaries and titles, only transcript text,
+                            never audio. It goes to the provider selected above.
+                        </p>
+                    </div>
+                </div>
+            </SettingsGroup>
 
             <AddProviderDialog
                 open={isAddProviderOpen}
@@ -253,166 +311,13 @@ export function ProvidersSection({
 
 function ProvidersListSkeleton() {
     return (
-        <div className="space-y-3" aria-busy="true">
-            <span className="sr-only">Loading providers</span>
-            <div className="h-[74px] animate-pulse rounded-lg border bg-muted/40" />
-            <div className="h-[74px] animate-pulse rounded-lg border bg-muted/40" />
-        </div>
-    );
-}
-
-function formatIncludedSeconds(seconds: number | undefined): string {
-    if (!seconds) return "Included with your subscription";
-    return `Up to ${Math.round(seconds / 3600)}h of transcription per month`;
-}
-
-/**
- * Configured-providers list with edit/delete row actions. Pure
- * presentation -- the parent owns the data + dialog state.
- */
-function ProvidersList({
-    providers,
-    deletingId,
-    onAdd,
-    onEdit,
-    onDelete,
-    onSetDefault,
-}: {
-    providers: Provider[];
-    deletingId: string | null;
-    onAdd: () => void;
-    onEdit: (provider: Provider) => void;
-    onDelete: (id: string) => void;
-    onSetDefault: (id: string) => void;
-}) {
-    if (providers.length === 0) {
-        return (
-            <div className="text-center py-12">
-                <Bot className="size-16 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="font-semibold mb-2">No providers configured</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                    Add an AI provider to enable transcription
-                </p>
-                <Button onClick={onAdd} size="sm">
-                    <Plus className="size-4 mr-2" />
-                    Add Provider
-                </Button>
-            </div>
-        );
-    }
-    return (
-        <div className="space-y-3">
-            {providers.map((provider) => {
-                if (provider.managed === true) {
-                    return (
-                        <div
-                            key={provider.id}
-                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
-                        >
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="font-semibold">
-                                        {provider.provider}
-                                    </h3>
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Included with your plan
-                                    </span>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                    {formatIncludedSeconds(
-                                        provider.includedSeconds,
-                                    )}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2 ml-4">
-                                {provider.isDefaultTranscription ? (
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Default
-                                    </span>
-                                ) : (
-                                    <Button
-                                        onClick={() =>
-                                            onSetDefault(provider.id)
-                                        }
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={provider.available === false}
-                                    >
-                                        {provider.available === false
-                                            ? "Resubscribe to use"
-                                            : "Use for transcription"}
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                }
-
-                return (
-                    <div
-                        key={provider.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
-                    >
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold">
-                                    {provider.provider}
-                                </h3>
-                                {provider.isDefaultTranscription && (
-                                    <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                        Transcription
-                                    </span>
-                                )}
-                                {provider.isDefaultEnhancement && (
-                                    <span className="text-xs px-2 py-0.5 bg-purple-500/10 text-purple-600 rounded border border-purple-500/20">
-                                        Enhancement
-                                    </span>
-                                )}
-                            </div>
-                            {provider.defaultModel && (
-                                <p className="text-sm text-muted-foreground">
-                                    Model: {provider.defaultModel}
-                                </p>
-                            )}
-                            {provider.baseUrl && (
-                                <p className="text-xs text-muted-foreground font-mono truncate">
-                                    {provider.baseUrl}
-                                </p>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                            {!provider.isDefaultTranscription && (
-                                <Button
-                                    onClick={() => onSetDefault(provider.id)}
-                                    variant="outline"
-                                    size="sm"
-                                >
-                                    Use for transcription
-                                </Button>
-                            )}
-                            <Button
-                                onClick={() => onEdit(provider)}
-                                variant="outline"
-                                size="icon"
-                            >
-                                <Pencil className="size-4" />
-                            </Button>
-                            <Button
-                                onClick={() => onDelete(provider.id)}
-                                variant="outline"
-                                size="icon"
-                                disabled={deletingId === provider.id}
-                            >
-                                {deletingId === provider.id ? (
-                                    <div className="animate-spin size-4 border-2 border-destructive border-t-transparent rounded-full" />
-                                ) : (
-                                    <Trash2 className="size-4 text-destructive" />
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
+        <output
+            className="flex flex-col gap-3"
+            aria-busy="true"
+            aria-label="Loading providers"
+        >
+            <div className="squircle h-21 animate-pulse rounded-[var(--radius-card)] border border-border bg-surface" />
+            <div className="squircle h-21 animate-pulse rounded-[var(--radius-card)] border border-border bg-surface" />
+        </output>
     );
 }
