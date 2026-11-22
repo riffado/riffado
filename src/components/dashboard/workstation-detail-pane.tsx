@@ -1,21 +1,27 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import { RecordingPlayer } from "@/components/dashboard/recording-player";
-import { TranscriptionPanel } from "@/components/dashboard/transcription-panel";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo } from "react";
+import { RecordingView } from "@/components/recording/recording-view";
+import { summaryProviderStateFor } from "@/components/recording/summary-provider";
+import type { RecordingTranscript } from "@/components/recording/types";
+import type { Provider } from "@/components/settings-sections/providers-section";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
-interface TranscriptionData {
+/** Transcript fields the dashboard loads per recording. */
+export interface TranscriptionData {
     text?: string;
     language?: string;
+    source?: string;
+    provider?: string;
+    transcriptionType?: string;
 }
 
 interface Props {
     currentRecording: Recording | null;
     currentTranscription: TranscriptionData | undefined;
+    /** Recorder name for the current recording, when known. */
+    deviceName: string | null;
     isCurrentTranscribing: boolean;
     visibleRecordings: Recording[];
     onTranscribe: () => void;
@@ -23,9 +29,14 @@ interface Props {
     onTranscribeComplete?: () => void;
     onSelectRecording: (r: Recording) => void;
     onRenamed?: (filename: string) => void;
+    onDelete: (recording: Recording) => Promise<void>;
     onBackToList: () => void;
     /** When true, the pane is hidden (mobile list view active). */
     hiddenOnMobile: boolean;
+    /** The user's AI providers, or null while not loaded yet. */
+    providers: Provider[] | null;
+    /** Loads `providers` (no-op when fresh or in flight). */
+    onRequestProviders: () => void;
     initialPlaybackSpeed: number | undefined;
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
@@ -33,92 +44,98 @@ interface Props {
 }
 
 /**
- * Right-hand detail pane: player + transcription. On lg+ this is a
- * sticky column next to the recording list; on <lg the list and
- * detail toggle via `mobileView` -- both stay mounted so scroll
- * position / search query / selection survive a back-navigation.
+ * Right-hand detail pane: the recording reader next to the library list
+ * on lg+. Below lg the reader covers the screen while the list stays
+ * mounted underneath, so scroll position, search and selection survive
+ * going back.
  *
- * Auto-advance on player ended (when `autoPlayNext` is on) moves to
- * the next recording in `visibleRecordings`; the back-affordance is
- * mobile-only because desktop has both panes visible at once.
+ * Auto-advance on player end (when auto-play-next is on) moves to the
+ * next recording in `visibleRecordings`.
  */
 export function WorkstationDetailPane({
     currentRecording,
     currentTranscription,
+    deviceName,
     isCurrentTranscribing,
     visibleRecordings,
     onTranscribe,
     onTranscribeComplete,
     onSelectRecording,
     onRenamed,
+    onDelete,
     onBackToList,
     hiddenOnMobile,
+    providers,
+    onRequestProviders,
     initialPlaybackSpeed,
     initialVolume,
     initialAutoPlayNext,
     scrubberStyle,
 }: Props) {
+    useEffect(() => {
+        onRequestProviders();
+    }, [onRequestProviders]);
+
+    const transcripts = useMemo<RecordingTranscript[]>(
+        () =>
+            currentTranscription?.text
+                ? [
+                      {
+                          source: currentTranscription.source ?? "riffado",
+                          text: currentTranscription.text,
+                          language: currentTranscription.language,
+                          provider: currentTranscription.provider,
+                          transcriptionType:
+                              currentTranscription.transcriptionType,
+                      },
+                  ]
+                : [],
+        [currentTranscription],
+    );
+
+    const currentId = currentRecording?.id;
+    const handleEnded = useCallback(() => {
+        const currentIndex = visibleRecordings.findIndex(
+            (r) => r.id === currentId,
+        );
+        if (currentIndex >= 0 && currentIndex < visibleRecordings.length - 1) {
+            onSelectRecording(visibleRecordings[currentIndex + 1]);
+        }
+    }, [currentId, visibleRecordings, onSelectRecording]);
+
     return (
         <div
             className={cn(
-                "space-y-6 lg:sticky lg:top-[4.5rem] lg:col-span-2 lg:block lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:pr-1",
-                hiddenOnMobile && "hidden",
+                "lg:flex lg:min-h-0 lg:min-w-0 lg:flex-1 lg:flex-col",
+                hiddenOnMobile && "max-lg:hidden",
             )}
         >
-            {/*
-              Mobile back affordance. Returns to the list view without
-              dropping the selected recording -- reopening shows the
-              same detail. Hidden on lg+ where both panes are visible
-              at once.
-            */}
-            <Button
-                variant="ghost"
-                size="sm"
-                onClick={onBackToList}
-                className="-ml-2 h-9 gap-1 px-2 lg:hidden"
-            >
-                <ArrowLeft className="size-4" />
-                Back to recordings
-            </Button>
             {currentRecording ? (
-                <>
-                    <RecordingPlayer
-                        recording={currentRecording}
-                        initialPlaybackSpeed={initialPlaybackSpeed}
-                        initialVolume={initialVolume}
-                        initialAutoPlayNext={initialAutoPlayNext}
-                        scrubberStyle={scrubberStyle}
-                        onRenamed={onRenamed}
-                        onEnded={() => {
-                            const currentIndex = visibleRecordings.findIndex(
-                                (r) => r.id === currentRecording.id,
-                            );
-                            if (
-                                currentIndex >= 0 &&
-                                currentIndex < visibleRecordings.length - 1
-                            ) {
-                                onSelectRecording(
-                                    visibleRecordings[currentIndex + 1],
-                                );
-                            }
-                        }}
-                    />
-                    <TranscriptionPanel
-                        recording={currentRecording}
-                        transcription={currentTranscription}
-                        isTranscribing={isCurrentTranscribing}
-                        onTranscribe={onTranscribe}
-                        onTranscribeComplete={onTranscribeComplete}
-                    />
-                </>
+                <RecordingView
+                    recording={currentRecording}
+                    deviceName={deviceName}
+                    transcripts={transcripts}
+                    isTranscribing={isCurrentTranscribing}
+                    onTranscribe={onTranscribe}
+                    onTranscribeComplete={onTranscribeComplete ?? (() => {})}
+                    onRenamed={onRenamed}
+                    onDelete={() => onDelete(currentRecording)}
+                    back={{ label: "Library", onBack: onBackToList }}
+                    summaryProviderState={summaryProviderStateFor(providers)}
+                    player={{
+                        initialPlaybackSpeed,
+                        initialVolume,
+                        initialAutoPlayNext,
+                        scrubberStyle,
+                        onEnded: handleEnded,
+                    }}
+                />
             ) : (
-                <Card>
-                    <CardContent className="py-16 text-center">
-                        <p className="text-muted-foreground">
-                            Select a recording to view details and transcription
-                        </p>
-                    </CardContent>
-                </Card>
+                <div className="flex flex-1 items-center justify-center bg-reader px-6 py-16 max-lg:hidden">
+                    <p className="text-ui text-muted-foreground">
+                        Select a recording to read and listen.
+                    </p>
+                </div>
             )}
         </div>
     );

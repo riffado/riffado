@@ -1,9 +1,10 @@
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { Workstation } from "@/components/dashboard/workstation";
 import { db } from "@/db";
 import {
     aiEnhancements,
     plaudConnections,
+    plaudDevices,
     recordings,
     transcriptions,
     userSettings,
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
         userSummaryRows,
         [settingsRow],
         [connectionRow],
+        deviceRows,
     ] = await Promise.all([
         db
             .select({
@@ -48,6 +50,9 @@ export default async function DashboardPage() {
                 recordingId: transcriptions.recordingId,
                 text: transcriptions.text,
                 language: transcriptions.detectedLanguage,
+                source: transcriptions.source,
+                provider: transcriptions.provider,
+                transcriptionType: transcriptions.transcriptionType,
             })
             .from(transcriptions)
             .where(eq(transcriptions.userId, session.user.id)),
@@ -76,10 +81,20 @@ export default async function DashboardPage() {
             .select({
                 invalidatedAt: plaudConnections.invalidatedAt,
                 sessionExpiresAt: plaudConnections.sessionExpiresAt,
+                lastSync: plaudConnections.lastSync,
             })
             .from(plaudConnections)
             .where(eq(plaudConnections.userId, session.user.id))
             .limit(1),
+        db
+            .select({
+                serialNumber: plaudDevices.serialNumber,
+                name: plaudDevices.name,
+                model: plaudDevices.model,
+            })
+            .from(plaudDevices)
+            .where(eq(plaudDevices.userId, session.user.id))
+            .orderBy(asc(plaudDevices.createdAt)),
     ]);
     const summaryIds = new Set(userSummaryRows.map((r) => r.recordingId));
     const transcriptIds = new Set(userTranscriptions.map((t) => t.recordingId));
@@ -104,7 +119,13 @@ export default async function DashboardPage() {
     const transcriptionMap = new Map(
         userTranscriptions.map((t) => [
             t.recordingId,
-            { text: decryptText(t.text), language: t.language || undefined },
+            {
+                text: decryptText(t.text),
+                language: t.language || undefined,
+                source: t.source,
+                provider: t.provider,
+                transcriptionType: t.transcriptionType,
+            },
         ]),
     );
 
@@ -119,11 +140,15 @@ export default async function DashboardPage() {
             transcriptions={transcriptionMap}
             isAdmin={isAdminEmail(session.user.email)}
             userEmail={session.user.email ?? null}
+            userName={session.user.name || null}
+            devices={deviceRows}
             initialSettings={initialSettings}
             plaudNeedsReconnect={connectionRow?.invalidatedAt != null}
             plaudSessionExpiresAt={
                 connectionRow?.sessionExpiresAt?.toISOString() ?? null
             }
+            plaudLastSyncAt={connectionRow?.lastSync?.toISOString() ?? null}
+            hasPlaudConnection={connectionRow !== undefined}
             isHosted={env.IS_HOSTED}
         />
     );

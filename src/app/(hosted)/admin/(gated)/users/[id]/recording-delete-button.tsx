@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { toast } from "@/lib/toast";
 
 /**
  * Per-row admin soft-delete. Does NOT hard-delete the audio blob -- the

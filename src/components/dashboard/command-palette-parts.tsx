@@ -222,7 +222,7 @@ export function ActionsGroup({
     onOpenShortcuts,
     runAction,
 }: {
-    onSync: () => void;
+    onSync?: () => void;
     onUpload: () => void;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
@@ -230,14 +230,16 @@ export function ActionsGroup({
 }) {
     return (
         <Command.Group heading="Actions">
-            <Command.Item onSelect={runAction(onSync)}>
-                <Row
-                    icon={
-                        <RefreshCw className="size-4 text-muted-foreground" />
-                    }
-                    title="Sync device"
-                />
-            </Command.Item>
+            {onSync ? (
+                <Command.Item onSelect={runAction(onSync)}>
+                    <Row
+                        icon={
+                            <RefreshCw className="size-4 text-muted-foreground" />
+                        }
+                        title="Sync device"
+                    />
+                </Command.Item>
+            ) : null}
             <Command.Item onSelect={runAction(onUpload)}>
                 <Row
                     icon={<Upload className="size-4 text-muted-foreground" />}

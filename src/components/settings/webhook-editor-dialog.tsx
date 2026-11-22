@@ -2,7 +2,6 @@
 
 import { Check, Clipboard } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -13,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { toast } from "@/lib/toast";
 import { DEFAULT_WEBHOOK_EVENTS, type WebhookEndpoint } from "./webhook-types";
 
 interface WebhookForm {

@@ -2,8 +2,10 @@
 
 import { CheckCircle2, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsCard } from "@/components/settings/settings-card";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/lib/toast";
 
 interface PlaudInfo {
     connected: boolean;
@@ -44,7 +46,7 @@ export function DevSection() {
             } else if (data.connected && !data.reachable) {
                 toast.error(`Plaud unreachable: ${data.error ?? "unknown"}`);
             } else {
-                toast.message("No Plaud connection stored");
+                toast.info("No Plaud connection stored");
             }
         } catch (error) {
             toast.error(
@@ -56,40 +58,29 @@ export function DevSection() {
     };
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">
-                    Developer Tools
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                    Dev-only diagnostics. Not visible in production builds.
-                </p>
-            </div>
-
-            <section className="space-y-3 rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-2">
-                    <div>
-                        <h4 className="font-medium">Plaud connection</h4>
-                        <p className="text-sm text-muted-foreground">
-                            Probe the stored bearer token against the stored API
-                            base and report counts.
-                        </p>
-                    </div>
-                    <Button
-                        onClick={fetchPlaudInfo}
-                        disabled={isLoadingPlaud}
-                        size="sm"
-                        variant="outline"
-                    >
-                        {isLoadingPlaud ? (
-                            <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="size-4" />
-                        )}
-                        <span className="ml-2">Probe</span>
-                    </Button>
-                </div>
-
+        <SettingsGroup
+            title="Plaud connection"
+            description="Probes the stored bearer token against the stored API base and reports counts"
+            action={
+                <Button
+                    onClick={fetchPlaudInfo}
+                    disabled={isLoadingPlaud}
+                    size="compact"
+                    variant="quiet"
+                >
+                    {isLoadingPlaud ? (
+                        <Loader2 className="animate-spin" />
+                    ) : (
+                        <RefreshCw />
+                    )}
+                    Probe
+                </Button>
+            }
+        >
+            <SettingsCard tone="quiet">
+                {!plaudInfo && (
+                    <p className="text-ui text-subtle">Not probed yet</p>
+                )}
                 {plaudInfo && (
                     <div className="space-y-2 text-sm">
                         {!plaudInfo.connected ? (
@@ -100,9 +91,9 @@ export function DevSection() {
                             <>
                                 <div className="flex items-center gap-2">
                                     {plaudInfo.reachable ? (
-                                        <CheckCircle2 className="size-4 text-green-500" />
+                                        <CheckCircle2 className="size-4 text-status-ready" />
                                     ) : (
-                                        <XCircle className="size-4 text-red-500" />
+                                        <XCircle className="size-4 text-terracotta" />
                                     )}
                                     <span>
                                         {plaudInfo.reachable
@@ -157,7 +148,7 @@ export function DevSection() {
                         )}
                     </div>
                 )}
-            </section>
-        </div>
+            </SettingsCard>
+        </SettingsGroup>
     );
 }

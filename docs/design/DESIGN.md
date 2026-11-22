@@ -167,6 +167,7 @@ Paper page "03b — Android". Same layout, content, colors, type and dot languag
 - **Transcript actions:** one entry point per platform, same verbs. Mobile: long-press a paragraph -> lifted paragraph + glass context menu (Mark as highlight, Play from here, Fix a word, Change speaker, Copy). Web: hover a paragraph -> small toolbar (Mark, Play, Copy); clicking a word opens the correction popover. Mark is always first and terracotta.
 - **Sheets (iOS 26):** partial sheets float inset 8pt from the screen edges with `--radius-sheet`, light glass at ~94% so text stays readable over the scrim.
 - **Device imagery:** real product photos from the "imports from figma" page, cropped to the device shape. Used for recognition (pairing, transfer, library card, recorders list, web sidebar).
+- **Toasts (web):** ding (`@yusufceng1z/ding-react`, pinned), one region at the top centre, following the app theme. Decided 2026-11-22, replacing sonner. Toasts close on their own (errors after 8 s, others after 5 s; hover pauses). A toast with a button (e.g. "Report") stays until closed with x, Esc or a swipe. Covering content underneath is accepted. Repeats collapse into a counter. Sound follows the "Notification sound" setting: errors and newly synced recordings only.
 
 ## 9. Signature elements
 

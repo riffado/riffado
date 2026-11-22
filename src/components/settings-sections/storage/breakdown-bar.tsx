@@ -52,17 +52,19 @@ export function BreakdownBar({ segments, totalBytes }: BreakdownBarProps) {
     return (
         <div className="space-y-2">
             <div className="flex items-baseline justify-between gap-3">
-                <div className="text-sm font-medium">Storage breakdown</div>
-                <div className="text-xs text-muted-foreground tabular-nums">
+                <div className="text-row font-semibold text-strong">
+                    Storage breakdown
+                </div>
+                <div className="text-small text-subtle tabular-nums">
                     Top {segments.length} ={" "}
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-strong">
                         {topPct.toFixed(0)}%
                     </span>{" "}
                     of {formatBytes(totalBytes)}
                 </div>
             </div>
             <div
-                className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
+                className="flex h-3 w-full overflow-hidden rounded-sm bg-muted"
                 role="img"
                 aria-label={`Top ${segments.length} recordings account for ${topPct.toFixed(0)} percent of storage`}
             >

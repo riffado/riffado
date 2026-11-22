@@ -1,22 +1,33 @@
 "use client";
 
+import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { CommandPalette } from "@/components/dashboard/command-palette";
+import { LibrarySidebar } from "@/components/dashboard/library-sidebar";
 import { PlaudReconnectBanner } from "@/components/dashboard/plaud-reconnect-banner";
 import {
+    type LibraryFilter,
     RecordingList,
     type RecordingListHandle,
 } from "@/components/dashboard/recording-list";
 import { ShortcutsDialog } from "@/components/dashboard/shortcuts-dialog";
 import { TrialBanner } from "@/components/dashboard/trial-banner";
-import { WorkstationDetailPane } from "@/components/dashboard/workstation-detail-pane";
+import {
+    type TranscriptionData,
+    WorkstationDetailPane,
+} from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
 import { WorkstationHeader } from "@/components/dashboard/workstation-header";
 import { OnboardingDialog } from "@/components/onboarding-dialog";
-import { SettingsDialog } from "@/components/settings-dialog";
+import { SyncStatus } from "@/components/sync-button";
+import { Button } from "@/components/ui/button";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAutoSync } from "@/hooks/use-auto-sync";
 import { useListKeyboardNav } from "@/hooks/use-list-keyboard-nav";
 import { useProviderList } from "@/hooks/use-provider-list";
@@ -34,13 +45,10 @@ import {
 } from "@/lib/recordings/filename-overrides";
 import type { InitialSettings } from "@/lib/settings/initial-settings";
 import { SYNC_CONFIG } from "@/lib/sync-config";
+import { chimeNewRecordings, setToastSound, toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
+import type { RecorderDevice } from "@/types/device";
 import type { Recording } from "@/types/recording";
-
-interface TranscriptionData {
-    text?: string;
-    language?: string;
-}
 
 interface WorkstationProps {
     recordings: Recording[];
@@ -58,6 +66,16 @@ interface WorkstationProps {
      * state, which would risk a stale or attacker-influenced value.
      */
     userEmail?: string | null;
+    /**
+     * Logged-in user's display name for the sidebar account row, or null
+     * when the account has none. Server-supplied from the session.
+     */
+    userName: string | null;
+    /**
+     * Plaud recorders linked to this account, for the sidebar Recorders
+     * section. Server-supplied; empty when Plaud isn't connected.
+     */
+    devices: RecorderDevice[];
     initialSettings: InitialSettings;
     /**
      * True when Plaud has rejected the stored token (connection row carries
@@ -72,9 +90,22 @@ interface WorkstationProps {
      */
     plaudSessionExpiresAt: string | null;
     /**
+     * When the server last recorded a successful Plaud sync (ISO string),
+     * or null when never. Shown as "Last synced ..." while Plaud needs a
+     * reconnect. Server-supplied.
+     */
+    plaudLastSyncAt: string | null;
+    /**
+     * True when the account has a Plaud connection row (valid or not).
+     * Without one, sync UI is hidden and no sync runs. Seeds local state
+     * that flips to true when Plaud connects from the dashboard.
+     * Server-supplied.
+     */
+    hasPlaudConnection: boolean;
+    /**
      * True when running in Riffado's hosted mode (`IS_HOSTED=true`).
-     * Forwarded into SettingsDialog so hosted-only UI gating reflects
-     * the deployment mode. Server-supplied; never derive client-side.
+     * Gates hosted-only dashboard UI such as the trial banner.
+     * Server-supplied; never derive client-side.
      * Required (no default) so a future caller can't silently regress
      * hosted-mode behavior by forgetting to thread the value through.
      */
@@ -83,9 +114,9 @@ interface WorkstationProps {
 
 /**
  * Top-level dashboard component. Composition root for the recording
- * list, the detail pane (player + transcription), and the four
- * modals (CommandPalette, ShortcutsDialog, SettingsDialog,
- * OnboardingDialog).
+ * list, the detail pane (player + transcription), and the three
+ * modals (CommandPalette, ShortcutsDialog, OnboardingDialog). Settings
+ * is a separate page (`/settings`).
  *
  * State ownership is split:
  *  - selection / mobile master-detail toggle live here
@@ -102,16 +133,28 @@ export function Workstation({
     transcriptions,
     isAdmin = false,
     userEmail = null,
+    userName,
+    devices,
     initialSettings,
     plaudNeedsReconnect,
     plaudSessionExpiresAt,
+    plaudLastSyncAt,
+    hasPlaudConnection: hasPlaudConnectionProp,
     isHosted,
 }: WorkstationProps) {
-    const { refresh } = useRouter();
+    const { refresh, push, prefetch } = useRouter();
+    // Seeded from the server; set true as soon as Plaud connects from the
+    // dashboard so sync UI appears before `refresh()` lands, and re-seeded
+    // whenever fresh server truth arrives.
+    const [hasPlaudConnection, setHasPlaudConnection] = useState(
+        hasPlaudConnectionProp,
+    );
+    useEffect(() => {
+        setHasPlaudConnection(hasPlaudConnectionProp);
+    }, [hasPlaudConnectionProp]);
     const [currentRecording, setCurrentRecording] = useState<Recording | null>(
         recordings.length > 0 ? recordings[0] : null,
     );
-    const [settingsOpen, setSettingsOpen] = useState(false);
     // Auto-opens on first paint when the account hasn't finished
     // onboarding yet (server-supplied truth, re-evaluated on every fresh
     // navigation to this page). Everyone must finish onboarding --
@@ -129,19 +172,30 @@ export function Workstation({
     // toggle between them instead of stacking. Desktop ignores this
     // state entirely (both panes render via the grid).
     const [mobileView, setMobileView] = useState<"list" | "detail">("list");
-    const {
-        providers,
-        loadFailed: providersLoadFailed,
-        prefetch: prefetchProviders,
-        replaceProviders,
-    } = useProviderList();
+    const [query, setQuery] = useState("");
+    const [filter, setFilter] = useState<LibraryFilter>("all");
+    const sidebarSearchRef = useRef<HTMLInputElement>(null);
+    const deviceNames = useMemo(
+        () => new Map(devices.map((d) => [d.serialNumber, d.name || d.model])),
+        [devices],
+    );
+    const { providers, prefetch: prefetchProviders } = useProviderList();
+
+    // Settings is its own page. Entry points warm the route on hover or
+    // focus; the page reads providers on the server, so nothing else
+    // needs loading first.
+    const prefetchSettings = useCallback(() => {
+        prefetch("/settings");
+    }, [prefetch]);
 
     const openSettings = useCallback(() => {
-        prefetchProviders();
-        setSettingsOpen(true);
-    }, [prefetchProviders]);
+        push("/settings");
+    }, [push]);
 
     const { theme, setTheme } = useTheme(initialSettings.theme);
+    useEffect(() => {
+        setToastSound(initialSettings.notificationSound);
+    }, [initialSettings.notificationSound]);
     const listRef = useRef<RecordingListHandle>(null);
 
     // Filter out optimistically-hidden (deleted) rows.
@@ -165,10 +219,12 @@ export function Workstation({
 
     // Keep currentRecording in sync with the recordings prop (updated
     // after refresh()). If the previously-selected recording is no
-    // longer present (e.g. just deleted), clear the selection.
+    // longer present (e.g. just deleted), clear the selection. With
+    // nothing selected (first upload or first sync into an empty
+    // library), select the newest recording.
     useEffect(() => {
         setCurrentRecording((prev) => {
-            if (!prev) return prev;
+            if (!prev) return recordings[0] ?? null;
             const updated = recordings.find((r) => r.id === prev.id);
             return updated ?? null;
         });
@@ -199,13 +255,14 @@ export function Workstation({
         minInterval: SYNC_CONFIG.minInterval,
         syncOnMount: initialSettings.syncOnMount,
         syncOnVisibilityChange: initialSettings.syncOnVisibilityChange,
-        enabled: initialSettings.autoSyncEnabled,
+        enabled: initialSettings.autoSyncEnabled && hasPlaudConnection,
         onSuccess: (newRecordings) => {
             if (initialSettings.syncNotifications !== false) {
                 if (newRecordings > 0) {
                     toast.success(
                         `Synced ${newRecordings} new recording${newRecordings !== 1 ? "s" : ""}`,
                     );
+                    chimeNewRecordings();
                 } else {
                     toast.success("Sync complete - no new recordings");
                 }
@@ -228,8 +285,9 @@ export function Workstation({
     });
 
     const handleSync = useCallback(async () => {
+        if (!hasPlaudConnection) return;
         await manualSync();
-    }, [manualSync]);
+    }, [manualSync, hasPlaudConnection]);
 
     // Prefer the live sync result once we have one; fall back to the
     // server-rendered flag on first paint (before any sync runs). A
@@ -248,13 +306,19 @@ export function Workstation({
         }
     }, [plaudNeedsReconnect]);
     useEffect(() => {
-        if (typeof lastSyncResult?.needsReconnect === "boolean") {
-            setReconnectOverride(lastSyncResult.needsReconnect);
+        // Only Plaud rejecting the token raises the banner, and only a
+        // sync that succeeded clears it: a sync that failed for another
+        // reason (network, upstream) says nothing about the connection.
+        if (lastSyncResult?.needsReconnect === true) {
+            setReconnectOverride(true);
+        } else if (lastSyncResult?.success === true) {
+            setReconnectOverride(false);
         }
     }, [lastSyncResult]);
     const showReconnect = reconnectOverride ?? plaudNeedsReconnect;
 
     const handleReconnected = useCallback(() => {
+        setHasPlaudConnection(true);
         setReconnectOverride(false);
         refresh();
         manualSync();
@@ -265,6 +329,7 @@ export function Workstation({
         pendingUploads,
         uploadInputRef,
         handleUpload,
+        uploadFile,
         triggerUpload,
     } = useUploadQueue({ onUploadComplete: refresh });
 
@@ -344,20 +409,63 @@ export function Workstation({
     useListKeyboardNav({
         onNext: () => listRef.current?.next(),
         onPrev: () => listRef.current?.prev(),
-        onFocusSearch: () => listRef.current?.focusSearch(),
+        onFocusSearch: () => {
+            if (window.matchMedia("(min-width: 64rem)").matches) {
+                sidebarSearchRef.current?.focus();
+            } else {
+                listRef.current?.focusSearch();
+            }
+        },
         onOpenPalette: () => setPaletteOpen(true),
         onOpenShortcuts: () => setShortcutsOpen(true),
         onOpenSettings: openSettings,
-        enabled:
-            !settingsOpen && !onboardingOpen && !paletteOpen && !shortcutsOpen,
+        enabled: !onboardingOpen && !paletteOpen && !shortcutsOpen,
     });
+
+    const isEmpty =
+        visibleRecordings.length === 0 && pendingUploads.length === 0;
+    const reconnectBanner = (
+        <PlaudReconnectBanner
+            show={showReconnect}
+            sessionExpiresAt={plaudSessionExpiresAt}
+            onReconnected={handleReconnected}
+        />
+    );
 
     return (
         <>
-            <div className="bg-background">
-                <div className="container mx-auto max-w-7xl px-4 py-6">
-                    <TrialBanner isHosted={isHosted} />
+            <input
+                ref={uploadInputRef}
+                type="file"
+                accept="audio/*"
+                className="hidden"
+                onChange={handleUpload}
+            />
+            <div className="bg-background lg:flex lg:h-dvh">
+                <LibrarySidebar
+                    className="hidden lg:flex"
+                    recordingCount={visibleRecordings.length}
+                    devices={devices}
+                    plaudNeedsReconnect={showReconnect}
+                    query={query}
+                    onQueryChange={setQuery}
+                    onEnterSelectFirst={() => listRef.current?.selectFirst()}
+                    searchRef={sidebarSearchRef}
+                    onShowLibrary={() => {
+                        setQuery("");
+                        setFilter("all");
+                    }}
+                    isAdmin={isAdmin}
+                    userEmail={userEmail}
+                    userName={userName}
+                    initialTheme={initialSettings.theme}
+                    onOpenSettings={openSettings}
+                    onSettingsIntent={prefetchSettings}
+                    onOpenShortcuts={() => setShortcutsOpen(true)}
+                />
+                <div className="mx-auto max-w-7xl px-4 py-6 max-lg:container lg:flex lg:min-w-0 lg:max-w-none lg:flex-1 lg:flex-col lg:p-0">
                     <WorkstationHeader
+                        className="lg:hidden"
                         isAdmin={isAdmin}
                         userEmail={userEmail}
                         initialTheme={initialSettings.theme}
@@ -366,32 +474,38 @@ export function Workstation({
                         isAutoSyncing={isAutoSyncing}
                         lastSyncResult={lastSyncResult}
                         onSync={handleSync}
+                        showSync={hasPlaudConnection}
                         isUploading={isUploading}
                         isProcessing={isProcessing}
-                        uploadInputRef={uploadInputRef}
                         onTriggerUpload={triggerUpload}
-                        onUploadInputChange={handleUpload}
                         onOpenPalette={() => setPaletteOpen(true)}
                         onOpenSettings={openSettings}
-                        onSettingsIntent={prefetchProviders}
+                        onSettingsIntent={prefetchSettings}
                         onOpenShortcuts={() => setShortcutsOpen(true)}
                     />
 
-                    <PlaudReconnectBanner
-                        show={showReconnect}
-                        sessionExpiresAt={plaudSessionExpiresAt}
-                        onReconnected={handleReconnected}
-                    />
+                    <div className="empty:hidden lg:px-6 lg:pt-4">
+                        <TrialBanner isHosted={isHosted} />
+                    </div>
 
-                    {visibleRecordings.length === 0 &&
-                    pendingUploads.length === 0 ? (
-                        <WorkstationEmptyState
-                            isSyncing={isAutoSyncing}
-                            onSync={handleSync}
-                            onUpload={triggerUpload}
-                        />
+                    {isEmpty ? (
+                        <div className="lg:flex-1 lg:overflow-y-auto lg:p-8">
+                            {reconnectBanner}
+                            <WorkstationEmptyState
+                                hasPlaudConnection={hasPlaudConnection}
+                                isSyncing={isAutoSyncing}
+                                autoSyncEnabled={
+                                    initialSettings.autoSyncEnabled
+                                }
+                                isUploading={isUploading}
+                                onSync={handleSync}
+                                onUpload={triggerUpload}
+                                onDropFile={uploadFile}
+                                onPlaudConnected={handleReconnected}
+                            />
+                        </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-6 lg:flex lg:min-h-0 lg:flex-1 lg:gap-0">
                             {/*
                               Mobile master/detail: on <lg, only one
                               pane renders at a time. `mobileView ===
@@ -399,12 +513,12 @@ export function Workstation({
                               while keeping its state mounted, so
                               scroll position, search query, and
                               selection survive the back-navigation.
-                              The `lg:block` override brings the list
+                              The `lg:flex` override brings the list
                               back on desktop where both panes coexist.
                             */}
                             <div
                                 className={cn(
-                                    "lg:col-span-1 lg:block",
+                                    "lg:flex lg:w-93 lg:shrink-0 lg:flex-col lg:border-r lg:border-border",
                                     mobileView === "detail" && "hidden",
                                 )}
                             >
@@ -415,6 +529,61 @@ export function Workstation({
                                     currentRecording={currentRecording}
                                     pendingUploads={pendingUploads}
                                     inFlightActions={inFlightActions}
+                                    deviceNames={deviceNames}
+                                    query={query}
+                                    onQueryChange={setQuery}
+                                    filter={filter}
+                                    onFilterChange={setFilter}
+                                    banner={reconnectBanner}
+                                    headerActions={
+                                        <div className="flex items-center gap-1">
+                                            {hasPlaudConnection ? (
+                                                <SyncStatus
+                                                    lastSyncTime={lastSyncTime}
+                                                    nextSyncTime={nextSyncTime}
+                                                    isAutoSyncing={
+                                                        isAutoSyncing
+                                                    }
+                                                    lastSyncResult={
+                                                        lastSyncResult
+                                                    }
+                                                    onSync={handleSync}
+                                                    needsReconnect={
+                                                        showReconnect
+                                                    }
+                                                    lastSuccessfulSyncTime={
+                                                        plaudLastSyncAt
+                                                            ? new Date(
+                                                                  plaudLastSyncAt,
+                                                              )
+                                                            : null
+                                                    }
+                                                />
+                                            ) : null}
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon-compact"
+                                                        onClick={triggerUpload}
+                                                        disabled={isProcessing}
+                                                        aria-label={
+                                                            isUploading
+                                                                ? "Uploading audio"
+                                                                : "Upload audio"
+                                                        }
+                                                        className="text-foreground"
+                                                    >
+                                                        <Upload className="size-4" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="bottom">
+                                                    Upload an audio file from
+                                                    your computer
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </div>
+                                    }
                                     onSelect={(r) => {
                                         setCurrentRecording(r);
                                         // Tapping a row on mobile
@@ -439,14 +608,24 @@ export function Workstation({
                             <WorkstationDetailPane
                                 currentRecording={selectedRecording}
                                 currentTranscription={currentTranscription}
+                                deviceName={
+                                    selectedRecording
+                                        ? (deviceNames.get(
+                                              selectedRecording.deviceSn,
+                                          ) ?? null)
+                                        : null
+                                }
                                 isCurrentTranscribing={isCurrentTranscribing}
                                 visibleRecordings={visibleRecordings}
                                 onTranscribe={handleTranscribe}
                                 onTranscribeComplete={refresh}
                                 onSelectRecording={setCurrentRecording}
                                 onRenamed={handleRenamed}
+                                onDelete={handleDelete}
                                 onBackToList={() => setMobileView("list")}
                                 hiddenOnMobile={mobileView === "list"}
+                                providers={providers}
+                                onRequestProviders={prefetchProviders}
                                 initialPlaybackSpeed={
                                     initialSettings.defaultPlaybackSpeed
                                 }
@@ -474,7 +653,7 @@ export function Workstation({
                     setCurrentRecording(r);
                     setMobileView("detail");
                 }}
-                onSync={handleSync}
+                onSync={hasPlaudConnection ? handleSync : undefined}
                 onUpload={triggerUpload}
                 onOpenSettings={openSettings}
                 onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -485,21 +664,6 @@ export function Workstation({
             <ShortcutsDialog
                 open={shortcutsOpen}
                 onOpenChange={setShortcutsOpen}
-            />
-
-            <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                providers={providers}
-                onProvidersChange={replaceProviders}
-                providersLoadFailed={providersLoadFailed}
-                onRetryProviders={prefetchProviders}
-                isHosted={isHosted}
-                onReRunOnboarding={() => {
-                    setSettingsOpen(false);
-                    setOnboardingOpen(true);
-                }}
-                onPlaudReconnected={handleReconnected}
             />
 
             <OnboardingDialog

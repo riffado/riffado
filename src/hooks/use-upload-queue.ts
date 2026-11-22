@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { toast } from "sonner";
 import type { PendingUpload } from "@/components/dashboard/recording-list";
+import { toast } from "@/lib/toast";
 
 interface Options {
     /** Called after a successful upload so the parent can refresh data. */
@@ -25,13 +25,8 @@ export function useUploadQueue({ onUploadComplete }: Options) {
     const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
-    const handleUpload = useCallback(
-        async (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            // Reset so picking the same file twice still fires change.
-            e.target.value = "";
-
+    const uploadFile = useCallback(
+        async (file: File) => {
             // Optimistic placeholder in the list. Uses a `pending:`
             // prefixed id namespace so the row can't collide with a
             // server-issued recording id.
@@ -75,6 +70,17 @@ export function useUploadQueue({ onUploadComplete }: Options) {
         [onUploadComplete],
     );
 
+    const handleUpload = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            // Reset so picking the same file twice still fires change.
+            e.target.value = "";
+            void uploadFile(file);
+        },
+        [uploadFile],
+    );
+
     const triggerUpload = useCallback(() => {
         uploadInputRef.current?.click();
     }, []);
@@ -84,6 +90,7 @@ export function useUploadQueue({ onUploadComplete }: Options) {
         pendingUploads,
         uploadInputRef,
         handleUpload,
+        uploadFile,
         triggerUpload,
     };
 }

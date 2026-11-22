@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { StatusDot } from "@/components/ui/status-dot";
 import { formatDateTime } from "@/lib/format-date";
 import {
     PLAUD_SESSION_WARNING_WINDOW_MS,
@@ -131,42 +132,52 @@ export function PlaudReconnectBanner({
 
     return (
         <>
-            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-500" />
-                    {state === "ending-soon" ? (
-                        <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-foreground">
-                                Your Plaud connection ends on {endsOn}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                Reconnect to keep syncing.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-0.5">
-                            <p className="text-sm font-medium text-foreground">
-                                Your Plaud connection needs to be reconnected
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                Plaud stopped accepting your saved sign-in, so
-                                new recordings aren't syncing. Reconnect to
-                                resume. Your existing recordings stay put.
-                            </p>
-                        </div>
-                    )}
-                </div>
-                <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
-                    <Button onClick={() => setOpen(true)}>Reconnect</Button>
+            <div className="pb-2.5 lg:px-2.5">
+                <div className="squircle flex gap-3 rounded-[var(--radius-item)] border border-accent bg-card p-3.5">
+                    <div className="flex w-2 shrink-0 pt-1.5">
+                        <StatusDot tone="working" />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+                        {state === "ending-soon" ? (
+                            <div className="flex flex-col gap-0.75">
+                                <p className="text-ui font-semibold text-strong">
+                                    Your Plaud connection ends on {endsOn}
+                                </p>
+                                <p className="text-small text-subtle">
+                                    Reconnect to keep syncing.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-0.75">
+                                <p className="text-ui font-semibold text-strong">
+                                    Plaud signed you out
+                                </p>
+                                <p className="text-small text-subtle">
+                                    Recordings you already have are safe. New
+                                    ones wait in your Plaud account until you
+                                    reconnect.
+                                </p>
+                            </div>
+                        )}
+                        <Button
+                            variant="ink"
+                            size="compact"
+                            onClick={() => setOpen(true)}
+                            className="w-fit"
+                        >
+                            Reconnect
+                        </Button>
+                    </div>
                     {state === "ending-soon" && (
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
+                            size="icon-compact"
                             onClick={dismissEndingSoon}
-                            className="rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
+                            className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground"
                             aria-label="Dismiss Plaud connection ending notice"
                         >
                             <X className="size-4" />
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>

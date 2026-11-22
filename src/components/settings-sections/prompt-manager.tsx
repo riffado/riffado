@@ -1,10 +1,16 @@
 "use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
+import { PromptList } from "@/components/settings/prompt-list";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+} from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -18,11 +24,11 @@ import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
 import { PROMPT_PRESETS } from "@/lib/ai/prompt-presets";
+import { toast } from "@/lib/toast";
 
 interface CustomPrompt {
     id: string;
@@ -157,14 +163,6 @@ export function PromptManager() {
         });
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     const viewingText =
         viewingPromptId &&
         (PROMPT_PRESETS[viewingPromptId as keyof typeof PROMPT_PRESETS]
@@ -185,160 +183,93 @@ export function PromptManager() {
             "Custom prompt");
 
     return (
-        <div className="space-y-6">
-            {/* Active prompt selector */}
-            <div className="space-y-2">
-                <Label htmlFor="selected-prompt">Active Prompt</Label>
-                <Select
-                    value={selectedPromptId}
-                    onValueChange={(value) => {
-                        setSelectedPromptId(value);
-                        handlePromptSettingChange({
-                            selectedPrompt: value,
-                            customPrompts,
-                        });
-                    }}
-                    disabled={isSavingSettings}
-                >
-                    <SelectTrigger id="selected-prompt">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {Object.values(PROMPT_PRESETS).map((preset) => (
-                            <SelectItem key={preset.id} value={preset.id}>
-                                {preset.name} (Preset)
-                            </SelectItem>
-                        ))}
-                        {customPrompts.map((prompt) => (
-                            <SelectItem key={prompt.id} value={prompt.id}>
-                                {prompt.name} (Custom)
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                    Select which prompt to use for title generation
-                </p>
-            </div>
-
-            {/* Preset prompts (read-only) */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Preset Prompts</h3>
-                </div>
-                <div className="space-y-2">
-                    {Object.values(PROMPT_PRESETS).map((preset) => (
-                        <div key={preset.id} className="p-4 border rounded-lg">
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-medium">
-                                            {preset.name}
-                                        </h4>
-                                        {selectedPromptId === preset.id && (
-                                            <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                Active
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mb-2">
-                                        {preset.description}
-                                    </p>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        setViewingPromptId(preset.id)
-                                    }
-                                >
-                                    View Prompt
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Custom prompts */}
-            <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">Custom Prompts</h3>
-                    <Button
-                        onClick={() =>
-                            setEditingCustomPrompt({ name: "", prompt: "" })
-                        }
-                        size="sm"
-                    >
-                        <Plus className="size-4 mr-2" />
-                        Add Custom Prompt
-                    </Button>
-                </div>
-                {customPrompts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                        No custom prompts yet. Create one to get started.
-                    </p>
-                ) : (
-                    <div className="space-y-2">
-                        {customPrompts.map((prompt) => (
-                            <div
-                                key={prompt.id}
-                                className="p-4 border rounded-lg"
+        <SettingsGroup
+            title="Titles"
+            description="The prompt used to name recordings"
+        >
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={1} />
+            ) : (
+                <SettingsRows>
+                    <SettingsRow
+                        label="Title prompt"
+                        description="Used when Riffado names a recording"
+                        controlId="selected-prompt"
+                        control={
+                            <Select
+                                value={selectedPromptId}
+                                onValueChange={(value) => {
+                                    setSelectedPromptId(value);
+                                    handlePromptSettingChange({
+                                        selectedPrompt: value,
+                                        customPrompts,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
                             >
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-medium">
-                                                {prompt.name}
-                                            </h4>
-                                            {selectedPromptId === prompt.id && (
-                                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                    Active
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setViewingPromptId(prompt.id)
-                                            }
+                                <SettingsSelectTrigger id="selected-prompt">
+                                    <SelectValue />
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {Object.values(PROMPT_PRESETS).map(
+                                        (preset) => (
+                                            <SelectItem
+                                                key={preset.id}
+                                                value={preset.id}
+                                            >
+                                                {preset.name}
+                                            </SelectItem>
+                                        ),
+                                    )}
+                                    {customPrompts.map((prompt) => (
+                                        <SelectItem
+                                            key={prompt.id}
+                                            value={prompt.id}
                                         >
-                                            View
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setEditingCustomPrompt({
-                                                    id: prompt.id,
-                                                    name: prompt.name,
-                                                    prompt: prompt.prompt,
-                                                })
-                                            }
-                                        >
-                                            <Pencil className="size-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                handleDeleteCustomPrompt(
-                                                    prompt.id,
-                                                )
-                                            }
-                                        >
-                                            <Trash2 className="size-4 text-destructive" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                                            {prompt.name} (yours)
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                </SettingsRows>
+            )}
+
+            <PromptList
+                title="Built-in title prompts"
+                items={Object.values(PROMPT_PRESETS).map((preset) => ({
+                    id: preset.id,
+                    name: preset.name,
+                    description: preset.description,
+                    active: selectedPromptId === preset.id,
+                }))}
+                onView={setViewingPromptId}
+            />
+
+            <PromptList
+                title="Your title prompts"
+                emptyText="None yet. Write one when the built-in prompts don't fit"
+                addLabel="New prompt"
+                onAdd={() => setEditingCustomPrompt({ name: "", prompt: "" })}
+                items={customPrompts.map((prompt) => ({
+                    id: prompt.id,
+                    name: prompt.name,
+                    active: selectedPromptId === prompt.id,
+                }))}
+                onView={setViewingPromptId}
+                onEdit={(id) => {
+                    const prompt = customPrompts.find((p) => p.id === id);
+                    if (prompt) {
+                        setEditingCustomPrompt({
+                            id: prompt.id,
+                            name: prompt.name,
+                            prompt: prompt.prompt,
+                        });
+                    }
+                }}
+                onDelete={handleDeleteCustomPrompt}
+            />
 
             {/* View prompt dialog */}
             {viewingPromptId && (
@@ -472,6 +403,6 @@ Generate the title now:`}
                     </DialogContent>
                 </Dialog>
             )}
-        </div>
+        </SettingsGroup>
     );
 }

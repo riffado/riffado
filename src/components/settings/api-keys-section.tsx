@@ -1,9 +1,10 @@
 "use client";
 
-import { Check, Clipboard, KeyRound, Plus, Trash2 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Check, Clipboard, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsRowsSkeleton } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { toast } from "@/lib/toast";
 
 type ApiKey = {
     id: string;
@@ -27,9 +29,23 @@ type ApiKey = {
     createdAt: string;
 };
 
-function formatDate(value: string | null): string {
-    if (!value) return "Never";
-    return new Date(value).toLocaleString();
+function formatDate(value: string): string {
+    return new Date(value).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+    });
+}
+
+function formatRelative(value: string): string {
+    return formatDistanceToNow(new Date(value), { addSuffix: true });
+}
+
+/** "read" -> "Read"; several scopes join with "and". */
+function formatScopes(scopes: string[]): string {
+    if (scopes.length === 0) return "No access";
+    const labels = scopes.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+    return labels.join(" and ");
 }
 
 export function ApiKeysSection() {
@@ -145,84 +161,78 @@ export function ApiKeysSection() {
     };
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="API Keys"
-                description="Personal access tokens for the Riffado public API."
-                icon={KeyRound}
-                action={
-                    <Button
-                        size="sm"
-                        onClick={() => {
-                            setCreatedKey(null);
-                            setIsCreateOpen(true);
-                        }}
-                    >
-                        <Plus className="size-4" />
-                        Create Key
-                    </Button>
-                }
-            />
-
+        <SettingsGroup
+            title="API keys"
+            description="Read access to your recordings for scripts and other apps"
+            action={
+                <Button
+                    variant="ink"
+                    size="compact"
+                    onClick={() => {
+                        setCreatedKey(null);
+                        setIsCreateOpen(true);
+                    }}
+                >
+                    <Plus />
+                    Create key
+                </Button>
+            }
+        >
             {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-                </div>
+                <SettingsRowsSkeleton rows={2} />
             ) : apiKeys.length === 0 ? (
-                <div className="text-center py-12 border rounded-lg">
-                    <KeyRound className="size-12 mx-auto mb-3 text-muted-foreground" />
-                    <h3 className="font-semibold mb-2">No API keys</h3>
-                    <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-                        <Plus className="size-4" />
-                        Create Key
-                    </Button>
-                </div>
+                <p className="border-y border-hairline py-4 text-ui text-subtle">
+                    No keys yet
+                </p>
             ) : (
-                <div className="space-y-3">
+                <ul className="flex flex-col divide-y divide-hairline border-y border-hairline">
                     {apiKeys.map((apiKey) => (
-                        <div
+                        <li
                             key={apiKey.id}
-                            className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                            className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3.5"
                         >
-                            <div className="min-w-0 space-y-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <h3 className="font-medium">
-                                        {apiKey.name}
-                                    </h3>
-                                    <span className="rounded border px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                            <div className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
+                                <span className="truncate text-row font-semibold text-strong">
+                                    {apiKey.name}
+                                </span>
+                                <span className="text-small leading-4 text-subtle">
+                                    {formatScopes(apiKey.scopes)} ·{" "}
+                                    <span className="font-mono">
                                         {apiKey.keyPrefix}
                                     </span>
-                                    {apiKey.revokedAt && (
-                                        <span className="rounded border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-                                            Revoked
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
-                                    <span>
-                                        Last used:{" "}
-                                        {formatDate(apiKey.lastUsedAt)}
-                                    </span>
-                                    <span>
-                                        Expires: {formatDate(apiKey.expiresAt)}
-                                    </span>
-                                    <span>
-                                        Created: {formatDate(apiKey.createdAt)}
-                                    </span>
-                                </div>
+                                </span>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleRevoke(apiKey.id)}
-                                disabled={Boolean(apiKey.revokedAt)}
-                                aria-label={`Revoke ${apiKey.name}`}
-                            >
-                                <Trash2 className="size-4 text-destructive" />
-                            </Button>
-                        </div>
+                            <div className="flex w-44 shrink-0 flex-col gap-0.5 text-small leading-4 text-subtle">
+                                <span>
+                                    {apiKey.lastUsedAt
+                                        ? `Used ${formatRelative(apiKey.lastUsedAt)}`
+                                        : "Never used"}
+                                </span>
+                                <span>
+                                    {apiKey.expiresAt
+                                        ? `Expires ${formatDate(apiKey.expiresAt)}`
+                                        : `Created ${formatDate(apiKey.createdAt)}`}
+                                </span>
+                            </div>
+                            <div className="ml-auto flex w-20 shrink-0 justify-end">
+                                {apiKey.revokedAt ? (
+                                    <span className="text-small leading-4 text-subtle">
+                                        Revoked
+                                    </span>
+                                ) : (
+                                    <Button
+                                        variant="ghost"
+                                        size="compact"
+                                        onClick={() => handleRevoke(apiKey.id)}
+                                        aria-label={`Revoke ${apiKey.name}`}
+                                    >
+                                        Revoke
+                                    </Button>
+                                )}
+                            </div>
+                        </li>
                     ))}
-                </div>
+                </ul>
             )}
 
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -307,6 +317,6 @@ export function ApiKeysSection() {
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </SettingsGroup>
     );
 }

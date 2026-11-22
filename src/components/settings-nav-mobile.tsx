@@ -1,65 +1,67 @@
 "use client";
 
-import { useMemo } from "react";
-import { buildSettingsNav } from "@/components/settings-nav-config";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import type { SettingsSection } from "@/types/settings";
+import { ChevronRight } from "lucide-react";
+import type * as React from "react";
+import type { NavItem } from "@/components/settings-nav-config";
+import { LibraryBackLink } from "@/components/settings-nav-sidebar";
+import type { SettingsPage } from "@/types/settings";
 
 interface Props {
-    activeSection: SettingsSection;
-    onSectionChange: (section: SettingsSection) => void;
-    isHosted: boolean;
+    nav: NavItem[];
+    onSelect: (page: SettingsPage) => void;
+    onNavKeyDown: (e: React.KeyboardEvent) => void;
+    onLeave?: () => void;
 }
 
 /**
- * Section picker shown in the dialog header below md. Replaces the
- * sidebar (hidden at that breakpoint) so users on small screens
- * still have a way to switch sections without a separate route.
+ * Phone and tablet layout (below lg): Settings is a list screen; tapping
+ * an item pushes into that page, which shows a back control to return
+ * here (see `SettingsPageContent`).
  */
 export function SettingsNavMobile({
-    activeSection,
-    onSectionChange,
-    isHosted,
+    nav,
+    onSelect,
+    onNavKeyDown,
+    onLeave,
 }: Props) {
-    const settingsNav = useMemo(
-        () => buildSettingsNav({ isHosted }),
-        [isHosted],
-    );
-    const activeNavItem = settingsNav.find((item) => item.id === activeSection);
-
     return (
-        <div className="md:hidden">
-            <Select
-                value={activeSection}
-                onValueChange={(value) =>
-                    onSectionChange(value as SettingsSection)
-                }
-            >
-                <SelectTrigger
-                    className="w-[180px]"
-                    aria-label="Select settings section"
+        <div className="flex flex-col gap-5.5 px-4 pt-5.5 pb-10">
+            <LibraryBackLink onNavigate={onLeave} />
+            <h1 className="px-0.5 font-display text-plan-title font-semibold text-strong">
+                Settings
+            </h1>
+            <nav aria-label="Settings">
+                <ul
+                    className="flex flex-col divide-y divide-hairline border-y border-hairline"
+                    onKeyDown={onNavKeyDown}
                 >
-                    <SelectValue>
-                        {activeNavItem?.name || "Settings"}
-                    </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                    {settingsNav.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                            <div className="flex items-center gap-2">
-                                <item.icon className="size-4" />
-                                <span>{item.name}</span>
-                            </div>
-                        </SelectItem>
+                    {nav.map((item) => (
+                        <li key={item.id}>
+                            <button
+                                type="button"
+                                data-settings-nav-item=""
+                                data-page={item.id}
+                                onClick={() => onSelect(item.id)}
+                                className="flex min-h-13 w-full items-center gap-3.5 py-2 text-left outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-accent/60"
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="squircle flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-surface text-foreground"
+                                >
+                                    <item.icon className="size-4.5" />
+                                </span>
+                                <span className="flex-1 text-row font-medium text-strong">
+                                    {item.name}
+                                </span>
+                                <ChevronRight
+                                    className="size-4.5 shrink-0 text-subtle"
+                                    aria-hidden="true"
+                                />
+                            </button>
+                        </li>
                     ))}
-                </SelectContent>
-            </Select>
+                </ul>
+            </nav>
         </div>
     );
 }

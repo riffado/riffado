@@ -45,7 +45,7 @@ function endingNotice() {
 }
 
 function reconnectNotice() {
-    return screen.queryByText("Your Plaud connection needs to be reconnected");
+    return screen.queryByText("Plaud signed you out");
 }
 
 function bannerProps(show: boolean, sessionExpiresAt: string | null) {
@@ -116,9 +116,7 @@ describe("PlaudReconnectBanner ending-soon dismissal", () => {
                 onReconnected={() => {}}
             />,
         );
-        expect(
-            screen.getByText("Your Plaud connection needs to be reconnected"),
-        ).not.toBeNull();
+        expect(screen.getByText("Plaud signed you out")).not.toBeNull();
         expect(
             screen.queryByRole("button", {
                 name: "Dismiss Plaud connection ending notice",

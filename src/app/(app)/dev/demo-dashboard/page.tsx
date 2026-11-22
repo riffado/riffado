@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth-server";
 import {
     buildDemoRecordings,
     buildDemoTranscriptions,
+    DEMO_DEVICES,
     DEMO_INITIAL_SETTINGS,
 } from "@/lib/demo/fixtures";
 import { env } from "@/lib/env";
@@ -47,9 +48,13 @@ export default async function DemoDashboardPage() {
             transcriptions={transcriptions}
             isAdmin={false}
             userEmail={session.user.email ?? null}
+            userName={session.user.name || null}
+            devices={DEMO_DEVICES}
             initialSettings={DEMO_INITIAL_SETTINGS}
             plaudNeedsReconnect={false}
             plaudSessionExpiresAt={null}
+            plaudLastSyncAt={null}
+            hasPlaudConnection
             isHosted={env.IS_HOSTED}
         />
     );

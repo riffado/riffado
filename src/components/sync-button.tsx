@@ -2,12 +2,14 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatSyncedAgo } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 
 /**
@@ -99,30 +101,12 @@ export function SyncButton({
     // old stacked layout showed below the primary line (next sync ETA,
     // last-error message) into a single `title=` string so we don't
     // need a tooltip primitive just for this.
-    const title = (() => {
-        const parts: string[] = [];
-        if (failed && lastSyncResult?.error) {
-            parts.push(lastSyncResult.error);
-        }
-        if (!isAutoSyncing && nextSyncTime) {
-            try {
-                const diff = nextSyncTime.getTime() - Date.now();
-                if (diff < 60000) {
-                    parts.push("Next auto-sync soon");
-                } else {
-                    parts.push(
-                        `Next auto-sync ${formatDistanceToNow(nextSyncTime, {
-                            addSuffix: true,
-                        })}`,
-                    );
-                }
-            } catch {
-                // Ignore - we just won't include the next-sync line.
-            }
-        }
-        parts.push(isAutoSyncing ? "Sync in progress" : "Click to sync now");
-        return parts.join(" \u00b7 ");
-    })();
+    const title = syncTooltip({
+        isAutoSyncing,
+        failed,
+        error: lastSyncResult?.error,
+        nextSyncTime,
+    });
 
     const ariaLabel = isAutoSyncing
         ? "Syncing device"
@@ -170,5 +154,137 @@ export function SyncButton({
             </TooltipTrigger>
             <TooltipContent side="bottom">{title}</TooltipContent>
         </Tooltip>
+    );
+}
+
+function syncTooltip({
+    isAutoSyncing,
+    failed,
+    error,
+    nextSyncTime,
+}: {
+    isAutoSyncing: boolean;
+    failed: boolean;
+    error: string | undefined;
+    nextSyncTime: Date | null;
+}): string {
+    const parts: string[] = [];
+    if (failed && error) {
+        parts.push(error);
+    }
+    if (!isAutoSyncing && nextSyncTime) {
+        try {
+            const diff = nextSyncTime.getTime() - Date.now();
+            if (diff < 60000) {
+                parts.push("Next auto-sync soon");
+            } else {
+                parts.push(
+                    `Next auto-sync ${formatDistanceToNow(nextSyncTime, {
+                        addSuffix: true,
+                    })}`,
+                );
+            }
+        } catch {
+            // Ignore - we just won't include the next-sync line.
+        }
+    }
+    parts.push(isAutoSyncing ? "Sync in progress" : "Click to sync now");
+    return parts.join(" \u00b7 ");
+}
+
+function useMinuteClock(): number | null {
+    const [now, setNow] = useState<number | null>(null);
+    useEffect(() => {
+        setNow(Date.now());
+        const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    return now;
+}
+
+interface SyncStatusProps extends SyncButtonProps {
+    /**
+     * True while Plaud has signed the user out. The status then reads
+     * "Last synced ..." from `lastSuccessfulSyncTime` and the sync button
+     * is hidden, since a sync can't succeed until the user reconnects.
+     */
+    needsReconnect: boolean;
+    /** Last sync the server recorded as successful, if known. */
+    lastSuccessfulSyncTime: Date | null;
+}
+
+/**
+ * Pane-header sync status: "Synced 4 min ago" plus an icon-only Sync now
+ * button. The icon spins while a sync runs; the label is right-aligned so
+ * its changing width never moves the button.
+ */
+export function SyncStatus({
+    lastSyncTime,
+    nextSyncTime,
+    isAutoSyncing,
+    lastSyncResult,
+    onSync,
+    needsReconnect,
+    lastSuccessfulSyncTime,
+    className,
+}: SyncStatusProps) {
+    const now = useMinuteClock();
+    const failed = !isAutoSyncing && lastSyncResult?.success === false;
+    const shownSyncTime = needsReconnect
+        ? lastSuccessfulSyncTime
+        : (lastSyncTime ?? lastSuccessfulSyncTime);
+
+    const label = (() => {
+        if (isAutoSyncing) return "Syncing…";
+        if (failed && !needsReconnect) return "Sync failed";
+        if (!shownSyncTime || now === null) return null;
+        const ago = formatSyncedAgo(shownSyncTime, now);
+        if (!ago) return null;
+        return needsReconnect ? `Last synced ${ago}` : `Synced ${ago}`;
+    })();
+
+    return (
+        <div className={cn("flex items-center gap-1.5", className)}>
+            {label ? (
+                <span
+                    className="text-small leading-4 text-subtle tabular-nums"
+                    aria-live="polite"
+                >
+                    {label}
+                </span>
+            ) : null}
+            {needsReconnect ? null : (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-compact"
+                            onClick={onSync}
+                            disabled={isAutoSyncing}
+                            aria-label={failed ? "Retry sync" : "Sync now"}
+                            className="text-foreground disabled:opacity-100"
+                        >
+                            <RefreshCw
+                                className={cn(
+                                    "size-4",
+                                    isAutoSyncing &&
+                                        "animate-spin motion-reduce:animate-none",
+                                )}
+                                aria-hidden="true"
+                            />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                        {syncTooltip({
+                            isAutoSyncing,
+                            failed,
+                            error: lastSyncResult?.error,
+                            nextSyncTime,
+                        })}
+                    </TooltipContent>
+                </Tooltip>
+            )}
+        </div>
     );
 }

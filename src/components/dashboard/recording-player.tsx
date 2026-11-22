@@ -1,44 +1,38 @@
 "use client";
 
 import { RecordingPlayerControls } from "@/components/dashboard/recording-player-controls";
-import { RecordingPlayerHeader } from "@/components/dashboard/recording-player-header";
-import { Card, CardContent } from "@/components/ui/card";
+import type { PlayerPreferences } from "@/components/recording/types";
 import { usePlaybackEngine } from "@/hooks/use-playback-engine";
 import { usePlaybackKeyboard } from "@/hooks/use-playback-keyboard";
 import { useWaveform } from "@/hooks/use-waveform";
+import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
-interface RecordingPlayerProps {
+interface RecordingPlayerProps extends PlayerPreferences {
     recording: Recording;
+    /** Called when playback ends and auto-play-next is on. */
     onEnded?: () => void;
-    onRenamed?: (filename: string) => void;
-    initialPlaybackSpeed?: number;
-    initialVolume?: number;
-    initialAutoPlayNext?: boolean;
-    /**
-     * Which scrubber style to render. `"slider"` forces the plain
-     * progress bar even when waveform peaks are available; `"waveform"`
-     * shows the canvas waveform when peaks exist and falls back to the
-     * slider otherwise. Read from userSettings.playerScrubber.
-     */
-    scrubberStyle?: "waveform" | "slider";
+    className?: string;
 }
 
 /**
- * Audio playback card for a single recording. State is owned by
+ * Night player bar for a single recording. State is owned by
  * usePlaybackEngine (audio element + transport state); keyboard
  * shortcuts by usePlaybackKeyboard; waveform peaks by useWaveform.
- * This component is the composition root + the hidden <audio>
- * element that the engine writes to.
+ * This component is the composition root + the hidden <audio> element
+ * the engine writes to. Placement (floating or docked) is the parent's.
+ *
+ * `scrubberStyle`: `"slider"` always renders a slider; `"waveform"`
+ * renders the dot waveform (flat until peaks are decoded).
  */
 export function RecordingPlayer({
     recording,
     onEnded,
-    onRenamed,
     initialPlaybackSpeed = 1.0,
     initialVolume = 75,
     initialAutoPlayNext = false,
     scrubberStyle = "waveform",
+    className,
 }: RecordingPlayerProps) {
     const {
         audioRef,
@@ -68,11 +62,10 @@ export function RecordingPlayer({
             setVolume((prev) => Math.max(0, Math.min(100, prev + delta))),
     });
 
-    // Waveform peaks: cached server-side if present, decoded
-    // client-side on first listen for recordings under
-    // AUTO_DECODE_MAX_MS. Long recordings show a manual "Generate
-    // waveform" button instead so we don't surprise the user with a
-    // multi-hundred-MB decode.
+    // Waveform peaks: cached server-side if present, decoded client-side
+    // on first listen for recordings under AUTO_DECODE_MAX_MS. Longer
+    // recordings wait for the "Generate waveform" button so we don't
+    // surprise the user with a multi-hundred-MB decode.
     const {
         peaks: waveformPeaks,
         status: waveformStatus,
@@ -81,42 +74,39 @@ export function RecordingPlayer({
         recordingId: recording.id,
         durationMs: recording.duration,
         initialPeaks: recording.waveformPeaks ?? null,
-        // Skip auto-decode entirely when the user has opted out of the
-        // waveform UI -- there's no point spending CPU on peaks the
-        // player will never display.
         autoStart: scrubberStyle === "waveform",
     });
 
     return (
-        <Card>
-            <RecordingPlayerHeader
-                recording={recording}
-                duration={duration}
+        <section
+            aria-label="Player"
+            className={cn(
+                "squircle rounded-[var(--radius-card)] bg-player py-1.5 pr-4 pl-1.5 shadow-player lg:py-2.5 lg:pr-3.5 lg:pl-2.5",
+                className,
+            )}
+        >
+            <RecordingPlayerControls
+                isPlaying={isPlaying}
+                onTogglePlay={togglePlayPause}
+                currentTime={currentTime}
+                // Fall back to the stored length until the audio element
+                // reports its own, so the total never flashes 0:00.
+                duration={duration || recording.duration / 1000}
+                onSeekRatio={seekToRatio}
+                onSkip={seekRelative}
+                playbackSpeed={playbackSpeed}
+                onCycleSpeed={cycleSpeed}
+                volume={volume}
+                onVolumeChange={setVolume}
+                onToggleMute={toggleMute}
                 scrubberStyle={scrubberStyle}
+                waveformPeaks={waveformPeaks}
                 waveformStatus={waveformStatus}
                 onDecodeWaveform={triggerWaveformDecode}
-                onRenamed={onRenamed}
             />
-            <CardContent>
-                <RecordingPlayerControls
-                    isPlaying={isPlaying}
-                    onTogglePlay={togglePlayPause}
-                    currentTime={currentTime}
-                    duration={duration}
-                    onSeekRatio={seekToRatio}
-                    playbackSpeed={playbackSpeed}
-                    onCycleSpeed={cycleSpeed}
-                    volume={volume}
-                    onVolumeChange={setVolume}
-                    onToggleMute={toggleMute}
-                    scrubberStyle={scrubberStyle}
-                    waveformPeaks={waveformPeaks}
-                />
-
-                <audio ref={audioRef} preload="metadata" className="hidden">
-                    <track kind="captions" />
-                </audio>
-            </CardContent>
-        </Card>
+            <audio ref={audioRef} preload="metadata" className="hidden">
+                <track kind="captions" />
+            </audio>
+        </section>
     );
 }

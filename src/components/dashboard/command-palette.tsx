@@ -32,7 +32,8 @@ interface CommandPaletteProps {
     currentTheme: "light" | "dark" | "system";
     dateTimeFormat: DateTimeFormat;
     onSelectRecording: (r: Recording) => void;
-    onSync: () => void;
+    /** Omitted when there is no Plaud connection; hides the Sync action. */
+    onSync?: () => void;
     onUpload: () => void;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;

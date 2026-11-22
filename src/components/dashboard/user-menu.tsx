@@ -27,6 +27,13 @@ interface UserMenuProps {
     isAdmin: boolean;
     initialTheme: "light" | "dark" | "system";
     userEmail: string | null;
+    /** Display name from the session, when the account has one. */
+    userName?: string | null;
+    /**
+     * `icon`: the header's square initial button. `sidebar`: avatar plus
+     * name, filling the sidebar's account row.
+     */
+    trigger?: "icon" | "sidebar";
     onOpenSettings: () => void;
     /** Called on hover or focus of the Settings item so its data can load before the click. */
     onSettingsIntent: () => void;
@@ -48,10 +55,35 @@ function emailInitial(email: string | null): string {
     return trimmed[0].toUpperCase();
 }
 
+/** Up to two initials from the display name, else the email's first letter. */
+export function accountInitials(
+    name: string | null | undefined,
+    email: string | null,
+): string {
+    const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return emailInitial(email);
+    const first = words[0][0] ?? "";
+    const last = words.length > 1 ? (words[words.length - 1][0] ?? "") : "";
+    return `${first}${last}`.toUpperCase();
+}
+
+function AccountAvatar({ initials }: { initials: string }) {
+    return (
+        <span
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-terracotta-wash text-xs font-semibold text-terracotta"
+            aria-hidden="true"
+        >
+            {initials}
+        </span>
+    );
+}
+
 export function UserMenu({
     isAdmin,
     initialTheme,
     userEmail,
+    userName = null,
+    trigger = "icon",
     onOpenSettings,
     onSettingsIntent,
     onOpenShortcuts,
@@ -68,16 +100,35 @@ export function UserMenu({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Account menu"
-                    className="font-semibold"
-                >
-                    {emailInitial(userEmail)}
-                </Button>
+                {trigger === "sidebar" ? (
+                    <button
+                        type="button"
+                        aria-label="Account menu"
+                        className="squircle flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-inner)] px-1.5 py-1 text-left outline-none select-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
+                    >
+                        <AccountAvatar
+                            initials={accountInitials(userName, userEmail)}
+                        />
+                        <span className="truncate text-ui font-medium text-foreground">
+                            {userName || userEmail || "Account"}
+                        </span>
+                    </button>
+                ) : (
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label="Account menu"
+                        className="font-semibold"
+                    >
+                        {emailInitial(userEmail)}
+                    </Button>
+                )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-0">
+            <DropdownMenuContent
+                align={trigger === "sidebar" ? "start" : "end"}
+                side={trigger === "sidebar" ? "top" : "bottom"}
+                className="w-72 p-0"
+            >
                 <div className="flex items-center gap-3 border-b p-3">
                     <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"

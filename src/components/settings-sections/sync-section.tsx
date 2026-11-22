@@ -1,20 +1,22 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
-import { SettingsCard } from "@/components/settings/settings-card";
-import { ToggleRow } from "@/components/settings/toggle-row";
-import { Label } from "@/components/ui/label";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+    ToggleRow,
+} from "@/components/settings/toggle-row";
 import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
 import { useSettings } from "@/hooks/use-settings";
+import { toast } from "@/lib/toast";
 
 const syncIntervalPresets = [
     { label: "1 minute", value: 60 * 1000 },
@@ -128,27 +130,16 @@ export function SyncSection() {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Sync"
-                description="When and how Riffado pulls new recordings from your Plaud device."
-                icon={RefreshCw}
-            />
-            <div className="space-y-3">
-                <SettingsCard title="Auto-sync">
+        <SettingsGroup title="Sync">
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={5} />
+            ) : (
+                <SettingsRows>
                     <ToggleRow
                         id="auto-sync"
-                        label="Enable auto-sync"
-                        description="Automatically sync recordings from your Plaud device at regular intervals."
+                        label="Sync automatically"
+                        description="Checks your Plaud account for new recordings"
                         checked={autoSyncEnabled}
                         onCheckedChange={(checked) => {
                             setAutoSyncEnabled(checked);
@@ -160,11 +151,11 @@ export function SyncSection() {
                     />
 
                     {autoSyncEnabled && (
-                        <div className="mt-3 space-y-3 border-t pt-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="sync-interval">
-                                    Sync interval
-                                </Label>
+                        <SettingsRow
+                            label="Every"
+                            description="How often Riffado checks"
+                            controlId="sync-interval"
+                            control={
                                 <Select
                                     value={syncInterval.toString()}
                                     onValueChange={(value) => {
@@ -176,15 +167,12 @@ export function SyncSection() {
                                     }}
                                     disabled={isSavingSettings}
                                 >
-                                    <SelectTrigger
-                                        id="sync-interval"
-                                        className="w-full"
-                                    >
+                                    <SettingsSelectTrigger id="sync-interval">
                                         <SelectValue>
                                             {getSyncIntervalLabel(syncInterval)}
                                         </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
+                                    </SettingsSelectTrigger>
+                                    <SelectContent align="end">
                                         {syncIntervalPresets.map((preset) => (
                                             <SelectItem
                                                 key={preset.value}
@@ -195,44 +183,46 @@ export function SyncSection() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
-
-                            <ToggleRow
-                                id="sync-on-mount"
-                                label="Sync on app load"
-                                description="Automatically sync when the app first loads."
-                                checked={syncOnMount}
-                                onCheckedChange={(checked) => {
-                                    setSyncOnMount(checked);
-                                    handleSyncSettingChange({
-                                        syncOnMount: checked,
-                                    });
-                                }}
-                                disabled={isSavingSettings}
-                            />
-
-                            <ToggleRow
-                                id="sync-on-visibility"
-                                label="Sync on tab visibility"
-                                description="Sync when you return to the app tab."
-                                checked={syncOnVisibilityChange}
-                                onCheckedChange={(checked) => {
-                                    setSyncOnVisibilityChange(checked);
-                                    handleSyncSettingChange({
-                                        syncOnVisibilityChange: checked,
-                                    });
-                                }}
-                                disabled={isSavingSettings}
-                            />
-                        </div>
+                            }
+                        />
                     )}
-                </SettingsCard>
 
-                <SettingsCard title="Notifications">
+                    {autoSyncEnabled && (
+                        <ToggleRow
+                            id="sync-on-mount"
+                            label="Sync when Riffado opens"
+                            description="Catches up as soon as you open the app"
+                            checked={syncOnMount}
+                            onCheckedChange={(checked) => {
+                                setSyncOnMount(checked);
+                                handleSyncSettingChange({
+                                    syncOnMount: checked,
+                                });
+                            }}
+                            disabled={isSavingSettings}
+                        />
+                    )}
+
+                    {autoSyncEnabled && (
+                        <ToggleRow
+                            id="sync-on-visibility"
+                            label="Sync when you come back"
+                            description="Checks again when you return to this tab"
+                            checked={syncOnVisibilityChange}
+                            onCheckedChange={(checked) => {
+                                setSyncOnVisibilityChange(checked);
+                                handleSyncSettingChange({
+                                    syncOnVisibilityChange: checked,
+                                });
+                            }}
+                            disabled={isSavingSettings}
+                        />
+                    )}
+
                     <ToggleRow
                         id="sync-notifications"
-                        label="Show sync notifications"
-                        description="Display notifications when sync completes."
+                        label="Sync notifications"
+                        description="A message when a sync finishes"
                         checked={syncNotifications}
                         onCheckedChange={(checked) => {
                             setSyncNotifications(checked);
@@ -242,8 +232,8 @@ export function SyncSection() {
                         }}
                         disabled={isSavingSettings}
                     />
-                </SettingsCard>
-            </div>
-        </div>
+                </SettingsRows>
+            )}
+        </SettingsGroup>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Loader2, MoreHorizontal, Play, Trash2 } from "lucide-react";
+import { Download, MoreHorizontal, Play, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,107 +10,133 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatDateTime } from "@/lib/format-date";
+import { StatusDot, type StatusTone } from "@/components/ui/status-dot";
 import { formatDurationMs } from "@/lib/format-duration";
 import { recordingAudioDownloadPath } from "@/lib/recordings/filename";
 import { cn } from "@/lib/utils";
-import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
+
+/** Where a row's status dot stands: in flight, transcribed, or not yet. */
+export function recordingRowTone(
+    hasTranscript: boolean,
+    inFlight: "transcribing" | "summarizing" | undefined,
+): StatusTone {
+    if (inFlight) return "working";
+    return hasTranscript ? "ready" : "idle";
+}
+
+/**
+ * Shared geometry for list rows (recordings and pending uploads): a fixed
+ * 8px status-dot lane, then title + duration, a one-line detail, and a
+ * metadata line.
+ */
+export function RecordingRowLayout({
+    tone,
+    title,
+    duration,
+    detail,
+    meta,
+    isCompact,
+}: {
+    tone: StatusTone;
+    title: string;
+    duration?: string;
+    detail?: string | null;
+    meta?: string | null;
+    isCompact: boolean;
+}) {
+    return (
+        <div className={cn("flex gap-3 px-3.5", isCompact ? "py-2" : "py-3")}>
+            <div className="flex w-2 shrink-0 pt-1.75">
+                <StatusDot tone={tone} />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.75">
+                <div className="flex justify-between gap-3">
+                    <span className="truncate text-ui font-semibold text-strong">
+                        {title}
+                    </span>
+                    {duration ? (
+                        <span className="shrink-0 text-xs text-subtle tabular-nums">
+                            {duration}
+                        </span>
+                    ) : null}
+                </div>
+                {detail ? (
+                    <p className="truncate text-small text-subtle">{detail}</p>
+                ) : null}
+                {meta ? (
+                    <p className="truncate text-xs text-muted-foreground">
+                        {meta}
+                    </p>
+                ) : null}
+            </div>
+        </div>
+    );
+}
 
 export function RecordingRow({
     recording,
     isSelected,
+    hasTranscript,
     inFlight,
     snippet,
+    meta,
     isCompact,
-    rowPadding,
-    dateTimeFormat,
     onSelect,
     onDelete,
     registerRef,
 }: {
     recording: Recording;
     isSelected: boolean;
+    hasTranscript: boolean;
     inFlight: "transcribing" | "summarizing" | undefined;
     snippet: string | null;
+    meta: string | null;
     isCompact: boolean;
-    rowPadding: string;
-    dateTimeFormat: DateTimeFormat;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
     registerRef: (id: string, el: HTMLButtonElement | null) => void;
 }) {
     const confirm = useConfirm();
+    const detail = inFlight
+        ? inFlight === "transcribing"
+            ? "Transcribing…"
+            : "Summarizing…"
+        : hasTranscript
+          ? snippet
+          : "Not transcribed yet";
+
     return (
-        <div
-            className={cn(
-                "group/row relative",
-                isSelected
-                    ? "bg-accent shadow-[inset_2px_0_0_0_var(--color-primary)]"
-                    : null,
-            )}
-        >
+        <div className="group/row relative">
             <button
                 ref={(el) => {
                     registerRef(recording.id, el);
                 }}
                 type="button"
                 onClick={() => onSelect(recording)}
+                aria-current={isSelected ? "true" : undefined}
                 className={cn(
-                    "w-full text-left transition-colors hover:bg-accent/60",
-                    rowPadding,
+                    "squircle block w-full scroll-mt-10 rounded-[var(--radius-item)] text-left outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    isSelected ? "bg-accent" : "hover:bg-accent/60",
                 )}
             >
-                <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <h3 className="truncate text-sm font-medium">
-                            {recording.filename}
-                        </h3>
-                        {inFlight && (
-                            <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[11px] text-primary">
-                                <Loader2
-                                    className="size-3 animate-spin"
-                                    aria-hidden="true"
-                                />
-                                {inFlight === "transcribing"
-                                    ? "Transcribing"
-                                    : "Summarizing"}
-                            </span>
-                        )}
-                    </div>
-                    {snippet ? (
-                        <p
-                            className={cn(
-                                "truncate text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
-                            )}
-                        >
-                            {snippet}
-                        </p>
-                    ) : (
-                        <p
-                            className={cn(
-                                "text-xs text-muted-foreground",
-                                isCompact ? "mt-0.5" : "mt-1",
-                            )}
-                        >
-                            {formatDurationMs(recording.duration)}
-                            {" \u00b7 "}
-                            {formatDateTime(
-                                recording.startTime,
-                                dateTimeFormat,
-                            )}
-                        </p>
-                    )}
-                </div>
+                <RecordingRowLayout
+                    tone={recordingRowTone(hasTranscript, inFlight)}
+                    title={recording.filename}
+                    duration={formatDurationMs(recording.duration)}
+                    detail={detail}
+                    meta={meta}
+                    isCompact={isCompact}
+                />
             </button>
             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="ghost"
-                            size="icon-sm"
+                            size="icon-compact"
                             aria-label="Row actions"
+                            className="bg-accent hover:bg-border"
                             onClick={(e) => e.stopPropagation()}
                         >
                             <MoreHorizontal className="size-4" />
@@ -145,10 +171,10 @@ export function RecordingRow({
                                                 {recording.filename}
                                             </span>
                                             <br />
-                                            The audio file and any transcript or
-                                            summary will be removed. If the file
-                                            is still on your Plaud device, the
-                                            next sync will re-download it.
+                                            The audio, transcript and summary
+                                            are removed from Riffado. A copy in
+                                            your Plaud account stays there and
+                                            won't sync back.
                                         </>
                                     ),
                                     confirmLabel: "Delete",

@@ -2,26 +2,45 @@
 
 import { Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
     MAX_RECORDING_TITLE_LENGTH,
     normalizeRecordingTitle,
 } from "@/lib/recordings/filename";
+import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
+/**
+ * Recording name that renames in place: click (or set `editing`) to
+ * edit, Enter or blur to save, Escape to cancel.
+ *
+ * `variant="display"` wraps long names instead of truncating and drops
+ * the pencil hint (the big title has a Rename menu item). Pass
+ * `editing` + `onEditingChange` to control edit mode from outside.
+ */
 export function RecordingTitle({
     recordingId,
     filename,
     onRenamed,
     className,
+    variant = "inline",
+    editing: editingProp,
+    onEditingChange,
 }: {
     recordingId: string;
     filename: string;
     onRenamed?: (filename: string) => void;
     className?: string;
+    variant?: "inline" | "display";
+    editing?: boolean;
+    onEditingChange?: (editing: boolean) => void;
 }) {
-    const [editing, setEditing] = useState(false);
+    const [editingState, setEditingState] = useState(false);
+    const editing = editingProp ?? editingState;
+    const setEditing = (next: boolean) => {
+        if (editingProp === undefined) setEditingState(next);
+        onEditingChange?.(next);
+    };
     const [draft, setDraft] = useState(filename);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -107,12 +126,33 @@ export function RecordingTitle({
                     }
                 }}
                 className={cn(
-                    "w-full min-w-0 rounded-md bg-transparent px-1 -mx-1 font-semibold outline-none",
+                    "w-full min-w-0 rounded-md bg-transparent px-1 -mx-1 outline-none",
+                    variant === "inline" && "font-semibold",
+                    // Chrome won't shrink a text input below the font's
+                    // normal line height; pin it to the title's line box.
+                    variant === "display" && "block h-[1lh]",
                     "focus-visible:ring-ring/50 focus-visible:ring-[3px]",
                     "disabled:opacity-60",
                     className,
                 )}
             />
+        );
+    }
+
+    if (variant === "display") {
+        return (
+            <button
+                type="button"
+                onClick={() => setEditing(true)}
+                title="Rename"
+                className={cn(
+                    "block w-full rounded-md px-1 -mx-1 text-left wrap-anywhere outline-none transition-colors",
+                    "hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    className,
+                )}
+            >
+                {filename}
+            </button>
         );
     }
 

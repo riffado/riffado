@@ -10,7 +10,7 @@ import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { OpenAnalytics } from "@/components/open-analytics";
 import { PostHogAnalytics } from "@/components/posthog-analytics";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { env } from "@/lib/env";
 import "./globals.css";

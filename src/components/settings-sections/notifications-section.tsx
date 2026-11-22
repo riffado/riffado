@@ -1,22 +1,19 @@
 "use client";
 
-import {
-    Bell,
-    BellRing,
-    Mail,
-    Megaphone,
-    Smartphone,
-    Volume2,
-} from "lucide-react";
+import { Mail } from "lucide-react";
 import { useEffect, useState } from "react";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
-import { SettingsCard } from "@/components/settings/settings-card";
-import { ToggleRow } from "@/components/settings/toggle-row";
+import { SettingsGroup } from "@/components/settings/section-header";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+    ToggleRow,
+} from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-settings";
 import { requestNotificationPermission } from "@/lib/notifications/browser";
+import { setToastSound } from "@/lib/toast";
 
 export function NotificationsSection() {
     const {
@@ -51,6 +48,7 @@ export function NotificationsSection() {
                     setEmailNotifications(data.emailNotifications ?? false);
                     setBarkNotifications(data.barkNotifications ?? false);
                     setNotificationSound(data.notificationSound ?? true);
+                    setToastSound(data.notificationSound ?? true);
                     setMarketingEmailConsent(
                         data.marketingEmailConsent ?? false,
                     );
@@ -164,190 +162,128 @@ export function NotificationsSection() {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Notifications"
-                description="Choose how and when Riffado lets you know about new recordings and sync events."
-                icon={Bell}
-            />
-
-            <div className="space-y-3">
-                {/* Browser */}
-                <SettingsCard>
+        <SettingsGroup
+            title="Notifications"
+            description="How Riffado tells you about new recordings and syncs"
+        >
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={5} />
+            ) : (
+                <SettingsRows>
                     <ToggleRow
                         id="browser-notifications"
-                        label={
-                            <span className="inline-flex items-center gap-2">
-                                <BellRing
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Browser notifications
-                            </span>
-                        }
-                        description="Show browser notifications for new recordings and sync events."
+                        label="Browser notifications"
+                        description="For new recordings and sync events"
                         checked={browserNotifications}
                         onCheckedChange={handleBrowserNotificationsChange}
                         disabled={isSavingSettings}
                     />
-                </SettingsCard>
-
-                {/* Email */}
-                <SettingsCard>
                     <ToggleRow
                         id="email-notifications"
-                        label={
-                            <span className="inline-flex items-center gap-2">
-                                <Mail
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Email notifications
-                            </span>
-                        }
-                        description="Send email notifications for new recordings."
+                        label="Email notifications"
+                        description="An email for new recordings"
                         checked={emailNotifications}
                         onCheckedChange={handleEmailNotificationsChange}
                         disabled={isSavingSettings}
                     />
-
                     {emailNotifications && (
-                        <div className="mt-3 space-y-2 border-t pt-3">
-                            <Label htmlFor="notification-email">
-                                Email address
-                            </Label>
-                            <Input
-                                id="notification-email"
-                                type="email"
-                                value={notificationEmail}
-                                onChange={(e) =>
-                                    handleNotificationEmailChange(
-                                        e.target.value,
-                                    )
-                                }
-                                placeholder={userEmail || "your@email.com"}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                {userEmail && notificationEmail === userEmail
-                                    ? "Using your account email. You can change this to a different address if needed."
-                                    : "Email address to receive notifications."}
-                            </p>
-                            <div className="flex items-center gap-2 pt-1">
+                        <SettingsRow
+                            label="Email address"
+                            description={
+                                userEmail && notificationEmail === userEmail
+                                    ? "Your account email. You can use another address"
+                                    : "Where notifications go"
+                            }
+                            controlId="notification-email"
+                            control={
+                                <Input
+                                    id="notification-email"
+                                    type="email"
+                                    value={notificationEmail}
+                                    onChange={(e) =>
+                                        handleNotificationEmailChange(
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder={userEmail || "your@email.com"}
+                                    className="squircle h-9.5 w-64 rounded-[var(--radius-control)] border-border max-sm:w-full"
+                                />
+                            }
+                        >
+                            <div className="flex flex-wrap items-center gap-3">
                                 <Button
                                     type="button"
-                                    variant="outline"
-                                    size="sm"
+                                    variant="quiet"
+                                    size="compact"
                                     onClick={handleSendTestEmail}
                                     disabled={
                                         isSendingTestEmail ||
                                         !(notificationEmail || userEmail)
                                     }
                                 >
-                                    <Mail className="size-4" />
+                                    <Mail />
                                     {isSendingTestEmail
                                         ? "Sending…"
                                         : "Send test email"}
                                 </Button>
                                 {testEmailStatus.type && (
                                     <p
-                                        className={`text-xs ${
+                                        className={`text-small leading-4 ${
                                             testEmailStatus.type === "success"
-                                                ? "text-green-600 dark:text-green-400"
-                                                : "text-red-600 dark:text-red-400"
+                                                ? "text-subtle"
+                                                : "text-destructive"
                                         }`}
                                     >
                                         {testEmailStatus.message}
                                     </p>
                                 )}
                             </div>
-                        </div>
+                        </SettingsRow>
                     )}
-                </SettingsCard>
-
-                {/* Bark */}
-                <SettingsCard>
                     <ToggleRow
                         id="bark-notifications"
-                        label={
-                            <span className="inline-flex items-center gap-2">
-                                <Smartphone
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Bark push notifications
-                            </span>
-                        }
-                        description="Send push notifications via Bark for new recordings."
+                        label="Bark push notifications"
+                        description="A push through the Bark app for new recordings"
                         checked={barkNotifications}
                         onCheckedChange={handleBarkNotificationsChange}
                         disabled={isSavingSettings}
                     />
-
                     {barkNotifications && (
-                        <div className="mt-3 space-y-2 border-t pt-3">
-                            <Label htmlFor="bark-push-url">Bark push URL</Label>
-                            <Input
-                                id="bark-push-url"
-                                type="url"
-                                value={barkPushUrl}
-                                onChange={(e) =>
-                                    handleBarkPushUrlChange(e.target.value)
-                                }
-                                placeholder="https://api.day.app/your_key"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                                Copy the full push URL from the Bark app (e.g.,
-                                https://api.day.app/your_key).
-                            </p>
-                        </div>
+                        <SettingsRow
+                            label="Bark push URL"
+                            description="Copy the full push URL from the Bark app"
+                            controlId="bark-push-url"
+                            control={
+                                <Input
+                                    id="bark-push-url"
+                                    type="url"
+                                    value={barkPushUrl}
+                                    onChange={(e) =>
+                                        handleBarkPushUrlChange(e.target.value)
+                                    }
+                                    placeholder="https://api.day.app/your_key"
+                                    className="squircle h-9.5 w-64 rounded-[var(--radius-control)] border-border max-sm:w-full"
+                                />
+                            }
+                        />
                     )}
-                </SettingsCard>
-
-                {/* Sound */}
-                <SettingsCard>
                     <ToggleRow
                         id="notification-sound"
-                        label={
-                            <span className="inline-flex items-center gap-2">
-                                <Volume2
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Notification sound
-                            </span>
-                        }
-                        description="Play a sound when notifications are received."
+                        label="Notification sound"
+                        description="A short sound for errors and new recordings"
                         checked={notificationSound}
                         onCheckedChange={(checked) => {
                             setNotificationSound(checked);
+                            setToastSound(checked);
                             handleChange({ notificationSound: checked });
                         }}
                         disabled={isSavingSettings}
                     />
-                </SettingsCard>
-
-                <SettingsCard>
                     <ToggleRow
                         id="marketing-email-consent"
-                        label={
-                            <span className="inline-flex items-center gap-2">
-                                <Megaphone
-                                    className="size-4 text-muted-foreground"
-                                    aria-hidden="true"
-                                />
-                                Product updates
-                            </span>
-                        }
-                        description="Occasional emails about new features and releases. A few times a year at most, never more than once a month."
+                        label="Product updates"
+                        description="Occasional emails about new features and releases"
                         checked={marketingEmailConsent}
                         onCheckedChange={(checked) => {
                             setMarketingEmailConsent(checked);
@@ -355,8 +291,8 @@ export function NotificationsSection() {
                         }}
                         disabled={isSavingSettings}
                     />
-                </SettingsCard>
-            </div>
-        </div>
+                </SettingsRows>
+            )}
+        </SettingsGroup>
     );
 }

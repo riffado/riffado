@@ -18,7 +18,6 @@
 // @vitest-environment jsdom
 
 import { act, renderHook } from "@testing-library/react";
-import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
 import {
@@ -31,8 +30,9 @@ import {
     shouldApplyFetchedSummary,
     shouldApplySummaryToView,
 } from "@/lib/summary/job-scope";
+import { toast } from "@/lib/toast";
 
-vi.mock("sonner", () => ({
+vi.mock("@/lib/toast", () => ({
     toast: {
         success: vi.fn(),
         error: vi.fn(),

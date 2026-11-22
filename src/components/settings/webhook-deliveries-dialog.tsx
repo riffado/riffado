@@ -2,9 +2,9 @@
 
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "@/lib/toast";
 import {
     formatWebhookDate,
     type WebhookDelivery,

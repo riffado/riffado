@@ -1,12 +1,12 @@
 "use client";
 
-import { CheckCircle2, Link2Off, Mic, RefreshCw } from "lucide-react";
+import { format, formatDistanceToNow, isThisYear } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsCard } from "@/components/settings/settings-card";
+import { DetailRow } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -15,10 +15,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { StatusDot } from "@/components/ui/status-dot";
 import { getApiErrorMessage } from "@/lib/api-errors";
-import { formatDateTime } from "@/lib/format-date";
 import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
 import { PLAUD_SERVERS, type PlaudServerKey } from "@/lib/plaud/servers";
+import { toast } from "@/lib/toast";
 
 interface ConnectionInfo {
     connected: boolean;
@@ -51,20 +52,35 @@ function regionLabel(
     return server;
 }
 
+function formatEndDate(iso: string): string {
+    const date = new Date(iso);
+    return format(date, isThisYear(date) ? "MMM d" : "MMM d, yyyy");
+}
+
 interface PlaudAccountSectionProps {
     /**
-     * Called after a successful reconnect or account switch, in addition
-     * to this component's own `fetchConnection()`. Lets the dashboard
-     * (`Workstation`) refresh its server-rendered `plaudNeedsReconnect`
-     * prop and kick off a fresh sync -- without it, the dashboard's
-     * `PlaudReconnectBanner` can stay stale until the next periodic sync
-     * since it's driven by separate client state, not this section's.
+     * Called after a successful first connect, reconnect or account
+     * switch, in addition to this component's own `fetchConnection()`.
+     * The settings page uses it to refresh server data (so the Library
+     * shows the new connection) and start a sync.
      */
     onReconnected?: () => void;
+    /**
+     * Called after the user disconnects Plaud, so server-rendered views
+     * drop the connection without a reload.
+     */
+    onDisconnected?: () => void;
+    /**
+     * When the server last recorded a successful sync (ISO string), or
+     * null when never or unknown. Shown as "Last sync".
+     */
+    lastSyncAt?: string | null;
 }
 
 export function PlaudAccountSection({
     onReconnected,
+    onDisconnected,
+    lastSyncAt = null,
 }: PlaudAccountSectionProps = {}) {
     const [info, setInfo] = useState<ConnectionInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -112,6 +128,7 @@ export function PlaudAccountSection({
             await disconnect();
             toast.success("Plaud account disconnected");
             setConfirmOpen(null);
+            onDisconnected?.();
             await fetchConnection();
         } catch (error) {
             toast.error(
@@ -161,11 +178,24 @@ export function PlaudAccountSection({
         onReconnected?.();
     }, [fetchConnection, onReconnected]);
 
+    const handleConnectSuccess = useCallback(async () => {
+        await fetchConnection();
+        onReconnected?.();
+    }, [fetchConnection, onReconnected]);
+
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
+            <SettingsGroup
+                title="Sources"
+                description="New recordings reach Riffado from here"
+            >
+                <div
+                    className="squircle h-52 animate-pulse rounded-[var(--radius-card)] border border-border bg-surface"
+                    aria-busy="true"
+                >
+                    <span className="sr-only">Loading Plaud connection</span>
+                </div>
+            </SettingsGroup>
         );
     }
 
@@ -179,115 +209,107 @@ export function PlaudAccountSection({
           })
         : null;
     const sessionEndsOn = info?.sessionExpiresAt
-        ? formatDateTime(info.sessionExpiresAt, "absolute")
+        ? formatEndDate(info.sessionExpiresAt)
         : null;
 
+    let status: { tone: "ready" | "working" | "attention"; text: string };
+    if (connectionState === "reconnect") {
+        status = {
+            tone: "attention",
+            text: "Plaud stopped accepting this sign-in, so syncing is paused. Reconnect to resume. Your recordings stay put.",
+        };
+    } else if (connectionState === "ending-soon") {
+        status = {
+            tone: "working",
+            text: `Your Plaud connection ends on ${sessionEndsOn}. Reconnect to keep syncing.`,
+        };
+    } else if (sessionEndsOn) {
+        status = {
+            tone: "ready",
+            text: `Connected until ${sessionEndsOn}. You'll sign in again after that.`,
+        };
+    } else {
+        status = { tone: "ready", text: "Connected" };
+    }
+
     return (
-        <div className="space-y-6">
-            <div>
-                <SettingsSectionHeader
-                    title="Plaud Account"
-                    description="Your connection to the Plaud cloud used to pull recordings."
-                    icon={Mic}
-                />
-                <p className="text-sm text-muted-foreground mt-1">
-                    The Plaud account Riffado pulls recordings from. Switching
-                    accounts keeps your existing recordings; only future syncs
-                    change.
-                </p>
-            </div>
-
+        <SettingsGroup
+            title="Sources"
+            description="New recordings reach Riffado from here"
+        >
             {info?.connected ? (
-                <Card className="py-4">
-                    <CardContent className="space-y-4">
-                        <div className="flex items-start gap-3">
-                            <CheckCircle2 className="size-5 text-primary mt-0.5 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                                <p className="font-medium truncate">
-                                    {currentEmail ? (
-                                        <span className="font-mono">
-                                            {currentEmail}
-                                        </span>
-                                    ) : (
-                                        <span className="text-muted-foreground">
-                                            Connected (email unknown)
-                                        </span>
-                                    )}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                    Region:{" "}
-                                    {regionLabel(info.server, info.apiBase)}
-                                    {!currentEmail && (
-                                        <>
-                                            {" · "}
-                                            <span>
-                                                Use “Switch account” below to
-                                                display the email
-                                            </span>
-                                        </>
-                                    )}
-                                </p>
-                                {sessionEndsOn && connectionState === null && (
-                                    <p className="text-sm text-muted-foreground">
-                                        Connected until {sessionEndsOn}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-
-                        {connectionState === "reconnect" && (
-                            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
-                                Plaud stopped accepting this sign-in, so syncing
-                                is paused. Reconnect to resume. Your recordings
-                                stay put.
-                            </p>
-                        )}
-                        {connectionState === "ending-soon" && (
-                            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-500">
-                                Your Plaud connection ends on {sessionEndsOn}.
-                                Reconnect to keep syncing.
-                            </p>
-                        )}
-
-                        <div className="flex flex-wrap gap-2">
+                <SettingsCard
+                    className="pb-2"
+                    title="Plaud account"
+                    description={
+                        <span className="flex items-start gap-2">
+                            <StatusDot tone={status.tone} className="mt-1.5" />
+                            <span>{status.text}</span>
+                        </span>
+                    }
+                    action={
+                        <>
                             {connectionState !== null && (
                                 <Button
+                                    variant="ink"
+                                    size="compact"
                                     onClick={() => setReconnectDialogOpen(true)}
                                 >
-                                    <RefreshCw className="size-4 mr-2" />
                                     Reconnect
                                 </Button>
                             )}
                             <Button
-                                variant="outline"
+                                variant="quiet"
+                                size="compact"
                                 onClick={() => setConfirmOpen("switch")}
                             >
-                                <RefreshCw className="size-4 mr-2" />
                                 Switch account
                             </Button>
                             <Button
-                                variant="ghost"
+                                variant="quiet"
+                                size="compact"
                                 onClick={() => setConfirmOpen("disconnect")}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
-                                <Link2Off className="size-4 mr-2" />
                                 Disconnect
                             </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            ) : (
-                <Card className="py-4">
-                    <CardContent className="space-y-4">
-                        <p className="text-sm text-muted-foreground">
-                            No Plaud account connected. Sign in below to start
-                            syncing recordings.
-                        </p>
-                        <PlaudConnectTabs
-                            onConnected={() => fetchConnection()}
+                        </>
+                    }
+                >
+                    <div className="flex flex-col divide-y divide-hairline border-t border-hairline">
+                        <DetailRow
+                            label="Signed in as"
+                            value={
+                                currentEmail ?? (
+                                    <span className="font-normal text-subtle">
+                                        Not known. Switch account to show it
+                                    </span>
+                                )
+                            }
                         />
-                    </CardContent>
-                </Card>
+                        <DetailRow
+                            label="Plaud server"
+                            value={regionLabel(info.server, info.apiBase)}
+                        />
+                        {lastSyncAt && (
+                            <DetailRow
+                                label="Last sync"
+                                value={formatDistanceToNow(
+                                    new Date(lastSyncAt),
+                                    {
+                                        addSuffix: true,
+                                    },
+                                )}
+                            />
+                        )}
+                    </div>
+                </SettingsCard>
+            ) : (
+                <SettingsCard
+                    title="Plaud account"
+                    description="Not connected. Sign in to start syncing recordings"
+                >
+                    <PlaudConnectTabs onConnected={handleConnectSuccess} />
+                </SettingsCard>
             )}
 
             {/* Confirm: switch or disconnect */}
@@ -403,6 +425,6 @@ export function PlaudAccountSection({
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </SettingsGroup>
     );
 }

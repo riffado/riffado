@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export function useSettings() {
     const [isLoadingSettings, setIsLoadingSettings] = useState(true);

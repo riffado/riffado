@@ -36,7 +36,9 @@ function sample(peaks: number[], columns: number): number[] {
 
 /**
  * Dot-matrix waveform from the design system. Played columns are solid,
- * the playhead column is terracotta, unplayed columns are dimmed.
+ * the playhead column is terracotta (the brighter tint on night),
+ * unplayed columns are dimmed. Night tones are theme-stable so the
+ * player reads the same in light and dark mode.
  */
 export function DotWaveform({
     peaks,
@@ -54,8 +56,10 @@ export function DotWaveform({
     );
     const width = columns * STEP;
     const height = maxRows * STEP;
-    const played = tone === "night" ? "var(--background)" : "var(--ink)";
-    const rest = tone === "night" ? "var(--night-border)" : "var(--border)";
+    const played = tone === "night" ? "var(--night-foreground)" : "var(--ink)";
+    const rest = tone === "night" ? "var(--night-dim)" : "var(--border)";
+    const playhead =
+        tone === "night" ? "var(--terracotta-bright)" : "var(--terracotta)";
 
     const dots: ReactElement[] = [];
     for (let i = 0; i < columns; i++) {
@@ -63,8 +67,7 @@ export function DotWaveform({
         if (n % 2 === 0) n += 1;
         n = Math.min(n, maxRows);
         const cx = i * STEP + STEP / 2;
-        const fill =
-            i === head ? "var(--terracotta)" : i < head ? played : rest;
+        const fill = i === head ? playhead : i < head ? played : rest;
         for (let k = 0; k < n; k++) {
             const cy = height / 2 + (k - (n - 1) / 2) * STEP;
             dots.push(

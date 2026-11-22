@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { recordingAudioPlaybackPath } from "@/lib/recordings/filename";
+import { toast } from "@/lib/toast";
 import type { Recording } from "@/types/recording";
 
 export const PLAYBACK_SPEED_OPTIONS = [
