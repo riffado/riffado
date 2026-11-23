@@ -1,12 +1,11 @@
 "use client";
 
-import { Keyboard, LogOut, Settings, Shield } from "lucide-react";
+import { Keyboard, LogOut, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { useRef, useState } from "react";
 import { AppLinksMenuItems, AppVersionLine } from "@/components/app-links";
 import { ReportBugDialog } from "@/components/report-bug-dialog";
-import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -15,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
     isAdmin: boolean;
@@ -22,16 +22,6 @@ interface UserMenuProps {
     userEmail: string | null;
     /** Display name from the session, when the account has one. */
     userName?: string | null;
-    /**
-     * `icon`: the phone and tablet header's square initial button, whose
-     * menu also opens Settings (that header has no Settings button).
-     * `sidebar`: avatar plus name, filling the sidebar's account row,
-     * next to its own Settings button.
-     */
-    trigger?: "icon" | "sidebar";
-    onOpenSettings: () => void;
-    /** Called on hover or focus of the Settings item so its data can load before the click. */
-    onSettingsIntent: () => void;
     onOpenShortcuts: () => void;
 }
 
@@ -62,10 +52,20 @@ export function accountInitials(
     return `${first}${last}`.toUpperCase();
 }
 
-function AccountAvatar({ initials }: { initials: string }) {
+/** Sand circle with ink initials (DESIGN.md: account items). */
+export function AccountAvatar({
+    initials,
+    size = "default",
+}: {
+    initials: string;
+    size?: "default" | "large";
+}) {
     return (
         <span
-            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-terracotta-wash text-xs font-semibold text-terracotta"
+            className={cn(
+                "flex shrink-0 items-center justify-center rounded-full bg-secondary font-semibold text-strong select-none",
+                size === "large" ? "size-9 text-sm" : "size-7 text-xs",
+            )}
             aria-hidden="true"
         >
             {initials}
@@ -73,57 +73,61 @@ function AccountAvatar({ initials }: { initials: string }) {
     );
 }
 
+/** Logs out, resets analytics and returns to the start page. */
+export function useLogOut() {
+    const { push, refresh } = useRouter();
+    return async () => {
+        if (posthog.__loaded) {
+            posthog.capture("user_signed_out");
+            posthog.reset();
+        }
+        await signOut();
+        push("/");
+        refresh();
+    };
+}
+
+/**
+ * The desktop sidebar's account row and menu: name and email, Keyboard
+ * shortcuts, the about links and Log out. On phones the same items live
+ * in the menu drawer.
+ */
 export function UserMenu({
     isAdmin,
     isHosted,
     userEmail,
     userName = null,
-    trigger = "icon",
-    onOpenSettings,
-    onSettingsIntent,
     onOpenShortcuts,
 }: UserMenuProps) {
-    const { push, refresh } = useRouter();
+    const { push } = useRouter();
+    const logOut = useLogOut();
     const [reportOpen, setReportOpen] = useState(false);
     // Set by Report a bug; the dialog opens once the menu has closed and
     // handed focus back to its trigger, so the dialog returns it there.
     const reportPending = useRef(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const name = userName?.trim() || null;
+    const initials = accountInitials(userName, userEmail);
 
     return (
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    {trigger === "sidebar" ? (
-                        <button
-                            ref={triggerRef}
-                            type="button"
-                            aria-label="Account menu"
-                            className="squircle flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-inner)] px-1.5 py-1 text-left outline-none select-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
-                        >
-                            <AccountAvatar
-                                initials={accountInitials(userName, userEmail)}
-                            />
-                            <span className="truncate text-ui font-medium text-foreground">
-                                {userName || userEmail || "Account"}
-                            </span>
-                        </button>
-                    ) : (
-                        <Button
-                            ref={triggerRef}
-                            variant="outline"
-                            size="icon"
-                            aria-label="Account menu"
-                            className="size-11 font-semibold"
-                        >
-                            {emailInitial(userEmail)}
-                        </Button>
-                    )}
+                    <button
+                        ref={triggerRef}
+                        type="button"
+                        aria-label="Account menu"
+                        className="squircle flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-inner)] px-1.5 py-1 text-left outline-none select-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
+                    >
+                        <AccountAvatar initials={initials} />
+                        <span className="truncate text-ui font-medium text-foreground">
+                            {userName || userEmail || "Account"}
+                        </span>
+                    </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                    align={trigger === "sidebar" ? "start" : "end"}
-                    side={trigger === "sidebar" ? "top" : "bottom"}
+                    align="start"
+                    side="top"
                     className="w-72 p-0"
                     onCloseAutoFocus={() => {
                         if (!reportPending.current) return;
@@ -132,12 +136,7 @@ export function UserMenu({
                     }}
                 >
                     <div className="flex items-center gap-3 border-b p-3 select-none">
-                        <div
-                            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                            aria-hidden="true"
-                        >
-                            {accountInitials(userName, userEmail)}
-                        </div>
+                        <AccountAvatar initials={initials} size="large" />
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium">
                                 {name ?? userEmail ?? "Account"}
@@ -151,17 +150,6 @@ export function UserMenu({
                     </div>
 
                     <div className="p-1">
-                        {trigger === "icon" ? (
-                            <DropdownMenuItem
-                                onSelect={onOpenSettings}
-                                onPointerEnter={onSettingsIntent}
-                                onFocus={onSettingsIntent}
-                            >
-                                <Settings />
-                                <span className="flex-1">Settings</span>
-                                <Kbd>,</Kbd>
-                            </DropdownMenuItem>
-                        ) : null}
                         <DropdownMenuItem onSelect={onOpenShortcuts}>
                             <Keyboard />
                             <span className="flex-1">Keyboard shortcuts</span>
@@ -182,15 +170,7 @@ export function UserMenu({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             variant="destructive"
-                            onSelect={async () => {
-                                if (posthog.__loaded) {
-                                    posthog.capture("user_signed_out");
-                                    posthog.reset();
-                                }
-                                await signOut();
-                                push("/");
-                                refresh();
-                            }}
+                            onSelect={logOut}
                         >
                             <LogOut />
                             Log out

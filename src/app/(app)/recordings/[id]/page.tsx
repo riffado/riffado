@@ -9,7 +9,7 @@ import {
     transcriptions,
     userSettings,
 } from "@/db/schema";
-import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
+import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
 import { env } from "@/lib/env";
 import { resolvePrimaryTranscript } from "@/lib/v1/serialize";
@@ -23,7 +23,6 @@ export default async function RecordingDetailPage({
 }: RecordingDetailPageProps) {
     // Check authentication server-side
     const session = await requireAuth();
-    await requireCompletedOnboarding(session);
     const { id } = await params;
 
     // Fetch recording from database

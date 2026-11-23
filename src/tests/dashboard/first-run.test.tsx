@@ -25,21 +25,24 @@ vi.mock("next/navigation", () => ({
     useSearchParams: () => searchParams,
 }));
 
-vi.mock("@/components/plaud-connect-tabs", () => ({
-    PlaudConnectTabs: ({
+vi.mock("@/components/plaud-connect/connect-dialog", () => ({
+    PlaudConnectDialog: ({
+        open,
         onConnected,
-        initialMode = "connector",
+        initialView = "main",
     }: {
+        open: boolean;
         onConnected: () => void;
-        initialMode?: string;
-    }) => (
-        <div>
-            <p>Connect tab: {initialMode}</p>
-            <button type="button" onClick={onConnected}>
-                Finish connect
-            </button>
-        </div>
-    ),
+        initialView?: string;
+    }) =>
+        open ? (
+            <div>
+                <p>Connect view: {initialView}</p>
+                <button type="button" onClick={onConnected}>
+                    Finish connect
+                </button>
+            </div>
+        ) : null,
 }));
 
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
@@ -218,21 +221,18 @@ describe("First run without a Plaud connection", () => {
         expect(syncRequests).toBe(0);
     });
 
-    it("opens the connect dialog on the matching tab", () => {
+    it("opens the connect dialog on the matching view", () => {
         renderWorkstation({ hasPlaudConnection: false });
 
         fireEvent.click(
             screen.getByRole("button", { name: "Sign in with Plaud" }),
         );
-        expect(screen.getByText("Connect tab: connector")).not.toBeNull();
-        fireEvent.keyDown(document.activeElement ?? document.body, {
-            key: "Escape",
-        });
+        expect(screen.getByText("Connect view: main")).not.toBeNull();
 
         fireEvent.click(
             screen.getByRole("button", { name: "Other ways to connect" }),
         );
-        expect(screen.getByText("Connect tab: email")).not.toBeNull();
+        expect(screen.getByText("Connect view: email")).not.toBeNull();
     });
 
     it("switches to the connected state and syncs once Plaud connects", async () => {

@@ -25,20 +25,13 @@ import { APP_SOURCE_URL, APP_VERSION } from "@/lib/version";
 
 afterEach(cleanup);
 
-function openMenu(props: {
-    trigger: "icon" | "sidebar";
-    isAdmin?: boolean;
-    userName?: string | null;
-}) {
+function openMenu(props: { isAdmin?: boolean; userName?: string | null }) {
     render(
         <UserMenu
-            trigger={props.trigger}
             isAdmin={props.isAdmin ?? false}
             isHosted={false}
             userEmail="maya@example.com"
             userName={props.userName ?? "Maya Lin"}
-            onOpenSettings={() => {}}
-            onSettingsIntent={() => {}}
             onOpenShortcuts={() => {}}
         />,
     );
@@ -50,7 +43,7 @@ function openMenu(props: {
 
 describe("UserMenu", () => {
     it("shows name and email without a Signed in line or a theme switch", () => {
-        const menu = openMenu({ trigger: "sidebar" });
+        const menu = openMenu({});
         expect(menu.getByText("Maya Lin")).not.toBeNull();
         expect(menu.getByText("maya@example.com")).not.toBeNull();
         expect(menu.queryByText("Signed in")).toBeNull();
@@ -60,17 +53,12 @@ describe("UserMenu", () => {
     });
 
     it("leaves Settings out of the sidebar menu", () => {
-        const menu = openMenu({ trigger: "sidebar" });
+        const menu = openMenu({});
         expect(menu.queryByRole("menuitem", { name: /Settings/ })).toBeNull();
     });
 
-    it("keeps Settings in the phone header menu, which has no other entry", () => {
-        const menu = openMenu({ trigger: "icon" });
-        expect(menu.getByRole("menuitem", { name: /Settings/ })).not.toBeNull();
-    });
-
     it("has the about links, the source offer and the licence", () => {
-        const menu = openMenu({ trigger: "sidebar" });
+        const menu = openMenu({});
         const items = menu
             .getAllByRole("menuitem")
             .map((item) => item.textContent?.trim());
@@ -96,7 +84,7 @@ describe("UserMenu", () => {
     });
 
     it("shows Admin only for admins", () => {
-        const menu = openMenu({ trigger: "sidebar", isAdmin: true });
+        const menu = openMenu({ isAdmin: true });
         expect(
             menu.getByRole("menuitem", { name: "Admin dashboard" }),
         ).not.toBeNull();

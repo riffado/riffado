@@ -8,6 +8,7 @@ import {
     Server,
     SlidersHorizontal,
     Smartphone,
+    UserRound,
     Wrench,
 } from "lucide-react";
 import type { SettingsPage, SettingsSection } from "@/types/settings";
@@ -29,6 +30,14 @@ const PLAN_ITEM: NavItem = {
     title: "Plan & usage",
     description: "Your plan, and how much of it you've used",
     icon: Gauge,
+};
+
+const ACCOUNT_ITEM: NavItem = {
+    id: "account",
+    name: "Account",
+    title: "Account",
+    description: "Your name, the email you sign in with, and your password",
+    icon: UserRound,
 };
 
 const BASE_ITEMS: NavItem[] = [
@@ -96,13 +105,14 @@ const DEV_ITEM: NavItem = {
 
 /**
  * The settings navigation, in display order. `isHosted` adds Plan & usage
- * (billing has no meaning on self-host); development builds add Developer
- * tools. Keyboard navigation, hash routing and the last-page memory all
- * work on this flat list.
+ * (billing has no meaning on self-host); Account follows it on both;
+ * development builds add Developer tools. Keyboard navigation, hash
+ * routing and the last-page memory all work on this flat list.
  */
 export function buildSettingsNav(opts: { isHosted: boolean }): NavItem[] {
     return [
         ...(opts.isHosted ? [PLAN_ITEM] : []),
+        ACCOUNT_ITEM,
         ...BASE_ITEMS,
         ...(process.env.NODE_ENV !== "production" ? [DEV_ITEM] : []),
     ];

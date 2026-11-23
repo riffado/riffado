@@ -6,9 +6,15 @@
  * one place the end date appears when the sign-in is about to end.
  */
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { PlaudAccountSection } from "@/components/settings-sections/plaud-account-section";
+
+function render(ui: ReactElement) {
+    return rtlRender(<ConfirmDialogProvider>{ui}</ConfirmDialogProvider>);
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

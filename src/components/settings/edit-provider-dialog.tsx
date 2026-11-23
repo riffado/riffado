@@ -1,346 +1,370 @@
 "use client";
 
-import { AlertTriangle, Shield } from "lucide-react";
+import { Lock, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { MetalButton } from "@/components/metal-button";
-import { Panel } from "@/components/panel";
+import { useConfirm } from "@/components/confirm-dialog";
+import {
+    DialogHeading,
+    dialogInputClass,
+    InfoNote,
+    monoInputClass,
+    settingsDialogClass,
+} from "@/components/settings/form-controls";
+import {
+    AddressRow,
+    providerRemovalCopy,
+    summariesProviderId,
+    UseItForRows,
+    WhatGetsSentNote,
+} from "@/components/settings/provider-form";
 import { TranscriptionModelPicker } from "@/components/settings/transcription-model-picker";
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import type { Provider } from "@/components/settings-sections/providers-section";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Field, FieldError, FieldInput } from "@/components/ui/field";
 import {
     findPreset,
-    getVisiblePresets,
     isLocalPreset,
     supportsEnhancement,
 } from "@/lib/ai/provider-presets";
+import { getApiErrorMessage, parseApiError } from "@/lib/api-errors";
 import { toast } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 
-interface Provider {
-    id: string;
-    provider: string;
-    baseUrl: string | null;
-    defaultModel: string | null;
-    isDefaultTranscription: boolean;
-    isDefaultEnhancement: boolean;
-}
+type EditableProvider = Pick<
+    Provider,
+    | "id"
+    | "provider"
+    | "baseUrl"
+    | "defaultModel"
+    | "isDefaultTranscription"
+    | "isDefaultEnhancement"
+>;
 
 interface EditProviderDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    provider: Provider | null;
+    provider: EditableProvider | null;
+    /** Called after a save or a delete, so the parent can re-read the list. */
     onSuccess: () => void;
     /**
-     * When true, hide the LM Studio / Ollama presets and show a hint that
-     * localhost base URLs aren't reachable from the hosted app. The server
-     * also rejects them on save.
+     * When true, a saved LM Studio / Ollama provider gets a note that the
+     * hosted app can't reach it. The server rejects loopback addresses.
      */
     isHosted?: boolean;
+    /** The user's providers, to name defaults and what a delete changes. */
+    providers?: Provider[];
 }
 
+interface FormErrors {
+    apiKey?: string;
+    baseUrl?: string;
+    form?: string;
+}
+
+function roleLine(provider: EditableProvider, providers: Provider[]): string {
+    const transcribes = provider.isDefaultTranscription;
+    const summarizes = summariesProviderId(providers) === provider.id;
+    if (transcribes && summarizes) {
+        return "Your provider for transcription and summaries";
+    }
+    if (transcribes) return "Your provider for transcription";
+    if (summarizes) return "Your provider for summaries and titles";
+    return "Saved, not your default for anything";
+}
+
+/**
+ * Edit a saved provider: the key stays hidden ("Saved key, hidden") until
+ * replaced, the address and model can change, and the defaults for
+ * transcription and summaries are set here. Delete sits on the left and
+ * asks first, saying what stops working.
+ */
 export function EditProviderDialog({
     open,
     onOpenChange,
     provider,
     onSuccess,
     isHosted = false,
+    providers = [],
 }: EditProviderDialogProps) {
-    const visiblePresets = getVisiblePresets({ isHosted });
-    // Legacy case: a hosted user has an existing LM Studio / Ollama provider
-    // (added before hosted enforcement, or imported). Keep their currently
-    // selected preset visible in the dropdown, disabled, so the Select
-    // doesn't render an empty trigger. The save will still fail server-side
-    // because the stored baseUrl is loopback; we surface a notice so the
-    // user knows to delete and re-add with a public endpoint.
-    const legacyLocalProvider =
-        isHosted && provider != null && isLocalPreset(provider.provider)
-            ? provider.provider
-            : null;
-    const [providerName, setProviderName] = useState("");
+    const confirm = useConfirm();
+    const [replacingKey, setReplacingKey] = useState(false);
     const [apiKey, setApiKey] = useState("");
     const [baseUrl, setBaseUrl] = useState("");
-    const [defaultModel, setDefaultModel] = useState("");
-    const [isDefaultTranscription, setIsDefaultTranscription] = useState(false);
-    const [isDefaultEnhancement, setIsDefaultEnhancement] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
+    const [model, setModel] = useState("");
+    const [useTranscription, setUseTranscription] = useState(false);
+    const [useSummaries, setUseSummaries] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [saving, setSaving] = useState(false);
 
+    const known: Provider[] =
+        providers.length > 0
+            ? providers
+            : provider
+              ? [{ ...provider, createdAt: new Date(0) }]
+              : [];
+
+    // biome-ignore lint/correctness/useExhaustiveDependencies: seed once per open, not on every list refresh
     useEffect(() => {
-        if (open && provider) {
-            setProviderName(provider.provider);
-            setBaseUrl(provider.baseUrl || "");
-            setDefaultModel(provider.defaultModel || "");
-            setIsDefaultTranscription(provider.isDefaultTranscription);
-            setIsDefaultEnhancement(
-                supportsEnhancement(provider.provider) &&
-                    provider.isDefaultEnhancement,
-            );
-            setApiKey("");
-        } else if (!open) {
-            setProviderName("");
-            setApiKey("");
-            setBaseUrl("");
-            setDefaultModel("");
-            setIsDefaultTranscription(false);
-            setIsDefaultEnhancement(false);
-        }
+        if (!open || !provider) return;
+        setReplacingKey(false);
+        setApiKey("");
+        setBaseUrl(provider.baseUrl ?? "");
+        setModel(provider.defaultModel ?? "");
+        setUseTranscription(provider.isDefaultTranscription);
+        setUseSummaries(
+            supportsEnhancement(provider.provider) &&
+                summariesProviderId(known) === provider.id,
+        );
+        setErrors({});
     }, [open, provider]);
 
-    const handleProviderChange = (value: string) => {
-        setProviderName(value);
-        const preset = findPreset(value);
-        if (preset) {
-            setBaseUrl(preset.baseUrl);
-            setDefaultModel(preset.defaultModel);
-        }
-    };
+    if (!provider) return null;
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const name = provider.provider;
+    const legacyLocal = isHosted && isLocalPreset(name);
+
+    const submit = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        if (!providerName) {
-            toast.error("Provider name is required");
+        if (replacingKey && !apiKey.trim()) {
+            setErrors({ apiKey: "Paste the new key, or keep the saved one" });
             return;
         }
-
-        if (!provider?.id) {
-            toast.error("Provider ID is missing");
-            return;
-        }
-
-        setIsLoading(true);
+        setSaving(true);
+        setErrors({});
         try {
-            const updateData: {
-                baseUrl: string | null;
-                defaultModel: string | null;
-                isDefaultTranscription: boolean;
-                isDefaultEnhancement: boolean;
-                apiKey?: string;
-            } = {
-                baseUrl: baseUrl || null,
-                defaultModel: defaultModel || null,
-                isDefaultTranscription,
-                isDefaultEnhancement,
-            };
-
-            if (apiKey.trim()) {
-                updateData.apiKey = apiKey;
-            }
-
             const response = await fetch(
                 `/api/settings/ai/providers/${provider.id}`,
                 {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(updateData),
+                    body: JSON.stringify({
+                        baseUrl: baseUrl.trim() || null,
+                        defaultModel: model.trim() || null,
+                        isDefaultTranscription: useTranscription,
+                        isDefaultEnhancement:
+                            useSummaries && supportsEnhancement(name),
+                        ...(replacingKey && apiKey.trim()
+                            ? { apiKey: apiKey.trim() }
+                            : {}),
+                    }),
                 },
             );
-
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || "Failed to update provider");
+                const body = await parseApiError(response);
+                if (body.details?.field === "baseUrl") {
+                    setErrors({ baseUrl: body.error });
+                } else {
+                    setErrors({
+                        form: body.error || "Couldn't save the changes",
+                    });
+                }
+                return;
             }
-
-            toast.success("AI provider updated successfully");
+            toast.success("Changes saved");
             onSuccess();
             onOpenChange(false);
-
-            setProviderName("");
-            setApiKey("");
-            setBaseUrl("");
-            setDefaultModel("");
-            setIsDefaultTranscription(false);
-            setIsDefaultEnhancement(false);
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to update AI provider",
-            );
+        } catch {
+            setErrors({
+                form: "Couldn't reach Riffado. Check your connection, then try again",
+            });
         } finally {
-            setIsLoading(false);
+            setSaving(false);
         }
     };
 
-    const selectedPreset = findPreset(providerName);
-
-    if (!open || !provider) return null;
+    const remove = () => {
+        void confirm({
+            title: `Delete ${name}?`,
+            description: (
+                <>
+                    <span className="font-medium text-strong">{name}</span> and
+                    its saved key are removed from Riffado.{" "}
+                    {providerRemovalCopy(
+                        { ...provider, createdAt: new Date(0) },
+                        known,
+                    )}
+                </>
+            ),
+            confirmLabel: "Delete provider",
+            pendingLabel: "Deleting…",
+            destructive: true,
+            onConfirm: async () => {
+                const response = await fetch(
+                    `/api/settings/ai/providers/${provider.id}`,
+                    { method: "DELETE" },
+                );
+                if (!response.ok) {
+                    throw new Error(
+                        await getApiErrorMessage(
+                            response,
+                            `Couldn't delete ${name}`,
+                        ),
+                    );
+                }
+                toast.success(`${name} deleted`);
+                onOpenChange(false);
+                onSuccess();
+            },
+        });
+    };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange} key={provider.id}>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Edit AI Provider</DialogTitle>
-                </DialogHeader>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Provider</Label>
-                        <Select
-                            value={providerName}
-                            onValueChange={handleProviderChange}
-                            disabled={isLoading}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a provider" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {visiblePresets.map((preset) => (
-                                    <SelectItem
-                                        key={preset.name}
-                                        value={preset.name}
-                                    >
-                                        {preset.name}
-                                    </SelectItem>
-                                ))}
-                                {legacyLocalProvider && (
-                                    <SelectItem
-                                        key={legacyLocalProvider}
-                                        value={legacyLocalProvider}
-                                        disabled
-                                    >
-                                        {legacyLocalProvider} (not available on
-                                        hosted)
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                        {legacyLocalProvider && (
-                            <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
-                                <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-                                <span>
-                                    {legacyLocalProvider} isn&apos;t usable on
-                                    the hosted app. We can&apos;t reach your
-                                    machine. Delete this provider and re-add one
-                                    with a public endpoint, or self-host Riffado
-                                    (
-                                    <code className="font-mono">
-                                        docker compose up
-                                    </code>
-                                    ).
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="apiKey">API Key</Label>
-                        <Input
-                            id="apiKey"
-                            type="password"
-                            placeholder={
-                                selectedPreset?.placeholder ||
-                                "Enter a new key to replace the current one"
-                            }
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Shield className="size-3.5 shrink-0" />
-                            <span>
-                                For security, the saved API key is never shown.
-                                Leave this blank to keep your current key, or
-                                enter a new key to replace it.
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="baseUrl">Base URL (Optional)</Label>
-                        <Input
-                            id="baseUrl"
-                            type="text"
-                            placeholder="https://api.example.com/v1"
-                            value={baseUrl}
-                            onChange={(e) => setBaseUrl(e.target.value)}
-                            disabled={isLoading}
-                            className="font-mono text-sm"
-                        />
-                        {isHosted && (
-                            <p className="text-xs text-muted-foreground">
-                                We can&apos;t reach{" "}
-                                <code className="font-mono">localhost</code> or
-                                other private addresses from the hosted app. To
-                                use LM Studio or Ollama, self-host Riffado (
-                                <code className="font-mono">
-                                    docker compose up
-                                </code>
-                                ).
-                            </p>
-                        )}
-                    </div>
-
-                    <TranscriptionModelPicker
-                        preset={selectedPreset}
-                        apiKey={apiKey}
-                        baseUrl={baseUrl}
-                        value={defaultModel}
-                        onChange={setDefaultModel}
-                        disabled={isLoading}
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className={settingsDialogClass}>
+                <form
+                    onSubmit={submit}
+                    noValidate
+                    className="flex flex-col gap-5"
+                >
+                    <DialogHeading
+                        title={name}
+                        description={roleLine(provider, known)}
                     />
 
-                    <Panel variant="inset" className="space-y-2 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultTranscription}
-                                onChange={(e) =>
-                                    setIsDefaultTranscription(e.target.checked)
-                                }
-                                disabled={isLoading}
-                            />
-                            <span>Use for transcription</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={isDefaultEnhancement}
-                                onChange={(e) =>
-                                    setIsDefaultEnhancement(e.target.checked)
-                                }
-                                disabled={
-                                    isLoading ||
-                                    !supportsEnhancement(provider.provider)
-                                }
-                            />
-                            <span>Use for AI enhancements</span>
-                        </label>
-                        {!supportsEnhancement(provider.provider) && (
-                            <p className="text-xs text-muted-foreground pl-6">
-                                {provider.provider} transcribes only.
-                            </p>
-                        )}
-                    </Panel>
+                    {legacyLocal && (
+                        <InfoNote title="The hosted app can't reach it">
+                            {name} runs on your own machine. Delete it and add a
+                            service with a public address, or self-host Riffado
+                        </InfoNote>
+                    )}
 
-                    <div className="flex gap-2">
-                        <MetalButton
+                    <Field
+                        label="API key"
+                        error={errors.apiKey}
+                        hint={
+                            replacingKey
+                                ? undefined
+                                : "Riffado never shows a saved key. Replace it if you made a new one"
+                        }
+                    >
+                        {replacingKey ? (
+                            <div className="flex flex-col gap-1.5">
+                                <FieldInput
+                                    type="password"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    autoFocus
+                                    placeholder={
+                                        findPreset(name)?.placeholder ??
+                                        "Your new key"
+                                    }
+                                    value={apiKey}
+                                    disabled={saving}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    className={cn(
+                                        dialogInputClass,
+                                        monoInputClass,
+                                    )}
+                                />
+                                <button
+                                    type="button"
+                                    className="w-fit text-small text-subtle underline-offset-2 outline-none hover:text-strong hover:underline focus-visible:underline"
+                                    onClick={() => {
+                                        setReplacingKey(false);
+                                        setApiKey("");
+                                        setErrors((current) => ({
+                                            ...current,
+                                            apiKey: undefined,
+                                        }));
+                                    }}
+                                >
+                                    Keep the saved key
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="squircle flex h-10 items-center gap-2 rounded-[var(--radius-inner)] border border-border bg-surface pr-1 pl-3 dark:bg-night">
+                                <Lock
+                                    aria-hidden="true"
+                                    className="size-3.5 shrink-0 text-muted-foreground"
+                                />
+                                <span className="min-w-0 flex-1 text-ui text-subtle">
+                                    Saved key, hidden
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="quiet"
+                                    size="compact"
+                                    onClick={() => setReplacingKey(true)}
+                                    disabled={saving}
+                                >
+                                    Replace
+                                </Button>
+                            </div>
+                        )}
+                    </Field>
+
+                    <AddressRow
+                        value={baseUrl}
+                        onChange={(value) => {
+                            setBaseUrl(value);
+                            setErrors((c) => ({ ...c, baseUrl: undefined }));
+                        }}
+                        error={errors.baseUrl}
+                        disabled={saving}
+                    />
+
+                    <TranscriptionModelPicker
+                        preset={findPreset(name)}
+                        apiKey={apiKey}
+                        baseUrl={baseUrl}
+                        value={model}
+                        onChange={setModel}
+                        disabled={saving}
+                    />
+
+                    <UseItForRows
+                        providerName={name}
+                        providers={known}
+                        providerId={provider.id}
+                        transcription={useTranscription}
+                        summaries={useSummaries}
+                        onTranscriptionChange={setUseTranscription}
+                        onSummariesChange={setUseSummaries}
+                        disabled={saving}
+                    />
+
+                    <WhatGetsSentNote
+                        providerName={name}
+                        transcription={useTranscription}
+                        summaries={useSummaries && supportsEnhancement(name)}
+                    />
+
+                    {errors.form && (
+                        <FieldError role="alert">{errors.form}</FieldError>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <Button
                             type="button"
-                            onClick={() => onOpenChange(false)}
-                            disabled={isLoading}
-                            className="flex-1"
+                            variant="ghost"
+                            size="dialog"
+                            className="-ml-3 px-3"
+                            onClick={remove}
+                            disabled={saving}
                         >
-                            Cancel
-                        </MetalButton>
-                        <MetalButton
-                            type="submit"
-                            disabled={isLoading}
-                            className="flex-1"
-                        >
-                            {isLoading ? "Updating..." : "Update Provider"}
-                        </MetalButton>
+                            <Trash2 />
+                            Delete provider
+                        </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="bordered"
+                                size="dialog"
+                                onClick={() => onOpenChange(false)}
+                                disabled={saving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="ink"
+                                size="dialog"
+                                disabled={saving}
+                            >
+                                {saving ? "Saving…" : "Save changes"}
+                            </Button>
+                        </div>
                     </div>
                 </form>
             </DialogContent>

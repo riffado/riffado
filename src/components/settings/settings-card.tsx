@@ -42,7 +42,7 @@ export function SettingsCard({
             className={cn(
                 "squircle flex flex-col gap-4 rounded-[var(--radius-card)] border p-5",
                 tone === "default"
-                    ? "border-border bg-reader"
+                    ? "border-border bg-reader dark:bg-card"
                     : "border-hairline bg-background",
                 className,
             )}

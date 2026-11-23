@@ -1,22 +1,16 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { ArrowUpRight, Mail } from "lucide-react";
 import { type RefObject, useRef, useState } from "react";
-import { Github } from "@/components/icons/icons";
+import {
+    DialogHeading,
+    settingsDialogClass,
+} from "@/components/settings/form-controls";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
-import {
-    buildReportBugBodyPreview,
-    buildReportBugMailto,
-    buildReportBugUrl,
-} from "@/lib/report-bug";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { buildReportBugMailto, buildReportBugUrl } from "@/lib/report-bug";
+import { cn } from "@/lib/utils";
+import { APP_VERSION_TAG } from "@/lib/version";
 
 interface ReportBugDialogProps {
     isHosted: boolean;
@@ -34,15 +28,15 @@ interface ReportBugDialogProps {
 }
 
 /**
- * Renders the bug-report dialog with two action buttons:
- *   - "Report on GitHub" \u2014 always.
- *   - "Email us" \u2014 hosted only. Self-hosters aren't our customers and
+ * The bug-report dialog: the details Riffado fills in (what you were
+ * doing, error id, page, version, mode), then the ways to send them:
+ *   - "Open a GitHub issue": always.
+ *   - "Email us": hosted only. Self-hosters aren't our customers and
  *     `support@riffado.com` would just confuse them; they should file
  *     on GitHub.
  *
- * The preview is shown so users see exactly what gets sent before
- * clicking. Both buttons open in a new tab via `<a target="_blank">`
- * (the mailto opens the user's mail client; effectively the same UX).
+ * Both open outside the app (GitHub in a new tab, the mailto in the
+ * user's mail client) with the same details pre-filled.
  */
 export function ReportBugDialog({
     isHosted,
@@ -57,12 +51,23 @@ export function ReportBugDialog({
     const opts = { isHosted, errorId, errorContext, page };
     const githubUrl = buildReportBugUrl(opts);
     const mailtoUrl = buildReportBugMailto(opts);
-    const preview = buildReportBugBodyPreview(opts);
+    const details: { label: string; value: string; mono?: boolean }[] = [
+        ...(errorContext
+            ? [{ label: "While trying to", value: errorContext }]
+            : []),
+        ...(errorId ? [{ label: "Error id", value: errorId, mono: true }] : []),
+        ...(page ? [{ label: "Page", value: page, mono: true }] : []),
+        { label: "Version", value: APP_VERSION_TAG, mono: true },
+        {
+            label: "Mode",
+            value: isHosted ? "Hosted (riffado.com)" : "Self-hosted",
+        },
+    ];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-lg"
+                className={cn(settingsDialogClass, "sm:max-w-120")}
                 onCloseAutoFocus={(event) => {
                     const target = returnFocusTo?.current;
                     if (!target?.isConnected) return;
@@ -70,49 +75,61 @@ export function ReportBugDialog({
                     target.focus({ preventScroll: true });
                 }}
             >
-                <DialogHeader>
-                    <DialogTitle>Report a bug</DialogTitle>
-                    <DialogDescription>
-                        {errorId
-                            ? "Something went wrong. The details below will be pre-filled \u2014 add what you were doing and we'll take a look."
-                            : "Pick how you'd like to report this. Your version and deployment mode are pre-filled to save you typing."}
-                    </DialogDescription>
-                </DialogHeader>
+                <DialogHeading
+                    title="Report a bug"
+                    description="We fill in these details. Add what you were doing and what went wrong."
+                />
 
-                <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                        Preview
+                <div className="flex flex-col gap-1.5">
+                    <p className="text-sm leading-5 font-medium text-strong">
+                        Filled in for you
                     </p>
-                    <pre className="max-h-48 overflow-auto rounded-md border bg-muted/50 p-3 text-xs whitespace-pre-wrap break-words">
-                        {preview}
-                    </pre>
+                    <dl className="squircle flex flex-col gap-0.5 rounded-[var(--radius-control)] border border-hairline bg-surface px-3.5 py-3 dark:border-night-border dark:bg-night">
+                        {details.map((row) => (
+                            <div key={row.label} className="flex gap-2.5">
+                                <dt className="w-28 shrink-0 text-small leading-5 text-muted-foreground">
+                                    {row.label}
+                                </dt>
+                                <dd
+                                    className={cn(
+                                        "min-w-0 leading-5 break-words text-foreground",
+                                        row.mono
+                                            ? "font-mono text-xs leading-5"
+                                            : "text-small",
+                                    )}
+                                >
+                                    {row.value}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
                 </div>
 
-                <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
                     {isHosted ? (
-                        <Button variant="outline" asChild>
+                        <Button variant="bordered" size="dialog" asChild>
                             <a
                                 href={mailtoUrl}
                                 rel="noopener noreferrer"
                                 onClick={() => onOpenChange(false)}
                             >
-                                <Mail className="size-4" />
+                                <Mail />
                                 Email us
                             </a>
                         </Button>
                     ) : null}
-                    <Button asChild>
+                    <Button variant="ink" size="dialog" asChild>
                         <a
                             href={githubUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => onOpenChange(false)}
                         >
-                            <Github className="size-4" />
-                            Report on GitHub
+                            Open a GitHub issue
+                            <ArrowUpRight />
                         </a>
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

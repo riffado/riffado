@@ -1,164 +1,183 @@
 "use client";
 
-import { Command, Upload } from "lucide-react";
-import { UserMenu } from "@/components/dashboard/user-menu";
-import { SyncButton } from "@/components/sync-button";
+import { Menu, RefreshCw, Upload } from "lucide-react";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
+import { PhoneDrawer } from "@/components/dashboard/phone-drawer";
 import { Button } from "@/components/ui/button";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { useSettledSpin } from "@/hooks/use-settled-spin";
+import { formatSyncedAgo } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 
+type DrawerProps = Omit<
+    ComponentProps<typeof PhoneDrawer>,
+    "open" | "onOpenChange" | "returnFocusTo" | "trigger"
+>;
+
 interface Props {
-    isAdmin: boolean;
-    isHosted: boolean;
-    userEmail: string | null;
-    /** Display name for the account menu, or null when the account has none. */
-    userName: string | null;
-    lastSyncTime: Date | null;
-    nextSyncTime: Date | null;
-    isAutoSyncing: boolean;
-    lastSyncResult: {
-        success: boolean;
-        newRecordings?: number;
-        error?: string;
-    } | null;
-    onSync: () => void;
-    /** False hides the sync button (no Plaud connection to sync from). */
+    /** False hides the sync status and Sync now (no Plaud connection). */
     showSync: boolean;
+    /** True while Plaud has signed the user out; Sync now can't help then. */
+    needsReconnect: boolean;
+    lastSyncTime: Date | null;
+    /** Last sync the server recorded as successful, if known. */
+    lastSuccessfulSyncTime: Date | null;
+    isAutoSyncing: boolean;
+    lastSyncResult: { success: boolean } | null;
+    onSync: () => void;
     isUploading: boolean;
     isProcessing: boolean;
     onTriggerUpload: () => void;
-    onOpenPalette: () => void;
-    onOpenSettings: () => void;
-    /** Called on hover or focus of the Settings entry so its data can load before the click. */
-    onSettingsIntent: () => void;
-    onOpenShortcuts: () => void;
+    /** What the menu drawer shows and does. */
+    drawer: DrawerProps;
     /** True while something covers the header (the phone reader), so it leaves the tab order and the accessibility tree. */
     inert?: boolean;
     className?: string;
 }
 
+function useMinuteClock(): number | null {
+    const [now, setNow] = useState<number | null>(null);
+    useEffect(() => {
+        setNow(Date.now());
+        const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+        return () => window.clearInterval(timer);
+    }, []);
+    return now;
+}
+
+/** "Synced 4 min ago", "Syncing…", "Sync failed", or null when there's nothing to say. */
+export function syncStatusLabel({
+    isAutoSyncing,
+    failed,
+    needsReconnect,
+    syncTime,
+    now,
+}: {
+    isAutoSyncing: boolean;
+    failed: boolean;
+    needsReconnect: boolean;
+    syncTime: Date | null;
+    now: number | null;
+}): string | null {
+    if (isAutoSyncing) return "Syncing…";
+    if (failed && !needsReconnect) return "Sync failed";
+    if (!syncTime || now === null) return null;
+    const ago = formatSyncedAgo(syncTime, now);
+    if (!ago) return null;
+    return needsReconnect ? `Last synced ${ago}` : `Synced ${ago}`;
+}
+
+const iconButtonClass =
+    "squircle size-11 rounded-[var(--radius-control)] text-foreground";
+
 /**
- * Sticky page header for the dashboard workstation below `lg`. On `lg`+
- * the sidebar and the list pane header take over its actions.
- *
- * Title left, actions right, always one row. On mobile the buttons
- * collapse to icon-only (per-button `sm:` overrides) so the whole bar
- * fits in ~360px. `min-w-0` on the title block lets it truncate before
- * pushing buttons off-screen.
- *
- * Action order is intentional: search palette (most general), sync
- * (most frequent), upload (alternate ingest path), user menu (escape
- * hatch to settings + identity). The sync button is status-aware --
- * its label includes "Synced 2m ago" / "Retry sync" / "Syncing..."
- * so a separate status block isn't needed.
+ * The library's top bar below `lg`: menu, "Library" with the sync status
+ * under it, Sync now and Upload. Account items live in the menu drawer.
+ * Without a Plaud connection there is no status and no Sync now.
  */
 export function WorkstationHeader({
-    isAdmin,
-    isHosted,
-    userEmail,
-    userName,
+    showSync,
+    needsReconnect,
     lastSyncTime,
-    nextSyncTime,
+    lastSuccessfulSyncTime,
     isAutoSyncing,
     lastSyncResult,
     onSync,
-    showSync,
     isUploading,
     isProcessing,
     onTriggerUpload,
-    onOpenPalette,
-    onOpenSettings,
-    onSettingsIntent,
-    onOpenShortcuts,
+    drawer,
     inert = false,
     className,
 }: Props) {
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuButtonRef = useRef<HTMLButtonElement>(null);
+    const now = useMinuteClock();
+    const spin = useSettledSpin(isAutoSyncing);
+    const failed = !isAutoSyncing && lastSyncResult?.success === false;
+    const status = showSync
+        ? syncStatusLabel({
+              isAutoSyncing,
+              failed,
+              needsReconnect,
+              syncTime: needsReconnect
+                  ? lastSuccessfulSyncTime
+                  : (lastSyncTime ?? lastSuccessfulSyncTime),
+              now,
+          })
+        : null;
+
     return (
-        <div
+        <header
             inert={inert}
             className={cn(
-                "sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70",
+                "sticky top-0 z-30 -mx-4 flex items-center bg-background pt-[env(safe-area-inset-top)] pr-2 pl-1.5",
                 className,
             )}
         >
-            <div className="flex min-w-0 items-baseline gap-3">
-                <h1 className="truncate text-xl font-semibold leading-tight select-none sm:text-2xl md:text-3xl">
-                    Library
-                </h1>
-                {/*
-                  Recording count lives in the list pane's own meta row
-                  ("N of N recordings") -- showing it again in the page
-                  header is duplicative on every breakpoint, so the
-                  count is gone here.
-                */}
-            </div>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-                <Tooltip>
-                    <TooltipTrigger asChild>
+            <div className="flex h-15 min-w-0 flex-1 items-center">
+                <PhoneDrawer
+                    {...drawer}
+                    open={menuOpen}
+                    onOpenChange={setMenuOpen}
+                    returnFocusTo={menuButtonRef}
+                    trigger={
                         <Button
-                            onClick={onOpenPalette}
-                            variant="outline"
-                            size="sm"
-                            className="hidden h-11 md:inline-flex"
-                            aria-label="Open command palette"
+                            ref={menuButtonRef}
+                            variant="ghost"
+                            size="icon"
+                            className={iconButtonClass}
+                            aria-label="Open menu"
                         >
-                            <Command className="mr-2 size-4" />
-                            <span>Search</span>
-                            <kbd className="ml-2 hidden rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:inline">
-                                ⌘K
-                            </kbd>
+                            <Menu className="size-5.5" aria-hidden="true" />
                         </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                        Search recordings, transcripts, and actions
-                    </TooltipContent>
-                </Tooltip>
-                {showSync ? (
-                    <SyncButton
-                        lastSyncTime={lastSyncTime}
-                        nextSyncTime={nextSyncTime}
-                        isAutoSyncing={isAutoSyncing}
-                        lastSyncResult={lastSyncResult}
-                        onSync={onSync}
-                        className="h-11 min-w-11"
-                    />
-                ) : null}
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            onClick={onTriggerUpload}
-                            disabled={isProcessing}
-                            variant="outline"
-                            size="sm"
-                            className="h-11 min-w-11"
-                            aria-label={
-                                isUploading ? "Uploading audio" : "Upload audio"
-                            }
-                        >
-                            <Upload className="size-4 sm:mr-2" />
-                            <span className="hidden sm:inline">
-                                {isUploading ? "Uploading…" : "Upload Audio"}
-                            </span>
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                        Upload an audio file from your computer
-                    </TooltipContent>
-                </Tooltip>
-                <UserMenu
-                    isAdmin={isAdmin}
-                    isHosted={isHosted}
-                    userEmail={userEmail}
-                    userName={userName}
-                    onOpenSettings={onOpenSettings}
-                    onSettingsIntent={onSettingsIntent}
-                    onOpenShortcuts={onOpenShortcuts}
+                    }
                 />
+                <div className="flex min-w-0 flex-1 flex-col gap-px pl-1.5">
+                    <h1 className="truncate font-display text-section-title leading-6.5 font-semibold text-strong select-none">
+                        Library
+                    </h1>
+                    {status ? (
+                        <p
+                            className="truncate text-xs text-muted-foreground tabular-nums select-none"
+                            aria-live="polite"
+                        >
+                            {status}
+                        </p>
+                    ) : null}
+                </div>
+                {showSync && !needsReconnect ? (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(iconButtonClass, "disabled:opacity-100")}
+                        onClick={onSync}
+                        disabled={isAutoSyncing}
+                        aria-label={failed ? "Retry sync" : "Sync now"}
+                    >
+                        <RefreshCw
+                            ref={spin.ref}
+                            className={cn(
+                                "size-5",
+                                spin.spinning &&
+                                    "animate-spin motion-reduce:animate-pulse",
+                            )}
+                            aria-hidden="true"
+                        />
+                    </Button>
+                ) : null}
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={iconButtonClass}
+                    onClick={onTriggerUpload}
+                    disabled={isProcessing}
+                    aria-label={
+                        isUploading ? "Uploading audio" : "Upload audio"
+                    }
+                >
+                    <Upload className="size-5" aria-hidden="true" />
+                </Button>
             </div>
-        </div>
+        </header>
     );
 }

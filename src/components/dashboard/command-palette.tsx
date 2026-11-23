@@ -5,7 +5,6 @@ import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActionsGroup,
-    Kbd,
     PaletteFooter,
     RECORDING_CAP,
     RecordingsGroup,
@@ -91,12 +90,10 @@ export function CommandPalette({
     // keydown handler.
     const [activeValue, setActiveValue] = useState("");
 
-    // Build a lookup from a row's cmdk `value` string to its
-    // recording id. The Transcribe quick action only applies to
-    // recordings without a transcript, so the map deliberately
-    // skips rows that wouldn't render the button — keying off this
-    // map is both the "is this row a recording" check and the
-    // "does it have a transcribe action" check.
+    // Lookup from a row's cmdk `value` to its recording id, for rows
+    // that can be transcribed (no transcript, nothing in flight). The
+    // highlighted row shows its Transcribe chip and answers ⌘↵ only
+    // when it is in this map.
     const transcribeTargets = useMemo(() => {
         const map = new Map<string, string>();
         if (!onTranscribeRecording) return map;
@@ -134,7 +131,8 @@ export function CommandPalette({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 instant
-                className="max-w-xl gap-0 overflow-hidden p-0"
+                aria-describedby={undefined}
+                className="squircle top-24 translate-y-0 gap-0 overflow-hidden rounded-[24px] p-0 sm:max-w-160"
                 showCloseButton={false}
             >
                 <DialogTitle className="sr-only">Command palette</DialogTitle>
@@ -146,20 +144,20 @@ export function CommandPalette({
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
                 >
-                    <div className="cmd-input-row">
+                    <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
                         <Search
-                            className="cmd-input-icon size-4"
+                            className="size-4.5 shrink-0 text-subtle"
                             aria-hidden="true"
                         />
                         <Command.Input
                             value={search}
                             onValueChange={setSearch}
-                            placeholder="Search recordings, transcripts, or actions…"
+                            placeholder="Search recordings, transcripts and actions"
+                            className="min-w-0 flex-1 bg-transparent text-base leading-5.5 text-strong outline-none placeholder:text-muted-foreground"
                         />
-                        <Kbd>⌘K</Kbd>
                     </div>
 
-                    <Command.List className="max-h-[60vh] overflow-y-auto p-2">
+                    <Command.List className="max-h-[min(60vh,560px)] overflow-y-auto px-2 pt-1 pb-2">
                         <Command.Empty>
                             No matches.
                             <div className="cmd-empty-hint">
@@ -169,10 +167,13 @@ export function CommandPalette({
 
                         <RecordingsGroup
                             recordings={visibleRecordings}
+                            totalCount={matchingRecordings.length}
+                            heading={search.trim() ? "Recordings" : "Recent"}
                             transcriptions={transcriptions}
                             currentRecording={currentRecording}
                             inFlightActions={inFlightActions}
                             dateTimeFormat={dateTimeFormat}
+                            activeValue={activeValue}
                             onSelectRecording={onSelectRecording}
                             onTranscribeRecording={onTranscribeRecording}
                             runAction={runAction}
@@ -196,7 +197,7 @@ export function CommandPalette({
                     </Command.List>
 
                     <PaletteFooter
-                        showTranscribeHint={transcribeTargets.size > 0}
+                        showTranscribeHint={transcribeTargets.has(activeValue)}
                     />
                 </Command>
             </DialogContent>

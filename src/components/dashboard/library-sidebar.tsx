@@ -2,6 +2,7 @@
 
 import { Search, Settings, TextAlignStart, X } from "lucide-react";
 import type * as React from "react";
+import { useId } from "react";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { LogoWordmark } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
@@ -37,11 +38,154 @@ interface LibrarySidebarProps {
     className?: string;
 }
 
+/** `sidebar` is the desktop sidebar; `drawer` the phone menu, with 44px rows. */
+export type LibraryNavVariant = "sidebar" | "drawer";
+
+const navStyles = {
+    sidebar: {
+        item: "h-9 gap-2.5 px-2.5",
+        label: "text-ui",
+        count: "text-xs",
+        heading: "px-2.5 text-xs",
+        row: "gap-2.5 px-2.5 py-1.5",
+        name: "text-ui",
+        status: "text-xs",
+    },
+    drawer: {
+        item: "h-11 gap-3 px-3",
+        label: "text-row leading-5",
+        count: "text-small leading-4",
+        heading: "px-3 text-small leading-4",
+        row: "min-h-13 gap-2 py-1.5 pr-3 pl-2",
+        name: "text-row leading-5",
+        status: "text-small leading-4",
+    },
+} as const;
+
+/** The Library entry with its recording count, hidden at zero. */
+export function LibraryNavItem({
+    recordingCount,
+    onClick,
+    variant,
+}: {
+    recordingCount: number;
+    onClick: () => void;
+    variant: LibraryNavVariant;
+}) {
+    const s = navStyles[variant];
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-current="page"
+            className={cn(
+                "squircle flex items-center rounded-[var(--radius-control)] bg-accent text-left outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                s.item,
+            )}
+        >
+            <TextAlignStart
+                className="size-4.5 shrink-0 text-foreground"
+                aria-hidden="true"
+            />
+            <span className={cn("flex-1 font-semibold text-strong", s.label)}>
+                Library
+            </span>
+            {recordingCount > 0 ? (
+                <span
+                    className={cn(
+                        "text-muted-foreground tabular-nums",
+                        s.count,
+                    )}
+                >
+                    {recordingCount}
+                </span>
+            ) : null}
+        </button>
+    );
+}
+
+/**
+ * The user's recorders and how their recordings arrive ("Via Plaud", or
+ * "Not syncing" while Plaud has signed the user out). Renders nothing
+ * without recorders.
+ */
+export function RecordersSection({
+    devices,
+    plaudNeedsReconnect,
+    variant,
+}: {
+    devices: RecorderDevice[];
+    plaudNeedsReconnect: boolean;
+    variant: LibraryNavVariant;
+}) {
+    const headingId = useId();
+    if (devices.length === 0) return null;
+    const s = navStyles[variant];
+    return (
+        <section
+            aria-labelledby={headingId}
+            className="flex min-h-0 flex-col gap-0.5 select-none"
+        >
+            <h2
+                id={headingId}
+                className={cn(
+                    "pb-1.5 font-medium text-muted-foreground",
+                    s.heading,
+                )}
+            >
+                Recorders
+            </h2>
+            <ul className="flex flex-col gap-0.5 overflow-y-auto">
+                {devices.map((device) => (
+                    <li
+                        key={device.serialNumber}
+                        className={cn("flex items-center", s.row)}
+                    >
+                        <span
+                            className="flex h-8.5 w-6.5 shrink-0 items-center justify-center"
+                            aria-hidden="true"
+                        >
+                            <span className="h-7 w-4 rounded-sm bg-accent" />
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-px">
+                            <span
+                                className={cn(
+                                    "truncate font-medium text-foreground",
+                                    s.name,
+                                )}
+                            >
+                                {device.name || device.model}
+                            </span>
+                            <span
+                                className={cn(
+                                    "flex items-center gap-1.5 text-muted-foreground",
+                                    s.status,
+                                )}
+                            >
+                                <StatusDot
+                                    size="small"
+                                    tone={
+                                        plaudNeedsReconnect ? "idle" : "ready"
+                                    }
+                                />
+                                {plaudNeedsReconnect
+                                    ? "Not syncing"
+                                    : "Via Plaud"}
+                            </span>
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 /**
  * Desktop sidebar for the dashboard: search, the Library entry, the
  * user's recorders and the account row. Follows the first-run rule:
  * with no recordings the count is hidden, and with no recorders the
- * Recorders section is left out.
+ * Recorders section is left out. The phone menu drawer shows the same
+ * Library entry and recorders.
  */
 export function LibrarySidebar({
     recordingCount,
@@ -109,91 +253,33 @@ export function LibrarySidebar({
                             <X className="size-3.5" />
                         </button>
                     ) : (
-                        <kbd className="squircle rounded-[var(--radius-small)] bg-accent px-1.5 py-0.5 font-sans text-xs text-muted-foreground select-none">
+                        <kbd className="squircle rounded-[var(--radius-small)] bg-accent px-1.5 py-0.5 font-sans text-xs text-muted-foreground select-none dark:bg-row-selected">
                             /
                         </kbd>
                     )}
                 </search>
 
                 <nav aria-label="Library" className="flex flex-col gap-0.5">
-                    <button
-                        type="button"
+                    <LibraryNavItem
+                        recordingCount={recordingCount}
                         onClick={onShowLibrary}
-                        aria-current="page"
-                        className="squircle flex h-9 items-center gap-2.5 rounded-[var(--radius-control)] bg-accent px-2.5 text-left outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                        <TextAlignStart
-                            className="size-4.5 shrink-0 text-foreground"
-                            aria-hidden="true"
-                        />
-                        <span className="flex-1 text-ui font-semibold text-strong">
-                            Library
-                        </span>
-                        {recordingCount > 0 ? (
-                            <span className="text-xs text-muted-foreground tabular-nums">
-                                {recordingCount}
-                            </span>
-                        ) : null}
-                    </button>
+                        variant="sidebar"
+                    />
                 </nav>
 
-                {devices.length > 0 ? (
-                    <section
-                        aria-labelledby="sidebar-recorders"
-                        className="flex min-h-0 flex-col gap-0.5 select-none"
-                    >
-                        <h2
-                            id="sidebar-recorders"
-                            className="px-2.5 pb-1.5 text-xs font-medium text-muted-foreground"
-                        >
-                            Recorders
-                        </h2>
-                        <ul className="flex flex-col gap-0.5 overflow-y-auto">
-                            {devices.map((device) => (
-                                <li
-                                    key={device.serialNumber}
-                                    className="flex items-center gap-2.5 px-2.5 py-1.5"
-                                >
-                                    <span
-                                        className="flex h-8.5 w-6.5 shrink-0 items-center justify-center"
-                                        aria-hidden="true"
-                                    >
-                                        <span className="h-7 w-4 rounded-sm bg-accent" />
-                                    </span>
-                                    <span className="flex min-w-0 flex-1 flex-col gap-px">
-                                        <span className="truncate text-ui font-medium text-foreground">
-                                            {device.name || device.model}
-                                        </span>
-                                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                            <StatusDot
-                                                size="small"
-                                                tone={
-                                                    plaudNeedsReconnect
-                                                        ? "idle"
-                                                        : "ready"
-                                                }
-                                            />
-                                            {plaudNeedsReconnect
-                                                ? "Not syncing"
-                                                : "Via Plaud"}
-                                        </span>
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-                ) : null}
+                <RecordersSection
+                    devices={devices}
+                    plaudNeedsReconnect={plaudNeedsReconnect}
+                    variant="sidebar"
+                />
             </div>
 
             <div className="flex items-center gap-1">
                 <UserMenu
-                    trigger="sidebar"
                     isAdmin={isAdmin}
                     isHosted={isHosted}
                     userEmail={userEmail}
                     userName={userName}
-                    onOpenSettings={onOpenSettings}
-                    onSettingsIntent={onSettingsIntent}
                     onOpenShortcuts={onOpenShortcuts}
                 />
                 <Tooltip>

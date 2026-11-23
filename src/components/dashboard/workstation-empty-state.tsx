@@ -1,19 +1,15 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
-import { type DragEvent, useState } from "react";
+import Link from "next/link";
+import { type DragEvent, type ReactNode, useEffect, useState } from "react";
 import {
-    type PlaudConnectMode,
-    PlaudConnectTabs,
-} from "@/components/plaud-connect-tabs";
+    PlaudConnectDialog,
+    type PlaudConnectView,
+} from "@/components/plaud-connect/connect-dialog";
+import type { Provider } from "@/components/settings-sections/providers-section";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { StatusDot } from "@/components/ui/status-dot";
 import { useSettledSpin } from "@/hooks/use-settled-spin";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +26,31 @@ interface Props {
     onDropFile: (file: File) => void;
     /** Called after Plaud connects from this screen. */
     onPlaudConnected: () => void;
+    /** The user's AI providers, or null until loaded. */
+    providers: Provider[] | null;
+    /** Loads `providers`; called on mount. */
+    onRequestProviders: () => void;
+}
+
+/** Which transcription line the first-run screen shows, if any. */
+export type TranscriptionNotice = "mynah" | "browser" | null;
+
+/**
+ * The transcription a new account will use, when it's worth a line:
+ * Mynah when the plan includes it and nothing else is the default, or
+ * browser transcription when there is no server provider at all. Null
+ * while loading and when the user picked their own provider.
+ */
+export function transcriptionNoticeFor(
+    providers: Provider[] | null,
+): TranscriptionNotice {
+    if (providers === null) return null;
+    const own = providers.filter((p) => !p.managed);
+    const mynah = providers.find((p) => p.managed && p.available !== false);
+    const chosen = providers.find((p) => p.isDefaultTranscription);
+    if (mynah && (chosen ? chosen.managed : own.length === 0)) return "mynah";
+    if (!mynah && own.length === 0) return "browser";
+    return null;
 }
 
 /**
@@ -47,11 +68,20 @@ export function WorkstationEmptyState({
     onUpload,
     onDropFile,
     onPlaudConnected,
+    providers,
+    onRequestProviders,
 }: Props) {
-    const [connectMode, setConnectMode] = useState<PlaudConnectMode | null>(
+    const [connectView, setConnectView] = useState<PlaudConnectView | null>(
         null,
     );
     const spin = useSettledSpin(isSyncing);
+
+    useEffect(() => {
+        onRequestProviders();
+    }, [onRequestProviders]);
+    const notice = (
+        <TranscriptionNoticeLine notice={transcriptionNoticeFor(providers)} />
+    );
 
     const waitingBody = autoSyncEnabled
         ? "New recordings in your Plaud account show up here automatically."
@@ -90,6 +120,7 @@ export function WorkstationEmptyState({
                         onDropFile={onDropFile}
                         className="w-full md:w-75"
                     />
+                    {notice}
                 </>
             ) : (
                 <>
@@ -100,7 +131,7 @@ export function WorkstationEmptyState({
                     <div className="flex w-full max-w-184 flex-col gap-4 md:flex-row">
                         <section
                             aria-labelledby="first-run-plaud"
-                            className="squircle flex min-w-0 flex-1 flex-col gap-5 rounded-[var(--radius-card)] border border-accent bg-card p-6"
+                            className="squircle flex min-w-0 flex-1 flex-col gap-5 rounded-[var(--radius-card)] border border-accent bg-card p-6 dark:border-border"
                         >
                             <div className="flex flex-col gap-1.5">
                                 <h2
@@ -119,14 +150,14 @@ export function WorkstationEmptyState({
                                 <Button
                                     variant="ink"
                                     size="control"
-                                    onClick={() => setConnectMode("connector")}
+                                    onClick={() => setConnectView("main")}
                                 >
                                     Sign in with Plaud
                                 </Button>
                                 <Button
                                     variant="ghost"
                                     size="control"
-                                    onClick={() => setConnectMode("email")}
+                                    onClick={() => setConnectView("email")}
                                     className="text-foreground"
                                 >
                                     Other ways to connect
@@ -140,35 +171,19 @@ export function WorkstationEmptyState({
                             className="md:w-75 md:shrink-0"
                         />
                     </div>
+                    {notice}
 
-                    <Dialog
-                        open={connectMode !== null}
+                    <PlaudConnectDialog
+                        open={connectView !== null}
                         onOpenChange={(open) => {
-                            if (!open) setConnectMode(null);
+                            if (!open) setConnectView(null);
                         }}
-                    >
-                        <DialogContent className="max-w-lg">
-                            <DialogHeader>
-                                <DialogTitle>
-                                    Connect your Plaud account
-                                </DialogTitle>
-                                <DialogDescription>
-                                    Sign in to Plaud so your recordings sync to
-                                    this server.
-                                </DialogDescription>
-                            </DialogHeader>
-                            {connectMode !== null && (
-                                <PlaudConnectTabs
-                                    key={connectMode}
-                                    initialMode={connectMode}
-                                    onConnected={() => {
-                                        setConnectMode(null);
-                                        onPlaudConnected();
-                                    }}
-                                />
-                            )}
-                        </DialogContent>
-                    </Dialog>
+                        initialView={connectView ?? "main"}
+                        onConnected={() => {
+                            setConnectView(null);
+                            onPlaudConnected();
+                        }}
+                    />
                 </>
             )}
         </div>
@@ -183,6 +198,50 @@ function Heading({ title, body }: { title: string; body: string }) {
             </h2>
             <p className="max-w-130 text-reading text-subtle">{body}</p>
         </div>
+    );
+}
+
+/**
+ * One line under the cards naming the transcription in use, linked to
+ * Settings. Its row is reserved from the first paint so the cards don't
+ * move when the provider list arrives; the text fades in.
+ */
+function TranscriptionNoticeLine({ notice }: { notice: TranscriptionNotice }) {
+    return (
+        <p className="flex min-h-5 flex-wrap items-center justify-center gap-x-2 text-center text-sm text-subtle">
+            {notice ? (
+                <span
+                    key={notice}
+                    className="inline-flex items-center gap-2 transition-opacity duration-(--duration-status) ease-(--ease-out) starting:opacity-0"
+                >
+                    <StatusDot tone="ready" />
+                    <span>
+                        {notice === "mynah" ? (
+                            <>
+                                Transcription uses Mynah, included with your
+                                plan. <NoticeLink>Change</NoticeLink>
+                            </>
+                        ) : (
+                            <>
+                                Transcribe in your browser for free, or{" "}
+                                <NoticeLink>add a provider</NoticeLink>
+                            </>
+                        )}
+                    </span>
+                </span>
+            ) : null}
+        </p>
+    );
+}
+
+function NoticeLink({ children }: { children: ReactNode }) {
+    return (
+        <Link
+            href="/settings#transcription"
+            className="rounded-sm font-medium text-strong underline decoration-1 underline-offset-3 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+            {children}
+        </Link>
     );
 }
 

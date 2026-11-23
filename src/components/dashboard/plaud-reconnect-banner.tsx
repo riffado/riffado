@@ -2,15 +2,8 @@
 
 import { X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
+import { PlaudConnectDialog } from "@/components/plaud-connect/connect-dialog";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { StatusDot } from "@/components/ui/status-dot";
 import { formatDateTime } from "@/lib/format-date";
 import {
@@ -64,8 +57,8 @@ interface PlaudReconnectBannerProps {
  * hidden until the new end arrives; `show` is always honoured, so a
  * rejected replacement sign-in still shows the reconnect banner.
  * Re-reads the clock when the tab becomes visible and when the warning
- * window opens or the sign-in ends. Opens the connector-first connect flow
- * as a modal, not full re-onboarding.
+ * window opens or the sign-in ends. Opens the Connect Plaud dialog in its
+ * reconnect form (account email and server), not full re-onboarding.
  */
 export function PlaudReconnectBanner({
     show,
@@ -133,7 +126,7 @@ export function PlaudReconnectBanner({
     return (
         <>
             <div className="pb-2.5 lg:px-2.5">
-                <div className="squircle flex gap-3 rounded-[var(--radius-item)] border border-accent bg-card p-3.5">
+                <div className="squircle flex gap-3 rounded-[var(--radius-item)] border border-accent bg-card p-3.5 dark:border-border">
                     <div className="flex w-2 shrink-0 pt-1.5">
                         <StatusDot tone="working" />
                     </div>
@@ -173,7 +166,7 @@ export function PlaudReconnectBanner({
                             variant="ghost"
                             size="icon-compact"
                             onClick={dismissEndingSoon}
-                            className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground"
+                            className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground dark:hover:bg-border"
                             aria-label="Dismiss Plaud connection ending notice"
                         >
                             <X className="size-4" />
@@ -182,26 +175,18 @@ export function PlaudReconnectBanner({
                 </div>
             </div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Reconnect your Plaud account</DialogTitle>
-                        <DialogDescription>
-                            Sign back in to keep syncing. Your existing
-                            recordings and transcripts are unaffected.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {open && (
-                        <PlaudConnectTabs
-                            onConnected={() => {
-                                setOpen(false);
-                                setReconnectedFrom({ sessionExpiresAt });
-                                onReconnected();
-                            }}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            <PlaudConnectDialog
+                open={open}
+                onOpenChange={setOpen}
+                intent="reconnect"
+                reason={state === "reconnect" ? "signed-out" : "ending-soon"}
+                endsOn={endsOn}
+                onConnected={() => {
+                    setOpen(false);
+                    setReconnectedFrom({ sessionExpiresAt });
+                    onReconnected();
+                }}
+            />
         </>
     );
 }

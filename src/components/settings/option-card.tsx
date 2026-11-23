@@ -91,7 +91,7 @@ export function OptionCard({
                         "squircle flex size-11 shrink-0 items-center justify-center rounded-[var(--radius-control)] transition-colors duration-150 ease-out max-sm:hidden",
                         selected
                             ? "bg-strong text-background"
-                            : "bg-surface text-foreground",
+                            : "bg-surface text-foreground dark:bg-secondary",
                         disabled && "opacity-60",
                     )}
                 >
@@ -150,7 +150,7 @@ export function OptionCardPanel({
     trailing?: React.ReactNode;
 }) {
     return (
-        <div className="squircle flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[var(--radius-item)] bg-background px-4 py-3">
+        <div className="squircle flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[var(--radius-item)] bg-background px-4 py-3 dark:bg-quiet">
             <div className="flex min-w-0 items-center gap-2 text-ui text-strong">
                 {children}
             </div>

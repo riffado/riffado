@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Transcription model picker shared by the Add/Edit provider dialogs.
+ * Model picker shared by the Add/Edit provider dialogs.
  *
  * Three modes:
  *   - Preset has `fetchAudioModels: true` (OpenRouter): live-fetch the
@@ -11,22 +11,26 @@
  *     hand-curated list shipped in `provider-presets.ts`.
  *   - Otherwise: plain freeform text input (LM Studio / Ollama / Custom).
  *
- * Both list modes include a final "Custom (type model name)…" option as
- * an escape hatch so users on a stale Riffado release can still type a
- * model id we haven't seeded yet.
+ * Both list modes include a final "Type a model name" option as an escape
+ * hatch so users on a stale Riffado release can still type a model id we
+ * haven't seeded yet.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+    dialogInputClass,
+    monoInputClass,
+} from "@/components/settings/form-controls";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import { Field, FieldInput } from "@/components/ui/field";
 import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
 import type { ProviderPreset } from "@/lib/ai/provider-presets";
+import { getApiErrorMessage } from "@/lib/api-errors";
 
 interface ModelOption {
     id: string;
@@ -42,6 +46,8 @@ interface Props {
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
+    /** An error from saving that belongs to the model. */
+    error?: string | null;
 }
 
 export function TranscriptionModelPicker({
@@ -51,7 +57,9 @@ export function TranscriptionModelPicker({
     value,
     onChange,
     disabled,
+    error,
 }: Props) {
+    const fieldId = useId();
     // Live fetch for `fetchAudioModels: true` presets.
     const [audioModels, setAudioModels] = useState<ModelOption[]>([]);
     const [audioModelsLoading, setAudioModelsLoading] = useState(false);
@@ -89,22 +97,27 @@ export function TranscriptionModelPicker({
                         baseUrl: baseUrl || null,
                     }),
                 });
-                const data = (await res.json().catch(() => null)) as {
-                    models?: ModelOption[];
-                    error?: string;
-                } | null;
                 if (reqId !== requestId.current) return;
                 if (!res.ok) {
                     setAudioModels([]);
                     setAudioModelsError(
-                        data?.error || "Couldn't load audio models.",
+                        await getApiErrorMessage(
+                            res,
+                            "Couldn't load the models. Check the key, then try again",
+                        ),
                     );
                     return;
                 }
+                const data = (await res.json().catch(() => null)) as {
+                    models?: ModelOption[];
+                } | null;
+                if (reqId !== requestId.current) return;
                 setAudioModels(data?.models ?? []);
             } catch {
                 if (reqId !== requestId.current) return;
-                setAudioModelsError("Couldn't load audio models.");
+                setAudioModelsError(
+                    `Couldn't reach ${providerName || "the provider"}. Check your connection, then try again`,
+                );
             } finally {
                 if (reqId === requestId.current) {
                     setAudioModelsLoading(false);
@@ -124,15 +137,14 @@ export function TranscriptionModelPicker({
 
     const hasOptions = options.length > 0;
 
-    // Custom-mode toggle: true when the user explicitly picked "Custom…"
-    // OR when the stored `value` isn't one of the curated options (legacy
-    // values or hand-typed ids from a stale release).
+    // Custom-mode toggle: true when the user explicitly picked "Type a
+    // model name" OR when the stored `value` isn't one of the curated
+    // options (legacy values or hand-typed ids from a stale release).
     const [useCustom, setUseCustom] = useState(false);
 
-    // Reset whenever the selected preset changes. Without this, clicking
-    // "Custom…" on one provider and then switching providers leaves the
-    // picker stuck in freeform mode for the new provider (where the
-    // current value is a perfectly valid item in its curated list).
+    // Reset whenever the selected preset changes. Without this, picking
+    // "Type a model name" on one provider and then switching providers
+    // leaves the picker stuck in freeform mode for the new provider.
     // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — reset on preset change only.
     useEffect(() => {
         setUseCustom(false);
@@ -160,36 +172,40 @@ export function TranscriptionModelPicker({
         onChange(selected);
     };
 
-    // Helper text below the picker.
-    let helper: string | null = null;
+    let hint: string | undefined;
     if (preset?.fetchAudioModels) {
         if (audioModelsLoading) {
-            helper = "Loading audio-capable models…";
-        } else if (audioModelsError) {
-            helper = audioModelsError;
+            hint = "Loading the models that take audio…";
         } else if (hasOptions) {
-            helper =
-                "Only audio-input models are shown. Transcription uses chat-completions; mp3/wav recordings only.";
+            hint =
+                "Only models that take audio are listed. They transcribe mp3 and wav recordings";
         } else {
-            helper = "Enter your API key to load audio-capable models.";
+            hint = "Paste your key to see the models that take audio";
         }
-    } else if (preset?.knownTranscriptionModels?.length) {
-        helper =
-            "Pick a transcription model. Choose Custom… to type a model id we haven't shipped yet.";
     }
 
+    const fieldError = error || audioModelsError || undefined;
+
     return (
-        <div className="space-y-2">
-            <Label htmlFor="defaultModel">Default Model</Label>
+        <Field label="Model" id={fieldId} error={fieldError} hint={hint}>
             {hasOptions && !useCustom ? (
                 <Select
                     value={value || undefined}
                     onValueChange={handleSelectChange}
                     disabled={disabled}
                 >
-                    <SelectTrigger>
-                        <SelectValue placeholder="Pick a transcription model" />
-                    </SelectTrigger>
+                    <SettingsSelectTrigger
+                        id={fieldId}
+                        aria-describedby={
+                            fieldError || hint
+                                ? `${fieldId}-message`
+                                : undefined
+                        }
+                        aria-invalid={fieldError ? true : undefined}
+                        className="h-10 w-full rounded-[var(--radius-inner)] border-input font-mono text-small font-normal data-[size=default]:h-10"
+                    >
+                        <SelectValue placeholder="Pick a model" />
+                    </SettingsSelectTrigger>
                     <SelectContent>
                         {options.map((m) => (
                             <SelectItem key={m.id} value={m.id}>
@@ -197,36 +213,39 @@ export function TranscriptionModelPicker({
                             </SelectItem>
                         ))}
                         <SelectItem value={CUSTOM_SENTINEL}>
-                            Custom (type model name)…
+                            Type a model name…
                         </SelectItem>
                     </SelectContent>
                 </Select>
             ) : (
-                <Input
-                    id="defaultModel"
-                    type="text"
-                    placeholder="whisper-1, gpt-4o, etc."
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    disabled={disabled}
-                    className="font-mono text-sm"
-                />
+                <div className="flex flex-col gap-1.5">
+                    <FieldInput
+                        type="text"
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder={
+                            preset?.defaultModel ||
+                            "whisper-large-v3, qwen2.5:14b"
+                        }
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        disabled={disabled}
+                        className={`${dialogInputClass} ${monoInputClass}`}
+                    />
+                    {hasOptions && (
+                        <button
+                            type="button"
+                            className="w-fit text-small text-subtle underline-offset-2 outline-none hover:text-strong hover:underline focus-visible:underline"
+                            onClick={() => {
+                                setUseCustom(false);
+                                onChange(options[0]?.id ?? "");
+                            }}
+                        >
+                            Pick from the list instead
+                        </button>
+                    )}
+                </div>
             )}
-            {hasOptions && useCustom && (
-                <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={() => {
-                        setUseCustom(false);
-                        onChange(options[0]?.id ?? "");
-                    }}
-                >
-                    Back to suggested models
-                </button>
-            )}
-            {helper && (
-                <p className="text-xs text-muted-foreground">{helper}</p>
-            )}
-        </div>
+        </Field>
     );
 }

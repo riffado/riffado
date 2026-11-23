@@ -17,12 +17,19 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/components/plaud-connect-tabs", () => ({
-    PlaudConnectTabs: ({ onConnected }: { onConnected: () => void }) => (
-        <button type="button" onClick={onConnected}>
-            Finish reconnect
-        </button>
-    ),
+vi.mock("@/components/plaud-connect/connect-dialog", () => ({
+    PlaudConnectDialog: ({
+        open,
+        onConnected,
+    }: {
+        open: boolean;
+        onConnected: () => void;
+    }) =>
+        open ? (
+            <button type="button" onClick={onConnected}>
+                Finish reconnect
+            </button>
+        ) : null,
 }));
 
 import { PlaudReconnectBanner } from "@/components/dashboard/plaud-reconnect-banner";

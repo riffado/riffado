@@ -129,7 +129,7 @@ function renderPalette() {
 
 function typeInPalette(query: string) {
     const input = screen.getByPlaceholderText(
-        "Search recordings, transcripts, or actions…",
+        "Search recordings, transcripts and actions",
     );
     act(() => {
         fireEvent.change(input, { target: { value: query } });

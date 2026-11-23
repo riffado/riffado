@@ -27,6 +27,7 @@ export type SettingsSection =
 /** A destination in the settings navigation: one full page. */
 export type SettingsPage =
     | "plan"
+    | "account"
     | "recorders"
     | "transcription"
     | "ai"

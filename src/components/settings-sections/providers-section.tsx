@@ -262,7 +262,7 @@ export function ProvidersSection({
                     </OptionCardGroup>
                 )}
 
-                <div className="squircle flex gap-3.5 rounded-[var(--radius-card)] bg-surface px-4.5 py-4">
+                <div className="squircle flex gap-3.5 rounded-[var(--radius-card)] bg-quiet px-4.5 py-4">
                     <Info
                         className="mt-0.5 size-4.5 shrink-0 text-foreground"
                         aria-hidden="true"
@@ -283,6 +283,7 @@ export function ProvidersSection({
                 open={isAddProviderOpen}
                 onOpenChange={setIsAddProviderOpen}
                 isHosted={isHosted}
+                providers={providers ?? []}
                 onSuccess={() => {
                     setIsAddProviderOpen(false);
                     refreshProviders();
@@ -291,17 +292,12 @@ export function ProvidersSection({
 
             <EditProviderDialog
                 open={isEditProviderOpen}
-                onOpenChange={(open) => {
-                    setIsEditProviderOpen(open);
-                    if (!open) {
-                        setEditingProvider(null);
-                    }
-                }}
+                onOpenChange={setIsEditProviderOpen}
                 provider={editingProvider}
                 isHosted={isHosted}
+                providers={providers ?? []}
                 onSuccess={() => {
                     setIsEditProviderOpen(false);
-                    setEditingProvider(null);
                     refreshProviders();
                 }}
             />

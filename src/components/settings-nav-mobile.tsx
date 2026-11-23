@@ -50,7 +50,7 @@ export function SettingsNavMobile({
                             >
                                 <span
                                     aria-hidden="true"
-                                    className="squircle flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-surface text-foreground"
+                                    className="squircle flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-inner)] bg-surface text-foreground dark:bg-accent"
                                 >
                                     <item.icon className="size-4.5" />
                                 </span>

@@ -1,8 +1,5 @@
 import { redirect } from "next/navigation";
-import {
-    HostedAuthChrome,
-    SelfHostAuthChrome,
-} from "@/components/auth/auth-chrome";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { RegisterForm } from "@/components/auth/register-form";
 import { emailVerificationRequired } from "@/lib/auth";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
@@ -13,33 +10,18 @@ export default async function RegisterPage() {
 
     // Per product decision: when registration is disabled, redirect to
     // /login rather than rendering a "registration disabled" panel. The
-    // dangling deep-link is the only meaningful entry point, and a
-    // redirect is a less confusing landing than a dead-end card.
+    // sign-in page says sign-ups are off, which is a less confusing
+    // landing than a dead-end card.
     if (env.DISABLE_REGISTRATION) {
         redirect("/login");
     }
 
-    if (env.IS_HOSTED) {
-        return (
-            <HostedAuthChrome
-                title="Create your account"
-                subtitle="Free to start. Upgrade only when you outgrow it."
-            >
-                <RegisterForm
-                    requireEmailVerification={emailVerificationRequired}
-                />
-            </HostedAuthChrome>
-        );
-    }
-
     return (
-        <SelfHostAuthChrome
-            title="Create your account"
-            subtitle="The first account on a new Riffado instance becomes the admin."
-        >
+        <AuthShell offset="tall">
             <RegisterForm
                 requireEmailVerification={emailVerificationRequired}
+                showTerms={env.IS_HOSTED}
             />
-        </SelfHostAuthChrome>
+        </AuthShell>
     );
 }

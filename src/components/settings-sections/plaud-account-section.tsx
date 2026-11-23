@@ -2,23 +2,21 @@
 
 import { format, formatDistanceToNow, isThisYear } from "date-fns";
 import { useCallback, useEffect, useState } from "react";
-import { PlaudConnectTabs } from "@/components/plaud-connect-tabs";
+import { useConfirm } from "@/components/confirm-dialog";
+import {
+    PlaudConnectDialog,
+    type PlaudConnectIntent,
+    type PlaudConnectView,
+} from "@/components/plaud-connect/connect-dialog";
+import { plaudServerName } from "@/components/plaud-connect/server-label";
 import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
 import { DetailRow } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { StatusDot } from "@/components/ui/status-dot";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { plaudConnectionBannerState } from "@/lib/plaud/connection-expiry";
-import { PLAUD_SERVERS, type PlaudServerKey } from "@/lib/plaud/servers";
+import type { PlaudServerKey } from "@/lib/plaud/servers";
 import { toast } from "@/lib/toast";
 
 interface ConnectionInfo {
@@ -32,24 +30,6 @@ interface ConnectionInfo {
     createdAt?: string;
     updatedAt?: string;
     apiBase?: string;
-}
-
-/**
- * Short region label for the connection card. Falls back to the raw
- * apiBase for "custom" entries (custom-server users want to see exactly
- * which host they're talking to).
- */
-function regionLabel(
-    server: PlaudServerKey | undefined,
-    apiBase?: string,
-): string {
-    if (!server) return "Unknown";
-    if (server === "custom") return apiBase ?? PLAUD_SERVERS.custom.label;
-    if (server === "global") return "Global";
-    if (server === "eu") return "EU (Frankfurt)";
-    if (server === "apse1") return "Asia Pacific (Singapore)";
-    if (server === "cn") return "China Mainland";
-    return server;
 }
 
 function formatEndDate(iso: string): string {
@@ -77,19 +57,27 @@ interface PlaudAccountSectionProps {
     lastSyncAt?: string | null;
 }
 
+/**
+ * Settings > Recorders > Sources: the Plaud account card. Connect,
+ * reconnect and switch all open the one Connect Plaud dialog.
+ */
 export function PlaudAccountSection({
     onReconnected,
     onDisconnected,
     lastSyncAt = null,
 }: PlaudAccountSectionProps = {}) {
+    const confirm = useConfirm();
     const [info, setInfo] = useState<ConnectionInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [confirmOpen, setConfirmOpen] = useState<
-        null | "switch" | "disconnect"
-    >(null);
-    const [switchDialogOpen, setSwitchDialogOpen] = useState(false);
-    const [reconnectDialogOpen, setReconnectDialogOpen] = useState(false);
-    const [isMutating, setIsMutating] = useState(false);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [dialogMode, setDialogMode] = useState<{
+        intent: PlaudConnectIntent;
+        view: PlaudConnectView;
+    }>({ intent: "connect", view: "main" });
+    const openDialog = (intent: PlaudConnectIntent, view: PlaudConnectView) => {
+        setDialogMode({ intent, view });
+        setDialogOpen(true);
+    };
 
     const fetchConnection = useCallback(async () => {
         try {
@@ -113,72 +101,17 @@ export function PlaudAccountSection({
         fetchConnection();
     }, [fetchConnection]);
 
-    const disconnect = useCallback(async (): Promise<boolean> => {
+    const disconnect = useCallback(async () => {
         const res = await fetch("/api/plaud/connection", { method: "DELETE" });
         if (!res.ok) {
-            const msg = await getApiErrorMessage(res, "Failed to disconnect");
-            throw new Error(msg);
+            throw new Error(
+                await getApiErrorMessage(res, "Failed to disconnect"),
+            );
         }
-        return true;
     }, []);
 
-    const handleDisconnect = async () => {
-        setIsMutating(true);
-        try {
-            await disconnect();
-            toast.success("Plaud account disconnected");
-            setConfirmOpen(null);
-            onDisconnected?.();
-            await fetchConnection();
-        } catch (error) {
-            toast.error(
-                error instanceof Error ? error.message : "Failed to disconnect",
-            );
-        } finally {
-            setIsMutating(false);
-        }
-    };
-
-    /**
-     * Switch flow: explicitly delete the existing connection (and its
-     * associated `plaud_devices` rows) before opening the connect dialog.
-     * The verify / connect-token routes both upsert, so this isn't strictly
-     * required for the connection row, but it prevents stale device rows
-     * from the prior account lingering until the next sync rewrites them.
-     * Recordings live in a separate table and are unaffected.
-     */
-    const handleSwitchConfirmed = async () => {
-        setIsMutating(true);
-        try {
-            await disconnect();
-            setConfirmOpen(null);
-            setSwitchDialogOpen(true);
-            // Reflect the unlinked state in the card while the dialog is open
-            await fetchConnection();
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Failed to unlink current account",
-            );
-        } finally {
-            setIsMutating(false);
-        }
-    };
-
-    const handleSwitchSuccess = useCallback(async () => {
-        setSwitchDialogOpen(false);
-        await fetchConnection();
-        onReconnected?.();
-    }, [fetchConnection, onReconnected]);
-
-    const handleReconnectSuccess = useCallback(async () => {
-        setReconnectDialogOpen(false);
-        await fetchConnection();
-        onReconnected?.();
-    }, [fetchConnection, onReconnected]);
-
-    const handleConnectSuccess = useCallback(async () => {
+    const handleConnected = useCallback(async () => {
+        setDialogOpen(false);
         await fetchConnection();
         onReconnected?.();
     }, [fetchConnection, onReconnected]);
@@ -200,7 +133,57 @@ export function PlaudAccountSection({
     }
 
     const currentEmail = info?.plaudEmail ?? null;
-    const currentEmailDisplay = currentEmail ?? "the current account";
+    const accountName = currentEmail ? (
+        <span className="font-medium text-strong">{currentEmail}</span>
+    ) : (
+        "the current Plaud account"
+    );
+
+    const askDisconnect = () =>
+        confirm({
+            title: "Disconnect Plaud account?",
+            description: (
+                <p>
+                    Riffado stops syncing from {accountName}. Recordings you
+                    already have stay here.
+                </p>
+            ),
+            confirmLabel: "Disconnect",
+            pendingLabel: "Disconnecting…",
+            destructive: true,
+            onConfirm: async () => {
+                await disconnect();
+                toast.success("Plaud account disconnected");
+                onDisconnected?.();
+                await fetchConnection();
+            },
+        });
+
+    /*
+     * Switch deletes the connection and its device rows before the new
+     * sign-in, so the old account's recorders don't linger until the next
+     * sync. Recordings live in their own table and stay.
+     */
+    const askSwitch = async () => {
+        const confirmed = await confirm({
+            title: "Switch Plaud account?",
+            description: (
+                <p>
+                    Riffado unlinks {accountName} so you can sign in to a
+                    different Plaud account. Recordings you already have stay
+                    here; new ones come from the new account.
+                </p>
+            ),
+            confirmLabel: "Switch account",
+            pendingLabel: "Unlinking…",
+            errorMessage: "Couldn't unlink the current account",
+            onConfirm: disconnect,
+        });
+        if (!confirmed) return;
+        openDialog("switch", "main");
+        await fetchConnection();
+    };
+
     const connectionState = info?.connected
         ? plaudConnectionBannerState({
               needsReconnect: info.needsReconnect === true,
@@ -249,26 +232,19 @@ export function PlaudAccountSection({
                     }
                     action={
                         <>
-                            {connectionState !== null && (
-                                <Button
-                                    variant="ink"
-                                    size="compact"
-                                    onClick={() => setReconnectDialogOpen(true)}
-                                >
-                                    Reconnect
-                                </Button>
-                            )}
                             <Button
-                                variant="quiet"
+                                variant={
+                                    connectionState === null ? "quiet" : "ink"
+                                }
                                 size="compact"
-                                onClick={() => setConfirmOpen("switch")}
+                                onClick={() => openDialog("reconnect", "main")}
                             >
-                                Switch account
+                                Reconnect
                             </Button>
                             <Button
                                 variant="quiet"
                                 size="compact"
-                                onClick={() => setConfirmOpen("disconnect")}
+                                onClick={askDisconnect}
                             >
                                 Disconnect
                             </Button>
@@ -276,28 +252,38 @@ export function PlaudAccountSection({
                     }
                 >
                     <div className="flex flex-col divide-y divide-hairline border-t border-hairline">
-                        <DetailRow
-                            label="Signed in as"
-                            value={
-                                currentEmail ?? (
-                                    <span className="font-normal text-subtle">
-                                        Not known. Switch account to show it
-                                    </span>
-                                )
-                            }
-                        />
+                        <div className="flex items-center justify-between gap-4 py-1.25 text-ui">
+                            <span className="shrink-0 text-subtle">
+                                Signed in as
+                            </span>
+                            <span className="flex min-w-0 items-center gap-1">
+                                <span className="min-w-0 truncate font-medium text-strong">
+                                    {currentEmail ?? (
+                                        <span className="font-normal text-subtle">
+                                            Not known
+                                        </span>
+                                    )}
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="compact"
+                                    onClick={() => void askSwitch()}
+                                    className="-mr-3 shrink-0 text-subtle hover:text-strong"
+                                >
+                                    Switch account
+                                </Button>
+                            </span>
+                        </div>
                         <DetailRow
                             label="Plaud server"
-                            value={regionLabel(info.server, info.apiBase)}
+                            value={plaudServerName(info.server, info.apiBase)}
                         />
                         {lastSyncAt && (
                             <DetailRow
                                 label="Last sync"
                                 value={formatDistanceToNow(
                                     new Date(lastSyncAt),
-                                    {
-                                        addSuffix: true,
-                                    },
+                                    { addSuffix: true },
                                 )}
                             />
                         )}
@@ -307,124 +293,54 @@ export function PlaudAccountSection({
                 <SettingsCard
                     title="Plaud account"
                     description="Not connected. Sign in to start syncing recordings"
-                >
-                    <PlaudConnectTabs onConnected={handleConnectSuccess} />
-                </SettingsCard>
+                    action={
+                        <>
+                            <Button
+                                variant="ink"
+                                size="compact"
+                                onClick={() => openDialog("connect", "main")}
+                            >
+                                Sign in with Plaud
+                            </Button>
+                            <Button
+                                variant="quiet"
+                                size="compact"
+                                onClick={() => openDialog("connect", "email")}
+                            >
+                                Other ways to connect
+                            </Button>
+                        </>
+                    }
+                />
             )}
 
-            {/* Confirm: switch or disconnect */}
-            <Dialog
-                open={confirmOpen !== null}
-                onOpenChange={(open) => {
-                    if (!open && !isMutating) setConfirmOpen(null);
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {confirmOpen === "switch"
-                                ? "Switch Plaud account?"
-                                : "Disconnect Plaud account?"}
-                        </DialogTitle>
-                        <DialogDescription asChild>
-                            <div className="space-y-2 pt-2">
-                                {confirmOpen === "switch" ? (
-                                    <p>
-                                        This will unlink{" "}
-                                        <span className="font-mono text-foreground">
-                                            {currentEmailDisplay}
-                                        </span>{" "}
-                                        and let you sign in with a different
-                                        Plaud account. Your existing recordings
-                                        stay; only future syncs will come from
-                                        the new account.
-                                    </p>
-                                ) : (
-                                    <p>
-                                        This will unlink{" "}
-                                        <span className="font-mono text-foreground">
-                                            {currentEmailDisplay}
-                                        </span>
-                                        . Your existing recordings stay, but
-                                        sync will stop until you reconnect.
-                                    </p>
-                                )}
-                            </div>
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setConfirmOpen(null)}
-                            disabled={isMutating}
-                        >
-                            Cancel
-                        </Button>
-                        {confirmOpen === "switch" ? (
-                            <Button
-                                onClick={handleSwitchConfirmed}
-                                disabled={isMutating}
-                            >
-                                {isMutating ? "Unlinking…" : "Continue"}
-                            </Button>
-                        ) : (
-                            <Button
-                                variant="destructive"
-                                onClick={handleDisconnect}
-                                disabled={isMutating}
-                            >
-                                {isMutating ? "Disconnecting…" : "Disconnect"}
-                            </Button>
-                        )}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Switch: connect dialog (full PlaudConnectTabs — connector,
-                email-OTP, paste-token) */}
-            <Dialog
-                open={switchDialogOpen}
-                onOpenChange={(open) => setSwitchDialogOpen(open)}
-            >
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Sign in to new Plaud account</DialogTitle>
-                        <DialogDescription>
-                            Choose how you want to connect the Plaud account
-                            you’re switching to.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {switchDialogOpen && (
-                        <PlaudConnectTabs onConnected={handleSwitchSuccess} />
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            {/* Reconnect: same-account recovery from an invalidated token.
-                Unlike "Switch account", this never deletes the existing
-                connection/device rows first -- persistPlaudConnection()
-                upserts, so re-authenticating with the same (or a new)
-                account is safe even if the user backs out of the dialog
-                without finishing. */}
-            <Dialog
-                open={reconnectDialogOpen}
-                onOpenChange={(open) => setReconnectDialogOpen(open)}
-            >
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Reconnect your Plaud account</DialogTitle>
-                        <DialogDescription>
-                            Sign back in to resume syncing. Your existing
-                            recordings and transcripts are unaffected.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {reconnectDialogOpen && (
-                        <PlaudConnectTabs
-                            onConnected={handleReconnectSuccess}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
+            {/* Reconnect never deletes the connection first: the connect
+                routes upsert, so backing out of the dialog leaves the
+                current sign-in as it was. */}
+            <PlaudConnectDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                intent={dialogMode.intent}
+                initialView={dialogMode.view}
+                account={
+                    info?.connected
+                        ? {
+                              email: currentEmail,
+                              server: info.server,
+                              apiBase: info.apiBase,
+                          }
+                        : null
+                }
+                reason={
+                    connectionState === "reconnect"
+                        ? "signed-out"
+                        : connectionState === "ending-soon"
+                          ? "ending-soon"
+                          : null
+                }
+                endsOn={sessionEndsOn}
+                onConnected={() => void handleConnected()}
+            />
         </SettingsGroup>
     );
 }

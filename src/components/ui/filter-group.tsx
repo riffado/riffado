@@ -42,7 +42,7 @@ export function FilterGroup<T extends string>({
                         touchTargetClass,
                         "focus-visible:ring-[3px] focus-visible:ring-ring/50",
                         "data-[state=on]:border-ink data-[state=on]:bg-ink data-[state=on]:text-background",
-                        "dark:data-[state=on]:border-foreground dark:data-[state=on]:bg-foreground",
+                        "dark:data-[state=on]:border-strong dark:data-[state=on]:bg-strong dark:data-[state=on]:text-ink",
                     )}
                 >
                     {option.label}

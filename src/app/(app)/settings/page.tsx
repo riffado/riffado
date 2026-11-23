@@ -3,12 +3,12 @@ import { SettingsPageContent } from "@/components/settings/settings-page-content
 import { db } from "@/db";
 import { plaudConnections, plaudDevices } from "@/db/schema";
 import { listUserProviders } from "@/lib/ai/list-providers";
-import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
+import { emailVerificationRequired } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 
 export default async function SettingsPage() {
     const session = await requireAuth();
-    await requireCompletedOnboarding(session);
 
     const [providers, devices, [connection]] = await Promise.all([
         listUserProviders(session.user.id),
@@ -35,6 +35,8 @@ export default async function SettingsPage() {
             devices={devices}
             plaudLastSyncAt={connection?.lastSync?.toISOString() ?? null}
             hasPlaudConnection={connection !== undefined}
+            account={{ name: session.user.name, email: session.user.email }}
+            canChangeEmail={emailVerificationRequired}
         />
     );
 }

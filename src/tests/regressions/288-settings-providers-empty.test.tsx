@@ -146,13 +146,11 @@ describe("Settings providers on first open (#288)", () => {
     it("warms the Settings route before the menu item is clicked", async () => {
         renderWorkstation();
 
-        // The header (below lg) and the sidebar (lg+) each render an
-        // account menu; jsdom applies no media queries, so both are present.
-        // Only the header's menu opens Settings (the sidebar has a gear).
-        const menus = screen.getAllByRole("button", { name: "Account menu" });
-        fireEvent.keyDown(menus[menus.length - 1], { key: "Enter" });
-        const item = await screen.findByRole("menuitem", { name: /Settings/ });
-        fireEvent.pointerEnter(item);
+        // Below lg, Settings sits in the menu drawer (the sidebar has a
+        // gear). jsdom applies no media queries, so the top bar is present.
+        fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+        const item = await screen.findByRole("button", { name: "Settings" });
+        fireEvent.pointerDown(item);
         expect(prefetch).toHaveBeenCalledWith("/settings");
 
         fireEvent.click(item);

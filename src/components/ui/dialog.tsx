@@ -75,7 +75,7 @@ function DialogContent({
                     <DialogPrimitive.Close
                         data-slot="dialog-close"
                         className={cn(
-                            "motion-press squircle absolute top-4 right-4 flex size-7 items-center justify-center rounded-[var(--radius-small)] text-subtle outline-none hover:bg-accent hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+                            "motion-press squircle absolute top-4 right-4 flex size-7 items-center justify-center rounded-[var(--radius-small)] text-subtle outline-none hover:bg-accent hover:text-strong dark:hover:bg-border focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
                             touchTargetClass,
                         )}
                     >

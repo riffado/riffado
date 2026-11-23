@@ -24,7 +24,7 @@ export function RecordersList({ devices }: { devices: RecorderDevice[] }) {
                     >
                         <span
                             aria-hidden="true"
-                            className="squircle flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-surface text-foreground"
+                            className="squircle flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-surface text-foreground dark:bg-accent"
                         >
                             <Smartphone className="size-5" />
                         </span>

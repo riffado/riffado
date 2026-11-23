@@ -1,135 +1,177 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { MetalButton } from "@/components/metal-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { type FormEvent, useRef, useState } from "react";
+import { AUTH_ERROR_COPY } from "@/components/auth/auth-errors";
+import { AuthHeading, AuthLink } from "@/components/auth/auth-shell";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldInput } from "@/components/ui/field";
 import { requestPasswordReset } from "@/lib/auth-client";
-import { toast } from "@/lib/toast";
+
+/**
+ * The env vars `isSmtpConfigured()` (`src/lib/smtp.ts`) checks. Shown to
+ * whoever runs the server when reset email can't be sent.
+ */
+export const SMTP_ENV_VARS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"];
 
 interface ForgotPasswordFormProps {
     /**
      * Whether SMTP is configured on this instance. When false the form is
-     * replaced with an operator-help block that names the env vars to set,
-     * rather than letting the user submit a request that can't be delivered.
+     * replaced by an explanation: ask whoever runs the server, plus a
+     * separate block for them naming the env vars to set.
      */
     smtpConfigured: boolean;
 }
 
-/**
- * Renders only the form body (input + submit / submitted state / SMTP help).
- * Page chrome (logo, headings, panel, background) is owned by the route.
- */
+/** Reset-password request: form, "Check your email", or no-email notice. */
 export function ForgotPasswordForm({
     smtpConfigured,
 }: ForgotPasswordFormProps) {
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [emailError, setEmailError] = useState<string | null>(null);
+    const [formError, setFormError] = useState<string | null>(null);
+    const emailRef = useRef<HTMLInputElement>(null);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    if (!smtpConfigured) {
+        return <EmailNotSetUp />;
+    }
+
+    if (submitted) {
+        return (
+            <>
+                <AuthHeading title="Check your email">
+                    If there's an account for{" "}
+                    <span className="font-medium text-strong">{email}</span>, a
+                    reset link is on its way. It works for 1 hour.
+                </AuthHeading>
+                <div className="flex">
+                    <AuthLink href="/login">Back to sign in</AuthLink>
+                </div>
+            </>
+        );
+    }
+
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!smtpConfigured) return;
+        if (!email.trim()) {
+            setEmailError("Enter your email");
+            emailRef.current?.focus();
+            return;
+        }
+        setEmailError(null);
+        setFormError(null);
         setIsLoading(true);
 
         try {
-            // We intentionally don't surface the better-auth response: we
-            // always show the same success message so this endpoint can't
-            // be used to enumerate which emails have accounts.
+            // The response is deliberately ignored apart from rate limits:
+            // every request shows the same "Check your email" so this page
+            // can't be used to find out which emails have accounts.
             const result = await requestPasswordReset({
                 email,
                 redirectTo: "/reset-password",
             });
-            // Rate-limit rejections (429) are a request-volume signal, not an
-            // account-existence signal, so surfacing them doesn't leak
-            // enumeration. Show the limiter's message instead of a false
-            // "check your email" when no email was actually sent.
+            // A 429 is a request-volume signal, not an account-existence
+            // signal, so saying so leaks nothing.
             if (result?.error?.status === 429) {
-                toast.error(
-                    result.error.message ||
-                        "Too many requests. Please wait a moment and try again.",
-                );
+                setFormError(AUTH_ERROR_COPY.rateLimited);
                 return;
             }
             setSubmitted(true);
-        } catch (error) {
-            // Network-level failures still get surfaced -- those aren't an
-            // account-existence signal.
-            const message =
-                error instanceof Error
-                    ? error.message
-                    : "Could not send reset email. Please try again.";
-            toast.error(message);
+        } catch {
+            setFormError(AUTH_ERROR_COPY.network);
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div className="space-y-6">
-            {!smtpConfigured ? (
-                <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">
-                        Password reset is unavailable on this instance.
-                    </p>
-                    <p className="text-muted-foreground">
-                        The administrator hasn't configured SMTP, so reset
-                        emails can't be delivered. Set{" "}
-                        <code className="font-mono text-xs">SMTP_HOST</code>,{" "}
-                        <code className="font-mono text-xs">SMTP_USER</code>,
-                        and{" "}
-                        <code className="font-mono text-xs">SMTP_PASSWORD</code>{" "}
-                        in the server environment to enable it. In the meantime,
-                        ask your administrator to reset your password directly
-                        in the database.
-                    </p>
-                </div>
-            ) : submitted ? (
-                <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4 text-sm">
-                    <p className="font-medium">Check your email.</p>
-                    <p className="text-muted-foreground">
-                        If an account exists for{" "}
-                        <span className="font-mono text-xs">{email}</span>,
-                        we've sent a password reset link. The link expires in 1
-                        hour.
-                    </p>
-                </div>
-            ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            placeholder="you@example.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            disabled={isLoading}
-                            autoComplete="email"
-                        />
-                    </div>
-
-                    <MetalButton
+        <>
+            <AuthHeading title="Reset password" tone="quiet">
+                We'll email you a link to set a new one
+            </AuthHeading>
+            <form
+                onSubmit={handleSubmit}
+                noValidate
+                className="flex flex-col gap-4"
+            >
+                <Field label="Email" error={emailError}>
+                    <FieldInput
+                        ref={emailRef}
+                        type="email"
+                        name="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => {
+                            setEmail(e.target.value);
+                            setEmailError(null);
+                            setFormError(null);
+                        }}
+                        required
+                        autoComplete="email"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                    />
+                </Field>
+                <div className="flex flex-col gap-3 pt-2">
+                    {formError ? (
+                        <FieldError role="alert">{formError}</FieldError>
+                    ) : null}
+                    <Button
                         type="submit"
+                        variant="ink"
+                        size="control"
                         className="w-full"
-                        variant="cyan"
                         disabled={isLoading}
                     >
-                        {isLoading ? "Sending..." : "Send reset link"}
-                    </MetalButton>
-                </form>
-            )}
-
-            <div className="text-center text-sm">
-                <Link
-                    href="/login"
-                    className="text-accent-cyan hover:underline"
-                >
-                    Back to sign in
-                </Link>
+                        {isLoading ? "Sending…" : "Send reset link"}
+                    </Button>
+                </div>
+            </form>
+            <div className="flex justify-center">
+                <AuthLink href="/login">Back to sign in</AuthLink>
             </div>
-        </div>
+        </>
+    );
+}
+
+/** Self-host without SMTP: who to ask, and what the operator sets. */
+function EmailNotSetUp() {
+    return (
+        <>
+            <AuthHeading title="Reset password">
+                This server isn't set up to send email, so it can't send you a
+                reset link. Ask the person who runs it to reset your password.
+            </AuthHeading>
+            <section
+                aria-labelledby="smtp-operator-heading"
+                className="squircle flex flex-col gap-3 rounded-[var(--radius-item)] border border-hairline bg-surface p-5"
+            >
+                <div className="flex flex-col gap-1">
+                    <h2
+                        id="smtp-operator-heading"
+                        className="text-sm leading-5 font-medium text-strong"
+                    >
+                        If you run this server
+                    </h2>
+                    <p className="text-dialog-body text-subtle">
+                        Add your email provider's SMTP details to the server's
+                        environment, then restart Riffado
+                    </p>
+                </div>
+                <ul className="flex flex-wrap gap-1.5">
+                    {SMTP_ENV_VARS.map((name) => (
+                        <li key={name}>
+                            <code className="flex h-7 items-center rounded-lg border border-hairline bg-reader px-2 font-mono text-small text-strong dark:bg-night-raised">
+                                {name}
+                            </code>
+                        </li>
+                    ))}
+                </ul>
+            </section>
+            <div className="flex">
+                <AuthLink href="/login">Back to sign in</AuthLink>
+            </div>
+        </>
     );
 }

@@ -30,7 +30,6 @@ import {
 } from "@/components/dashboard/workstation-detail-pane";
 import { WorkstationEmptyState } from "@/components/dashboard/workstation-empty-state";
 import { WorkstationHeader } from "@/components/dashboard/workstation-header";
-import { OnboardingDialog } from "@/components/onboarding-dialog";
 import type { RecordingViewRequest } from "@/components/recording/recording-view";
 import { transcriptionProviderStateFor } from "@/components/recording/summary-provider";
 import { SyncStatus } from "@/components/sync-button";
@@ -173,8 +172,8 @@ interface WorkstationProps {
 
 /**
  * Top-level dashboard component. Composition root for the recording
- * list, the detail pane (player + transcription), and the three
- * modals (CommandPalette, ShortcutsDialog, OnboardingDialog). Settings
+ * list, the detail pane (player + transcription), and the two
+ * modals (CommandPalette, ShortcutsDialog). Settings
  * is a separate page (`/settings`).
  *
  * State ownership is split:
@@ -224,13 +223,6 @@ export function Workstation({
             recordings[0] ??
             null,
     );
-    // Auto-opens on first paint when the account hasn't finished
-    // onboarding yet (server-supplied truth, re-evaluated on every fresh
-    // navigation to this page). Everyone must finish onboarding --
-    // `mandatory` below keeps it non-dismissible in that case.
-    const [onboardingOpen, setOnboardingOpen] = useState(
-        () => !initialSettings.onboardingCompleted,
-    );
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
@@ -245,6 +237,19 @@ export function Workstation({
         [devices],
     );
     const { providers, prefetch: prefetchProviders } = useProviderList();
+
+    // A new account lands here once with `?welcome=1` (straight after
+    // sign-up, or from the verification link). Greet it by first name and
+    // drop the flag so a reload or Back doesn't greet again.
+    const welcomed = useRef(false);
+    useEffect(() => {
+        if (welcomed.current || searchParams.get("welcome") !== "1") return;
+        welcomed.current = true;
+        toast.success(welcomeMessage(userName));
+        const url = new URL(window.location.href);
+        url.searchParams.delete("welcome");
+        window.history.replaceState(window.history.state, "", url);
+    }, [searchParams, userName]);
 
     // Settings is its own page. Entry points warm the route on hover or
     // focus; the page reads providers on the server, so nothing else
@@ -649,7 +654,7 @@ export function Workstation({
         onOpenPalette: () => setPaletteOpen(true),
         onOpenShortcuts: () => setShortcutsOpen(true),
         onOpenSettings: openSettings,
-        enabled: !onboardingOpen && !paletteOpen && !shortcutsOpen,
+        enabled: !paletteOpen && !shortcutsOpen,
     });
 
     const isEmpty =
@@ -693,26 +698,40 @@ export function Workstation({
                     onSettingsIntent={prefetchSettings}
                     onOpenShortcuts={() => setShortcutsOpen(true)}
                 />
-                <div className="mx-auto max-w-7xl px-4 py-6 max-lg:container lg:flex lg:min-w-0 lg:max-w-none lg:flex-1 lg:flex-col lg:p-0">
+                <div className="mx-auto max-w-7xl px-4 pb-6 max-lg:container lg:flex lg:min-w-0 lg:max-w-none lg:flex-1 lg:flex-col lg:p-0">
                     <WorkstationHeader
-                        className="lg:hidden"
-                        isAdmin={isAdmin}
-                        userEmail={userEmail}
-                        userName={userName}
-                        isHosted={isHosted}
+                        className="mb-1 lg:hidden"
+                        showSync={hasPlaudConnection}
+                        needsReconnect={showReconnect}
                         lastSyncTime={lastSyncTime}
-                        nextSyncTime={nextSyncTime}
+                        lastSuccessfulSyncTime={
+                            plaudLastSyncAt ? new Date(plaudLastSyncAt) : null
+                        }
                         isAutoSyncing={isAutoSyncing}
                         lastSyncResult={lastSyncResult}
                         onSync={handleSync}
-                        showSync={hasPlaudConnection}
                         isUploading={isUploading}
                         isProcessing={isProcessing}
                         onTriggerUpload={triggerUpload}
-                        onOpenPalette={() => setPaletteOpen(true)}
-                        onOpenSettings={openSettings}
-                        onSettingsIntent={prefetchSettings}
-                        onOpenShortcuts={() => setShortcutsOpen(true)}
+                        drawer={{
+                            recordingCount: visibleRecordings.length,
+                            devices,
+                            plaudNeedsReconnect: showReconnect,
+                            onSearch: isEmpty
+                                ? undefined
+                                : () => listRef.current?.focusSearch(),
+                            onShowLibrary: () => {
+                                setQuery("");
+                                setFilter("all");
+                            },
+                            onOpenSettings: openSettings,
+                            onSettingsIntent: prefetchSettings,
+                            onOpenShortcuts: () => setShortcutsOpen(true),
+                            isAdmin,
+                            isHosted,
+                            userEmail,
+                            userName,
+                        }}
                         inert={phoneReaderOpen}
                     />
 
@@ -737,6 +756,8 @@ export function Workstation({
                                 onUpload={triggerUpload}
                                 onDropFile={uploadFile}
                                 onPlaudConnected={handleReconnected}
+                                providers={providers}
+                                onRequestProviders={prefetchProviders}
                             />
                         </div>
                     ) : (
@@ -895,16 +916,14 @@ export function Workstation({
                 open={shortcutsOpen}
                 onOpenChange={setShortcutsOpen}
             />
-
-            <OnboardingDialog
-                open={onboardingOpen}
-                onOpenChange={setOnboardingOpen}
-                onComplete={() => {
-                    setOnboardingOpen(false);
-                    refresh();
-                }}
-                mandatory={!initialSettings.onboardingCompleted}
-            />
         </>
     );
+}
+
+/** The one-time greeting after sign-up: "Welcome to Riffado, Maya". */
+export function welcomeMessage(userName: string | null): string {
+    const firstName = userName?.trim().split(/\s+/)[0];
+    return firstName
+        ? `Welcome to Riffado, ${firstName}`
+        : "Welcome to Riffado";
 }

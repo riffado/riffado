@@ -207,6 +207,7 @@ describe("settings navigation", () => {
         renderSettings();
         const nav = sidebarNav();
         const labels = [
+            "Account",
             "Recorders",
             "Transcription",
             "AI for summaries",
@@ -229,6 +230,19 @@ describe("settings navigation", () => {
         expect(nav.getAllByRole("button")[0]).toBe(
             nav.getByRole("button", { name: "Plan & usage" }),
         );
+        expect(nav.getAllByRole("button")[1]).toBe(
+            nav.getByRole("button", { name: "Account" }),
+        );
+    });
+
+    it("opens Account for #account", async () => {
+        renderSettings({ hash: "#account" });
+        expect(
+            await screen.findByRole("heading", { level: 1, name: "Account" }),
+        ).not.toBeNull();
+        expect(
+            screen.getByRole("heading", { level: 2, name: "Profile" }),
+        ).not.toBeNull();
     });
 
     it("opens AI for summaries for the old #providers link", async () => {
@@ -261,7 +275,7 @@ describe("settings navigation", () => {
     it("ignores #billing on self-host and falls back to the first page", async () => {
         renderSettings({ hash: "#billing" });
         expect(
-            await screen.findByRole("heading", { level: 1, name: "Recorders" }),
+            await screen.findByRole("heading", { level: 1, name: "Account" }),
         ).not.toBeNull();
     });
 

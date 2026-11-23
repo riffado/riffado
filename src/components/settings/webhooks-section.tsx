@@ -11,6 +11,7 @@ import { StatusDot } from "@/components/ui/status-dot";
 import { toast } from "@/lib/toast";
 import { WebhookDeliveriesDialog } from "./webhook-deliveries-dialog";
 import { WebhookEditorDialog } from "./webhook-editor-dialog";
+import { webhookEventLabel } from "./webhook-events";
 import { DEFAULT_WEBHOOK_EVENTS, type WebhookEndpoint } from "./webhook-types";
 
 export function WebhooksSection() {
@@ -54,8 +55,8 @@ export function WebhooksSection() {
         void confirm({
             title: "Delete this webhook?",
             description:
-                "Deliveries will stop immediately. You'll have to recreate the endpoint and re-share its signing secret with any consumers.",
-            confirmLabel: "Delete",
+                "Riffado stops posting to it right away. To use it again, add it again and copy the new signing secret into the app that receives it.",
+            confirmLabel: "Delete webhook",
             pendingLabel: "Deleting…",
             destructive: true,
             onConfirm: async () => {
@@ -122,14 +123,9 @@ export function WebhooksSection() {
     );
 }
 
-/** "transcription.completed" -> "Transcription completed". */
-function eventLabel(event: string): string {
-    const words = event.replace(/[._]/g, " ");
-    return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
+/** "A transcript is ready · A summary is ready and 2 more". */
 function eventsSummary(events: string[]): string {
-    const labels = events.map(eventLabel);
+    const labels = events.map(webhookEventLabel);
     if (labels.length <= 3) return labels.join(" · ");
     return `${labels.slice(0, 2).join(" · ")} and ${labels.length - 2} more`;
 }

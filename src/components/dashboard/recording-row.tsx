@@ -203,7 +203,7 @@ export function RecordingRow({
                         className={cn(
                             "squircle relative block w-full scroll-mt-10 rounded-[var(--radius-item)] text-left outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-[3px] focus-visible:ring-ring/50",
                             isSelected
-                                ? "bg-accent before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-full before:bg-strong"
+                                ? "bg-row-selected before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-full before:bg-strong"
                                 : "hover:bg-accent/50 data-[state=open]:bg-accent/50 group-has-[[data-slot=dropdown-menu-trigger][data-state=open]]/row:bg-accent/50",
                         )}
                     >

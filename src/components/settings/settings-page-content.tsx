@@ -3,12 +3,12 @@
 import { ChevronLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { OnboardingDialog } from "@/components/onboarding-dialog";
 import { SettingsPageHeader } from "@/components/settings/section-header";
 import { SettingsContent } from "@/components/settings-content";
 import { buildSettingsNav } from "@/components/settings-nav-config";
 import { SettingsNavMobile } from "@/components/settings-nav-mobile";
 import { SettingsNavSidebar } from "@/components/settings-nav-sidebar";
+import type { AccountInfo } from "@/components/settings-sections/account-section";
 import type { Provider } from "@/components/settings-sections/providers-section";
 import { touchTargetClass } from "@/components/ui/button";
 import { useSettingsNav } from "@/hooks/use-settings-nav";
@@ -27,6 +27,10 @@ interface SettingsPageContentProps {
     plaudLastSyncAt: string | null;
     /** True when the account has a Plaud connection row. Server-supplied. */
     hasPlaudConnection: boolean;
+    /** The signed-in user's name and email, for Account. Server-supplied. */
+    account?: AccountInfo;
+    /** True when the instance can mail an email-change confirmation. Server-computed. */
+    canChangeEmail?: boolean;
 }
 
 /**
@@ -40,13 +44,14 @@ export function SettingsPageContent({
     devices,
     plaudLastSyncAt,
     hasPlaudConnection,
+    account,
+    canChangeEmail = false,
 }: SettingsPageContentProps) {
     const router = useRouter();
     const nav = useMemo(() => buildSettingsNav({ isHosted }), [isHosted]);
     const [providers, setProviders] = useState(initialProviders);
     const [mobileView, setMobileView] = useState<"list" | "page">("list");
     const [pushed, setPushed] = useState(false);
-    const [onboardingOpen, setOnboardingOpen] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     // True when leaving through the Library link or Escape, which fetch
     // the dashboard fresh anyway.
@@ -226,25 +231,16 @@ export function SettingsPageContent({
                                 devices={devices}
                                 plaudLastSyncAt={plaudLastSyncAt}
                                 hasPlaudConnection={hasPlaudConnection}
+                                account={account}
+                                canChangeEmail={canChangeEmail}
+                                onNavigate={selectPage}
                                 onPlaudReconnected={handlePlaudReconnected}
                                 onPlaudDisconnected={handlePlaudDisconnected}
-                                onReRunOnboarding={() =>
-                                    setOnboardingOpen(true)
-                                }
                             />
                         </>
                     )}
                 </div>
             </div>
-
-            <OnboardingDialog
-                open={onboardingOpen}
-                onOpenChange={setOnboardingOpen}
-                onComplete={() => {
-                    setOnboardingOpen(false);
-                    router.push("/dashboard");
-                }}
-            />
         </div>
     );
 }

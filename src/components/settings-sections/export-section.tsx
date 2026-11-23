@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsSelectTrigger } from "@/components/settings/settings-select";
@@ -53,11 +53,7 @@ function formatBytes(bytes: number): string {
     return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-interface ExportSectionProps {
-    onReRunOnboarding?: () => void;
-}
-
-export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
+export function ExportSection() {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [defaultExportFormat, setDefaultExportFormat] = useState("json");
@@ -351,43 +347,6 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             </div>
                         )}
                     </SettingsRow>
-                </SettingsRows>
-            </SettingsGroup>
-
-            <SettingsGroup title="Onboarding">
-                <SettingsRows>
-                    <SettingsRow
-                        label="Run onboarding again"
-                        description="Walks you through connecting a recorder and a provider"
-                        control={
-                            <Button
-                                onClick={async () => {
-                                    try {
-                                        await fetch("/api/settings/user", {
-                                            method: "PUT",
-                                            headers: {
-                                                "Content-Type":
-                                                    "application/json",
-                                            },
-                                            body: JSON.stringify({
-                                                onboardingCompleted: false,
-                                            }),
-                                        });
-                                        onReRunOnboarding?.();
-                                    } catch {
-                                        toast.error(
-                                            "Failed to reset onboarding",
-                                        );
-                                    }
-                                }}
-                                variant="quiet"
-                                size="compact"
-                            >
-                                <RefreshCw />
-                                Re-run onboarding
-                            </Button>
-                        }
-                    />
                 </SettingsRows>
             </SettingsGroup>
         </div>

@@ -6,6 +6,10 @@ import type { SettingsPage } from "@/types/settings";
 import { ApiKeysSection } from "./settings/api-keys-section";
 import { WebhooksSection } from "./settings/webhooks-section";
 import { SECTION_LOCATION } from "./settings-nav-config";
+import {
+    type AccountInfo,
+    AccountSection,
+} from "./settings-sections/account-section";
 import { BillingSection } from "./settings-sections/billing-section";
 import { DevSection } from "./settings-sections/dev-section";
 import { DisplaySection } from "./settings-sections/display-section";
@@ -34,7 +38,6 @@ interface SettingsContentProps {
     providersLoadFailed?: boolean;
     /** Retries loading the provider list. */
     onRetryProviders?: () => void;
-    onReRunOnboarding?: () => void;
     isHosted?: boolean;
     /** Recorders linked to the Plaud account, for Recorders. */
     devices?: RecorderDevice[];
@@ -46,6 +49,15 @@ interface SettingsContentProps {
     onPlaudReconnected?: () => void;
     /** Forwarded to `PlaudAccountSection` as `onDisconnected`. */
     onPlaudDisconnected?: () => void;
+    /** The signed-in user, for Account. Server-supplied. */
+    account?: AccountInfo;
+    /**
+     * True when this instance can mail the confirmation an email change
+     * needs. Server-computed; false shows the email read-only.
+     */
+    canChangeEmail?: boolean;
+    /** Opens another settings page (Account links to Plan & usage). */
+    onNavigate?: (page: SettingsPage) => void;
 }
 
 /** Scroll target for an old section id that now lives inside a page. */
@@ -73,18 +85,29 @@ export function SettingsContent({
     onProvidersChange,
     providersLoadFailed,
     onRetryProviders,
-    onReRunOnboarding,
     isHosted = false,
     devices = [],
     plaudLastSyncAt = null,
     hasPlaudConnection = false,
     onPlaudReconnected,
     onPlaudDisconnected,
+    account = { name: "", email: "" },
+    canChangeEmail = false,
+    onNavigate,
 }: SettingsContentProps) {
     switch (page) {
         case "plan":
             if (!isHosted) return null;
             return <BillingSection />;
+        case "account":
+            return (
+                <AccountSection
+                    account={account}
+                    canChangeEmail={canChangeEmail}
+                    isHosted={isHosted}
+                    onNavigate={onNavigate}
+                />
+            );
         case "recorders":
             return (
                 <>
@@ -149,7 +172,7 @@ export function SettingsContent({
                 </>
             );
         case "export":
-            return <ExportSection onReRunOnboarding={onReRunOnboarding} />;
+            return <ExportSection />;
         case "preferences":
             return (
                 <>
