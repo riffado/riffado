@@ -19,8 +19,12 @@ import {
     RecordingListToolbar,
     type SortOrder,
 } from "@/components/dashboard/recording-list-toolbar";
-import { RecordingRow } from "@/components/dashboard/recording-row";
+import {
+    RecordingRow,
+    type RecordingRowActions,
+} from "@/components/dashboard/recording-row";
 import { FilterGroup } from "@/components/ui/filter-group";
+import { useListFlip } from "@/hooks/use-list-flip";
 import {
     dateGroupLabel,
     formatDateTime,
@@ -66,6 +70,8 @@ interface RecordingListProps {
     banner: React.ReactNode;
     onSelect: (recording: Recording) => void;
     onDelete: (recording: Recording) => Promise<void>;
+    /** Handlers and shared state for each row's action menus. */
+    rowActions: RecordingRowActions;
     initialDateTimeFormat: DateTimeFormat;
     initialSortOrder: SortOrder;
     initialDensity: ListDensity;
@@ -78,6 +84,8 @@ export interface RecordingListHandle {
     selectFirst: () => void;
     next: () => void;
     prev: () => void;
+    /** Records row positions before an add or remove so the list can animate the change. */
+    snapshotLayout: () => void;
 }
 
 function persistSetting(field: string, value: unknown) {
@@ -124,6 +132,7 @@ export function RecordingList({
     banner,
     onSelect,
     onDelete,
+    rowActions,
     initialDateTimeFormat,
     initialSortOrder,
     initialDensity,
@@ -136,7 +145,9 @@ export function RecordingList({
     const [visibleCount, setVisibleCount] = useState(initialChunkSize);
     const searchRef = useRef<HTMLInputElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
-    const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+    const { snapshot } = useListFlip(bodyRef);
 
     const setSortOrderPersisted = useCallback((next: SortOrder) => {
         setSortOrder(next);
@@ -148,13 +159,10 @@ export function RecordingList({
         persistSetting("listDensity", next);
     }, []);
 
-    const registerRowRef = useCallback(
-        (id: string, el: HTMLButtonElement | null) => {
-            if (el) rowRefs.current.set(id, el);
-            else rowRefs.current.delete(id);
-        },
-        [],
-    );
+    const registerRowRef = useCallback((id: string, el: HTMLElement | null) => {
+        if (el) rowRefs.current.set(id, el);
+        else rowRefs.current.delete(id);
+    }, []);
 
     const isTranscribed = useCallback(
         (r: Recording) =>
@@ -265,9 +273,10 @@ export function RecordingList({
                 const target = list[Math.max(0, nextIdx)];
                 if (target) {
                     onSelect(target);
-                    rowRefs.current
-                        .get(target.id)
-                        ?.scrollIntoView({ block: "nearest" });
+                    rowRefs.current.get(target.id)?.scrollIntoView({
+                        block: "nearest",
+                        behavior: "instant",
+                    });
                 }
             },
             prev: () => {
@@ -280,13 +289,15 @@ export function RecordingList({
                 const target = list[prevIdx];
                 if (target) {
                     onSelect(target);
-                    rowRefs.current
-                        .get(target.id)
-                        ?.scrollIntoView({ block: "nearest" });
+                    rowRefs.current.get(target.id)?.scrollIntoView({
+                        block: "nearest",
+                        behavior: "instant",
+                    });
                 }
             },
+            snapshotLayout: snapshot,
         }),
-        [filtered, currentRecording, onSelect],
+        [filtered, currentRecording, onSelect, snapshot],
     );
 
     const isCompact = density === "compact";
@@ -304,7 +315,7 @@ export function RecordingList({
         <div className="flex flex-col lg:h-full lg:min-h-0">
             <div className="flex flex-col gap-4 pb-3.5 lg:px-6 lg:pt-6.5">
                 <div className="hidden items-baseline justify-between gap-3 lg:flex">
-                    <h1 className="font-display text-pane-title font-semibold text-strong">
+                    <h1 className="font-display text-pane-title font-semibold text-strong select-none">
                         Library
                     </h1>
                     {headerActions}
@@ -339,7 +350,10 @@ export function RecordingList({
             />
 
             <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
-                <div className="flex flex-col gap-0.5 pb-4 lg:px-2.5">
+                <div
+                    ref={bodyRef}
+                    className="flex flex-col gap-0.5 pb-4 lg:px-2.5"
+                >
                     {pendingUploads.map((p) => (
                         <PendingUploadRow
                             key={p.id}
@@ -354,7 +368,10 @@ export function RecordingList({
                             className="flex flex-col gap-0.5"
                         >
                             {group.label && (
-                                <div className="z-10 bg-background px-3.5 pt-3.5 pb-1.5 text-xs font-medium text-muted-foreground lg:sticky lg:top-0">
+                                <div
+                                    data-flip-key={`group:${group.label}`}
+                                    className="z-10 bg-background px-3.5 pt-3.5 pb-1.5 text-xs font-medium text-muted-foreground select-none lg:sticky lg:top-0"
+                                >
                                     {group.label}
                                 </div>
                             )}
@@ -362,6 +379,7 @@ export function RecordingList({
                                 <RecordingRow
                                     key={recording.id}
                                     recording={recording}
+                                    href={`?r=${encodeURIComponent(recording.id)}`}
                                     isSelected={
                                         currentRecording?.id === recording.id
                                     }
@@ -374,6 +392,7 @@ export function RecordingList({
                                     isCompact={isCompact}
                                     onSelect={onSelect}
                                     onDelete={onDelete}
+                                    actions={rowActions}
                                     registerRef={registerRowRef}
                                 />
                             ))}
@@ -381,7 +400,7 @@ export function RecordingList({
                     ))}
 
                     {filtered.length === 0 && pendingUploads.length === 0 && (
-                        <p className="px-3.5 py-10 text-center text-small text-muted-foreground">
+                        <p className="px-3.5 py-10 text-center text-small text-muted-foreground select-none">
                             {emptyMessage(query, filter)}
                         </p>
                     )}

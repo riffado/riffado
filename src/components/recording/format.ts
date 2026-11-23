@@ -6,7 +6,11 @@ import {
     isYesterday,
 } from "date-fns";
 import type { RecordingTranscript } from "@/components/recording/types";
-import { findPreset, isLocalPreset } from "@/lib/ai/provider-presets";
+import {
+    findPreset,
+    isLocalPreset,
+    PROVIDER_PRESETS,
+} from "@/lib/ai/provider-presets";
 
 /** "Today, 09:12", "Yesterday, 18:40", "Monday, 09:12", "Nov 3, 09:12". */
 export function formatRecordedAt(date: Date | string, now: Date): string {
@@ -82,4 +86,17 @@ export function languageName(code: string): string {
 export function countWords(text: string): number {
     const trimmed = text.trim();
     return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+/**
+ * A stored provider name as people know it: "groq" reads "Groq", the
+ * same as in "Transcribed with Groq". Unknown names pass through.
+ */
+export function providerDisplayName(name: string): string {
+    const lower = name.toLowerCase();
+    if (lower === "mynah") return "Mynah";
+    return (
+        PROVIDER_PRESETS.find((p) => p.name.toLowerCase() === lower)?.name ??
+        name
+    );
 }

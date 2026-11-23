@@ -9,6 +9,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useSettledSpin } from "@/hooks/use-settled-spin";
 import { formatSyncedAgo } from "@/lib/format-date";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +47,7 @@ function compactAgo(from: Date): string {
  * Status-aware sync action.
  *
  * Replaces what used to be a stacked status block ("Synced 2m ago / Next
- * sync in 3m") sitting next to a separate "Sync device" button. One
+ * sync in 3m") sitting next to a separate "Sync now" button. One
  * affordance is friendlier: the button itself communicates state, and
  * clicking it is the only action available anyway. The tooltip carries
  * the secondary detail (next auto-sync ETA, error message) for users who
@@ -56,7 +57,7 @@ function compactAgo(from: Date): string {
  *   syncing     -> icon spins, label "Syncing...", disabled
  *   failed      -> AlertCircle, label "Retry sync", destructive tone, clickable
  *   has last    -> RefreshCw, label "Synced <relative>", normal tone
- *   never       -> RefreshCw, label "Sync device", normal tone
+ *   never       -> RefreshCw, label "Sync now", normal tone
  *
  * The label collapses to icon-only below `sm` (same breakpoint the
  * old Sync button used) so the header still fits on a phone.
@@ -83,6 +84,7 @@ export function SyncButton({
     className,
 }: SyncButtonProps) {
     const failed = !isAutoSyncing && lastSyncResult?.success === false;
+    const spin = useSettledSpin(isAutoSyncing);
 
     const label = (() => {
         if (isAutoSyncing) return "Syncing...";
@@ -94,7 +96,7 @@ export function SyncButton({
                 return "Synced recently";
             }
         }
-        return "Sync device";
+        return "Sync now";
     })();
 
     // Tooltip: secondary context for users who hover. We pack what the
@@ -109,10 +111,10 @@ export function SyncButton({
     });
 
     const ariaLabel = isAutoSyncing
-        ? "Syncing device"
+        ? "Syncing"
         : failed
           ? "Retry sync"
-          : "Sync device";
+          : "Sync now";
 
     return (
         <Tooltip>
@@ -142,9 +144,11 @@ export function SyncButton({
                         />
                     ) : (
                         <RefreshCw
+                            ref={spin.ref}
                             className={cn(
                                 "size-4 sm:mr-2",
-                                isAutoSyncing && "animate-spin",
+                                spin.spinning &&
+                                    "animate-spin motion-reduce:animate-pulse",
                             )}
                             aria-hidden="true"
                         />
@@ -229,6 +233,7 @@ export function SyncStatus({
     className,
 }: SyncStatusProps) {
     const now = useMinuteClock();
+    const spin = useSettledSpin(isAutoSyncing);
     const failed = !isAutoSyncing && lastSyncResult?.success === false;
     const shownSyncTime = needsReconnect
         ? lastSuccessfulSyncTime
@@ -266,10 +271,11 @@ export function SyncStatus({
                             className="text-foreground disabled:opacity-100"
                         >
                             <RefreshCw
+                                ref={spin.ref}
                                 className={cn(
                                     "size-4",
-                                    isAutoSyncing &&
-                                        "animate-spin motion-reduce:animate-none",
+                                    spin.spinning &&
+                                        "animate-spin motion-reduce:animate-pulse",
                                 )}
                                 aria-hidden="true"
                             />

@@ -4,7 +4,7 @@ import { extendTailwindMerge } from "tailwind-merge";
 const twMerge = extendTailwindMerge({
     extend: {
         theme: {
-            text: ["small", "ui", "pane-title"],
+            text: ["small", "ui", "pane-title", "section-title", "dialog-body"],
         },
     },
 });

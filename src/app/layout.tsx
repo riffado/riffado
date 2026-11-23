@@ -78,6 +78,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+    viewportFit: "cover",
     themeColor: [
         { media: "(prefers-color-scheme: light)", color: "#faf9f5" },
         { media: "(prefers-color-scheme: dark)", color: "#262624" },
@@ -92,6 +93,7 @@ export default function RootLayout({
     return (
         <html
             lang="en"
+            data-scroll-behavior="smooth"
             suppressHydrationWarning
             className={`${funnelSans.variable} ${funnelDisplay.variable} ${doto.variable} ${geistMono.variable}`}
         >

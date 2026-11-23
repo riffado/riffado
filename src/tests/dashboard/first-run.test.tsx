@@ -17,10 +17,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+const searchParams = vi.hoisted(() => new URLSearchParams());
 vi.mock("next/navigation", () => ({
     // Stable like the real hook; a new object per render would re-run
     // useAutoSync's effects forever.
     useRouter: () => router,
+    useSearchParams: () => searchParams,
 }));
 
 vi.mock("@/components/plaud-connect-tabs", () => ({
@@ -297,7 +299,11 @@ describe("First run with a Plaud connection", () => {
                 "New recordings in your Plaud account show up here after the next sync.",
             ),
         ).not.toBeNull();
-        fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+        fireEvent.click(
+            screen
+                .getAllByRole("button", { name: "Sync now" })
+                .at(-1) as HTMLElement,
+        );
         await waitFor(() => expect(syncRequests).toBe(1));
     });
 
@@ -308,6 +314,8 @@ describe("First run with a Plaud connection", () => {
             settings: { autoSyncEnabled: false },
         });
 
-        expect(screen.getByRole("button", { name: "Sync now" })).not.toBeNull();
+        expect(
+            screen.getAllByRole("button", { name: "Sync now" }).length,
+        ).toBeGreaterThan(0);
     });
 });

@@ -1,6 +1,10 @@
 "use client";
 
-import { RecordingPlayerControls } from "@/components/dashboard/recording-player-controls";
+import { type Ref, useImperativeHandle } from "react";
+import {
+    RecordingPlayerControls,
+    SKIP_SECONDS,
+} from "@/components/dashboard/recording-player-controls";
 import type { PlayerPreferences } from "@/components/recording/types";
 import { usePlaybackEngine } from "@/hooks/use-playback-engine";
 import { usePlaybackKeyboard } from "@/hooks/use-playback-keyboard";
@@ -8,10 +12,18 @@ import { useWaveform } from "@/hooks/use-waveform";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
+/** What the reader can ask of the player (transcript timestamps). */
+export interface RecordingPlayerHandle {
+    /** Seek to `seconds` and start playing. */
+    playFrom: (seconds: number) => void;
+}
+
 interface RecordingPlayerProps extends PlayerPreferences {
     recording: Recording;
     /** Called when playback ends and auto-play-next is on. */
     onEnded?: () => void;
+    /** Receives the player's handle, for play-from-here elsewhere. */
+    controlRef?: Ref<RecordingPlayerHandle>;
     className?: string;
 }
 
@@ -32,6 +44,7 @@ export function RecordingPlayer({
     initialVolume = 75,
     initialAutoPlayNext = false,
     scrubberStyle = "waveform",
+    controlRef,
     className,
 }: RecordingPlayerProps) {
     const {
@@ -43,6 +56,7 @@ export function RecordingPlayer({
         setVolume,
         playbackSpeed,
         togglePlayPause,
+        playFrom,
         seekToRatio,
         seekRelative,
         cycleSpeed,
@@ -55,9 +69,12 @@ export function RecordingPlayer({
         initialAutoPlayNext,
     });
 
+    useImperativeHandle(controlRef, () => ({ playFrom }), [playFrom]);
+
+    // Arrow keys take the same step as the skip buttons.
     usePlaybackKeyboard({
         onToggle: togglePlayPause,
-        onSeekRelative: seekRelative,
+        onSkip: (direction) => seekRelative(direction * SKIP_SECONDS),
         onVolumeDelta: (delta) =>
             setVolume((prev) => Math.max(0, Math.min(100, prev + delta))),
     });

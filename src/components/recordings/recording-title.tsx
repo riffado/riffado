@@ -44,13 +44,23 @@ export function RecordingTitle({
     const [draft, setDraft] = useState(filename);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    // Set when editing ends from the keyboard (Enter, Escape), so focus
+    // goes back to the title instead of dropping to the page.
+    const refocusRef = useRef(false);
 
     useEffect(() => {
         if (!editing) setDraft(filename);
     }, [filename, editing]);
 
     useEffect(() => {
-        if (!editing) return;
+        if (!editing) {
+            if (refocusRef.current) {
+                refocusRef.current = false;
+                buttonRef.current?.focus({ preventScroll: true });
+            }
+            return;
+        }
         const input = inputRef.current;
         if (!input) return;
         input.focus();
@@ -66,6 +76,7 @@ export function RecordingTitle({
             return;
         }
         if (next.length > MAX_RECORDING_TITLE_LENGTH) {
+            refocusRef.current = false;
             toast.error(
                 `Name must be ${MAX_RECORDING_TITLE_LENGTH} characters or fewer`,
             );
@@ -85,6 +96,7 @@ export function RecordingTitle({
                 body: JSON.stringify({ filename: next }),
             });
             if (!response.ok) {
+                refocusRef.current = false;
                 toast.error(
                     await getApiErrorMessage(response, "Failed to rename"),
                 );
@@ -96,6 +108,7 @@ export function RecordingTitle({
             setDraft(saved);
             onRenamed?.(saved);
         } catch {
+            refocusRef.current = false;
             toast.error("Failed to rename");
         } finally {
             setSaving(false);
@@ -118,9 +131,11 @@ export function RecordingTitle({
                     if (e.key === "Enter") {
                         if (e.nativeEvent.isComposing) return;
                         e.preventDefault();
+                        refocusRef.current = true;
                         void commit();
                     } else if (e.key === "Escape") {
                         e.preventDefault();
+                        refocusRef.current = true;
                         setDraft(filename);
                         setEditing(false);
                     }
@@ -142,6 +157,7 @@ export function RecordingTitle({
     if (variant === "display") {
         return (
             <button
+                ref={buttonRef}
                 type="button"
                 onClick={() => setEditing(true)}
                 title="Rename"
@@ -158,6 +174,7 @@ export function RecordingTitle({
 
     return (
         <button
+            ref={buttonRef}
             type="button"
             onClick={() => setEditing(true)}
             title="Rename"

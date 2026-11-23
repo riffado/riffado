@@ -23,9 +23,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
 const prefetch = vi.fn();
+const searchParams = new URLSearchParams();
 
 vi.mock("next/navigation", () => ({
     useRouter: () => ({ refresh: vi.fn(), push, prefetch }),
+    useSearchParams: () => searchParams,
 }));
 
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";

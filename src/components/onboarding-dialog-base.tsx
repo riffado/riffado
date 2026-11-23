@@ -3,6 +3,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type * as React from "react";
+import { touchTargetClass } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const OnboardingDialogRoot = DialogPrimitive.Root;
@@ -20,7 +21,7 @@ function OnboardingDialogOverlay({
         <DialogPrimitive.Overlay
             ref={ref}
             className={cn(
-                "fixed inset-0 z-[101] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:duration-200 data-[state=open]:duration-200",
+                "motion-overlay fixed inset-0 z-[101] bg-black/50",
                 className,
             )}
             {...props}
@@ -51,15 +52,20 @@ function OnboardingDialogContent({
             <DialogPrimitive.Content
                 ref={ref}
                 className={cn(
-                    "fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-full -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-lg shadow-black/5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:duration-200 data-[state=open]:duration-200 sm:max-w-[600px] sm:rounded-xl",
+                    "motion-dialog squircle fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100%-4rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-[var(--radius-card)] bg-dialog-surface p-6 text-strong shadow-dialog outline-none sm:max-w-[600px]",
                     className,
                 )}
                 {...props}
             >
                 {children}
                 {!hideCloseButton && (
-                    <DialogPrimitive.Close className="group absolute right-3 top-3 flex size-7 items-center justify-center rounded-lg outline-offset-2 transition-colors focus-visible:outline-2 focus-visible:outline-ring/70 disabled:pointer-events-none">
-                        <X className="size-4 opacity-60 transition-opacity group-hover:opacity-100" />
+                    <DialogPrimitive.Close
+                        className={cn(
+                            "motion-press squircle absolute top-4 right-4 flex size-7 items-center justify-center rounded-[var(--radius-small)] text-subtle outline-none hover:bg-accent hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none",
+                            touchTargetClass,
+                        )}
+                    >
+                        <X className="size-4" />
                         <span className="sr-only">Close</span>
                     </DialogPrimitive.Close>
                 )}
@@ -74,10 +80,7 @@ function OnboardingDialogHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
     return (
         <div
-            className={cn(
-                "flex flex-col space-y-1.5 text-center sm:text-left",
-                className,
-            )}
+            className={cn("flex flex-col gap-2 text-left", className)}
             {...props}
         />
     );
@@ -108,7 +111,10 @@ function OnboardingDialogTitle({
     return (
         <DialogPrimitive.Title
             ref={ref}
-            className={cn("text-lg font-semibold tracking-tight", className)}
+            className={cn(
+                "font-display text-section-title font-semibold text-strong",
+                className,
+            )}
             {...props}
         />
     );
@@ -124,7 +130,7 @@ function OnboardingDialogDescription({
     return (
         <DialogPrimitive.Description
             ref={ref}
-            className={cn("text-sm text-muted-foreground", className)}
+            className={cn("text-dialog-body text-subtle", className)}
             {...props}
         />
     );

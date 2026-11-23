@@ -2,7 +2,7 @@
 
 import { ArrowDownWideNarrow, Search, X } from "lucide-react";
 import type * as React from "react";
-import { Button } from "@/components/ui/button";
+import { Button, touchTargetClass } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -18,6 +18,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 export type SortOrder = "newest" | "oldest" | "name";
 export type ListDensity = "comfortable" | "compact";
@@ -70,13 +71,16 @@ export function RecordingListToolbar({
                         type="button"
                         onClick={() => onQueryChange("")}
                         aria-label="Clear search"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                        className={cn(
+                            "absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground",
+                            touchTargetClass,
+                        )}
                     >
                         <X className="size-4" />
                     </button>
                 )}
             </div>
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="text-xs text-muted-foreground tabular-nums select-none">
                 {filteredCount}
                 {query ? " matching" : ""} of {totalCount} recording
                 {totalCount !== 1 ? "s" : ""}

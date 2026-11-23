@@ -1,83 +1,34 @@
 "use client";
 
+import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import {
-    Check,
-    ChevronLeft,
-    Cpu,
-    FileText,
-    MoreHorizontal,
-    Pencil,
-    RefreshCw,
-    Sparkles,
-    Trash2,
-    X,
-} from "lucide-react";
-import { useRef } from "react";
+    type RecordingActionHandlers,
+    RecordingActionsContent,
+    type RecordingActionsState,
+} from "@/components/recording/recording-actions";
 import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { StatusLine } from "@/components/ui/status-dot";
-import type { SummaryPromptOption } from "@/hooks/use-transcription-summary";
 import { cn } from "@/lib/utils";
 
 interface Props {
-    recordingId: string;
     title: string;
     origin: string | null;
     back?: { label: string; onBack: () => void; showOnDesktop?: boolean };
-    hasTranscript: boolean;
-    hasSummary: boolean;
-    isTranscribing: boolean;
-    browserBusy: boolean;
-    isSummarizing: boolean;
-    summaryPreset: string;
-    summaryPresets: SummaryPromptOption[];
-    onRename: () => void;
-    onTranscribe: () => void;
-    onTranscribeInBrowser: () => void;
-    onSummarize: (preset: string) => void;
-    onDeleteSummary: () => void;
-    onDelete: () => void;
+    /** State and handlers for the More menu's recording action list. */
+    actions: RecordingActionsState & RecordingActionHandlers;
 }
 
 /**
  * Recording top bar: small title (or a back link on phones), where the
- * transcript came from, download, and a More menu with every other
- * recording action.
+ * transcript came from, download, and a More menu with the recording
+ * action list.
  */
-export function RecordingTopBar({
-    recordingId,
-    title,
-    origin,
-    back,
-    hasTranscript,
-    hasSummary,
-    isTranscribing,
-    browserBusy,
-    isSummarizing,
-    summaryPreset,
-    summaryPresets,
-    onRename,
-    onTranscribe,
-    onTranscribeInBrowser,
-    onSummarize,
-    onDeleteSummary,
-    onDelete,
-}: Props) {
-    // Rename starts once the menu has closed, so the menu's focus
-    // handling can't pull focus back out of the title field.
-    const renameOnCloseRef = useRef(false);
-    const transcribeBusy = isTranscribing || browserBusy;
-
+export function RecordingTopBar({ title, origin, back, actions }: Props) {
     return (
         <div className="flex h-13 shrink-0 items-center justify-between gap-4 px-2 lg:h-16 lg:pr-6 lg:pl-10">
             <div className="flex min-w-0 items-center gap-1">
@@ -119,7 +70,7 @@ export function RecordingTopBar({
                 ) : null}
                 <div className="flex items-center gap-0.5">
                     <DownloadAudioButton
-                        recordingId={recordingId}
+                        recordingId={actions.recordingId}
                         className="max-lg:size-11 max-lg:rounded-[var(--radius-control)]"
                     />
                     <DropdownMenu>
@@ -128,97 +79,16 @@ export function RecordingTopBar({
                                 variant="ghost"
                                 size="icon-sm"
                                 aria-label="More actions"
-                                className="max-lg:size-11 max-lg:rounded-[var(--radius-control)]"
+                                className="max-lg:size-11 max-lg:rounded-[var(--radius-control)] data-[state=open]:bg-accent"
                             >
                                 <MoreHorizontal className="size-4.5" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent
+                        <RecordingActionsContent
+                            flavour="dropdown"
                             align="end"
-                            className="min-w-52"
-                            onCloseAutoFocus={(e) => {
-                                if (renameOnCloseRef.current) {
-                                    e.preventDefault();
-                                    renameOnCloseRef.current = false;
-                                    onRename();
-                                }
-                            }}
-                        >
-                            <DropdownMenuItem
-                                onSelect={() => {
-                                    renameOnCloseRef.current = true;
-                                }}
-                            >
-                                <Pencil />
-                                Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                disabled={transcribeBusy}
-                                onSelect={onTranscribe}
-                            >
-                                {hasTranscript ? <RefreshCw /> : <FileText />}
-                                {hasTranscript ? "Re-transcribe" : "Transcribe"}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                disabled={transcribeBusy}
-                                onSelect={onTranscribeInBrowser}
-                            >
-                                <Cpu />
-                                Transcribe in browser
-                            </DropdownMenuItem>
-                            {hasTranscript ? (
-                                <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger
-                                        disabled={isSummarizing}
-                                        className="[&_svg]:size-4"
-                                    >
-                                        <Sparkles />
-                                        {hasSummary
-                                            ? "Regenerate summary"
-                                            : "Summarize"}
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="min-w-48">
-                                        {summaryPresets.map((preset) => (
-                                            <DropdownMenuItem
-                                                key={preset.id}
-                                                onSelect={() =>
-                                                    onSummarize(preset.id)
-                                                }
-                                            >
-                                                <Check
-                                                    className={cn(
-                                                        preset.id !==
-                                                            summaryPreset &&
-                                                            "invisible",
-                                                    )}
-                                                />
-                                                {preset.name}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                            ) : null}
-                            {hasSummary ? (
-                                <DropdownMenuItem onSelect={onDeleteSummary}>
-                                    <X />
-                                    Delete summary
-                                </DropdownMenuItem>
-                            ) : null}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                variant="destructive"
-                                onSelect={(e) => {
-                                    // Keep the menu mounted so the confirm
-                                    // dialog can take focus.
-                                    e.preventDefault();
-                                    onDelete();
-                                }}
-                            >
-                                <Trash2 />
-                                Delete recording
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
+                            {...actions}
+                        />
                     </DropdownMenu>
                 </div>
             </div>

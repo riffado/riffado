@@ -20,9 +20,26 @@ import {
     type LibraryFilter,
     RecordingList,
 } from "@/components/dashboard/recording-list";
+import type { RecordingRowActions } from "@/components/dashboard/recording-row";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { RecorderDevice } from "@/types/device";
 import type { Recording } from "@/types/recording";
+
+const ROW_ACTIONS: RecordingRowActions = {
+    browser: {
+        runningId: null,
+        isRunning: false,
+        phaseFor: () => "idle",
+        start: async () => {},
+    },
+    summaryPrompts: { options: [], selectedId: "general", select: () => {} },
+    summarizingIds: new Set(),
+    serverTranscription: true,
+    onRename: () => {},
+    onTranscribe: () => {},
+    onSummarize: () => {},
+    onDeleteSummary: () => {},
+};
 
 const DEVICE: RecorderDevice = {
     serialNumber: "SN-1",
@@ -91,6 +108,7 @@ function renderList(recordings: Recording[], filter: LibraryFilter) {
                     banner={null}
                     onSelect={() => {}}
                     onDelete={async () => {}}
+                    rowActions={ROW_ACTIONS}
                     initialDateTimeFormat="relative"
                     initialSortOrder="newest"
                     initialDensity="comfortable"
@@ -186,6 +204,7 @@ describe("RecordingList filters", () => {
                         banner={null}
                         onSelect={() => {}}
                         onDelete={async () => {}}
+                        rowActions={ROW_ACTIONS}
                         initialDateTimeFormat="relative"
                         initialSortOrder="newest"
                         initialDensity="comfortable"

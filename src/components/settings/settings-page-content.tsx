@@ -10,7 +10,9 @@ import { buildSettingsNav } from "@/components/settings-nav-config";
 import { SettingsNavMobile } from "@/components/settings-nav-mobile";
 import { SettingsNavSidebar } from "@/components/settings-nav-sidebar";
 import type { Provider } from "@/components/settings-sections/providers-section";
+import { touchTargetClass } from "@/components/ui/button";
 import { useSettingsNav } from "@/hooks/use-settings-nav";
+import { libraryLocation } from "@/lib/library-location";
 import { cn } from "@/lib/utils";
 import type { RecorderDevice } from "@/types/device";
 import type { SettingsPage } from "@/types/settings";
@@ -40,6 +42,7 @@ export function SettingsPageContent({
     const nav = useMemo(() => buildSettingsNav({ isHosted }), [isHosted]);
     const [providers, setProviders] = useState(initialProviders);
     const [mobileView, setMobileView] = useState<"list" | "page">("list");
+    const [pushed, setPushed] = useState(false);
     const [onboardingOpen, setOnboardingOpen] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
     // True when leaving through the Library link or Escape, which fetch
@@ -48,7 +51,7 @@ export function SettingsPageContent({
 
     const exitToLibrary = useCallback(() => {
         leavingToLibraryRef.current = true;
-        router.push("/dashboard");
+        router.push(libraryLocation());
     }, [router]);
 
     const {
@@ -61,7 +64,7 @@ export function SettingsPageContent({
     } = useSettingsNav({ nav, onExit: exitToLibrary });
 
     useEffect(() => {
-        router.prefetch("/dashboard");
+        router.prefetch(libraryLocation());
     }, [router]);
 
     // The browser back button restores the Library from the client router
@@ -85,9 +88,10 @@ export function SettingsPageContent({
     const selectPage = useCallback(
         (page: SettingsPage) => {
             setActivePage(page);
+            setPushed(true);
             setMobileView("page");
-            contentRef.current?.scrollTo({ top: 0 });
-            window.scrollTo({ top: 0 });
+            contentRef.current?.scrollTo({ top: 0, behavior: "instant" });
+            window.scrollTo({ top: 0, behavior: "instant" });
         },
         [setActivePage],
     );
@@ -109,7 +113,9 @@ export function SettingsPageContent({
         window.addEventListener("keydown", stop, options);
         const scroll = () => {
             if (userScrolled) return;
-            document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+            document
+                .getElementById(anchor)
+                ?.scrollIntoView({ block: "start", behavior: "instant" });
         };
         const frame = requestAnimationFrame(scroll);
         const early = setTimeout(scroll, 300);
@@ -158,7 +164,14 @@ export function SettingsPageContent({
                 }}
             />
 
-            <div className={cn("lg:hidden", mobileView === "page" && "hidden")}>
+            <div
+                className={cn(
+                    "lg:hidden",
+                    mobileView === "page" && "hidden",
+                    pushed &&
+                        "transition-[opacity,translate] duration-(--duration-push-in) ease-(--ease-out) starting:-translate-x-6 starting:opacity-0 motion-reduce:starting:translate-x-0",
+                )}
+            >
                 <SettingsNavMobile
                     nav={nav}
                     onSelect={selectPage}
@@ -174,13 +187,21 @@ export function SettingsPageContent({
                 className={cn(
                     "min-w-0 flex-1 lg:overflow-y-auto",
                     mobileView === "list" && "max-lg:hidden",
+                    pushed &&
+                        "max-lg:transition-[opacity,translate] max-lg:duration-(--duration-push-in) max-lg:ease-(--ease-out) max-lg:starting:translate-x-6 max-lg:starting:opacity-0 max-lg:motion-reduce:starting:translate-x-0",
                 )}
             >
                 <div className="flex max-w-240 flex-col gap-11 px-5 pt-5.5 pb-16 sm:px-10 lg:px-24 lg:pt-14">
                     <button
                         type="button"
-                        onClick={() => setMobileView("list")}
-                        className="squircle -mb-5 flex h-7 w-fit items-center gap-1.5 rounded-[var(--radius-small)] pr-2 pl-1.5 text-ui font-medium text-subtle outline-none select-none hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:hidden"
+                        onClick={() => {
+                            setPushed(true);
+                            setMobileView("list");
+                        }}
+                        className={cn(
+                            "squircle relative -mb-5 flex h-7 w-fit items-center gap-1.5 rounded-[var(--radius-small)] pr-2 pl-1.5 text-ui font-medium text-subtle outline-none select-none hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:hidden",
+                            touchTargetClass,
+                        )}
                     >
                         <ChevronLeft className="size-4.5" aria-hidden="true" />
                         Settings

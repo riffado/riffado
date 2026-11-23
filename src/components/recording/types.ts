@@ -14,6 +14,13 @@ export interface RecordingTranscript {
 /** Whether an AI provider that can write summaries is set up. */
 export type SummaryProviderState = "unknown" | "ready" | "missing";
 
+/**
+ * Whether anything can transcribe on the server: one of the user's own
+ * providers, or Mynah when the plan includes it. `unknown` until the
+ * provider list loads; treat it like `ready` so nothing flashes.
+ */
+export type TranscriptionProviderState = "unknown" | "ready" | "missing";
+
 /** Player preferences forwarded from user settings. */
 export interface PlayerPreferences {
     initialPlaybackSpeed?: number;

@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { memo, type ReactElement } from "react";
 import { cn } from "@/lib/utils";
 
 interface DotWaveformProps {
@@ -34,13 +34,20 @@ function sample(peaks: number[], columns: number): number[] {
     return out;
 }
 
+function headColumn(progress: number, columns: number): number {
+    return Math.min(
+        columns - 1,
+        Math.floor(Math.max(0, Math.min(1, progress)) * columns),
+    );
+}
+
 /**
  * Dot-matrix waveform from the design system. Played columns are solid,
  * the playhead column is terracotta (the brighter tint on night),
  * unplayed columns are dimmed. Night tones are theme-stable so the
  * player reads the same in light and dark mode.
  */
-export function DotWaveform({
+function DotWaveformImpl({
     peaks,
     progress,
     columns = 60,
@@ -50,10 +57,7 @@ export function DotWaveform({
 }: DotWaveformProps) {
     const maxRows = rows % 2 === 0 ? rows + 1 : rows;
     const values = sample(peaks, columns);
-    const head = Math.min(
-        columns - 1,
-        Math.floor(Math.max(0, Math.min(1, progress)) * columns),
-    );
+    const head = headColumn(progress, columns);
     const width = columns * STEP;
     const height = maxRows * STEP;
     const played = tone === "night" ? "var(--night-foreground)" : "var(--ink)";
@@ -93,3 +97,21 @@ export function DotWaveform({
         </svg>
     );
 }
+
+/**
+ * Dot-matrix waveform; see `DotWaveformImpl`. Re-renders only when the
+ * playhead enters a new column or the data changes, so a playing
+ * recording doesn't diff hundreds of circles on every time update.
+ */
+export const DotWaveform = memo(DotWaveformImpl, (a, b) => {
+    const ca = a.columns ?? 60;
+    const cb = b.columns ?? 60;
+    return (
+        a.peaks === b.peaks &&
+        ca === cb &&
+        a.rows === b.rows &&
+        a.tone === b.tone &&
+        a.className === b.className &&
+        headColumn(a.progress, ca) === headColumn(b.progress, cb)
+    );
+});

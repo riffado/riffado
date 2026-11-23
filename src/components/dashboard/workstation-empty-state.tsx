@@ -14,6 +14,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { useSettledSpin } from "@/hooks/use-settled-spin";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -50,6 +51,7 @@ export function WorkstationEmptyState({
     const [connectMode, setConnectMode] = useState<PlaudConnectMode | null>(
         null,
     );
+    const spin = useSettledSpin(isSyncing);
 
     const waitingBody = autoSyncEnabled
         ? "New recordings in your Plaud account show up here automatically."
@@ -71,10 +73,11 @@ export function WorkstationEmptyState({
                             disabled={isSyncing}
                         >
                             <RefreshCw
+                                ref={spin.ref}
                                 className={cn(
                                     "size-4",
-                                    isSyncing &&
-                                        "animate-spin motion-reduce:animate-none",
+                                    spin.spinning &&
+                                        "animate-spin motion-reduce:animate-pulse",
                                 )}
                                 aria-hidden="true"
                             />

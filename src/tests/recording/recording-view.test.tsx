@@ -18,7 +18,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { parseTranscript } from "@/components/recording/recording-transcript";
 import { RecordingView } from "@/components/recording/recording-view";
-import type { RecordingTranscript } from "@/components/recording/types";
+import type {
+    RecordingTranscript,
+    TranscriptionProviderState,
+} from "@/components/recording/types";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Recording } from "@/types/recording";
 
@@ -69,7 +72,11 @@ function mockFetch(summary: typeof SUMMARY | null) {
     );
 }
 
-function renderView(rec: Recording, transcripts: RecordingTranscript[]) {
+function renderView(
+    rec: Recording,
+    transcripts: RecordingTranscript[],
+    options: { transcriptionProviderState?: TranscriptionProviderState } = {},
+) {
     return render(
         <ConfirmDialogProvider>
             <TooltipProvider>
@@ -83,6 +90,9 @@ function renderView(rec: Recording, transcripts: RecordingTranscript[]) {
                     onDelete={async () => {}}
                     back={{ label: "Library", onBack: () => {} }}
                     summaryProviderState="ready"
+                    transcriptionProviderState={
+                        options.transcriptionProviderState
+                    }
                     player={{ scrubberStyle: "waveform" }}
                 />
             </TooltipProvider>
@@ -140,7 +150,9 @@ describe("RecordingView tabs", () => {
         expect(
             screen.getByText("Revenue closed at four point one million."),
         ).not.toBeNull();
-        expect(screen.getByText("00:18")).not.toBeNull();
+        expect(
+            screen.getByRole("button", { name: "Play from 00:18" }),
+        ).not.toBeNull();
         expect(screen.getByText("English · 12 words")).not.toBeNull();
     });
 
@@ -148,13 +160,108 @@ describe("RecordingView tabs", () => {
         mockFetch(null);
         renderView(recording({ hasTranscript: false }), []);
 
-        expect(screen.getByText("Not transcribed yet.")).not.toBeNull();
+        expect(screen.getByText("Not transcribed yet")).not.toBeNull();
         expect(
             screen.getByRole("button", { name: "Transcribe" }),
         ).not.toBeNull();
         expect(
             screen.getByRole("button", { name: "Transcribe in browser" }),
         ).not.toBeNull();
+    });
+
+    it("leads with browser transcription when no provider can transcribe", () => {
+        mockFetch(null);
+        renderView(recording({ hasTranscript: false }), [], {
+            transcriptionProviderState: "missing",
+        });
+
+        expect(screen.queryByRole("button", { name: "Transcribe" })).toBeNull();
+        expect(
+            screen
+                .getByRole("button", { name: "Transcribe in browser" })
+                .className.includes("bg-ink"),
+        ).toBe(true);
+        expect(
+            screen
+                .getByRole("link", { name: "Add a provider" })
+                .getAttribute("href"),
+        ).toBe("/settings#transcription");
+    });
+
+    it("offers the transcribe actions on Overview too", () => {
+        mockFetch(null);
+        renderView(recording({ hasTranscript: false }), []);
+        const overview = screen.getByRole("tab", { name: "Overview" });
+        fireEvent.mouseDown(overview);
+        expect(
+            screen.getByText("Transcribe this recording to get a summary"),
+        ).not.toBeNull();
+        expect(
+            screen.getByRole("button", { name: "Transcribe" }),
+        ).not.toBeNull();
+    });
+});
+
+describe("RecordingView summary loading", () => {
+    it("holds the summary's place while it loads", async () => {
+        let resolve: (r: Response) => void = () => {};
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((input: RequestInfo | URL) =>
+                String(input).endsWith("/summary")
+                    ? new Promise<Response>((r) => {
+                          resolve = r;
+                      })
+                    : Promise.resolve(new Response("{}", { status: 200 })),
+            ),
+        );
+        renderView(recording({ hasSummary: true }), [TRANSCRIPT]);
+
+        expect(screen.getByLabelText("Loading summary")).not.toBeNull();
+        expect(screen.queryByText(/need an AI provider/)).toBeNull();
+
+        resolve(
+            new Response(JSON.stringify(SUMMARY), {
+                status: 200,
+                headers: { "content-type": "application/json" },
+            }),
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByText("Revenue up 18% quarter on quarter."),
+            ).not.toBeNull(),
+        );
+        expect(screen.queryByLabelText("Loading summary")).toBeNull();
+    });
+
+    it("says when the summary couldn't load and retries", async () => {
+        let summaryCalls = 0;
+        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+            if (!String(input).endsWith("/summary")) {
+                return new Response("{}", { status: 200 });
+            }
+            summaryCalls += 1;
+            return summaryCalls === 1
+                ? new Response("{}", { status: 500 })
+                : new Response(JSON.stringify(SUMMARY), {
+                      status: 200,
+                      headers: { "content-type": "application/json" },
+                  });
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        renderView(recording({ hasSummary: true }), [TRANSCRIPT]);
+
+        await waitFor(() =>
+            expect(
+                screen.getByText("Couldn't load the summary"),
+            ).not.toBeNull(),
+        );
+        fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+        await waitFor(() =>
+            expect(
+                screen.getByText("Revenue up 18% quarter on quarter."),
+            ).not.toBeNull(),
+        );
     });
 });
 
@@ -209,6 +316,22 @@ describe("RecordingView player", () => {
         const scrubber = screen.getByRole("slider", { name: "Seek" });
         expect(scrubber.querySelectorAll("circle").length).toBeGreaterThan(0);
         expect(scrubber.getAttribute("aria-valuetext")).toBe("00:00 of 23:41");
+    });
+
+    it("plays from a transcript timestamp", () => {
+        mockFetch(null);
+        const play = vi
+            .spyOn(HTMLMediaElement.prototype, "play")
+            .mockImplementation(async () => {});
+        renderView(recording(), [TRANSCRIPT]);
+
+        fireEvent.click(
+            screen.getByRole("button", { name: "Play from 00:18" }),
+        );
+
+        expect(play).toHaveBeenCalledTimes(1);
+        const audio = document.querySelector("audio");
+        expect(audio?.currentTime).toBe(18);
     });
 });
 

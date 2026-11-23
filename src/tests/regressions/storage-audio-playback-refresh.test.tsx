@@ -48,7 +48,10 @@ function audioElement(): HTMLAudioElement {
     return audio;
 }
 
-function fire(audio: HTMLAudioElement, type: "error" | "loadedmetadata") {
+function fire(
+    audio: HTMLAudioElement,
+    type: "error" | "loadedmetadata" | "play",
+) {
     act(() => {
         audio.dispatchEvent(new Event(type));
     });
@@ -270,6 +273,8 @@ describe("usePlaybackEngine source fallback", () => {
         act(() => {
             engine?.togglePlayPause();
         });
+        expect(engine?.isPlaying).toBe(false);
+        fire(audio, "play");
         expect(engine?.isPlaying).toBe(true);
 
         fire(audio, "error");

@@ -34,6 +34,8 @@ interface Props {
     /** Called on hover or focus of the Settings entry so its data can load before the click. */
     onSettingsIntent: () => void;
     onOpenShortcuts: () => void;
+    /** True while something covers the header (the phone reader), so it leaves the tab order and the accessibility tree. */
+    inert?: boolean;
     className?: string;
 }
 
@@ -69,17 +71,19 @@ export function WorkstationHeader({
     onOpenSettings,
     onSettingsIntent,
     onOpenShortcuts,
+    inert = false,
     className,
 }: Props) {
     return (
         <div
+            inert={inert}
             className={cn(
                 "sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/70",
                 className,
             )}
         >
             <div className="flex min-w-0 items-baseline gap-3">
-                <h1 className="truncate text-xl font-semibold leading-tight sm:text-2xl md:text-3xl">
+                <h1 className="truncate text-xl font-semibold leading-tight select-none sm:text-2xl md:text-3xl">
                     Library
                 </h1>
                 {/*
@@ -96,7 +100,7 @@ export function WorkstationHeader({
                             onClick={onOpenPalette}
                             variant="outline"
                             size="sm"
-                            className="hidden h-9 md:inline-flex"
+                            className="hidden h-11 md:inline-flex"
                             aria-label="Open command palette"
                         >
                             <Command className="mr-2 size-4" />
@@ -117,6 +121,7 @@ export function WorkstationHeader({
                         isAutoSyncing={isAutoSyncing}
                         lastSyncResult={lastSyncResult}
                         onSync={onSync}
+                        className="h-11 min-w-11"
                     />
                 ) : null}
                 <Tooltip>
@@ -126,7 +131,7 @@ export function WorkstationHeader({
                             disabled={isProcessing}
                             variant="outline"
                             size="sm"
-                            className="h-9"
+                            className="h-11 min-w-11"
                             aria-label={
                                 isUploading ? "Uploading audio" : "Upload audio"
                             }

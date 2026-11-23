@@ -109,7 +109,7 @@ export function LibrarySidebar({
                             <X className="size-3.5" />
                         </button>
                     ) : (
-                        <kbd className="squircle rounded-[var(--radius-small)] bg-accent px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
+                        <kbd className="squircle rounded-[var(--radius-small)] bg-accent px-1.5 py-0.5 font-sans text-xs text-muted-foreground select-none">
                             /
                         </kbd>
                     )}
@@ -140,7 +140,7 @@ export function LibrarySidebar({
                 {devices.length > 0 ? (
                     <section
                         aria-labelledby="sidebar-recorders"
-                        className="flex min-h-0 flex-col gap-0.5"
+                        className="flex min-h-0 flex-col gap-0.5 select-none"
                     >
                         <h2
                             id="sidebar-recorders"

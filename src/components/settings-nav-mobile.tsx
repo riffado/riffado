@@ -27,7 +27,7 @@ export function SettingsNavMobile({
     return (
         <div className="flex flex-col gap-5.5 px-4 pt-5.5 pb-10">
             <LibraryBackLink onNavigate={onLeave} />
-            <h1 className="px-0.5 font-display text-plan-title font-semibold text-strong">
+            <h1 className="px-0.5 font-display text-plan-title font-semibold text-strong select-none">
                 Settings
             </h1>
             <nav aria-label="Settings">

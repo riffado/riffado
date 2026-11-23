@@ -118,7 +118,7 @@ export function UserMenu({
                         variant="outline"
                         size="icon"
                         aria-label="Account menu"
-                        className="font-semibold"
+                        className="size-11 font-semibold"
                     >
                         {emailInitial(userEmail)}
                     </Button>
@@ -129,7 +129,7 @@ export function UserMenu({
                 side={trigger === "sidebar" ? "top" : "bottom"}
                 className="w-72 p-0"
             >
-                <div className="flex items-center gap-3 border-b p-3">
+                <div className="flex items-center gap-3 border-b p-3 select-none">
                     <div
                         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
                         aria-hidden="true"
@@ -169,7 +169,7 @@ export function UserMenu({
                     )}
                 </div>
 
-                <div className="border-t px-3 py-2">
+                <div className="border-t px-3 py-2 select-none">
                     <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
                         Theme
                     </div>
@@ -206,7 +206,7 @@ export function UserMenu({
                     </div>
                 </div>
 
-                <DropdownMenuSeparator className="my-0" />
+                <DropdownMenuSeparator className="mx-0 my-0" />
 
                 {/* Sign out */}
                 <div className="p-1">

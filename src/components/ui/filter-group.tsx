@@ -2,6 +2,7 @@
 
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui";
 import type * as React from "react";
+import { touchTargetClass } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,8 +37,9 @@ export function FilterGroup<T extends string>({
                     key={option.value}
                     value={option.value}
                     className={cn(
-                        "squircle inline-flex h-7.5 items-center rounded-[var(--radius-inner)] border border-border px-3 text-small leading-4 font-medium text-foreground outline-none select-none",
-                        "transition-[background-color,border-color,color] duration-150 data-[state=off]:hover:bg-accent",
+                        "squircle relative inline-flex h-7.5 items-center rounded-[var(--radius-inner)] border border-border px-3 text-small leading-4 font-medium text-foreground outline-none select-none",
+                        "motion-press data-[state=off]:hover:bg-accent",
+                        touchTargetClass,
                         "focus-visible:ring-[3px] focus-visible:ring-ring/50",
                         "data-[state=on]:border-ink data-[state=on]:bg-ink data-[state=on]:text-background",
                         "dark:data-[state=on]:border-foreground dark:data-[state=on]:bg-foreground",

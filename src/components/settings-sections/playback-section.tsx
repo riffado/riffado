@@ -145,8 +145,8 @@ export function PlaybackSection() {
 
     const shortcuts: { keys: string; description: string }[] = [
         { keys: "Space", description: "Play / pause" },
-        { keys: "←", description: "Seek backward 5s" },
-        { keys: "→", description: "Seek forward 5s" },
+        { keys: "←", description: "Skip back 10 seconds" },
+        { keys: "→", description: "Skip forward 10 seconds" },
         { keys: "↑", description: "Increase volume" },
         { keys: "↓", description: "Decrease volume" },
     ];

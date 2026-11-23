@@ -1,10 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo } from "react";
-import { RecordingView } from "@/components/recording/recording-view";
-import { summaryProviderStateFor } from "@/components/recording/summary-provider";
+import type { BrowserTranscription } from "@/components/dashboard/transcribe-in-browser-button";
+import {
+    RecordingView,
+    type RecordingViewRequest,
+} from "@/components/recording/recording-view";
+import {
+    summaryProviderStateFor,
+    transcriptionProviderStateFor,
+} from "@/components/recording/summary-provider";
 import type { RecordingTranscript } from "@/components/recording/types";
 import type { Provider } from "@/components/settings-sections/providers-section";
+import type { SummaryPrompts } from "@/hooks/use-summary-prompts";
 import { cn } from "@/lib/utils";
 import type { Recording } from "@/types/recording";
 
@@ -41,6 +49,15 @@ interface Props {
     initialVolume: number | undefined;
     initialAutoPlayNext: boolean | undefined;
     scrubberStyle: "waveform" | "slider" | undefined;
+    /** Browser transcription runner shared with the library rows. */
+    browser: BrowserTranscription;
+    /** Summary styles shared with the library rows. */
+    summaryPrompts: SummaryPrompts;
+    /** Action a library row asked the reader to run. */
+    request: RecordingViewRequest | null;
+    /** Called after a summary is generated or deleted. */
+    onSummaryChange: () => void;
+    onSummarizingChange: (ids: ReadonlySet<string>) => void;
 }
 
 /**
@@ -71,6 +88,11 @@ export function WorkstationDetailPane({
     initialVolume,
     initialAutoPlayNext,
     scrubberStyle,
+    browser,
+    summaryPrompts,
+    request,
+    onSummaryChange,
+    onSummarizingChange,
 }: Props) {
     useEffect(() => {
         onRequestProviders();
@@ -104,14 +126,16 @@ export function WorkstationDetailPane({
     }, [currentId, visibleRecordings, onSelectRecording]);
 
     return (
-        <div
-            className={cn(
-                "lg:flex lg:min-h-0 lg:min-w-0 lg:flex-1 lg:flex-col",
-                hiddenOnMobile && "max-lg:hidden",
-            )}
-        >
+        <div className="lg:flex lg:min-h-0 lg:min-w-0 lg:flex-1 lg:flex-col">
             {currentRecording ? (
                 <RecordingView
+                    className={cn(
+                        "max-lg:transition-[opacity,translate,visibility] max-lg:ease-(--ease-out)",
+                        hiddenOnMobile
+                            ? "max-lg:invisible max-lg:translate-x-6 max-lg:opacity-0 max-lg:duration-(--duration-push-out)"
+                            : "max-lg:duration-(--duration-push-in)",
+                        "max-lg:motion-reduce:translate-x-0",
+                    )}
                     recording={currentRecording}
                     deviceName={deviceName}
                     transcripts={transcripts}
@@ -122,6 +146,14 @@ export function WorkstationDetailPane({
                     onDelete={() => onDelete(currentRecording)}
                     back={{ label: "Library", onBack: onBackToList }}
                     summaryProviderState={summaryProviderStateFor(providers)}
+                    transcriptionProviderState={transcriptionProviderStateFor(
+                        providers,
+                    )}
+                    browser={browser}
+                    summaryPrompts={summaryPrompts}
+                    request={request}
+                    onSummaryChange={onSummaryChange}
+                    onSummarizingChange={onSummarizingChange}
                     player={{
                         initialPlaybackSpeed,
                         initialVolume,
@@ -132,7 +164,7 @@ export function WorkstationDetailPane({
                 />
             ) : (
                 <div className="flex flex-1 items-center justify-center bg-reader px-6 py-16 max-lg:hidden">
-                    <p className="text-ui text-muted-foreground">
+                    <p className="text-ui text-muted-foreground select-none">
                         Select a recording to read and listen.
                     </p>
                 </div>

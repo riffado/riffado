@@ -43,8 +43,8 @@ const groups: { title: string; rows: ShortcutRow[] }[] = [
         title: "Player",
         rows: [
             { keys: ["Space"], description: "Play / pause" },
-            { keys: ["←"], description: "Seek back 5s" },
-            { keys: ["→"], description: "Seek forward 5s" },
+            { keys: ["←"], description: "Skip back 10 seconds" },
+            { keys: ["→"], description: "Skip forward 10 seconds" },
             { keys: ["↑"], description: "Volume up" },
             { keys: ["↓"], description: "Volume down" },
         ],
@@ -53,7 +53,7 @@ const groups: { title: string; rows: ShortcutRow[] }[] = [
 
 function Kbd({ children }: { children: React.ReactNode }) {
     return (
-        <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground shadow-sm">
+        <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-xs text-foreground shadow-sm select-none">
             {children}
         </kbd>
     );
@@ -66,13 +66,13 @@ export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
                 <DialogHeader>
                     <DialogTitle>Keyboard shortcuts</DialogTitle>
                     <DialogDescription>
-                        Power-user shortcuts available across the dashboard.
+                        Shortcuts that work across the library
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-5">
                     {groups.map((group) => (
                         <div key={group.title}>
-                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            <h3 className="mb-2 text-xs font-medium text-muted-foreground select-none">
                                 {group.title}
                             </h3>
                             <ul className="space-y-1.5">

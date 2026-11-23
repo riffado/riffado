@@ -2,21 +2,25 @@
 
 import { Command } from "cmdk";
 import {
-    FileText,
+    Check,
     Keyboard,
-    Loader2,
-    Mic,
     Monitor,
     Moon,
     RefreshCw,
     Settings,
-    Sparkles,
     Sun,
     Upload,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { type DateTimeFormat, formatDateTime } from "@/lib/format-date";
-import { formatDurationMs } from "@/lib/format-duration";
+import { recordingRowTone } from "@/components/dashboard/recording-row";
+import { formatSpokenDuration } from "@/components/recording/format";
+import { StatusDot } from "@/components/ui/status-dot";
+import {
+    type DateTimeFormat,
+    formatDateTime,
+    formatRowTime,
+} from "@/lib/format-date";
+
 import type { Recording } from "@/types/recording";
 
 export const RECORDING_CAP = 200;
@@ -75,6 +79,16 @@ export function Kbd({ children }: { children: ReactNode }) {
     return <kbd className="cmd-kbd">{children}</kbd>;
 }
 
+/** Plain ink check for the current item, with its meaning for screen readers. */
+function CurrentMark({ label }: { label: string }) {
+    return (
+        <>
+            <Check className="size-4 text-strong" aria-hidden="true" />
+            <span className="sr-only">{label}</span>
+        </>
+    );
+}
+
 export function RecordingsGroup({
     recordings,
     transcriptions,
@@ -91,11 +105,12 @@ export function RecordingsGroup({
     inFlightActions: Map<string, "transcribing" | "summarizing">;
     dateTimeFormat: DateTimeFormat;
     onSelectRecording: (r: Recording) => void;
-    onTranscribeRecording: (id: string) => void;
+    onTranscribeRecording?: (id: string) => void;
     runAction: (fn: () => void) => () => void;
 }) {
     if (recordings.length === 0) return null;
     const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
+    const now = new Date();
 
     return (
         <Command.Group heading="Recent">
@@ -106,34 +121,23 @@ export function RecordingsGroup({
                 const inFlight = inFlightActions.get(r.id);
                 const isCurrent = currentRecording?.id === r.id;
 
-                let stateIcon: ReactNode;
-                let stateLabel: string;
-                if (inFlight) {
-                    stateIcon = (
-                        <Loader2 className="size-4 animate-spin text-primary" />
-                    );
-                    stateLabel =
-                        inFlight === "transcribing"
-                            ? "Transcribing"
-                            : "Summarizing";
-                } else if (!r.hasTranscript) {
-                    stateIcon = (
-                        <Mic className="size-4 text-muted-foreground" />
-                    );
-                    stateLabel = "Audio only";
-                } else if (!r.hasSummary) {
-                    stateIcon = (
-                        <FileText className="size-4 text-foreground/70" />
-                    );
-                    stateLabel = "Transcribed";
-                } else {
-                    stateIcon = <Sparkles className="size-4 text-primary" />;
-                    stateLabel = "Transcribed & summarized";
-                }
+                const stateLabel = inFlight
+                    ? inFlight === "transcribing"
+                        ? "Transcribing"
+                        : "Summarizing"
+                    : r.hasTranscript
+                      ? "Transcribed"
+                      : "Not transcribed yet";
 
                 const durationText =
-                    r.duration != null ? formatDurationMs(r.duration) : null;
-                const timeText = formatDateTime(r.startTime, dateTimeFormat);
+                    r.duration != null
+                        ? formatSpokenDuration(r.duration)
+                        : null;
+                // Same time detail as the library row's metadata line.
+                const timeText =
+                    dateTimeFormat === "relative"
+                        ? formatRowTime(r.startTime, now)
+                        : formatDateTime(r.startTime, dateTimeFormat);
                 const subtitle: ReactNode = snippet
                     ? snippet
                     : durationText
@@ -143,21 +147,9 @@ export function RecordingsGroup({
                 const searchValue = [r.filename, r.id, snippet ?? ""].join(" ");
 
                 let accessory: ReactNode = null;
-                if (inFlight === "transcribing") {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <Loader2 className="size-3 animate-spin" />
-                            Transcribing
-                        </span>
-                    );
-                } else if (inFlight === "summarizing") {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <Loader2 className="size-3 animate-spin" />
-                            Summarizing
-                        </span>
-                    );
-                } else if (!r.hasTranscript) {
+                if (inFlight) {
+                    accessory = `${stateLabel}…`;
+                } else if (!r.hasTranscript && onTranscribeRecording) {
                     // stopPropagation: cmdk treats inner pointerdown as selection.
                     accessory = (
                         <button
@@ -170,20 +162,11 @@ export function RecordingsGroup({
                             }}
                             aria-label={`Transcribe ${r.filename}`}
                         >
-                            <Sparkles className="size-3" aria-hidden="true" />
                             Transcribe
                         </button>
                     );
                 } else if (isCurrent) {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <span
-                                aria-hidden="true"
-                                className="inline-block size-1.5 rounded-full bg-primary"
-                            />
-                            Selected
-                        </span>
-                    );
+                    accessory = <CurrentMark label="Selected" />;
                 }
 
                 return (
@@ -194,8 +177,16 @@ export function RecordingsGroup({
                     >
                         <Row
                             icon={
-                                <span title={stateLabel} aria-hidden="true">
-                                    {stateIcon}
+                                <span
+                                    title={stateLabel}
+                                    className="flex size-4 items-center justify-center"
+                                >
+                                    <StatusDot
+                                        tone={recordingRowTone(
+                                            r.hasTranscript === true,
+                                            inFlight,
+                                        )}
+                                    />
                                 </span>
                             }
                             title={r.filename}
@@ -236,7 +227,7 @@ export function ActionsGroup({
                         icon={
                             <RefreshCw className="size-4 text-muted-foreground" />
                         }
-                        title="Sync device"
+                        title="Sync now"
                     />
                 </Command.Item>
             ) : null}
@@ -281,7 +272,7 @@ export function ThemeGroup({
                     title="Light"
                     accessory={
                         currentTheme === "light" ? (
-                            <span className="cmd-pill">Active</span>
+                            <CurrentMark label="Active" />
                         ) : null
                     }
                 />
@@ -292,7 +283,7 @@ export function ThemeGroup({
                     title="Dark"
                     accessory={
                         currentTheme === "dark" ? (
-                            <span className="cmd-pill">Active</span>
+                            <CurrentMark label="Active" />
                         ) : null
                     }
                 />
@@ -303,7 +294,7 @@ export function ThemeGroup({
                     title="Auto"
                     accessory={
                         currentTheme === "system" ? (
-                            <span className="cmd-pill">Active</span>
+                            <CurrentMark label="Active" />
                         ) : null
                     }
                 />

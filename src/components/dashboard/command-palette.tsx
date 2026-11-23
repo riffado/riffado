@@ -38,7 +38,8 @@ interface CommandPaletteProps {
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
     onSetTheme: (t: "light" | "dark" | "system") => void;
-    onTranscribeRecording: (id: string) => void;
+    /** Omitted when no transcription provider is set up; hides Transcribe. */
+    onTranscribeRecording?: (id: string) => void;
 }
 
 export function CommandPalette({
@@ -84,6 +85,7 @@ export function CommandPalette({
     // "does it have a transcribe action" check.
     const transcribeTargets = useMemo(() => {
         const map = new Map<string, string>();
+        if (!onTranscribeRecording) return map;
         for (const r of visibleRecordings) {
             if (r.hasTranscript) continue;
             if (inFlightActions.get(r.id) === "transcribing") continue;
@@ -99,7 +101,12 @@ export function CommandPalette({
             map.set(value, r.id);
         }
         return map;
-    }, [visibleRecordings, inFlightActions, transcriptions]);
+    }, [
+        visibleRecordings,
+        inFlightActions,
+        transcriptions,
+        onTranscribeRecording,
+    ]);
 
     // Stable ref to the latest map + handler so the keydown listener
     // doesn't have to be re-created (or get stale) on every render.
@@ -120,12 +127,13 @@ export function CommandPalette({
         if (!id) return;
         e.preventDefault();
         e.stopPropagation();
-        onTranscribeRef.current(id);
+        onTranscribeRef.current?.(id);
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
+                instant
                 className="max-w-xl gap-0 overflow-hidden p-0"
                 showCloseButton={false}
             >

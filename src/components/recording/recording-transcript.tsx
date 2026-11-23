@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
     type BrowserTranscriptionPhase,
     browserPhaseLabel,
@@ -10,10 +11,14 @@ import {
     languageName,
     transcriptSourceLabel,
 } from "@/components/recording/format";
-import type { RecordingTranscript } from "@/components/recording/types";
-import { Button } from "@/components/ui/button";
+import type {
+    RecordingTranscript,
+    TranscriptionProviderState,
+} from "@/components/recording/types";
+import { Button, touchTargetClass } from "@/components/ui/button";
 import { FilterGroup } from "@/components/ui/filter-group";
 import { StatusLine } from "@/components/ui/status-dot";
+import { cn } from "@/lib/utils";
 
 /** One block of transcript: optional timestamp, optional speaker label, text. */
 export interface TranscriptBlock {
@@ -77,28 +82,38 @@ export function parseTranscript(text: string): TranscriptBlock[] {
     return blocks;
 }
 
-interface Props {
-    transcripts: RecordingTranscript[];
-    active: RecordingTranscript | undefined;
-    onSelectSource: (source: string) => void;
+/** Seconds for a transcript stamp (`mm:ss` or `h:mm:ss`). */
+export function timestampSeconds(stamp: string): number {
+    return stamp
+        .split(":")
+        .reduce((total, part) => total * 60 + Number(part), 0);
+}
+
+/** How a recording can be transcribed right now, and the handlers. */
+export interface TranscribeOptions {
     isTranscribing: boolean;
     browserPhase: BrowserTranscriptionPhase;
     browserBusy: boolean;
+    providerState: TranscriptionProviderState;
     onTranscribe: () => void;
     onTranscribeInBrowser: () => void;
 }
 
-/** Transcript tab: readable blocks with timestamps, or the way to get one. */
-export function RecordingTranscriptTab({
-    transcripts,
-    active,
-    onSelectSource,
+/**
+ * The way to get a transcript: progress while one runs, otherwise a
+ * line of copy and the transcribe actions. With a provider, Transcribe
+ * (server) is the ink primary; without one, Transcribe in browser is,
+ * next to a quiet link to add a provider.
+ */
+export function TranscribePrompt({
+    message,
     isTranscribing,
     browserPhase,
     browserBusy,
+    providerState,
     onTranscribe,
     onTranscribeInBrowser,
-}: Props) {
+}: TranscribeOptions & { message: string }) {
     if (isTranscribing || browserPhase !== "idle") {
         return (
             <StatusLine tone="working" className="text-ui text-subtle">
@@ -109,28 +124,62 @@ export function RecordingTranscriptTab({
         );
     }
 
-    if (!active?.text) {
-        return (
-            <div className="flex flex-col items-start gap-4">
-                <p className="text-transcript text-subtle">
-                    Not transcribed yet.
-                </p>
-                <div className="flex flex-wrap gap-2">
+    const hasProvider = providerState !== "missing";
+    return (
+        <div className="flex flex-col items-start gap-4">
+            <p className="text-transcript text-subtle">{message}</p>
+            <div className="flex flex-wrap gap-2">
+                {hasProvider ? (
                     <Button variant="ink" size="compact" onClick={onTranscribe}>
                         Transcribe
                     </Button>
-                    <TranscribeInBrowserButton
-                        phase={browserPhase}
-                        onStart={onTranscribeInBrowser}
-                        disabled={browserBusy}
-                    />
-                </div>
-                <p className="max-w-prose text-small text-muted-foreground">
-                    In your browser, the audio stays on this device and no API
-                    key is needed. The first run downloads the Whisper model,
-                    about 75 MB.
-                </p>
+                ) : null}
+                <TranscribeInBrowserButton
+                    phase={browserPhase}
+                    onStart={onTranscribeInBrowser}
+                    disabled={browserBusy}
+                    variant={hasProvider ? "quiet" : "ink"}
+                />
+                {hasProvider ? null : (
+                    <Button variant="quiet" size="compact" asChild>
+                        <Link href="/settings#transcription">
+                            Add a provider
+                        </Link>
+                    </Button>
+                )}
             </div>
+            <p className="max-w-prose text-small text-muted-foreground">
+                In your browser, the audio stays on this device and no API key
+                is needed. The first run downloads the Whisper model, about 75
+                MB.
+            </p>
+        </div>
+    );
+}
+
+interface Props extends TranscribeOptions {
+    transcripts: RecordingTranscript[];
+    active: RecordingTranscript | undefined;
+    onSelectSource: (source: string) => void;
+    /** Seeks the player to `seconds` and plays from there. */
+    onPlayFrom?: (seconds: number) => void;
+}
+
+/** Transcript tab: readable blocks with timestamps, or the way to get one. */
+export function RecordingTranscriptTab({
+    transcripts,
+    active,
+    onSelectSource,
+    onPlayFrom,
+    ...transcribe
+}: Props) {
+    if (
+        transcribe.isTranscribing ||
+        transcribe.browserPhase !== "idle" ||
+        !active?.text
+    ) {
+        return (
+            <TranscribePrompt message="Not transcribed yet" {...transcribe} />
         );
     }
 
@@ -164,9 +213,14 @@ export function RecordingTranscriptTab({
                         className="flex gap-3 sm:gap-5"
                     >
                         {hasTimes ? (
-                            <span className="w-11 shrink-0 pt-1.5 text-small tabular-nums text-muted-foreground select-none sm:w-13">
-                                {block.time}
-                            </span>
+                            <div className="w-11 shrink-0 sm:w-13">
+                                {block.time ? (
+                                    <TimestampButton
+                                        time={block.time}
+                                        onPlayFrom={onPlayFrom}
+                                    />
+                                ) : null}
+                            </div>
                         ) : null}
                         <div className="flex min-w-0 flex-1 flex-col gap-1">
                             {block.speaker ? (
@@ -188,5 +242,38 @@ export function RecordingTranscriptTab({
                 {facts.join(" · ")}
             </p>
         </div>
+    );
+}
+
+/**
+ * A block's start time. Plays the recording from there when the reader
+ * has a player; otherwise plain text.
+ */
+function TimestampButton({
+    time,
+    onPlayFrom,
+}: {
+    time: string;
+    onPlayFrom?: (seconds: number) => void;
+}) {
+    if (!onPlayFrom) {
+        return (
+            <span className="block pt-1.5 text-small tabular-nums text-muted-foreground select-none">
+                {time}
+            </span>
+        );
+    }
+    return (
+        <button
+            type="button"
+            onClick={() => onPlayFrom(timestampSeconds(time))}
+            aria-label={`Play from ${time}`}
+            className={cn(
+                "squircle relative -ml-1.5 mt-0.5 rounded-[var(--radius-small)] px-1.5 py-1 text-small tabular-nums text-muted-foreground outline-none transition-colors select-none hover:bg-accent hover:text-strong focus-visible:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                touchTargetClass,
+            )}
+        >
+            {time}
+        </button>
     );
 }

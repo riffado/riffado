@@ -75,7 +75,7 @@ Palette is fixed (existing brand). One accent.
 | `--color-card` | `#FFFFFF` | Raised surface, reader |
 | `--color-secondary` | `#E9E6DC` | Selected row, hover |
 | `--color-border` | `#DAD9D4` | Hairlines |
-| `--color-muted` | `#83827D` | Tertiary text, large or non-critical only |
+| `--color-muted` | `#66655E` (web, was `#83827D`) | Tertiary text and small metadata. Darkened 2026-11-23 so 12-13px labels pass 4.5:1 on cream and on the Sand selected row |
 | `--color-subtle` | `#535146` | Secondary text |
 | `--color-foreground` | `#3D3929` | Body text |
 | `--color-ink` | `#141413` | Headlines, primary buttons |
@@ -182,6 +182,9 @@ Paper page "03b — Android". Same layout, content, colors, type and dot languag
 - **Transcript actions:** one entry point per platform, same verbs. Mobile: long-press a paragraph -> lifted paragraph + glass context menu (Mark as highlight, Play from here, Fix a word, Change speaker, Copy). Web: hover a paragraph -> small toolbar (Mark, Play, Copy); clicking a word opens the correction popover. Mark is always first and terracotta.
 - **Sheets (iOS 26):** partial sheets float inset 8pt from the screen edges with `--radius-sheet`, light glass at ~94% so text stays readable over the scrim.
 - **Device imagery:** real product photos from the "imports from figma" page, cropped to the device shape. Used for recognition (pairing, transfer, library card, recorders list, web sidebar).
+- **Menus (web):** one recording action list, shown identically from the row "…" menu, a right-click on the row, and the recording's More button: Rename, Download audio | Transcribe or Re-transcribe, Transcribe in browser | Summarize or Regenerate summary (submenu of summary styles, your own prompts after a separator), Delete summary | Delete recording. Items that don't apply are hidden, never disabled. Surface: card, 16px squircle, 6px padding, soft border + shadow; items 36px, 10px radius, 16px line icon, 14px ink label; hover = Sand. Delete is ink like every item (no red, no terracotta); the confirm dialog carries the weight. Menus grow from their trigger (or the cursor for right-click), ~150 ms ease-out, from scale 0.97. Paper: 01 Foundations > System > 04 Menus & dialogs.
+- **Confirm dialog:** card, 30px squircle, 24px padding, Funnel Display 22/600 title, the item's name in medium ink inside the body, Cancel (outline) then the action (ink), labelled with the verb ("Delete recording"), never "OK".
+- **Motion (web):** tokens in globals.css. Press 0.96 / 150 ms; tooltips 125 ms, first only; on-screen movement --ease-in-out; phone push 24 px / 200 ms in, 150 ms out; list reflow 200 ms on delete/upload only; ⌘K and keyboard actions never animate; content the user came for never animates in.
 - **Toasts (web):** ding (`@yusufceng1z/ding-react`, pinned), one region at the top centre, following the app theme. Decided 2026-11-22, replacing sonner. Toasts close on their own (errors after 8 s, others after 5 s; hover pauses). A toast with a button (e.g. "Report") stays until closed with x, Esc or a swipe. Covering content underneath is accepted. Repeats collapse into a counter. Sound follows the "Notification sound" setting: errors and newly synced recordings only.
 
 ## 9. Signature elements

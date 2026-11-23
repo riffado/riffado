@@ -16,7 +16,9 @@
     --secondary: oklch(0.9245 0.0138 92.9892);
     --secondary-foreground: oklch(0.4334 0.0177 98.6048);
     --muted: oklch(0.9341 0.0153 90.239);
-    --muted-foreground: oklch(0.6059 0.0075 97.4233);
+    /* Tertiary text. #66655E keeps 4.5:1 on cream and on the Sand selected
+       row, so it can carry 12-13px metadata (DESIGN.md section 3). */
+    --muted-foreground: #66655e;
     --accent: oklch(0.9245 0.0138 92.9892);
     --accent-foreground: oklch(0.2671 0.0196 98.939);
     --destructive: oklch(0.1908 0.002 106.5859);
@@ -77,12 +79,42 @@
     --player-shadow:
         0 12px 40px rgb(20 20 19 / 0.22), 0 2px 6px rgb(20 20 19 / 0.12);
 
+    /* Menus, selects and confirm dialogs (Paper: 01 Foundations > System >
+       Menus & dialogs). Highlight is the Sand used for row hover. */
+    --menu-surface: var(--reader);
+    --menu-border: var(--secondary);
+    --menu-highlight: var(--secondary);
+    --menu-shadow:
+        0 12px 32px rgb(20 20 19 / 0.12), 0 1px 3px rgb(20 20 19 / 0.06);
+    --dialog-surface: var(--reader);
+    --dialog-shadow:
+        0 24px 64px rgb(20 20 19 / 0.18), 0 2px 6px rgb(20 20 19 / 0.08);
+
+    /* Motion. Popovers grow from their trigger; dialogs and their overlay
+       share one timing. Exits are faster than entrances. Tooltips: first
+       one animates, neighbours are instant. Buttons press to 0.96.
+       On-screen movement uses --ease-in-out. */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --duration-popover-in: 150ms;
+    --duration-popover-out: 100ms;
+    --duration-dialog-in: 200ms;
+    --duration-dialog-out: 150ms;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --duration-press: 150ms;
+    --duration-tooltip-in: 125ms;
+    --duration-indicator: 200ms;
+    --duration-push-in: 200ms;
+    --duration-push-out: 150ms;
+    --duration-reflow: 200ms;
+    --duration-status: 200ms;
+
     /* Corner radii. Values assume continuous (squircle) corners; the
        .squircle utility scales them down where corner-shape is unsupported. */
     --radius-small: 10px;
     --radius-inner: 12px;
     --radius-control: 15px;
     --radius-item: 18px;
+    --radius-menu: 16px;
     --radius-card: 30px;
     --radius-sheet: 56px;
 
@@ -188,6 +220,14 @@
     --player-surface: var(--night-raised);
     --player-shadow: 0 12px 40px rgb(0 0 0 / 0.45), 0 2px 6px rgb(0 0 0 / 0.3);
 
+    --menu-surface: var(--night-raised);
+    --menu-border: var(--night-border);
+    --menu-highlight: var(--night-border);
+    --menu-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+    --dialog-surface: var(--night-raised);
+    --dialog-shadow:
+        0 24px 64px rgb(20 20 19 / 0.4), 0 2px 6px rgb(20 20 19 / 0.08);
+
     /* Hardware Design System Colors (Dark Mode) */
     --app-background: var(--background);
     --rack-background: var(--card);
@@ -288,6 +328,14 @@
     --color-reader: var(--reader);
     --color-player: var(--player-surface);
     --shadow-player: var(--player-shadow);
+    --color-menu-surface: var(--menu-surface);
+    --color-menu-border: var(--menu-border);
+    --color-menu-highlight: var(--menu-highlight);
+    --shadow-menu: var(--menu-shadow);
+    --color-dialog-surface: var(--dialog-surface);
+    --shadow-dialog: var(--dialog-shadow);
+    --text-dialog-body: 14px;
+    --text-dialog-body--line-height: 21px;
 
     --text-small: 13px;
     --text-small--line-height: 19px;
@@ -389,7 +437,6 @@
     * {
         scrollbar-width: thin;
         scrollbar-color: transparent transparent;
-        transition: scrollbar-color 200ms ease;
     }
 
     *:hover,
@@ -505,18 +552,24 @@
         background: var(--panel-surface);
         box-shadow: var(--shadow-sm);
         border: 1px solid var(--panel-border);
-        transition: all 0.2s ease;
+        transition:
+            background-color 150ms ease,
+            border-color 150ms ease,
+            box-shadow 150ms ease,
+            translate 150ms var(--ease-out);
     }
 
-    .metal-button:hover {
-        background: var(--accent);
-        border-color: var(--primary);
-        box-shadow: var(--shadow-md);
+    @media (hover: hover) and (pointer: fine) {
+        .metal-button:hover {
+            background: var(--accent);
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
     }
 
-    .metal-button:active {
+    .metal-button:not(:disabled):active {
         box-shadow: var(--shadow-xs);
-        transform: translateY(1px);
+        translate: 0 1px;
     }
 
     .led-indicator {
@@ -1125,8 +1178,118 @@
             --radius-inner: 8px;
             --radius-control: 10px;
             --radius-item: 12px;
+            --radius-menu: 11px;
             --radius-card: 20px;
             --radius-sheet: 38px;
+        }
+    }
+
+    /* Menus, context menus and selects grow from their trigger (or the
+       cursor). Pair with an `origin-(--radix-...-transform-origin)` class. */
+    .motion-popover[data-state="open"] {
+        animation: popover-in var(--duration-popover-in) var(--ease-out);
+    }
+
+    .motion-popover[data-state="closed"] {
+        animation: popover-out var(--duration-popover-out) var(--ease-out)
+            forwards;
+    }
+
+    /* Dialogs and their overlay: centred, one shared timing. */
+    .motion-dialog[data-state="open"] {
+        animation: popover-in var(--duration-dialog-in) var(--ease-out);
+    }
+
+    .motion-dialog[data-state="closed"] {
+        animation: popover-out var(--duration-dialog-out) var(--ease-out)
+            forwards;
+    }
+
+    .motion-overlay[data-state="open"] {
+        animation: fade-in var(--duration-dialog-in) var(--ease-out);
+    }
+
+    .motion-overlay[data-state="closed"] {
+        animation: fade-out var(--duration-dialog-out) var(--ease-out) forwards;
+    }
+
+    /* Tooltips: the first one (delayed-open) grows from its trigger;
+       neighbours opened inside the skip-delay window (instant-open)
+       appear with no animation. */
+    .motion-tooltip[data-state="delayed-open"] {
+        animation: popover-in var(--duration-tooltip-in) var(--ease-out);
+    }
+
+    .motion-tooltip[data-state="closed"] {
+        animation: popover-out var(--duration-popover-out) var(--ease-out)
+            forwards;
+    }
+
+    /* Press feedback for buttons and chips. Colours ease; the press
+       scale uses the strong ease-out. Disabled controls never scale. */
+    .motion-press {
+        transition-property:
+            color, background-color, border-color, opacity, scale;
+        transition-duration: var(--duration-press);
+        transition-timing-function: ease, ease, ease, ease, var(--ease-out);
+    }
+
+    .motion-press:not(:disabled):active {
+        scale: 0.96;
+    }
+
+    /* A status dot whose work is in progress. */
+    .motion-breathe {
+        animation: status-breathe 1000ms var(--ease-in-out) infinite alternate;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .motion-popover[data-state="open"],
+        .motion-dialog[data-state="open"],
+        .motion-tooltip[data-state="delayed-open"] {
+            animation-name: fade-in;
+        }
+
+        .motion-popover[data-state="closed"],
+        .motion-dialog[data-state="closed"],
+        .motion-tooltip[data-state="closed"] {
+            animation-name: fade-out;
+        }
+
+        .motion-breathe {
+            animation: none;
+        }
+    }
+
+    @keyframes popover-in {
+        from {
+            opacity: 0;
+            transform: scale(0.97);
+        }
+    }
+
+    @keyframes popover-out {
+        to {
+            opacity: 0;
+            transform: scale(0.97);
+        }
+    }
+
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+    }
+
+    @keyframes fade-out {
+        to {
+            opacity: 0;
+        }
+    }
+
+    @keyframes status-breathe {
+        to {
+            opacity: 0.45;
         }
     }
 

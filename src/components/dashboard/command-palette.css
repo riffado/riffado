@@ -23,15 +23,13 @@
     overflow: hidden;
 }
 
-/* Group headings — small, uppercase, recede. */
+/* Group headings: quiet, sentence case, like the library's group labels. */
 .command-palette [cmdk-group-heading] {
     padding: 0.75rem 0.75rem 0.375rem;
-    font-size: 0.6875rem; /* 11px */
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: 0.75rem; /* 12px */
+    font-weight: 500;
     color: var(--muted-foreground);
-    opacity: 0.75;
+    user-select: none;
 }
 
 /* First group's heading sits right under the input — tighter top pad. */
@@ -67,7 +65,6 @@
     font-size: 0.875rem;
     line-height: 1.25rem;
     outline: none;
-    transition: background-color 100ms ease;
 }
 
 /* Same shrink-chain fix at the list and group levels so the row's
@@ -156,23 +153,21 @@
     background: var(--muted);
     font-family:
         ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     line-height: 1;
     color: var(--muted-foreground);
 }
 
 /* Inline row action button (e.g. "Transcribe" on rows without a
- * transcript). Sized to match the pill so the row height stays
- * constant regardless of which accessory is rendered. */
+ * transcript). */
 .command-palette .cmd-row-action {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
     padding: 0.1875rem 0.5rem;
     border-radius: 0.375rem;
     border: 1px solid var(--border);
-    background: var(--background);
-    font-size: 0.6875rem;
+    background: transparent;
+    font-size: 0.75rem;
     font-weight: 500;
     line-height: 1;
     color: var(--foreground);
@@ -182,27 +177,16 @@
         border-color 100ms ease;
 }
 
-.command-palette .cmd-row-action:hover {
-    background: var(--accent);
-    border-color: var(--accent);
+@media (hover: hover) {
+    .command-palette .cmd-row-action:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+    }
 }
 
 .command-palette .cmd-row-action:focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 1px;
-}
-
-/* "Active" / "Now playing" pill — subtle, primary-tinted. */
-.command-palette .cmd-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.125rem 0.5rem;
-    border-radius: 9999px;
-    font-size: 0.6875rem;
-    font-weight: 500;
-    background: color-mix(in oklch, var(--primary) 12%, transparent);
-    color: var(--primary);
 }
 
 /* Footer: sticky hint bar at the bottom of the palette. */
@@ -213,9 +197,10 @@
     gap: 0.5rem;
     border-top: 1px solid var(--border);
     padding: 0.5rem 0.75rem;
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     color: var(--muted-foreground);
-    background: var(--background);
+    background: transparent;
+    user-select: none;
 }
 
 .command-palette .cmd-footer-group {

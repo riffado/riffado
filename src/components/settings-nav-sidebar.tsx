@@ -3,17 +3,30 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
+import { useEffect, useState } from "react";
 import type { NavItem } from "@/components/settings-nav-config";
+import { touchTargetClass } from "@/components/ui/button";
+import { libraryLocation } from "@/lib/library-location";
 import { cn } from "@/lib/utils";
 import type { SettingsPage } from "@/types/settings";
 
-/** "‹ Library" link back to the dashboard, at the top of the settings nav. */
+/**
+ * "‹ Library" link back to the dashboard, at the top of the settings nav.
+ * Returns to the recording the library last had open in this tab.
+ */
 export function LibraryBackLink({ onNavigate }: { onNavigate?: () => void }) {
+    const [href, setHref] = useState("/dashboard");
+    useEffect(() => {
+        setHref(libraryLocation());
+    }, []);
     return (
         <Link
-            href="/dashboard"
+            href={href}
             onClick={onNavigate}
-            className="squircle flex h-7 w-fit items-center gap-1.5 rounded-[var(--radius-small)] pr-2 pl-1.5 text-ui font-medium text-subtle outline-none select-none hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className={cn(
+                "squircle relative flex h-7 w-fit items-center gap-1.5 rounded-[var(--radius-small)] pr-2 pl-1.5 text-ui font-medium text-subtle outline-none select-none hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                touchTargetClass,
+            )}
         >
             <ChevronLeft className="size-4.5" aria-hidden="true" />
             Library
@@ -71,7 +84,7 @@ export function SettingsNavSidebar({
             <div className="px-2">
                 <LibraryBackLink onNavigate={onLeave} />
             </div>
-            <div className="px-2.5 font-display text-section-title font-semibold text-strong">
+            <div className="px-2.5 font-display text-section-title font-semibold text-strong select-none">
                 Settings
             </div>
             <nav aria-label="Settings">
@@ -87,7 +100,7 @@ export function SettingsNavSidebar({
                                     aria-current={active ? "page" : undefined}
                                     onClick={() => onSelect(item.id)}
                                     className={cn(
-                                        "squircle flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 text-left text-ui outline-none select-none transition-colors duration-100 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                                        "squircle flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 text-left text-ui outline-none select-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                                         active
                                             ? "bg-accent font-semibold text-strong"
                                             : "font-medium text-foreground hover:bg-accent/60",
