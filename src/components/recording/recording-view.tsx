@@ -1,6 +1,7 @@
 "use client";
 
 import { Tabs as TabsPrimitive } from "radix-ui";
+import type * as React from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useConfirm } from "@/components/confirm-dialog";
 import {
@@ -12,6 +13,7 @@ import {
     useBrowserTranscription,
 } from "@/components/dashboard/transcribe-in-browser-button";
 import {
+    displayTitle,
     formatRecordedAt,
     formatSpokenDuration,
     transcriptOriginLabel,
@@ -81,6 +83,8 @@ interface RecordingViewProps {
     onSummaryChange?: () => void;
     /** Reports every recording this view is summarizing. */
     onSummarizingChange?: (ids: ReadonlySet<string>) => void;
+    /** Quiet content at the end of the reading column, above the player. */
+    footer?: React.ReactNode;
     className?: string;
 }
 
@@ -111,6 +115,7 @@ export function RecordingView({
     request,
     onSummaryChange,
     onSummarizingChange,
+    footer,
     className,
 }: RecordingViewProps) {
     const confirm = useConfirm();
@@ -242,14 +247,14 @@ export function RecordingView({
 
     return (
         <article
-            aria-label={recording.filename}
+            aria-label={displayTitle(recording.filename)}
             className={cn(
                 "relative flex flex-col bg-background max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:pt-[env(safe-area-inset-top)] lg:min-h-0 lg:min-w-0 lg:flex-1 lg:bg-reader",
                 className,
             )}
         >
             <RecordingTopBar
-                title={recording.filename}
+                title={displayTitle(recording.filename)}
                 origin={transcriptOriginLabel(active)}
                 back={back}
                 actions={{
@@ -358,6 +363,7 @@ export function RecordingView({
                                 />
                             </TabsPrimitive.Content>
                         </TabsPrimitive.Root>
+                        {footer}
                     </div>
 
                     {/* Sticky in the same column as the content, so the

@@ -2,17 +2,21 @@
 
 import { Pencil } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { displayTitle } from "@/components/recording/format";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import {
     MAX_RECORDING_TITLE_LENGTH,
     normalizeRecordingTitle,
+    renamedRecordingFilename,
+    splitAudioExtension,
 } from "@/lib/recordings/filename";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 
 /**
  * Recording name that renames in place: click (or set `editing`) to
- * edit, Enter or blur to save, Escape to cancel.
+ * edit, Enter or blur to save, Escape to cancel. Shows and edits the
+ * name without its audio extension, which is kept on save.
  *
  * `variant="display"` wraps long names instead of truncating and drops
  * the pencil hint (the big title has a Rename menu item). Pass
@@ -41,7 +45,9 @@ export function RecordingTitle({
         if (editingProp === undefined) setEditingState(next);
         onEditingChange?.(next);
     };
-    const [draft, setDraft] = useState(filename);
+    const shown = displayTitle(filename);
+    const extensionLength = splitAudioExtension(filename).extension.length;
+    const [draft, setDraft] = useState(shown);
     const [saving, setSaving] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
@@ -50,8 +56,8 @@ export function RecordingTitle({
     const refocusRef = useRef(false);
 
     useEffect(() => {
-        if (!editing) setDraft(filename);
-    }, [filename, editing]);
+        if (!editing) setDraft(shown);
+    }, [shown, editing]);
 
     useEffect(() => {
         if (!editing) {
@@ -68,13 +74,14 @@ export function RecordingTitle({
     }, [editing]);
 
     const commit = async () => {
-        const next = normalizeRecordingTitle(draft);
-        if (!next) {
+        const typed = normalizeRecordingTitle(draft);
+        if (!typed) {
             toast.error("Name cannot be empty");
-            setDraft(filename);
+            setDraft(shown);
             setEditing(false);
             return;
         }
+        const next = renamedRecordingFilename(filename, typed);
         if (next.length > MAX_RECORDING_TITLE_LENGTH) {
             refocusRef.current = false;
             toast.error(
@@ -83,7 +90,7 @@ export function RecordingTitle({
             return;
         }
         if (next === filename) {
-            setDraft(filename);
+            setDraft(shown);
             setEditing(false);
             return;
         }
@@ -105,7 +112,7 @@ export function RecordingTitle({
             const body = (await response.json()) as { filename?: string };
             const saved = body.filename ?? next;
             setEditing(false);
-            setDraft(saved);
+            setDraft(displayTitle(saved));
             onRenamed?.(saved);
         } catch {
             refocusRef.current = false;
@@ -121,7 +128,7 @@ export function RecordingTitle({
                 ref={inputRef}
                 value={draft}
                 disabled={saving}
-                maxLength={MAX_RECORDING_TITLE_LENGTH}
+                maxLength={MAX_RECORDING_TITLE_LENGTH - extensionLength}
                 aria-label="Recording name"
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={() => {
@@ -136,7 +143,7 @@ export function RecordingTitle({
                     } else if (e.key === "Escape") {
                         e.preventDefault();
                         refocusRef.current = true;
-                        setDraft(filename);
+                        setDraft(shown);
                         setEditing(false);
                     }
                 }}
@@ -167,7 +174,7 @@ export function RecordingTitle({
                     className,
                 )}
             >
-                {filename}
+                {shown}
             </button>
         );
     }
@@ -178,14 +185,14 @@ export function RecordingTitle({
             type="button"
             onClick={() => setEditing(true)}
             title="Rename"
-            aria-label={`Rename ${filename}`}
+            aria-label={`Rename ${shown}`}
             className={cn(
                 "group/title inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md text-left",
                 "hover:bg-accent/60 focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none",
                 "px-1 -mx-1 py-0.5",
             )}
         >
-            <span className={cn("truncate", className)}>{filename}</span>
+            <span className={cn("truncate", className)}>{shown}</span>
             <Pencil
                 className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/title:opacity-100 group-focus-visible/title:opacity-100"
                 aria-hidden="true"

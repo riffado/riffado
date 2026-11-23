@@ -30,6 +30,7 @@ import {
     formatDateTime,
     formatRowTime,
 } from "@/lib/format-date";
+import { recordingMatchesQuery } from "@/lib/recordings/search";
 import type { DateTimeFormat } from "@/types/common";
 import type { Recording } from "@/types/recording";
 
@@ -171,13 +172,13 @@ export function RecordingList({
     );
 
     const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
         const base = recordings.filter((r) => {
             if (filter === "untranscribed" && isTranscribed(r)) return false;
-            if (!q) return true;
-            if (r.filename.toLowerCase().includes(q)) return true;
-            const t = transcriptions.get(r.id);
-            return !!t?.text && t.text.toLowerCase().includes(q);
+            return recordingMatchesQuery(
+                r.filename,
+                transcriptions.get(r.id)?.text,
+                query,
+            );
         });
 
         const sorted = [...base];

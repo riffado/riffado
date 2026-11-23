@@ -66,7 +66,7 @@ function renderSidebar(props: {
                 isAdmin={false}
                 userEmail="kacper@example.com"
                 userName="Kacper Smith"
-                initialTheme="light"
+                isHosted={false}
                 onOpenSettings={() => {}}
                 onSettingsIntent={() => {}}
                 onOpenShortcuts={() => {}}

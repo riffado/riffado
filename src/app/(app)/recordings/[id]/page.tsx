@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
+import { env } from "@/lib/env";
 import { resolvePrimaryTranscript } from "@/lib/v1/serialize";
 
 interface RecordingDetailPageProps {
@@ -138,6 +139,7 @@ export default async function RecordingDetailPage({
                 hasSummary: summaryRow !== undefined,
             }}
             deviceName={deviceRow ? deviceRow.name || deviceRow.model : null}
+            isHosted={env.IS_HOSTED}
             initialPlaybackSpeed={settingsRow?.defaultPlaybackSpeed ?? 1.0}
             initialVolume={settingsRow?.defaultVolume ?? 75}
             initialAutoPlayNext={settingsRow?.autoPlayNext ?? false}

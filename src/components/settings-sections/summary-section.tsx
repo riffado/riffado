@@ -3,6 +3,7 @@
 import { nanoid } from "nanoid";
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "@/components/confirm-dialog";
+import { summaryProviderStateFor } from "@/components/recording/summary-provider";
 import { PromptList } from "@/components/settings/prompt-list";
 import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsSelectTrigger } from "@/components/settings/settings-select";
@@ -12,6 +13,7 @@ import {
     SettingsRowsSkeleton,
     ToggleRow,
 } from "@/components/settings/toggle-row";
+import type { Provider } from "@/components/settings-sections/providers-section";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -46,7 +48,16 @@ type EditingPrompt = {
 // "use the user's default prompt". The DB stores this as NULL.
 const AUTO_PRESET_DEFAULT = "__default__";
 
-export function SummarySection() {
+/**
+ * Summary defaults and the user's summary prompts. Automatic summaries
+ * are hidden until a provider that can write summaries exists.
+ */
+export function SummarySection({
+    providers,
+}: {
+    /** The shared provider list; null while loading (treated as ready). */
+    providers: Provider[] | null;
+}) {
     const confirm = useConfirm();
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
@@ -303,6 +314,7 @@ export function SummarySection() {
         ? viewingPreset.description
         : "Custom prompt";
     const autoPresetValue = autoSummarizePreset ?? AUTO_PRESET_DEFAULT;
+    const canSummarize = summaryProviderStateFor(providers) !== "missing";
 
     return (
         <SettingsGroup
@@ -397,15 +409,17 @@ export function SummarySection() {
                             </Select>
                         }
                     />
-                    <ToggleRow
-                        id="auto-summarize"
-                        label="Summarize after transcription"
-                        description="Runs after every transcription, including re-transcribing. Each summary is one more call to your provider"
-                        checked={autoSummarize}
-                        onCheckedChange={handleAutoSummarizeChange}
-                        disabled={isSavingSettings}
-                    />
-                    {autoSummarize && (
+                    {canSummarize ? (
+                        <ToggleRow
+                            id="auto-summarize"
+                            label="Summarize after transcription"
+                            description="Runs after every transcription, including re-transcribing. Each summary is one more call to your provider"
+                            checked={autoSummarize}
+                            onCheckedChange={handleAutoSummarizeChange}
+                            disabled={isSavingSettings}
+                        />
+                    ) : null}
+                    {canSummarize && autoSummarize && (
                         <SettingsRow
                             label="Style for automatic summaries"
                             description="Lets them differ from your default, e.g. Action Items for meetings"
@@ -456,6 +470,17 @@ export function SummarySection() {
                         />
                     )}
                 </SettingsRows>
+            )}
+            {canSummarize ? null : (
+                <p className="text-ui text-subtle">
+                    Automatic summaries appear once you{" "}
+                    <a
+                        href="#providers"
+                        className="font-medium text-strong underline-offset-4 hover:underline"
+                    >
+                        add a provider
+                    </a>
+                </p>
             )}
 
             <PromptList

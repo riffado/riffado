@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { recordingRowTone } from "@/components/dashboard/recording-row";
-import { formatSpokenDuration } from "@/components/recording/format";
+import {
+    displayTitle,
+    formatSpokenDuration,
+} from "@/components/recording/format";
 import { StatusDot } from "@/components/ui/status-dot";
 import {
     type DateTimeFormat,
@@ -24,6 +27,11 @@ import {
 import type { Recording } from "@/types/recording";
 
 export const RECORDING_CAP = 200;
+
+/** cmdk item value for a recording row; unique per recording. */
+export function recordingItemValue(id: string): string {
+    return `recording:${id}`;
+}
 
 interface TranscriptionData {
     text?: string;
@@ -144,8 +152,6 @@ export function RecordingsGroup({
                       ? `${durationText} · ${timeText}`
                       : timeText;
 
-                const searchValue = [r.filename, r.id, snippet ?? ""].join(" ");
-
                 let accessory: ReactNode = null;
                 if (inFlight) {
                     accessory = `${stateLabel}…`;
@@ -160,7 +166,7 @@ export function RecordingsGroup({
                                 e.stopPropagation();
                                 onTranscribeRecording(r.id);
                             }}
-                            aria-label={`Transcribe ${r.filename}`}
+                            aria-label={`Transcribe ${displayTitle(r.filename)}`}
                         >
                             Transcribe
                         </button>
@@ -172,7 +178,7 @@ export function RecordingsGroup({
                 return (
                     <Command.Item
                         key={r.id}
-                        value={searchValue}
+                        value={recordingItemValue(r.id)}
                         onSelect={runAction(() => onSelectRecording(r))}
                     >
                         <Row
@@ -189,7 +195,7 @@ export function RecordingsGroup({
                                     />
                                 </span>
                             }
-                            title={r.filename}
+                            title={displayTitle(r.filename)}
                             subtitle={subtitle}
                             accessory={accessory}
                         />
@@ -206,100 +212,134 @@ export function RecordingsGroup({
     );
 }
 
+interface PaletteAction {
+    title: string;
+    icon: ReactNode;
+    accessory?: ReactNode;
+    run: () => void;
+}
+
+/** One cmdk group of fixed actions, showing only those whose title matches. */
+function ActionItems({
+    heading,
+    actions,
+    matches,
+    runAction,
+}: {
+    heading: string;
+    actions: PaletteAction[];
+    matches: (label: string) => boolean;
+    runAction: (fn: () => void) => () => void;
+}) {
+    const shown = actions.filter((a) => matches(a.title));
+    if (shown.length === 0) return null;
+    return (
+        <Command.Group heading={heading}>
+            {shown.map((a) => (
+                <Command.Item
+                    key={a.title}
+                    value={a.title}
+                    onSelect={runAction(a.run)}
+                >
+                    <Row
+                        icon={a.icon}
+                        title={a.title}
+                        accessory={a.accessory}
+                    />
+                </Command.Item>
+            ))}
+        </Command.Group>
+    );
+}
+
 export function ActionsGroup({
     onSync,
     onUpload,
     onOpenSettings,
     onOpenShortcuts,
+    matches,
     runAction,
 }: {
     onSync?: () => void;
     onUpload: () => void;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
+    /** Whether an action title matches the current query. */
+    matches: (label: string) => boolean;
     runAction: (fn: () => void) => () => void;
 }) {
+    const actions: PaletteAction[] = [
+        ...(onSync
+            ? [
+                  {
+                      title: "Sync now",
+                      icon: (
+                          <RefreshCw className="size-4 text-muted-foreground" />
+                      ),
+                      run: onSync,
+                  },
+              ]
+            : []),
+        {
+            title: "Upload audio",
+            icon: <Upload className="size-4 text-muted-foreground" />,
+            run: onUpload,
+        },
+        {
+            title: "Open settings",
+            icon: <Settings className="size-4 text-muted-foreground" />,
+            accessory: <Kbd>,</Kbd>,
+            run: onOpenSettings,
+        },
+        {
+            title: "Keyboard shortcuts",
+            icon: <Keyboard className="size-4 text-muted-foreground" />,
+            accessory: <Kbd>?</Kbd>,
+            run: onOpenShortcuts,
+        },
+    ];
     return (
-        <Command.Group heading="Actions">
-            {onSync ? (
-                <Command.Item onSelect={runAction(onSync)}>
-                    <Row
-                        icon={
-                            <RefreshCw className="size-4 text-muted-foreground" />
-                        }
-                        title="Sync now"
-                    />
-                </Command.Item>
-            ) : null}
-            <Command.Item onSelect={runAction(onUpload)}>
-                <Row
-                    icon={<Upload className="size-4 text-muted-foreground" />}
-                    title="Upload audio"
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenSettings)}>
-                <Row
-                    icon={<Settings className="size-4 text-muted-foreground" />}
-                    title="Open settings"
-                    accessory={<Kbd>,</Kbd>}
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenShortcuts)}>
-                <Row
-                    icon={<Keyboard className="size-4 text-muted-foreground" />}
-                    title="Keyboard shortcuts"
-                    accessory={<Kbd>?</Kbd>}
-                />
-            </Command.Item>
-        </Command.Group>
+        <ActionItems
+            heading="Actions"
+            actions={actions}
+            matches={matches}
+            runAction={runAction}
+        />
     );
 }
 
 export function ThemeGroup({
     currentTheme,
     onSetTheme,
+    matches,
     runAction,
 }: {
     currentTheme: "light" | "dark" | "system";
     onSetTheme: (t: "light" | "dark" | "system") => void;
+    /** Whether a theme name matches the current query. */
+    matches: (label: string) => boolean;
     runAction: (fn: () => void) => () => void;
 }) {
+    const themes = [
+        { value: "light", title: "Light", Icon: Sun },
+        { value: "dark", title: "Dark", Icon: Moon },
+        { value: "system", title: "Auto", Icon: Monitor },
+    ] as const;
     return (
-        <Command.Group heading="Theme">
-            <Command.Item onSelect={runAction(() => onSetTheme("light"))}>
-                <Row
-                    icon={<Sun className="size-4 text-muted-foreground" />}
-                    title="Light"
-                    accessory={
-                        currentTheme === "light" ? (
-                            <CurrentMark label="Active" />
-                        ) : null
-                    }
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("dark"))}>
-                <Row
-                    icon={<Moon className="size-4 text-muted-foreground" />}
-                    title="Dark"
-                    accessory={
-                        currentTheme === "dark" ? (
-                            <CurrentMark label="Active" />
-                        ) : null
-                    }
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("system"))}>
-                <Row
-                    icon={<Monitor className="size-4 text-muted-foreground" />}
-                    title="Auto"
-                    accessory={
-                        currentTheme === "system" ? (
-                            <CurrentMark label="Active" />
-                        ) : null
-                    }
-                />
-            </Command.Item>
-        </Command.Group>
+        <ActionItems
+            heading="Theme"
+            actions={themes.map(({ value, title, Icon }) => ({
+                title,
+                icon: <Icon className="size-4 text-muted-foreground" />,
+                accessory:
+                    currentTheme === value ? (
+                        <CurrentMark label="Active" />
+                    ) : null,
+                run: () => onSetTheme(value),
+            }))}
+            matches={matches}
+            runAction={runAction}
+        />
     );
 }
 

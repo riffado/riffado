@@ -13,6 +13,7 @@ import {
 import type * as React from "react";
 import { useRef } from "react";
 import type { useConfirm } from "@/components/confirm-dialog";
+import { displayTitle } from "@/components/recording/format";
 import {
     ContextMenuContent,
     ContextMenuItem,
@@ -313,7 +314,7 @@ export function confirmDeleteRecording(
         description: (
             <>
                 <span className="font-medium text-strong">
-                    {recording.filename}
+                    {displayTitle(recording.filename)}
                 </span>
                 {extras} removed from Riffado.
                 {fromPlaud

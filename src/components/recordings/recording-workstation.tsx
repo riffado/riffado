@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppLinksLine } from "@/components/app-links";
 import { RecordingView } from "@/components/recording/recording-view";
 import { summaryProviderStateFor } from "@/components/recording/summary-provider";
 import type {
@@ -19,17 +20,22 @@ interface RecordingWorkstationProps extends PlayerPreferences {
     transcripts: RecordingTranscript[];
     /** Recorder name, when the serial matches a linked recorder. */
     deviceName: string | null;
+    /** Picks the bug-report channels in the about links. Server-supplied. */
+    isHosted: boolean;
 }
 
 /**
  * Standalone recording page (`/recordings/[id]`). Renders the same
  * `RecordingView` as the dashboard pane, full height, with a back link
- * to the library on every screen size.
+ * to the library on every screen size. This page has no account menu,
+ * so the about links (docs, source code, licence) close the reading
+ * column.
  */
 export function RecordingWorkstation({
     recording,
     transcripts,
     deviceName,
+    isHosted,
     initialPlaybackSpeed,
     initialVolume,
     initialAutoPlayNext,
@@ -120,6 +126,12 @@ export function RecordingWorkstation({
                     showOnDesktop: true,
                 }}
                 summaryProviderState={summaryProviderStateFor(providers)}
+                footer={
+                    <AppLinksLine
+                        isHosted={isHosted}
+                        className="mt-12 border-t border-hairline pt-4"
+                    />
+                }
                 player={{
                     initialPlaybackSpeed,
                     initialVolume,

@@ -13,8 +13,10 @@ import { cn } from "@/lib/utils";
 
 interface Props {
     isAdmin: boolean;
+    isHosted: boolean;
     userEmail: string | null;
-    initialTheme: "light" | "dark" | "system";
+    /** Display name for the account menu, or null when the account has none. */
+    userName: string | null;
     lastSyncTime: Date | null;
     nextSyncTime: Date | null;
     isAutoSyncing: boolean;
@@ -56,8 +58,9 @@ interface Props {
  */
 export function WorkstationHeader({
     isAdmin,
+    isHosted,
     userEmail,
-    initialTheme,
+    userName,
     lastSyncTime,
     nextSyncTime,
     isAutoSyncing,
@@ -148,8 +151,9 @@ export function WorkstationHeader({
                 </Tooltip>
                 <UserMenu
                     isAdmin={isAdmin}
-                    initialTheme={initialTheme}
+                    isHosted={isHosted}
                     userEmail={userEmail}
+                    userName={userName}
                     onOpenSettings={onOpenSettings}
                     onSettingsIntent={onSettingsIntent}
                     onOpenShortcuts={onOpenShortcuts}

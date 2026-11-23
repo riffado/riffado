@@ -12,21 +12,12 @@ import { env } from "@/lib/env";
 import { AppError, apiHandler, ErrorCode } from "@/lib/errors";
 import { enforceStorageCap } from "@/lib/hosted/billing/storage-cap";
 import { captureServerEvent } from "@/lib/posthog-server";
+import { AUDIO_FILE_EXTENSIONS } from "@/lib/recordings/filename";
 import { deleteStorageObjectOrQueue } from "@/lib/storage/delete-object";
 import { createUserStorageProvider } from "@/lib/storage/factory";
 import { getAudioMimeType } from "@/lib/utils";
 
-const ACCEPTED_EXTENSIONS = new Set([
-    ".mp3",
-    ".mp4",
-    ".m4a",
-    ".wav",
-    ".ogg",
-    ".opus",
-    ".webm",
-    ".aac",
-    ".flac",
-]);
+const ACCEPTED_EXTENSIONS = new Set<string>(AUDIO_FILE_EXTENSIONS);
 
 async function getAudioDurationMs(
     buffer: Uint8Array,

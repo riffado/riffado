@@ -111,12 +111,43 @@ function responseFor(url: string): unknown {
 
 let requestedUrls: string[] = [];
 
+/** A provider that can transcribe and write summaries and titles. */
+const SUMMARY_PROVIDERS: Provider[] = [
+    {
+        id: "cred-2",
+        provider: "OpenAI",
+        baseUrl: "https://api.openai.com/v1",
+        defaultModel: "gpt-4o-mini",
+        isDefaultTranscription: true,
+        isDefaultEnhancement: true,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+];
+
+function renderSettingsWith(providers: Provider[], hash: string) {
+    window.history.replaceState(null, "", `/settings${hash}`);
+    return render(
+        <ConfirmDialogProvider>
+            <TooltipProvider>
+                <SettingsPageContent
+                    initialProviders={providers}
+                    devices={[]}
+                    plaudLastSyncAt={null}
+                    hasPlaudConnection
+                />
+            </TooltipProvider>
+        </ConfirmDialogProvider>,
+    );
+}
+
 function renderSettings({
     hash = "",
     isHosted = false,
+    hasPlaudConnection = true,
 }: {
     hash?: string;
     isHosted?: boolean;
+    hasPlaudConnection?: boolean;
 } = {}) {
     window.history.replaceState(null, "", `/settings${hash}`);
     return render(
@@ -127,6 +158,7 @@ function renderSettings({
                     isHosted={isHosted}
                     devices={[]}
                     plaudLastSyncAt={null}
+                    hasPlaudConnection={hasPlaudConnection}
                 />
             </TooltipProvider>
         </ConfirmDialogProvider>,
@@ -345,5 +377,113 @@ describe("every old section is on its new page", () => {
     it("keeps the Plaud account card on Recorders", async () => {
         renderSettings({ hash: "#plaud-account" });
         expect(await screen.findByText("Plaud account")).not.toBeNull();
+    });
+});
+
+describe("settings that can't do anything yet", () => {
+    it("hides the sync options on Recorders until Plaud is connected", async () => {
+        renderSettings({ hash: "#recorders", hasPlaudConnection: false });
+        expect(
+            await screen.findByText(
+                "Sync options appear once Plaud is connected",
+            ),
+        ).not.toBeNull();
+        expect(screen.queryByRole("heading", { name: "Sync" })).toBeNull();
+        for (const label of [
+            "Sync automatically",
+            "Every",
+            "Sync when Riffado opens",
+            "Sync when you come back",
+            "Sync notifications",
+        ]) {
+            expect(screen.queryByText(label)).toBeNull();
+        }
+    });
+
+    it("shows the sync options once Plaud is connected", async () => {
+        renderSettings({ hash: "#recorders", hasPlaudConnection: true });
+        expect(await screen.findByText("Sync automatically")).not.toBeNull();
+        expect(screen.getByText("Sync notifications")).not.toBeNull();
+        expect(
+            screen.queryByText("Sync options appear once Plaud is connected"),
+        ).toBeNull();
+    });
+
+    it("hides automatic transcription and titles without a provider", async () => {
+        renderSettingsWith([], "#transcription");
+        expect(
+            await screen.findByText(/Automatic transcription and titles/),
+        ).not.toBeNull();
+        expect(
+            screen.queryByText("Transcribe new recordings automatically"),
+        ).toBeNull();
+        expect(screen.queryByText("Name recordings automatically")).toBeNull();
+        expect(screen.queryByText("Send titles to Plaud")).toBeNull();
+        expect(
+            screen.getByRole("link", { name: "add a provider" }),
+        ).not.toBeNull();
+    });
+
+    it("keeps automatic transcription and titles with a provider", async () => {
+        renderSettingsWith(SUMMARY_PROVIDERS, "#transcription");
+        expect(
+            await screen.findByText("Transcribe new recordings automatically"),
+        ).not.toBeNull();
+        expect(
+            screen.getByText("Name recordings automatically"),
+        ).not.toBeNull();
+        expect(screen.queryByText(/appear once you/)).toBeNull();
+    });
+
+    it("hides automatic summaries without a provider that can write them", async () => {
+        renderSettingsWith([], "#summary");
+        expect(
+            await screen.findByText(/Automatic summaries appear once you/),
+        ).not.toBeNull();
+        expect(screen.queryByText("Summarize after transcription")).toBeNull();
+    });
+
+    it("keeps automatic summaries with a provider", async () => {
+        renderSettingsWith(SUMMARY_PROVIDERS, "#summary");
+        expect(
+            await screen.findByText("Summarize after transcription"),
+        ).not.toBeNull();
+        expect(
+            screen.queryByText(/Automatic summaries appear once you/),
+        ).toBeNull();
+    });
+
+    it("drops the Automatic group from Export & backup", async () => {
+        renderSettings({ hash: "#export" });
+        expect(
+            await screen.findByRole("heading", { level: 2, name: "Download" }),
+        ).not.toBeNull();
+        expect(screen.queryByRole("heading", { name: "Automatic" })).toBeNull();
+        expect(screen.queryByText("Not available yet")).toBeNull();
+    });
+});
+
+describe("about links", () => {
+    it("keeps the source code and licence links on Settings", () => {
+        renderSettings({ hash: "#recorders" });
+        const lines = screen.getAllByRole("navigation", {
+            name: "About Riffado",
+        });
+        // Desktop sidebar and phone list (jsdom renders both).
+        expect(lines).toHaveLength(2);
+        for (const line of lines) {
+            const links = within(line);
+            expect(
+                links
+                    .getByRole("link", { name: "Source code" })
+                    .getAttribute("href"),
+            ).toBe("https://github.com/riffado/riffado");
+            expect(
+                links.getByRole("link", { name: "AGPL-3.0" }),
+            ).not.toBeNull();
+            expect(
+                links.getByRole("button", { name: "Report a bug" }),
+            ).not.toBeNull();
+        }
     });
 });

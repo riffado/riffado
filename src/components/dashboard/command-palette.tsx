@@ -1,19 +1,20 @@
 "use client";
 
-import { Command } from "cmdk";
+import { Command, defaultFilter } from "cmdk";
 import { Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActionsGroup,
     Kbd,
     PaletteFooter,
     RECORDING_CAP,
     RecordingsGroup,
+    recordingItemValue,
     ThemeGroup,
-    transcriptSnippet,
 } from "@/components/dashboard/command-palette-parts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { DateTimeFormat } from "@/lib/format-date";
+import { filterRecordingsByQuery } from "@/lib/recordings/search";
 import type { Recording } from "@/types/recording";
 import "@/components/dashboard/command-palette.css";
 
@@ -68,7 +69,20 @@ export function CommandPalette({
         setTimeout(fn, 0);
     };
 
-    const visibleRecordings = recordings.slice(0, RECORDING_CAP);
+    // Filtering is ours, not cmdk's: recordings match exactly like the
+    // library search (title and full transcript), and actions keep
+    // cmdk's fuzzy match on their labels.
+    const [search, setSearch] = useState("");
+    useEffect(() => {
+        if (!open) setSearch("");
+    }, [open]);
+    const matchingRecordings = useMemo(
+        () => filterRecordingsByQuery(recordings, transcriptions, search),
+        [recordings, transcriptions, search],
+    );
+    const visibleRecordings = matchingRecordings.slice(0, RECORDING_CAP);
+    const matchesLabel = (label: string) =>
+        !search.trim() || defaultFilter(label, search.trim()) > 0;
 
     // Controlled `value` on the cmdk root lets us look up the
     // currently-highlighted item when the user fires a global
@@ -89,24 +103,10 @@ export function CommandPalette({
         for (const r of visibleRecordings) {
             if (r.hasTranscript) continue;
             if (inFlightActions.get(r.id) === "transcribing") continue;
-            const snippet = transcriptSnippet(transcriptions.get(r.id)?.text);
-            // Filter falsy parts before joining so the value doesn't
-            // end in a trailing space when `snippet` is null. cmdk
-            // trims values internally, so a trailing space would
-            // make `activeValue` (trimmed) miss this map's key and
-            // ⌘↵ / Ctrl+↵ would silently no-op.
-            const value = [r.filename, r.id, snippet]
-                .filter((p): p is string => Boolean(p))
-                .join(" ");
-            map.set(value, r.id);
+            map.set(recordingItemValue(r.id), r.id);
         }
         return map;
-    }, [
-        visibleRecordings,
-        inFlightActions,
-        transcriptions,
-        onTranscribeRecording,
-    ]);
+    }, [visibleRecordings, inFlightActions, onTranscribeRecording]);
 
     // Stable ref to the latest map + handler so the keydown listener
     // doesn't have to be re-created (or get stale) on every render.
@@ -141,6 +141,7 @@ export function CommandPalette({
                 <Command
                     className="command-palette"
                     label="Command palette"
+                    shouldFilter={false}
                     value={activeValue}
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
@@ -150,7 +151,11 @@ export function CommandPalette({
                             className="cmd-input-icon size-4"
                             aria-hidden="true"
                         />
-                        <Command.Input placeholder="Search recordings, transcripts, or actions…" />
+                        <Command.Input
+                            value={search}
+                            onValueChange={setSearch}
+                            placeholder="Search recordings, transcripts, or actions…"
+                        />
                         <Kbd>⌘K</Kbd>
                     </div>
 
@@ -178,12 +183,14 @@ export function CommandPalette({
                             onUpload={onUpload}
                             onOpenSettings={onOpenSettings}
                             onOpenShortcuts={onOpenShortcuts}
+                            matches={matchesLabel}
                             runAction={runAction}
                         />
 
                         <ThemeGroup
                             currentTheme={currentTheme}
                             onSetTheme={onSetTheme}
+                            matches={matchesLabel}
                             runAction={runAction}
                         />
                     </Command.List>

@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import type * as React from "react";
 import { useEffect, useState } from "react";
+import { AppLinksLine } from "@/components/app-links";
 import type { NavItem } from "@/components/settings-nav-config";
 import { touchTargetClass } from "@/components/ui/button";
 import { libraryLocation } from "@/lib/library-location";
@@ -58,11 +59,14 @@ interface Props {
     onSelect: (page: SettingsPage) => void;
     onNavKeyDown: (e: React.KeyboardEvent) => void;
     onLeave?: () => void;
+    /** Picks the bug-report channels in the links line at the bottom. */
+    isHosted: boolean;
     className?: string;
 }
 
 /**
- * Settings sidebar (lg and up): back link, title and one item per page.
+ * Settings sidebar (lg and up): back link, title and one item per page,
+ * with the about links (docs, source code, licence) at the bottom.
  * Replaces the library sidebar while Settings is open. Arrow keys move
  * between items (handled by `onNavKeyDown`), Enter opens one.
  */
@@ -72,6 +76,7 @@ export function SettingsNavSidebar({
     onSelect,
     onNavKeyDown,
     onLeave,
+    isHosted,
     className,
 }: Props) {
     return (
@@ -117,6 +122,7 @@ export function SettingsNavSidebar({
                     })}
                 </ul>
             </nav>
+            <AppLinksLine isHosted={isHosted} className="mt-auto px-2.5" />
         </aside>
     );
 }

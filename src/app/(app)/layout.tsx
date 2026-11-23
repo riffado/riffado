@@ -1,4 +1,3 @@
-import { Footer } from "@/components/footer";
 import { RebrandBanner } from "@/components/rebrand-banner";
 import { env } from "@/lib/env";
 
@@ -13,7 +12,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 seeing chrome that doesn't apply to them. */}
             {env.IS_HOSTED ? <RebrandBanner /> : null}
             <main className="flex-1 flex flex-col">{children}</main>
-            <Footer />
         </div>
     );
 }

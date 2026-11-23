@@ -4,7 +4,10 @@ import { MoreHorizontal } from "lucide-react";
 import { useRef } from "react";
 import { useConfirm } from "@/components/confirm-dialog";
 import type { BrowserTranscription } from "@/components/dashboard/transcribe-in-browser-button";
-import { formatSpokenDuration } from "@/components/recording/format";
+import {
+    displayTitle,
+    formatSpokenDuration,
+} from "@/components/recording/format";
 import {
     confirmDeleteRecording,
     type RecordingActionHandlers,
@@ -206,7 +209,7 @@ export function RecordingRow({
                     >
                         <RecordingRowLayout
                             tone={recordingRowTone(hasTranscript, inFlight)}
-                            title={recording.filename}
+                            title={displayTitle(recording.filename)}
                             duration={formatSpokenDuration(recording.duration)}
                             detail={detail}
                             meta={meta}
@@ -226,7 +229,7 @@ export function RecordingRow({
                         <Button
                             variant="ghost"
                             size="icon-compact"
-                            aria-label={`Actions for ${recording.filename}`}
+                            aria-label={`Actions for ${displayTitle(recording.filename)}`}
                             className="bg-accent hover:bg-border"
                             onClick={(e) => e.stopPropagation()}
                         >

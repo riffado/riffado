@@ -25,6 +25,8 @@ interface SettingsPageContentProps {
     devices: RecorderDevice[];
     /** Last successful Plaud sync (ISO string), or null. Server-supplied. */
     plaudLastSyncAt: string | null;
+    /** True when the account has a Plaud connection row. Server-supplied. */
+    hasPlaudConnection: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export function SettingsPageContent({
     isHosted = false,
     devices,
     plaudLastSyncAt,
+    hasPlaudConnection,
 }: SettingsPageContentProps) {
     const router = useRouter();
     const nav = useMemo(() => buildSettingsNav({ isHosted }), [isHosted]);
@@ -162,6 +165,7 @@ export function SettingsPageContent({
                 onLeave={() => {
                     leavingToLibraryRef.current = true;
                 }}
+                isHosted={isHosted}
             />
 
             <div
@@ -179,6 +183,7 @@ export function SettingsPageContent({
                     onLeave={() => {
                         leavingToLibraryRef.current = true;
                     }}
+                    isHosted={isHosted}
                 />
             </div>
 
@@ -220,6 +225,7 @@ export function SettingsPageContent({
                                 isHosted={isHosted}
                                 devices={devices}
                                 plaudLastSyncAt={plaudLastSyncAt}
+                                hasPlaudConnection={hasPlaudConnection}
                                 onPlaudReconnected={handlePlaudReconnected}
                                 onPlaudDisconnected={handlePlaudDisconnected}
                                 onReRunOnboarding={() =>

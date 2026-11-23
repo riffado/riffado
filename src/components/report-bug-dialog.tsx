@@ -1,7 +1,7 @@
 "use client";
 
 import { Mail } from "lucide-react";
-import { useState } from "react";
+import { type RefObject, useRef, useState } from "react";
 import { Github } from "@/components/icons/icons";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,11 @@ interface ReportBugDialogProps {
     errorContext?: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /**
+     * Element that gets focus back when the dialog closes. The dialog has
+     * no Radix trigger, so without it focus drops to the page.
+     */
+    returnFocusTo?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -45,6 +50,7 @@ export function ReportBugDialog({
     errorContext,
     open,
     onOpenChange,
+    returnFocusTo,
 }: ReportBugDialogProps) {
     const page =
         typeof window !== "undefined" ? window.location.pathname : undefined;
@@ -55,7 +61,15 @@ export function ReportBugDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent
+                className="sm:max-w-lg"
+                onCloseAutoFocus={(event) => {
+                    const target = returnFocusTo?.current;
+                    if (!target?.isConnected) return;
+                    event.preventDefault();
+                    target.focus({ preventScroll: true });
+                }}
+            >
                 <DialogHeader>
                     <DialogTitle>Report a bug</DialogTitle>
                     <DialogDescription>
@@ -124,10 +138,12 @@ const RESET_BUTTON_CLASSES =
 
 export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
     const [open, setOpen] = useState(false);
+    const buttonRef = useRef<HTMLButtonElement>(null);
 
     return (
         <>
             <button
+                ref={buttonRef}
                 type="button"
                 onClick={() => setOpen(true)}
                 className={`${RESET_BUTTON_CLASSES} ${className ?? ""}`}
@@ -138,6 +154,7 @@ export function ReportBugButton({ isHosted, className }: ReportBugButtonProps) {
                 isHosted={isHosted}
                 open={open}
                 onOpenChange={setOpen}
+                returnFocusTo={buttonRef}
             />
         </>
     );

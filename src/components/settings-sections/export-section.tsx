@@ -4,11 +4,7 @@ import { Download, Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsSelectTrigger } from "@/components/settings/settings-select";
-import {
-    SettingsRow,
-    SettingsRows,
-    ToggleRow,
-} from "@/components/settings/toggle-row";
+import { SettingsRow, SettingsRows } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
 import {
     Select,
@@ -25,13 +21,6 @@ const exportFormatOptions = [
     { label: "TXT", value: "txt", description: "Plain text format" },
     { label: "SRT", value: "srt", description: "Subtitle format" },
     { label: "VTT", value: "vtt", description: "WebVTT subtitle format" },
-];
-
-const backupFrequencyOptions = [
-    { label: "Never", value: "never" },
-    { label: "Daily", value: "daily" },
-    { label: "Weekly", value: "weekly" },
-    { label: "Monthly", value: "monthly" },
 ];
 
 interface ExportJobStatus {
@@ -72,8 +61,6 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
     const [defaultExportFormat, setDefaultExportFormat] = useState("json");
-    const [autoExport, setAutoExport] = useState(false);
-    const [backupFrequency, setBackupFrequency] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const [isStartingBackup, setIsStartingBackup] = useState(false);
     const [backupJob, setBackupJob] = useState<ExportJobStatus | null>(null);
@@ -85,8 +72,6 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                 if (response.ok) {
                     const data = await response.json();
                     setDefaultExportFormat(data.defaultExportFormat ?? "json");
-                    setAutoExport(data.autoExport ?? false);
-                    setBackupFrequency(data.backupFrequency ?? null);
                 }
             } catch (error) {
                 console.error("Failed to fetch settings:", error);
@@ -154,49 +139,21 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
         };
     }, [backupJob]);
 
-    const handleExportBackupSettingChange = async (updates: {
-        defaultExportFormat?: string;
-        autoExport?: boolean;
-        backupFrequency?: string | null;
-    }) => {
-        const previousValues: Record<string, unknown> = {};
-        if (updates.defaultExportFormat !== undefined) {
-            previousValues.defaultExportFormat = defaultExportFormat;
-            setDefaultExportFormat(updates.defaultExportFormat);
-        }
-        if (updates.autoExport !== undefined) {
-            previousValues.autoExport = autoExport;
-            setAutoExport(updates.autoExport);
-        }
-        if (updates.backupFrequency !== undefined) {
-            previousValues.backupFrequency = backupFrequency;
-            setBackupFrequency(updates.backupFrequency);
-        }
-
+    const handleExportFormatChange = async (value: string) => {
+        const previous = defaultExportFormat;
+        setDefaultExportFormat(value);
         try {
             const response = await fetch("/api/settings/user", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(updates),
+                body: JSON.stringify({ defaultExportFormat: value }),
             });
 
             if (!response.ok) {
                 throw new Error("Failed to save settings");
             }
         } catch {
-            if (updates.defaultExportFormat !== undefined) {
-                const prev = previousValues.defaultExportFormat;
-                if (typeof prev === "string") setDefaultExportFormat(prev);
-            }
-            if (updates.autoExport !== undefined) {
-                const prev = previousValues.autoExport;
-                if (typeof prev === "boolean") setAutoExport(prev);
-            }
-            if (updates.backupFrequency !== undefined) {
-                const prev = previousValues.backupFrequency;
-                if (typeof prev === "string" || prev === null)
-                    setBackupFrequency(prev);
-            }
+            setDefaultExportFormat(previous);
             toast.error("Failed to save settings. Changes reverted.");
         }
     };
@@ -269,10 +226,7 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             <Select
                                 value={defaultExportFormat}
                                 onValueChange={(value) => {
-                                    setDefaultExportFormat(value);
-                                    handleExportBackupSettingChange({
-                                        defaultExportFormat: value,
-                                    });
+                                    void handleExportFormatChange(value);
                                 }}
                                 disabled={isSavingSettings || isLoadingSettings}
                             >
@@ -397,64 +351,6 @@ export function ExportSection({ onReRunOnboarding }: ExportSectionProps) {
                             </div>
                         )}
                     </SettingsRow>
-                </SettingsRows>
-            </SettingsGroup>
-
-            <SettingsGroup title="Automatic" description="Not available yet">
-                <SettingsRows>
-                    <ToggleRow
-                        id="auto-export"
-                        label="Export new recordings automatically"
-                        description="When they sync from your recorder"
-                        checked={autoExport}
-                        onCheckedChange={(checked) => {
-                            setAutoExport(checked);
-                            handleExportBackupSettingChange({
-                                autoExport: checked,
-                            });
-                        }}
-                        disabled={true}
-                    />
-                    <SettingsRow
-                        label="Back up on a schedule"
-                        description="How often to create a backup"
-                        controlId="backup-frequency"
-                        disabled
-                        control={
-                            <Select
-                                value={backupFrequency || "never"}
-                                onValueChange={(value) => {
-                                    const frequency =
-                                        value === "never" ? null : value;
-                                    setBackupFrequency(frequency);
-                                    handleExportBackupSettingChange({
-                                        backupFrequency: frequency,
-                                    });
-                                }}
-                                disabled={true}
-                            >
-                                <SettingsSelectTrigger id="backup-frequency">
-                                    <SelectValue>
-                                        {backupFrequencyOptions.find(
-                                            (opt) =>
-                                                opt.value ===
-                                                (backupFrequency || "never"),
-                                        )?.label || "Never"}
-                                    </SelectValue>
-                                </SettingsSelectTrigger>
-                                <SelectContent align="end">
-                                    {backupFrequencyOptions.map((option) => (
-                                        <SelectItem
-                                            key={option.value}
-                                            value={option.value}
-                                        >
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        }
-                    />
                 </SettingsRows>
             </SettingsGroup>
 

@@ -40,6 +40,8 @@ interface SettingsContentProps {
     devices?: RecorderDevice[];
     /** Last successful Plaud sync (ISO string), or null. */
     plaudLastSyncAt?: string | null;
+    /** False hides the sync options on Recorders until Plaud is connected. */
+    hasPlaudConnection?: boolean;
     /** Forwarded to `PlaudAccountSection`; see its prop doc. */
     onPlaudReconnected?: () => void;
     /** Forwarded to `PlaudAccountSection` as `onDisconnected`. */
@@ -75,6 +77,7 @@ export function SettingsContent({
     isHosted = false,
     devices = [],
     plaudLastSyncAt = null,
+    hasPlaudConnection = false,
     onPlaudReconnected,
     onPlaudDisconnected,
 }: SettingsContentProps) {
@@ -91,11 +94,20 @@ export function SettingsContent({
                             onDisconnected={onPlaudDisconnected}
                             lastSyncAt={plaudLastSyncAt}
                         />
+                        {hasPlaudConnection ? null : (
+                            <Anchor section="sync">
+                                <p className="mt-3 text-ui text-subtle">
+                                    Sync options appear once Plaud is connected
+                                </p>
+                            </Anchor>
+                        )}
                     </Anchor>
                     <RecordersList devices={devices} />
-                    <Anchor section="sync">
-                        <SyncSection />
-                    </Anchor>
+                    {hasPlaudConnection ? (
+                        <Anchor section="sync">
+                            <SyncSection />
+                        </Anchor>
+                    ) : null}
                 </>
             );
         case "transcription":
@@ -118,7 +130,7 @@ export function SettingsContent({
                         />
                     </Anchor>
                     <Anchor section="summary">
-                        <SummarySection />
+                        <SummarySection providers={providers} />
                     </Anchor>
                     <PromptManager />
                 </>

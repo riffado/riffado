@@ -11,6 +11,17 @@ import {
     isLocalPreset,
     PROVIDER_PRESETS,
 } from "@/lib/ai/provider-presets";
+import { splitAudioExtension } from "@/lib/recordings/filename";
+
+/**
+ * A recording name as shown in the app: without a trailing audio file
+ * extension ("Call.m4a" reads "Call"). Names without one are unchanged,
+ * and a name that is only an extension stays as stored.
+ */
+export function displayTitle(filename: string): string {
+    const base = splitAudioExtension(filename).base.trimEnd();
+    return base.trim() ? base : filename;
+}
 
 /** "Today, 09:12", "Yesterday, 18:40", "Monday, 09:12", "Nov 3, 09:12". */
 export function formatRecordedAt(date: Date | string, now: Date): string {

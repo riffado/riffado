@@ -29,7 +29,7 @@ interface LibrarySidebarProps {
     isAdmin: boolean;
     userEmail: string | null;
     userName: string | null;
-    initialTheme: "light" | "dark" | "system";
+    isHosted: boolean;
     onOpenSettings: () => void;
     /** Called on hover or focus of a Settings entry so its data can load before the click. */
     onSettingsIntent: () => void;
@@ -55,7 +55,7 @@ export function LibrarySidebar({
     isAdmin,
     userEmail,
     userName,
-    initialTheme,
+    isHosted,
     onOpenSettings,
     onSettingsIntent,
     onOpenShortcuts,
@@ -189,7 +189,7 @@ export function LibrarySidebar({
                 <UserMenu
                     trigger="sidebar"
                     isAdmin={isAdmin}
-                    initialTheme={initialTheme}
+                    isHosted={isHosted}
                     userEmail={userEmail}
                     userName={userName}
                     onOpenSettings={onOpenSettings}

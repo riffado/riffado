@@ -34,6 +34,7 @@ export default async function SettingsPage() {
             isHosted={env.IS_HOSTED}
             devices={devices}
             plaudLastSyncAt={connection?.lastSync?.toISOString() ?? null}
+            hasPlaudConnection={connection !== undefined}
         />
     );
 }

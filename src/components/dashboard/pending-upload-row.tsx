@@ -1,6 +1,7 @@
 "use client";
 
 import { RecordingRowLayout } from "@/components/dashboard/recording-row";
+import { displayTitle } from "@/components/recording/format";
 import { formatBytes } from "@/lib/format-bytes";
 
 export interface PendingUpload {
@@ -27,7 +28,7 @@ export function PendingUploadRow({
         <div aria-busy="true" data-flip-key={upload.id} className="select-none">
             <RecordingRowLayout
                 tone="working"
-                title={upload.filename}
+                title={displayTitle(upload.filename)}
                 detail={`Uploading… ${formatBytes(upload.filesize)}`}
                 isCompact={isCompact}
             />

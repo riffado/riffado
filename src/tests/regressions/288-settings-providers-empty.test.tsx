@@ -148,12 +148,9 @@ describe("Settings providers on first open (#288)", () => {
 
         // The header (below lg) and the sidebar (lg+) each render an
         // account menu; jsdom applies no media queries, so both are present.
-        fireEvent.keyDown(
-            screen.getAllByRole("button", { name: "Account menu" })[0],
-            {
-                key: "Enter",
-            },
-        );
+        // Only the header's menu opens Settings (the sidebar has a gear).
+        const menus = screen.getAllByRole("button", { name: "Account menu" });
+        fireEvent.keyDown(menus[menus.length - 1], { key: "Enter" });
         const item = await screen.findByRole("menuitem", { name: /Settings/ });
         fireEvent.pointerEnter(item);
         expect(prefetch).toHaveBeenCalledWith("/settings");
@@ -170,6 +167,7 @@ describe("Settings providers on first open (#288)", () => {
                     initialProviders={PROVIDERS as unknown as Provider[]}
                     devices={[]}
                     plaudLastSyncAt={null}
+                    hasPlaudConnection={false}
                 />
             </ConfirmDialogProvider>,
         );

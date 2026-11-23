@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { PendingUpload } from "@/components/dashboard/recording-list";
+import { displayTitle } from "@/components/recording/format";
 import { toast } from "@/lib/toast";
 
 interface Options {
@@ -99,7 +100,7 @@ export function useUploadQueue({
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    toast.success(`"${data.filename}" uploaded`);
+                    toast.success(`"${displayTitle(data.filename)}" uploaded`);
                     const uploaded: PendingUpload = {
                         ...placeholder,
                         uploadedAs: data.filename,

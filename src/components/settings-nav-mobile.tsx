@@ -2,6 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import type * as React from "react";
+import { AppLinksLine } from "@/components/app-links";
 import type { NavItem } from "@/components/settings-nav-config";
 import { LibraryBackLink } from "@/components/settings-nav-sidebar";
 import type { SettingsPage } from "@/types/settings";
@@ -11,18 +12,21 @@ interface Props {
     onSelect: (page: SettingsPage) => void;
     onNavKeyDown: (e: React.KeyboardEvent) => void;
     onLeave?: () => void;
+    /** Picks the bug-report channels in the links line at the bottom. */
+    isHosted: boolean;
 }
 
 /**
  * Phone and tablet layout (below lg): Settings is a list screen; tapping
  * an item pushes into that page, which shows a back control to return
- * here (see `SettingsPageContent`).
+ * here (see `SettingsPageContent`). The about links close the list.
  */
 export function SettingsNavMobile({
     nav,
     onSelect,
     onNavKeyDown,
     onLeave,
+    isHosted,
 }: Props) {
     return (
         <div className="flex flex-col gap-5.5 px-4 pt-5.5 pb-10">
@@ -62,6 +66,7 @@ export function SettingsNavMobile({
                     ))}
                 </ul>
             </nav>
+            <AppLinksLine isHosted={isHosted} className="px-0.5" />
         </div>
     );
 }

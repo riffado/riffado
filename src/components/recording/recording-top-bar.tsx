@@ -6,7 +6,6 @@ import {
     RecordingActionsContent,
     type RecordingActionsState,
 } from "@/components/recording/recording-actions";
-import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -25,8 +24,8 @@ interface Props {
 
 /**
  * Recording top bar: small title (or a back link on phones), where the
- * transcript came from, download, and a More menu with the recording
- * action list.
+ * transcript came from, and a More menu with the recording action list
+ * (Download audio lives there).
  */
 export function RecordingTopBar({ title, origin, back, actions }: Props) {
     return (
@@ -68,29 +67,23 @@ export function RecordingTopBar({ title, origin, back, actions }: Props) {
                         {origin}
                     </StatusLine>
                 ) : null}
-                <div className="flex items-center gap-0.5">
-                    <DownloadAudioButton
-                        recordingId={actions.recordingId}
-                        className="max-lg:size-11 max-lg:rounded-[var(--radius-control)]"
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="More actions"
+                            className="max-lg:size-11 max-lg:rounded-[var(--radius-control)] data-[state=open]:bg-accent"
+                        >
+                            <MoreHorizontal className="size-4.5" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <RecordingActionsContent
+                        flavour="dropdown"
+                        align="end"
+                        {...actions}
                     />
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="More actions"
-                                className="max-lg:size-11 max-lg:rounded-[var(--radius-control)] data-[state=open]:bg-accent"
-                            >
-                                <MoreHorizontal className="size-4.5" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <RecordingActionsContent
-                            flavour="dropdown"
-                            align="end"
-                            {...actions}
-                        />
-                    </DropdownMenu>
-                </div>
+                </DropdownMenu>
             </div>
         </div>
     );

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { displayTitle } from "@/components/recording/format";
 import { BREAKDOWN_COLORS } from "@/components/settings-sections/storage/breakdown-bar";
 import { formatBytes } from "@/lib/format-bytes";
 import { formatDurationMs } from "@/lib/format-duration";
@@ -47,7 +48,7 @@ export function LargestRecordings({ items }: LargestRecordingsProps) {
                                 aria-hidden="true"
                             />
                             <span className="min-w-0 flex-1 truncate font-medium text-strong">
-                                {r.filename}
+                                {displayTitle(r.filename)}
                             </span>
                             <span className="shrink-0 text-small text-subtle tabular-nums">
                                 {formatDurationMs(r.duration)}

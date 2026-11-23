@@ -688,7 +688,7 @@ export function Workstation({
                     isAdmin={isAdmin}
                     userEmail={userEmail}
                     userName={userName}
-                    initialTheme={initialSettings.theme}
+                    isHosted={isHosted}
                     onOpenSettings={openSettings}
                     onSettingsIntent={prefetchSettings}
                     onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -698,7 +698,8 @@ export function Workstation({
                         className="lg:hidden"
                         isAdmin={isAdmin}
                         userEmail={userEmail}
-                        initialTheme={initialSettings.theme}
+                        userName={userName}
+                        isHosted={isHosted}
                         lastSyncTime={lastSyncTime}
                         nextSyncTime={nextSyncTime}
                         isAutoSyncing={isAutoSyncing}

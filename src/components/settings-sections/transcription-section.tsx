@@ -3,6 +3,10 @@
 import { KeyRound, Monitor, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
+    summaryProviderStateFor,
+    transcriptionProviderStateFor,
+} from "@/components/recording/summary-provider";
+import {
     OptionCard,
     OptionCardGroup,
     OptionCardPanel,
@@ -92,6 +96,18 @@ const qualityOptions = [
 function formatIncludedSeconds(seconds: number | undefined): string {
     if (!seconds) return "Included with your subscription";
     return `Up to ${Math.round(seconds / 3600)}h of transcription per month`;
+}
+
+/** Start of the line that replaces settings hidden until a provider exists. */
+function missingProviderLead(
+    canTranscribe: boolean,
+    canWriteTitles: boolean,
+): string {
+    if (!canTranscribe && !canWriteTitles) {
+        return "Automatic transcription and titles appear once you ";
+    }
+    if (!canTranscribe) return "Automatic transcription appears once you ";
+    return "Automatic titles appear once you ";
 }
 
 interface TranscriptionSectionProps {
@@ -399,6 +415,9 @@ export function TranscriptionSection({
     const managed = providers?.find((p) => p.managed === true) ?? null;
     const credentials = providers ? credentialsInOrder(providers) : [];
     const selectedId = providers?.find((p) => p.isDefaultTranscription)?.id;
+    const canTranscribe =
+        transcriptionProviderStateFor(providers) !== "missing";
+    const canWriteTitles = summaryProviderStateFor(providers) !== "missing";
 
     return (
         <div className="flex flex-col gap-11">
@@ -483,195 +502,229 @@ export function TranscriptionSection({
                 <SettingsRowsSkeleton rows={5} />
             ) : (
                 <>
-                    <SettingsRows>
-                        <ToggleRow
-                            id="auto-transcribe"
-                            label="Transcribe new recordings automatically"
-                            description="As soon as they sync from your recorder"
-                            checked={autoTranscribe}
-                            onCheckedChange={handleAutoTranscribeChange}
-                            disabled={disabled}
-                        />
-                        <SettingsRow
-                            label="Language"
-                            description="Set one if auto-detect gets it wrong"
-                            controlId="transcription-language"
-                            control={
-                                <Select
-                                    value={
-                                        defaultTranscriptionLanguage || "auto"
-                                    }
-                                    onValueChange={(value) => {
-                                        const lang =
-                                            value === "auto" ? null : value;
-                                        setDefaultTranscriptionLanguage(lang);
-                                        handleTranscriptionSettingChange({
-                                            defaultTranscriptionLanguage: lang,
-                                        });
-                                    }}
+                    <div className="flex flex-col gap-3">
+                        <SettingsRows>
+                            {canTranscribe ? (
+                                <ToggleRow
+                                    id="auto-transcribe"
+                                    label="Transcribe new recordings automatically"
+                                    description="As soon as they sync from your recorder"
+                                    checked={autoTranscribe}
+                                    onCheckedChange={handleAutoTranscribeChange}
                                     disabled={disabled}
-                                >
-                                    <SettingsSelectTrigger id="transcription-language">
-                                        <SelectValue>
-                                            {languageOptions.find(
-                                                (opt) =>
-                                                    opt.value ===
-                                                    defaultTranscriptionLanguage,
-                                            )?.label || "Detect automatically"}
-                                        </SelectValue>
-                                    </SettingsSelectTrigger>
-                                    <SelectContent align="end">
-                                        {languageOptions.map((option) => (
-                                            <SelectItem
-                                                key={option.value || "auto"}
-                                                value={option.value || "auto"}
-                                            >
-                                                {option.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            }
-                        />
-                        <ToggleRow
-                            id="speaker-diarization"
-                            label="Separate speakers"
-                            description="Labels who is talking (Speaker 1, Speaker 2). ElevenLabs Scribe supports it; other providers ignore it"
-                            checked={speakerDiarization}
-                            onCheckedChange={(checked) => {
-                                setSpeakerDiarization(checked);
-                                handleTranscriptionSettingChange({
-                                    speakerDiarization: checked,
-                                });
-                            }}
-                            disabled={disabled}
-                        />
-                        {speakerDiarization && (
+                                />
+                            ) : null}
                             <SettingsRow
-                                label="Expected speakers"
-                                description="A hint, not a hard limit. Auto works for most recordings"
-                                controlId="diarization-speaker-count"
+                                label="Language"
+                                description="Set one if auto-detect gets it wrong"
+                                controlId="transcription-language"
                                 control={
                                     <Select
                                         value={
-                                            diarizationSpeakerCount === null
-                                                ? "auto"
-                                                : String(
-                                                      diarizationSpeakerCount,
-                                                  )
+                                            defaultTranscriptionLanguage ||
+                                            "auto"
                                         }
                                         onValueChange={(value) => {
-                                            const count =
-                                                value === "auto"
-                                                    ? null
-                                                    : Number(value);
+                                            const lang =
+                                                value === "auto" ? null : value;
+                                            setDefaultTranscriptionLanguage(
+                                                lang,
+                                            );
                                             handleTranscriptionSettingChange({
-                                                diarizationSpeakerCount: count,
+                                                defaultTranscriptionLanguage:
+                                                    lang,
                                             });
                                         }}
                                         disabled={disabled}
                                     >
-                                        <SettingsSelectTrigger id="diarization-speaker-count">
+                                        <SettingsSelectTrigger id="transcription-language">
                                             <SelectValue>
-                                                {diarizationSpeakerCount ===
-                                                null
-                                                    ? "Auto"
-                                                    : String(
-                                                          diarizationSpeakerCount,
-                                                      )}
+                                                {languageOptions.find(
+                                                    (opt) =>
+                                                        opt.value ===
+                                                        defaultTranscriptionLanguage,
+                                                )?.label ||
+                                                    "Detect automatically"}
                                             </SelectValue>
                                         </SettingsSelectTrigger>
                                         <SelectContent align="end">
-                                            <SelectItem value="auto">
-                                                Auto
-                                            </SelectItem>
-                                            {Array.from(
-                                                { length: 32 },
-                                                (_, i) => i + 1,
-                                            ).map((count) => (
+                                            {languageOptions.map((option) => (
                                                 <SelectItem
-                                                    key={count}
-                                                    value={String(count)}
+                                                    key={option.value || "auto"}
+                                                    value={
+                                                        option.value || "auto"
+                                                    }
                                                 >
-                                                    {count}
+                                                    {option.label}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 }
                             />
-                        )}
-                        <SettingsRow
-                            label="Quality"
-                            description="Trades speed for accuracy"
-                            controlId="transcription-quality"
-                            control={
-                                <Select
-                                    value={transcriptionQuality}
-                                    onValueChange={(value) => {
-                                        setTranscriptionQuality(value);
-                                        handleTranscriptionSettingChange({
-                                            transcriptionQuality: value,
-                                        });
-                                    }}
-                                    disabled={disabled}
-                                >
-                                    <SettingsSelectTrigger id="transcription-quality">
-                                        <SelectValue>
-                                            {qualityOptions.find(
-                                                (opt) =>
-                                                    opt.value ===
-                                                    transcriptionQuality,
-                                            )?.label || "Balanced"}
-                                        </SelectValue>
-                                    </SettingsSelectTrigger>
-                                    <SelectContent align="end">
-                                        {qualityOptions.map((option) => (
-                                            <SelectItem
-                                                key={option.value}
-                                                value={option.value}
-                                            >
-                                                <div>
-                                                    <div>{option.label}</div>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {option.description}
-                                                    </div>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            }
-                        />
-                        <ToggleRow
-                            id="auto-generate-title"
-                            label="Name recordings automatically"
-                            description="Writes a title from the transcript with your AI provider"
-                            checked={autoGenerateTitle}
-                            onCheckedChange={(checked) => {
-                                setAutoGenerateTitle(checked);
-                                handleTranscriptionSettingChange({
-                                    autoGenerateTitle: checked,
-                                });
-                            }}
-                            disabled={disabled}
-                        />
-                        {autoGenerateTitle && (
                             <ToggleRow
-                                id="sync-title-plaud"
-                                label="Send titles to Plaud"
-                                description="Renames the recording in your Plaud account too"
-                                checked={syncTitleToPlaud}
+                                id="speaker-diarization"
+                                label="Separate speakers"
+                                description="Labels who is talking (Speaker 1, Speaker 2). ElevenLabs Scribe supports it; other providers ignore it"
+                                checked={speakerDiarization}
                                 onCheckedChange={(checked) => {
-                                    setSyncTitleToPlaud(checked);
+                                    setSpeakerDiarization(checked);
                                     handleTranscriptionSettingChange({
-                                        syncTitleToPlaud: checked,
+                                        speakerDiarization: checked,
                                     });
                                 }}
                                 disabled={disabled}
                             />
+                            {speakerDiarization && (
+                                <SettingsRow
+                                    label="Expected speakers"
+                                    description="A hint, not a hard limit. Auto works for most recordings"
+                                    controlId="diarization-speaker-count"
+                                    control={
+                                        <Select
+                                            value={
+                                                diarizationSpeakerCount === null
+                                                    ? "auto"
+                                                    : String(
+                                                          diarizationSpeakerCount,
+                                                      )
+                                            }
+                                            onValueChange={(value) => {
+                                                const count =
+                                                    value === "auto"
+                                                        ? null
+                                                        : Number(value);
+                                                handleTranscriptionSettingChange(
+                                                    {
+                                                        diarizationSpeakerCount:
+                                                            count,
+                                                    },
+                                                );
+                                            }}
+                                            disabled={disabled}
+                                        >
+                                            <SettingsSelectTrigger id="diarization-speaker-count">
+                                                <SelectValue>
+                                                    {diarizationSpeakerCount ===
+                                                    null
+                                                        ? "Auto"
+                                                        : String(
+                                                              diarizationSpeakerCount,
+                                                          )}
+                                                </SelectValue>
+                                            </SettingsSelectTrigger>
+                                            <SelectContent align="end">
+                                                <SelectItem value="auto">
+                                                    Auto
+                                                </SelectItem>
+                                                {Array.from(
+                                                    { length: 32 },
+                                                    (_, i) => i + 1,
+                                                ).map((count) => (
+                                                    <SelectItem
+                                                        key={count}
+                                                        value={String(count)}
+                                                    >
+                                                        {count}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    }
+                                />
+                            )}
+                            <SettingsRow
+                                label="Quality"
+                                description="Trades speed for accuracy"
+                                controlId="transcription-quality"
+                                control={
+                                    <Select
+                                        value={transcriptionQuality}
+                                        onValueChange={(value) => {
+                                            setTranscriptionQuality(value);
+                                            handleTranscriptionSettingChange({
+                                                transcriptionQuality: value,
+                                            });
+                                        }}
+                                        disabled={disabled}
+                                    >
+                                        <SettingsSelectTrigger id="transcription-quality">
+                                            <SelectValue>
+                                                {qualityOptions.find(
+                                                    (opt) =>
+                                                        opt.value ===
+                                                        transcriptionQuality,
+                                                )?.label || "Balanced"}
+                                            </SelectValue>
+                                        </SettingsSelectTrigger>
+                                        <SelectContent align="end">
+                                            {qualityOptions.map((option) => (
+                                                <SelectItem
+                                                    key={option.value}
+                                                    value={option.value}
+                                                >
+                                                    <div>
+                                                        <div>
+                                                            {option.label}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {option.description}
+                                                        </div>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                }
+                            />
+                            {canWriteTitles ? (
+                                <ToggleRow
+                                    id="auto-generate-title"
+                                    label="Name recordings automatically"
+                                    description="Writes a title from the transcript with your AI provider"
+                                    checked={autoGenerateTitle}
+                                    onCheckedChange={(checked) => {
+                                        setAutoGenerateTitle(checked);
+                                        handleTranscriptionSettingChange({
+                                            autoGenerateTitle: checked,
+                                        });
+                                    }}
+                                    disabled={disabled}
+                                />
+                            ) : null}
+                            {canWriteTitles && autoGenerateTitle && (
+                                <ToggleRow
+                                    id="sync-title-plaud"
+                                    label="Send titles to Plaud"
+                                    description="Renames the recording in your Plaud account too"
+                                    checked={syncTitleToPlaud}
+                                    onCheckedChange={(checked) => {
+                                        setSyncTitleToPlaud(checked);
+                                        handleTranscriptionSettingChange({
+                                            syncTitleToPlaud: checked,
+                                        });
+                                    }}
+                                    disabled={disabled}
+                                />
+                            )}
+                        </SettingsRows>
+                        {canTranscribe && canWriteTitles ? null : (
+                            <p className="text-ui text-subtle">
+                                {missingProviderLead(
+                                    canTranscribe,
+                                    canWriteTitles,
+                                )}
+                                <a
+                                    href="#providers"
+                                    className="font-medium text-strong underline-offset-4 hover:underline"
+                                >
+                                    {canTranscribe
+                                        ? "add a provider for summaries"
+                                        : "add a provider"}
+                                </a>
+                            </p>
                         )}
-                    </SettingsRows>
+                    </div>
 
                     <SettingsGroup
                         title="Plaud transcripts"
