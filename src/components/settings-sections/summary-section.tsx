@@ -1,11 +1,19 @@
 "use client";
 
-import { ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { nanoid } from "nanoid";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { summaryProviderStateFor } from "@/components/recording/summary-provider";
+import { PromptList } from "@/components/settings/prompt-list";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+    ToggleRow,
+} from "@/components/settings/toggle-row";
+import type { Provider } from "@/components/settings-sections/providers-section";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -19,10 +27,8 @@ import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
 import {
     AI_OUTPUT_LANGUAGES,
@@ -30,6 +36,7 @@ import {
     SUMMARY_PRESETS,
     type SummaryPromptConfiguration,
 } from "@/lib/ai/summary-presets";
+import { toast } from "@/lib/toast";
 
 type EditingPrompt = {
     id?: string;
@@ -41,7 +48,16 @@ type EditingPrompt = {
 // "use the user's default prompt". The DB stores this as NULL.
 const AUTO_PRESET_DEFAULT = "__default__";
 
-export function SummarySection() {
+/**
+ * Summary defaults and the user's summary prompts. Automatic summaries
+ * are hidden until a provider that can write summaries exists.
+ */
+export function SummarySection({
+    providers,
+}: {
+    /** The shared provider list; null while loading (treated as ready). */
+    providers: Provider[] | null;
+}) {
     const confirm = useConfirm();
     const { isLoadingSettings, isSavingSettings, setIsLoadingSettings } =
         useSettings();
@@ -284,14 +300,6 @@ export function SummarySection() {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     const viewingCustom = customPrompts.find((p) => p.id === viewingPromptId);
     const viewingPreset =
         viewingPromptId &&
@@ -306,254 +314,198 @@ export function SummarySection() {
         ? viewingPreset.description
         : "Custom prompt";
     const autoPresetValue = autoSummarizePreset ?? AUTO_PRESET_DEFAULT;
+    const canSummarize = summaryProviderStateFor(providers) !== "missing";
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Summary"
-                description="Prompt presets and provider used when generating recording summaries."
-                icon={ListChecks}
-            />
-            <div className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="summary-preset">
-                        Default summary prompt
-                    </Label>
-                    <Select
-                        value={selectedPrompt}
-                        onValueChange={handlePresetChange}
-                        disabled={isSavingSettings}
-                    >
-                        <SelectTrigger id="summary-preset" className="w-full">
-                            <SelectValue>
-                                {SUMMARY_PRESETS[
-                                    selectedPrompt as keyof typeof SUMMARY_PRESETS
-                                ]?.name ||
-                                    customPrompts.find(
-                                        (p) => p.id === selectedPrompt,
-                                    )?.name ||
-                                    "General Summary"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.values(SUMMARY_PRESETS).map((preset) => (
-                                <SelectItem key={preset.id} value={preset.id}>
-                                    <div>
-                                        <div>{preset.name}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {preset.description}
-                                        </div>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                            {customPrompts.map((prompt) => (
-                                <SelectItem key={prompt.id} value={prompt.id}>
-                                    <div>
-                                        <div>{prompt.name}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            Custom prompt
-                                        </div>
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                        The default prompt used when generating summaries. You
-                        can override this per-recording.
-                    </p>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="ai-output-language">
-                        AI output language
-                    </Label>
-                    <Select
-                        value={outputLanguage}
-                        onValueChange={handleLanguageChange}
-                        disabled={isSavingSettings}
-                    >
-                        <SelectTrigger
-                            id="ai-output-language"
-                            className="w-full"
-                        >
-                            <SelectValue>
-                                {AI_OUTPUT_LANGUAGES.find(
-                                    (l) => l.code === outputLanguage,
-                                )?.label ?? "Auto (match transcript)"}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {AI_OUTPUT_LANGUAGES.map((lang) => (
-                                <SelectItem key={lang.code} value={lang.code}>
-                                    {lang.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                        Applies to AI-generated summaries and titles. Auto lets
-                        the model match the transcript's language.
-                    </p>
-                </div>
-                <div className="flex items-center justify-between pt-2">
-                    <div className="space-y-0.5 flex-1">
-                        <Label htmlFor="auto-summarize" className="text-base">
-                            Auto-generate summary after transcription
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Triggers after any successful transcription —
-                            manual, auto-sync, or re-transcribe. Enable
-                            Auto-transcribe to also cover newly synced
-                            recordings. Costs one extra AI provider call per
-                            generated summary.
-                        </p>
-                    </div>
-                    <Switch
-                        id="auto-summarize"
-                        checked={autoSummarize}
-                        onCheckedChange={handleAutoSummarizeChange}
-                        disabled={isSavingSettings}
-                    />
-                </div>
-                {autoSummarize && (
-                    <div className="space-y-2">
-                        <Label htmlFor="auto-summarize-preset">
-                            Preset for auto-summary
-                        </Label>
-                        <Select
-                            value={autoPresetValue}
-                            onValueChange={handleAutoPresetChange}
-                            disabled={isSavingSettings}
-                        >
-                            <SelectTrigger
-                                id="auto-summarize-preset"
-                                className="w-full"
+        <SettingsGroup
+            title="Summaries"
+            description="How summaries are written, and when"
+        >
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={3} />
+            ) : (
+                <SettingsRows>
+                    <SettingsRow
+                        label="Summary style"
+                        description="Your default. You can pick another for each recording"
+                        controlId="summary-preset"
+                        control={
+                            <Select
+                                value={selectedPrompt}
+                                onValueChange={handlePresetChange}
+                                disabled={isSavingSettings}
                             >
-                                <SelectValue>
-                                    {autoPresetValue === AUTO_PRESET_DEFAULT
-                                        ? "Use default summary prompt"
-                                        : SUMMARY_PRESETS[
-                                              autoPresetValue as keyof typeof SUMMARY_PRESETS
-                                          ]?.name ||
-                                          "Use default summary prompt"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={AUTO_PRESET_DEFAULT}>
-                                    <div>
-                                        <div>Use default summary prompt</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            Inherits the preset selected above
-                                        </div>
-                                    </div>
-                                </SelectItem>
-                                {Object.values(SUMMARY_PRESETS).map(
-                                    (preset) => (
+                                <SettingsSelectTrigger id="summary-preset">
+                                    <SelectValue>
+                                        {SUMMARY_PRESETS[
+                                            selectedPrompt as keyof typeof SUMMARY_PRESETS
+                                        ]?.name ||
+                                            customPrompts.find(
+                                                (p) => p.id === selectedPrompt,
+                                            )?.name ||
+                                            "General Summary"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {Object.values(SUMMARY_PRESETS).map(
+                                        (preset) => (
+                                            <SelectItem
+                                                key={preset.id}
+                                                value={preset.id}
+                                            >
+                                                <div>
+                                                    <div>{preset.name}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {preset.description}
+                                                    </div>
+                                                </div>
+                                            </SelectItem>
+                                        ),
+                                    )}
+                                    {customPrompts.map((prompt) => (
                                         <SelectItem
-                                            key={preset.id}
-                                            value={preset.id}
+                                            key={prompt.id}
+                                            value={prompt.id}
                                         >
                                             <div>
-                                                <div>{preset.name}</div>
+                                                <div>{prompt.name}</div>
                                                 <div className="text-xs text-muted-foreground">
-                                                    {preset.description}
+                                                    Custom prompt
                                                 </div>
                                             </div>
                                         </SelectItem>
-                                    ),
-                                )}
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Pick a different preset for the auto-mode (e.g.
-                            "Action Items" for meetings) without changing your
-                            manual default above.
-                        </p>
-                    </div>
-                )}
-            </div>
-
-            {/* Custom summary prompts */}
-            <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                        Custom Summary Prompts
-                    </h3>
-                    <Button
-                        onClick={() =>
-                            setEditingCustomPrompt({ name: "", prompt: "" })
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         }
-                        size="sm"
-                    >
-                        <Plus className="size-4 mr-2" />
-                        Add Custom Prompt
-                    </Button>
-                </div>
-                {customPrompts.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                        No custom prompts yet. Create one to get started.
-                    </p>
-                ) : (
-                    <div className="space-y-2">
-                        {customPrompts.map((prompt) => (
-                            <div
-                                key={prompt.id}
-                                className="p-4 border rounded-lg"
+                    />
+                    <SettingsRow
+                        label="Output language"
+                        description="For summaries and titles. Auto matches the transcript"
+                        controlId="ai-output-language"
+                        control={
+                            <Select
+                                value={outputLanguage}
+                                onValueChange={handleLanguageChange}
+                                disabled={isSavingSettings}
                             >
-                                <div className="flex items-start justify-between mb-2">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h4 className="font-medium">
-                                                {prompt.name}
-                                            </h4>
-                                            {selectedPrompt === prompt.id && (
-                                                <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded border border-primary/20">
-                                                    Active
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setViewingPromptId(prompt.id)
-                                            }
+                                <SettingsSelectTrigger id="ai-output-language">
+                                    <SelectValue>
+                                        {AI_OUTPUT_LANGUAGES.find(
+                                            (l) => l.code === outputLanguage,
+                                        )?.label ?? "Auto (match transcript)"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {AI_OUTPUT_LANGUAGES.map((lang) => (
+                                        <SelectItem
+                                            key={lang.code}
+                                            value={lang.code}
                                         >
-                                            View
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setEditingCustomPrompt({
-                                                    id: prompt.id,
-                                                    name: prompt.name,
-                                                    prompt: prompt.prompt,
-                                                })
-                                            }
-                                        >
-                                            <Pencil className="size-4" />
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                handleDeleteCustomPrompt(
-                                                    prompt.id,
-                                                )
-                                            }
-                                        >
-                                            <Trash2 className="size-4 text-destructive" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
+                                            {lang.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                    {canSummarize ? (
+                        <ToggleRow
+                            id="auto-summarize"
+                            label="Summarize after transcription"
+                            description="Runs after every transcription, including re-transcribing. Each summary is one more call to your provider"
+                            checked={autoSummarize}
+                            onCheckedChange={handleAutoSummarizeChange}
+                            disabled={isSavingSettings}
+                        />
+                    ) : null}
+                    {canSummarize && autoSummarize && (
+                        <SettingsRow
+                            label="Style for automatic summaries"
+                            description="Lets them differ from your default, e.g. Action Items for meetings"
+                            controlId="auto-summarize-preset"
+                            control={
+                                <Select
+                                    value={autoPresetValue}
+                                    onValueChange={handleAutoPresetChange}
+                                    disabled={isSavingSettings}
+                                >
+                                    <SettingsSelectTrigger id="auto-summarize-preset">
+                                        <SelectValue>
+                                            {autoPresetValue ===
+                                            AUTO_PRESET_DEFAULT
+                                                ? "Same as default"
+                                                : SUMMARY_PRESETS[
+                                                      autoPresetValue as keyof typeof SUMMARY_PRESETS
+                                                  ]?.name || "Same as default"}
+                                        </SelectValue>
+                                    </SettingsSelectTrigger>
+                                    <SelectContent align="end">
+                                        <SelectItem value={AUTO_PRESET_DEFAULT}>
+                                            <div>
+                                                <div>Same as default</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    Uses the summary style above
+                                                </div>
+                                            </div>
+                                        </SelectItem>
+                                        {Object.values(SUMMARY_PRESETS).map(
+                                            (preset) => (
+                                                <SelectItem
+                                                    key={preset.id}
+                                                    value={preset.id}
+                                                >
+                                                    <div>
+                                                        <div>{preset.name}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {preset.description}
+                                                        </div>
+                                                    </div>
+                                                </SelectItem>
+                                            ),
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            }
+                        />
+                    )}
+                </SettingsRows>
+            )}
+            {canSummarize ? null : (
+                <p className="text-ui text-subtle">
+                    Automatic summaries appear once you{" "}
+                    <a
+                        href="#providers"
+                        className="font-medium text-strong underline-offset-4 hover:underline"
+                    >
+                        add a provider
+                    </a>
+                </p>
+            )}
+
+            <PromptList
+                title="Your summary prompts"
+                emptyText="None yet. Write one when the built-in styles don't fit"
+                addLabel="New prompt"
+                onAdd={() => setEditingCustomPrompt({ name: "", prompt: "" })}
+                items={customPrompts.map((prompt) => ({
+                    id: prompt.id,
+                    name: prompt.name,
+                    active: selectedPrompt === prompt.id,
+                }))}
+                onView={setViewingPromptId}
+                onEdit={(id) => {
+                    const prompt = customPrompts.find((p) => p.id === id);
+                    if (prompt) {
+                        setEditingCustomPrompt({
+                            id: prompt.id,
+                            name: prompt.name,
+                            prompt: prompt.prompt,
+                        });
+                    }
+                }}
+                onDelete={handleDeleteCustomPrompt}
+            />
 
             {/* View prompt dialog */}
             {viewingPromptId && (
@@ -711,6 +663,6 @@ Transcription:
                     </DialogContent>
                 </Dialog>
             )}
-        </div>
+        </SettingsGroup>
     );
 }

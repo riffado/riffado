@@ -1,77 +1,74 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
 import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 interface SettingsCardProps {
     /**
      * Optional card title. When absent, the card renders as a plain
-     * surface; the children handle their own structure (useful when a
-     * subsystem only has a single setting and a title would feel like
-     * noise).
+     * surface and the children handle their own structure.
      */
     title?: React.ReactNode;
-    /** Optional short description rendered under the title. */
+    /** Optional short description under the title. No trailing period. */
     description?: React.ReactNode;
-    /** Optional icon shown next to the title at a restrained size. */
-    icon?: LucideIcon;
-    /** Slot rendered in the top-right of the header (e.g. a Switch). */
+    /** Slot on the right of the header (e.g. buttons or a switch). */
     action?: React.ReactNode;
-    children: React.ReactNode;
+    /**
+     * `default`: white card with a border, for things the user acts on.
+     * `quiet`: cream fill with a hairline, for read-only readouts such as
+     * usage meters.
+     */
+    tone?: "default" | "quiet";
+    children?: React.ReactNode;
     className?: string;
 }
 
 /**
- * Visual grouping primitive for settings sections.
- *
- * Each "subsystem" inside a section (Browser notifications, Email
- * notifications, Bark, …) wraps in a SettingsCard so related controls
- * read as one unit. The card itself is a subtle surface — border +
- * radius + padding — not a heavy raised card; settings should still
- * feel like a flat document, not a dashboard.
+ * Card surface for settings, drawn like the artboards: card radius with
+ * continuous corners, 20px padding, header with title, description and
+ * an action slot.
  */
 export function SettingsCard({
     title,
     description,
-    icon: Icon,
     action,
+    tone = "default",
     children,
     className,
 }: SettingsCardProps) {
+    const hasHeader = Boolean(title || description || action);
     return (
         <div
             className={cn(
-                "rounded-lg border bg-card/40 px-4 py-3.5",
+                "squircle flex flex-col gap-4 rounded-[var(--radius-card)] border p-5",
+                tone === "default"
+                    ? "border-border bg-reader dark:bg-card"
+                    : "border-hairline bg-background",
                 className,
             )}
         >
-            {(title || description || action) && (
-                <div className="flex items-start justify-between gap-4 pb-3">
-                    <div className="min-w-0 flex-1">
+            {hasHeader && (
+                <div className="flex items-start justify-between gap-4 max-sm:flex-col">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                         {title && (
-                            <div className="flex items-center gap-2 text-sm font-medium">
-                                {Icon && (
-                                    <Icon
-                                        className="size-4 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                )}
-                                <span>{title}</span>
+                            <div className="text-option font-semibold text-strong">
+                                {title}
                             </div>
                         )}
                         {description && (
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <div className="text-ui text-subtle">
                                 {description}
-                            </p>
+                            </div>
                         )}
                     </div>
-                    {action && <div className="shrink-0">{action}</div>}
+                    {action && (
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                            {action}
+                        </div>
+                    )}
                 </div>
             )}
-            <div className={cn(title || description ? "space-y-3" : "")}>
-                {children}
-            </div>
+            {children}
         </div>
     );
 }

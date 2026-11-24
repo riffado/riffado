@@ -1,6 +1,50 @@
 /** Max stored/display title length. Download basenames use the same cap. */
 export const MAX_RECORDING_TITLE_LENGTH = 200;
 
+export const AUDIO_FILE_EXTENSIONS = [
+    ".mp3",
+    ".mp4",
+    ".m4a",
+    ".wav",
+    ".ogg",
+    ".opus",
+    ".webm",
+    ".aac",
+    ".flac",
+] as const;
+
+/**
+ * Splits a trailing audio extension from `AUDIO_FILE_EXTENSIONS` off a
+ * recording name (case-insensitive). `extension` keeps the stored casing
+ * and is empty when the name has none; `base` may be empty for a name
+ * that is only an extension.
+ */
+export function splitAudioExtension(filename: string): {
+    base: string;
+    extension: string;
+} {
+    const lower = filename.toLowerCase();
+    const match = AUDIO_FILE_EXTENSIONS.find((ext) => lower.endsWith(ext));
+    if (!match) return { base: filename, extension: "" };
+    return {
+        base: filename.slice(0, -match.length),
+        extension: filename.slice(-match.length),
+    };
+}
+
+/**
+ * The name to store after a rename: the stored audio extension goes back
+ * on the typed name, unless the user typed a known audio extension.
+ */
+export function renamedRecordingFilename(
+    stored: string,
+    typed: string,
+): string {
+    const { extension } = splitAudioExtension(stored);
+    if (!extension || splitAudioExtension(typed).extension) return typed;
+    return `${typed}${extension}`;
+}
+
 const DOWNLOAD_PARAM_TRUE = new Set(["1", "true", "yes"]);
 
 function stripControlChars(value: string): string {

@@ -37,7 +37,7 @@ export function LandingNavMobile() {
                     <Menu aria-hidden="true" className="size-4" />
                 </button>
             </DialogTrigger>
-            <DialogContent className="inset-x-0 top-0 left-0 max-h-dvh w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-x-0 border-t-0 p-0 pt-[env(safe-area-inset-top)] shadow-lg motion-reduce:animate-none sm:max-w-none">
+            <DialogContent className="inset-x-0 top-0 left-0 max-h-dvh w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-x-0 border-t-0 border-b border-border p-0 pt-[env(safe-area-inset-top)] shadow-lg motion-reduce:animate-none sm:max-w-none">
                 <div className="flex h-16 items-center border-b border-border/60 px-4">
                     <DialogTitle className="text-base">Menu</DialogTitle>
                 </div>

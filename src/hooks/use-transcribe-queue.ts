@@ -1,7 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 type ActionKind = "transcribing" | "summarizing";
 
@@ -23,6 +24,7 @@ interface Options {
  * same map without duplicating the Map-update plumbing.
  */
 export function useTranscribeQueue({ onTranscribeComplete }: Options) {
+    const router = useRouter();
     const [inFlightActions, setInFlightActions] = useState<
         Map<string, ActionKind>
     >(new Map());
@@ -57,8 +59,21 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
                     toast.success("Transcription complete");
                     onTranscribeComplete();
                 } else {
-                    const error = await response.json();
-                    toast.error(error.error || "Transcription failed");
+                    const error = await response.json().catch(() => ({}));
+                    if (error.code === "NO_TRANSCRIPTION_PROVIDER") {
+                        toast.error(
+                            "Add a transcription provider in Settings, or transcribe in your browser",
+                            {
+                                action: {
+                                    label: "Open Settings",
+                                    onClick: () =>
+                                        router.push("/settings#transcription"),
+                                },
+                            },
+                        );
+                    } else {
+                        toast.error(error.error || "Transcription failed");
+                    }
                 }
             } catch {
                 toast.error("Failed to transcribe recording");
@@ -70,7 +85,7 @@ export function useTranscribeQueue({ onTranscribeComplete }: Options) {
                 markAction(id, null);
             }
         },
-        [markAction, onTranscribeComplete],
+        [markAction, onTranscribeComplete, router],
     );
 
     return {

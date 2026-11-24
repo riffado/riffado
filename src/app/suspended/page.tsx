@@ -1,6 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { AuthHeading, AuthShell } from "@/components/auth/auth-shell";
+import { SignOutButton } from "@/components/auth/sign-out-button";
+import { Button } from "@/components/ui/button";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getSession } from "@/lib/auth-server";
@@ -9,6 +12,8 @@ export const metadata: Metadata = {
     title: "Account suspended | Riffado",
     robots: { index: false, follow: false },
 };
+
+const SUPPORT_EMAIL = "support@riffado.com";
 
 /**
  * Page shown to suspended users. We deliberately tell them their account is
@@ -32,35 +37,23 @@ export default async function SuspendedPage() {
     if (!u?.suspendedAt) redirect("/dashboard");
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-6">
-            <div className="max-w-md border rounded-xl p-6 bg-card shadow-sm">
-                <h1 className="text-lg font-semibold mb-2">
-                    Your account is suspended
-                </h1>
-                <p className="text-sm text-muted-foreground mb-4">
-                    Access to recordings, sync, and transcription is paused
-                    while we review your account.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                    Reach out at{" "}
-                    <a href="mailto:support@riffado.com" className="underline">
-                        support@riffado.com
-                    </a>{" "}
-                    if you think this is a mistake.
-                </p>
-                <form
-                    action="/api/auth/sign-out"
-                    method="post"
-                    className="mt-6"
-                >
-                    <button
-                        type="submit"
-                        className="text-sm border rounded px-3 py-2 hover:bg-muted"
-                    >
-                        Sign out
-                    </button>
-                </form>
+        <AuthShell width="wide">
+            <AuthHeading title="Your account is suspended">
+                Recordings, sync and transcription are paused while we review
+                your account. If you think this is a mistake, email{" "}
+                <span className="font-medium text-strong">{SUPPORT_EMAIL}</span>
+            </AuthHeading>
+            <div className="flex flex-wrap gap-2">
+                <Button asChild variant="ink" size="control">
+                    <a href={`mailto:${SUPPORT_EMAIL}`}>Email support</a>
+                </Button>
+                <SignOutButton />
             </div>
-        </div>
+            {session.user.email ? (
+                <p className="text-small text-muted-foreground">
+                    Signed in as {session.user.email}
+                </p>
+            ) : null}
+        </AuthShell>
     );
 }

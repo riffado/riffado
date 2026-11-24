@@ -162,9 +162,12 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                     const result = await response.json();
                     const syncTime = new Date();
                     lastSyncTimeRef.current = syncTime.getTime();
-                    localStorage.setItem(STORAGE_KEY, syncTime.toISOString());
 
                     if (result.inProgress) {
+                        localStorage.setItem(
+                            STORAGE_KEY,
+                            syncTime.toISOString(),
+                        );
                         setStatus((prev) => ({
                             ...prev,
                             lastSyncTime: syncTime,
@@ -176,14 +179,36 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
                         return;
                     }
 
+                    const errors: string[] = Array.isArray(result.errors)
+                        ? result.errors.filter(
+                              (e: unknown): e is string =>
+                                  typeof e === "string",
+                          )
+                        : [];
+                    const needsReconnect = result.needsReconnect === true;
+                    const failed = errors.length > 0;
+                    if (!failed) {
+                        localStorage.setItem(
+                            STORAGE_KEY,
+                            syncTime.toISOString(),
+                        );
+                    }
+
                     setStatus((prev) => ({
                         ...prev,
-                        lastSyncTime: syncTime,
-                        lastSyncResult: {
-                            success: true,
-                            newRecordings: result.newRecordings || 0,
-                            needsReconnect: result.needsReconnect === true,
-                        },
+                        lastSyncTime: failed ? prev.lastSyncTime : syncTime,
+                        lastSyncResult: failed
+                            ? {
+                                  success: false,
+                                  newRecordings: result.newRecordings || 0,
+                                  error: errors[0],
+                                  needsReconnect,
+                              }
+                            : {
+                                  success: true,
+                                  newRecordings: result.newRecordings || 0,
+                                  needsReconnect,
+                              },
                     }));
 
                     if (!silent || result.newRecordings > 0) {
@@ -192,8 +217,11 @@ export function useAutoSync(options: UseAutoSyncOptions = {}) {
 
                     if (result.newRecordings > 0) {
                         onSuccessRef.current?.(result.newRecordings);
-                    } else if (!silent) {
+                    } else if (!silent && !failed) {
                         onSuccessRef.current?.(0);
+                    }
+                    if (failed && !silent && !needsReconnect) {
+                        onErrorRef.current?.(errors[0]);
                     }
                 } else {
                     const errorMessage = await getApiErrorMessage(

@@ -16,7 +16,9 @@
     --secondary: oklch(0.9245 0.0138 92.9892);
     --secondary-foreground: oklch(0.4334 0.0177 98.6048);
     --muted: oklch(0.9341 0.0153 90.239);
-    --muted-foreground: oklch(0.6059 0.0075 97.4233);
+    /* Tertiary text. #66655E keeps 4.5:1 on cream and on the Sand selected
+       row, so it can carry 12-13px metadata (DESIGN.md section 3). */
+    --muted-foreground: #66655e;
     --accent: oklch(0.9245 0.0138 92.9892);
     --accent-foreground: oklch(0.2671 0.0196 98.939);
     --destructive: oklch(0.1908 0.002 106.5859);
@@ -45,12 +47,105 @@
     --auth-brand: oklch(0.3438 0.0269 95.7226);
     --auth-brand-foreground: oklch(0.9818 0.0054 95.0986);
 
+    /* Redesign palette (docs/design/DESIGN.md section 3). Theme-stable. */
+    --ink: #141413;
+    --night: #262624;
+    --night-deep: #1a1915;
+    --night-raised: #30302e;
+    --night-border: #3e3e38;
+    --night-text: #c3c0b6;
+    --terracotta: #c96442;
+    --terracotta-bright: #d97757;
+    --terracotta-wash: #f3e3da;
+    --status-ready: #11ad32;
+    --status-working: #d9a514;
+    /* Strongest text and played dots on night surfaces. */
+    --night-foreground: #faf9f5;
+    /* Unplayed dots on night surfaces. */
+    --night-dim: #6b6a63;
+
+    /* Redesign text and surface roles (DESIGN.md section 3). Theme-aware:
+       the light values match the Paper tokens, .dark remaps them. */
+    --surface: var(--sidebar);
+    --strong: var(--ink);
+    --subtle: #535146;
+    /* Settings: hairline between stacked rows (Paper --color-secondary). */
+    --hairline: var(--secondary);
+
+    /* Recording view: the white reading surface and the floating night
+       player that sits on it. */
+    --reader: #ffffff;
+    --player-surface: var(--night);
+    --player-shadow:
+        0 12px 40px rgb(20 20 19 / 0.22), 0 2px 6px rgb(20 20 19 / 0.12);
+
+    /* Menus, selects and confirm dialogs (Paper: 01 Foundations > System >
+       Menus & dialogs). Highlight is the Sand used for row hover. */
+    --menu-surface: var(--reader);
+    --menu-border: var(--secondary);
+    --menu-highlight: var(--secondary);
+    --menu-shadow:
+        0 12px 32px rgb(20 20 19 / 0.12), 0 1px 3px rgb(20 20 19 / 0.06);
+    --dialog-surface: var(--reader);
+    --dialog-shadow:
+        0 24px 64px rgb(20 20 19 / 0.18), 0 2px 6px rgb(20 20 19 / 0.08);
+    /* Quiet band at the bottom of a dialog (Connect Plaud "Other ways"). */
+    --dialog-footer: var(--surface);
+    /* Quiet fill for notes and panels inside content ("What gets sent"). */
+    --quiet-surface: var(--surface);
+
+    /* Text inputs and textareas. */
+    --field-surface: var(--reader);
+    /* The open recording in the library list. */
+    --row-selected: var(--accent);
+
+    /* Toasts (Paper: System > 05 Forms & feedback). Read by the ding
+       overrides at the end of this file. */
+    --toast-surface: var(--reader);
+    --toast-text: var(--ink);
+    --toast-ring: rgb(20 20 19 / 0.08);
+    --toast-shadow:
+        0 8px 24px rgb(20 20 19 / 0.12), 0 1px 3px rgb(20 20 19 / 0.06);
+
+    /* Motion. Popovers grow from their trigger; dialogs and their overlay
+       share one timing. Exits are faster than entrances. Tooltips: first
+       one animates, neighbours are instant. Buttons press to 0.96.
+       On-screen movement uses --ease-in-out. */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --duration-popover-in: 150ms;
+    --duration-popover-out: 100ms;
+    --duration-dialog-in: 200ms;
+    --duration-dialog-out: 150ms;
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --duration-press: 150ms;
+    --duration-tooltip-in: 125ms;
+    --duration-indicator: 200ms;
+    --duration-push-in: 200ms;
+    --duration-push-out: 150ms;
+    --duration-reflow: 200ms;
+    --duration-status: 200ms;
+
+    /* Corner radii. Values assume continuous (squircle) corners; the
+       .squircle utility scales them down where corner-shape is unsupported. */
+    --radius-small: 10px;
+    --radius-inner: 12px;
+    --radius-control: 15px;
+    --radius-item: 18px;
+    --radius-menu: 16px;
+    --radius-card: 30px;
+    --radius-sheet: 56px;
+
     --font-sans:
-        ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        var(--font-funnel-sans), ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+        "Segoe UI Symbol", "Noto Color Emoji";
+    --font-display: var(--font-funnel-display), var(--font-sans);
+    --font-dot: var(--font-doto), var(--font-mono);
     --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-mono:
-        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
+        var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
+        Consolas, "Liberation Mono", "Courier New", monospace;
     --radius: 0.5rem;
     --shadow-x: 0;
     --shadow-y: 1px;
@@ -100,39 +195,87 @@
     --text-muted: var(--muted-foreground);
 }
 
+/* Dark mode (DESIGN.md section 3, Paper page 08). Sidebar #1F1E1D; list,
+   reader and settings content Night #262624; cards, menus, inputs,
+   dialogs and the player Night-raised #30302E; hairlines #3E3E38. Text:
+   strong #FAF9F5, body #C3C0B6, muted #A3A196 (5.1:1 on #30302E). */
 .dark {
-    --background: oklch(0.2679 0.0036 106.6427);
-    --foreground: oklch(0.8074 0.0142 93.0137);
-    --card: oklch(0.2679 0.0036 106.6427);
-    --card-foreground: oklch(0.9818 0.0054 95.0986);
-    --popover: oklch(0.3085 0.0035 106.6039);
-    --popover-foreground: oklch(0.9211 0.004 106.4781);
-    --primary: oklch(0.6724 0.1308 38.7559);
+    --background: #262624;
+    --foreground: #c3c0b6;
+    /* Raised surface: cards, the search field, banners. */
+    --card: #30302e;
+    --card-foreground: #faf9f5;
+    --popover: #30302e;
+    --popover-foreground: #faf9f5;
+    --primary: #d97757;
     --primary-foreground: oklch(1 0 0);
-    --secondary: oklch(0.9818 0.0054 95.0986);
-    --secondary-foreground: oklch(0.3085 0.0035 106.6039);
-    --muted: oklch(0.2213 0.0038 106.707);
-    --muted-foreground: oklch(0.7713 0.0169 99.0657);
-    --accent: oklch(0.213 0.0078 95.4245);
-    --accent-foreground: oklch(0.9663 0.008 98.8792);
-    --destructive: oklch(0.6368 0.2078 25.3313);
-    --destructive-foreground: oklch(1 0 0);
-    --border: oklch(0.3618 0.0101 106.8928);
-    --input: oklch(0.4336 0.0113 100.2195);
-    --ring: oklch(0.6724 0.1308 38.7559);
+    /* Sand in light; on dark the hairline tone (avatars, secondary buttons). */
+    --secondary: #3e3e38;
+    --secondary-foreground: #c3c0b6;
+    /* Quiet fills: slider and meter tracks, avatars. */
+    --muted: #3e3e38;
+    --muted-foreground: #a3a196;
+    /* Hover and the active nav item: Night-raised. */
+    --accent: #30302e;
+    --accent-foreground: #faf9f5;
+    /* Destructive actions are ink like every other action (DESIGN.md
+       section 8); on dark that is the near-white fill. */
+    --destructive: #faf9f5;
+    --destructive-foreground: #141413;
+    --border: #3e3e38;
+    /* Field border (System 05 dark field). */
+    --input: #52514a;
+    --ring: #d97757;
     --chart-1: oklch(0.5583 0.1276 42.9956);
     --chart-2: oklch(0.6898 0.1581 290.4107);
     --chart-3: oklch(0.213 0.0078 95.4245);
     --chart-4: oklch(0.3074 0.0516 289.323);
     --chart-5: oklch(0.5608 0.1348 42.0584);
-    --sidebar: oklch(0.2357 0.0024 67.7077);
-    --sidebar-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-primary: oklch(0.325 0 0);
-    --sidebar-primary-foreground: oklch(0.9881 0 0);
-    --sidebar-accent: oklch(0.168 0.002 106.6177);
-    --sidebar-accent-foreground: oklch(0.8074 0.0142 93.0137);
-    --sidebar-border: oklch(0.9401 0 0);
-    --sidebar-ring: oklch(0.7731 0 0);
+    --sidebar: #1f1e1d;
+    --sidebar-foreground: #c3c0b6;
+    --sidebar-primary: #faf9f5;
+    --sidebar-primary-foreground: #141413;
+    --sidebar-accent: #30302e;
+    --sidebar-accent-foreground: #faf9f5;
+    --sidebar-border: #3e3e38;
+    --sidebar-ring: #d97757;
+
+    --strong: #faf9f5;
+    --subtle: #c3c0b6;
+    --hairline: var(--border);
+
+    /* Status dots brighten on dark; terracotta becomes the bright tint. */
+    --status-ready: #3fcf5c;
+    --status-working: #e8b931;
+    --terracotta: #d97757;
+    --terracotta-wash: #34271f;
+
+    --reader: var(--background);
+    --field-surface: #2e2e2b;
+    --row-selected: var(--night-deep);
+
+    /* The player keeps its own raised surface, a 1px hairline (drawn as a
+       ring so the light layout doesn't change) and a deeper shadow. */
+    --player-surface: var(--night-raised);
+    --player-shadow:
+        0 0 0 1px var(--night-border), 0 12px 40px rgb(0 0 0 / 0.48), 0 2px 6px
+        rgb(0 0 0 / 0.27);
+
+    --menu-surface: var(--night-raised);
+    --menu-border: var(--night-border);
+    --menu-highlight: var(--night-border);
+    --menu-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+    --dialog-surface: var(--night-raised);
+    --dialog-shadow: 0 24px 64px rgb(0 0 0 / 0.4), 0 2px 6px rgb(0 0 0 / 0.2);
+    --dialog-footer: #2a2a28;
+    /* A light veil, so a note reads raised on the page (#2F2F2D) and on a
+       dialog (#383835) alike. */
+    --quiet-surface: rgb(250 249 245 / 0.04);
+
+    --toast-surface: var(--night-raised);
+    --toast-text: var(--night-foreground);
+    --toast-ring: rgb(250 249 245 / 0.08);
+    --toast-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
 
     /* Hardware Design System Colors (Dark Mode) */
     --app-background: var(--background);
@@ -195,10 +338,86 @@
     --color-sidebar-ring: var(--sidebar-ring);
     --color-auth-brand: var(--auth-brand);
     --color-auth-brand-foreground: var(--auth-brand-foreground);
+    --color-ink: var(--ink);
+    --color-night: var(--night);
+    --color-night-deep: var(--night-deep);
+    --color-night-raised: var(--night-raised);
+    --color-night-border: var(--night-border);
+    --color-night-text: var(--night-text);
+    --color-night-foreground: var(--night-foreground);
+    --color-night-dim: var(--night-dim);
+    --color-terracotta: var(--terracotta);
+    --color-terracotta-bright: var(--terracotta-bright);
+    --color-terracotta-wash: var(--terracotta-wash);
+    --color-status-ready: var(--status-ready);
+    --color-status-working: var(--status-working);
+    --color-surface: var(--surface);
+    --color-strong: var(--strong);
+    --color-subtle: var(--subtle);
+    --color-hairline: var(--hairline);
+
+    /* Settings type roles (Paper settings artboards). */
+    --text-page-title: 44px;
+    --text-page-title--line-height: 46px;
+    --text-page-title--letter-spacing: -0.04em;
+    --text-section-title: 22px;
+    --text-section-title--line-height: 28px;
+    --text-section-title--letter-spacing: -0.02em;
+    --text-plan-title: 28px;
+    --text-plan-title--line-height: 34px;
+    --text-plan-title--letter-spacing: -0.03em;
+    --text-option: 16px;
+    --text-option--line-height: 20px;
+    --text-row: 15px;
+    --text-row--line-height: 18px;
+    --text-meter: 28px;
+    --text-meter--line-height: 28px;
+    --text-meter-large: 32px;
+    --text-meter-large--line-height: 32px;
+    --color-reader: var(--reader);
+    --color-player: var(--player-surface);
+    --shadow-player: var(--player-shadow);
+    --color-menu-surface: var(--menu-surface);
+    --color-menu-border: var(--menu-border);
+    --color-menu-highlight: var(--menu-highlight);
+    --shadow-menu: var(--menu-shadow);
+    --color-dialog-surface: var(--dialog-surface);
+    --shadow-dialog: var(--dialog-shadow);
+    --color-dialog-footer: var(--dialog-footer);
+    --color-quiet: var(--quiet-surface);
+    --color-field: var(--field-surface);
+    --color-row-selected: var(--row-selected);
+    --text-dialog-body: 14px;
+    --text-dialog-body--line-height: 21px;
+
+    --text-small: 13px;
+    --text-small--line-height: 19px;
+    --text-ui: 14px;
+    --text-ui--line-height: 18px;
+    --text-pane-title: 26px;
+    --text-pane-title--line-height: 32px;
+    --text-pane-title--letter-spacing: -0.03em;
+    --text-reading: 17px;
+    --text-reading--line-height: 26px;
+    --text-display: 48px;
+    --text-display--line-height: 50px;
+    --text-display--letter-spacing: -0.045em;
+    --text-document-title: 60px;
+    --text-document-title--line-height: 60px;
+    --text-document-title--letter-spacing: -0.045em;
+    --text-document-title-compact: 34px;
+    --text-document-title-compact--line-height: 36px;
+    --text-document-title-compact--letter-spacing: -0.04em;
+    --text-lead: 19px;
+    --text-lead--line-height: 31px;
+    --text-transcript: 17px;
+    --text-transcript--line-height: 28px;
 
     --font-sans: var(--font-sans);
     --font-mono: var(--font-mono);
     --font-serif: var(--font-serif);
+    --font-display: var(--font-display);
+    --font-dot: var(--font-dot);
 
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
@@ -271,7 +490,6 @@
     * {
         scrollbar-width: thin;
         scrollbar-color: transparent transparent;
-        transition: scrollbar-color 200ms ease;
     }
 
     *:hover,
@@ -346,6 +564,12 @@
         }
     }
 
+    /* Doto always renders with round dots to match the logo. */
+    .font-dot {
+        font-variation-settings: "ROND" 100;
+        font-variant-numeric: tabular-nums;
+    }
+
     html::-webkit-scrollbar-thumb {
         background-color: color-mix(
             in oklch,
@@ -381,18 +605,24 @@
         background: var(--panel-surface);
         box-shadow: var(--shadow-sm);
         border: 1px solid var(--panel-border);
-        transition: all 0.2s ease;
+        transition:
+            background-color 150ms ease,
+            border-color 150ms ease,
+            box-shadow 150ms ease,
+            translate 150ms var(--ease-out);
     }
 
-    .metal-button:hover {
-        background: var(--accent);
-        border-color: var(--primary);
-        box-shadow: var(--shadow-md);
+    @media (hover: hover) and (pointer: fine) {
+        .metal-button:hover {
+            background: var(--accent);
+            border-color: var(--primary);
+            box-shadow: var(--shadow-md);
+        }
     }
 
-    .metal-button:active {
+    .metal-button:not(:disabled):active {
         box-shadow: var(--shadow-xs);
-        transform: translateY(1px);
+        translate: 0 1px;
     }
 
     .led-indicator {
@@ -987,6 +1217,135 @@
         }
     }
 
+    /* Continuous corners. Radius tokens are tuned for squircles, which read
+       tighter than circular arcs; without support, scale them down. */
+    .squircle {
+        /* biome-ignore lint/correctness/noUnknownProperty: corner-shape (CSS Borders 4) is newer than Biome's property list */
+        corner-shape: squircle;
+    }
+
+    /* biome-ignore lint/correctness/noUnknownProperty: corner-shape (CSS Borders 4) is newer than Biome's property list */
+    @supports not (corner-shape: squircle) {
+        .squircle {
+            --radius-small: 7px;
+            --radius-inner: 8px;
+            --radius-control: 10px;
+            --radius-item: 12px;
+            --radius-menu: 11px;
+            --radius-card: 20px;
+            --radius-sheet: 38px;
+        }
+    }
+
+    /* Menus, context menus and selects grow from their trigger (or the
+       cursor). Pair with an `origin-(--radix-...-transform-origin)` class. */
+    .motion-popover[data-state="open"] {
+        animation: popover-in var(--duration-popover-in) var(--ease-out);
+    }
+
+    .motion-popover[data-state="closed"] {
+        animation: popover-out var(--duration-popover-out) var(--ease-out)
+            forwards;
+    }
+
+    /* Dialogs and their overlay: centred, one shared timing. */
+    .motion-dialog[data-state="open"] {
+        animation: popover-in var(--duration-dialog-in) var(--ease-out);
+    }
+
+    .motion-dialog[data-state="closed"] {
+        animation: popover-out var(--duration-dialog-out) var(--ease-out)
+            forwards;
+    }
+
+    .motion-overlay[data-state="open"] {
+        animation: fade-in var(--duration-dialog-in) var(--ease-out);
+    }
+
+    .motion-overlay[data-state="closed"] {
+        animation: fade-out var(--duration-dialog-out) var(--ease-out) forwards;
+    }
+
+    /* Tooltips: the first one (delayed-open) grows from its trigger;
+       neighbours opened inside the skip-delay window (instant-open)
+       appear with no animation. */
+    .motion-tooltip[data-state="delayed-open"] {
+        animation: popover-in var(--duration-tooltip-in) var(--ease-out);
+    }
+
+    .motion-tooltip[data-state="closed"] {
+        animation: popover-out var(--duration-popover-out) var(--ease-out)
+            forwards;
+    }
+
+    /* Press feedback for buttons and chips. Colours ease; the press
+       scale uses the strong ease-out. Disabled controls never scale. */
+    .motion-press {
+        transition-property:
+            color, background-color, border-color, opacity, scale;
+        transition-duration: var(--duration-press);
+        transition-timing-function: ease, ease, ease, ease, var(--ease-out);
+    }
+
+    .motion-press:not(:disabled):active {
+        scale: 0.96;
+    }
+
+    /* A status dot whose work is in progress. */
+    .motion-breathe {
+        animation: status-breathe 1000ms var(--ease-in-out) infinite alternate;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .motion-popover[data-state="open"],
+        .motion-dialog[data-state="open"],
+        .motion-tooltip[data-state="delayed-open"] {
+            animation-name: fade-in;
+        }
+
+        .motion-popover[data-state="closed"],
+        .motion-dialog[data-state="closed"],
+        .motion-tooltip[data-state="closed"] {
+            animation-name: fade-out;
+        }
+
+        .motion-breathe {
+            animation: none;
+        }
+    }
+
+    @keyframes popover-in {
+        from {
+            opacity: 0;
+            transform: scale(0.97);
+        }
+    }
+
+    @keyframes popover-out {
+        to {
+            opacity: 0;
+            transform: scale(0.97);
+        }
+    }
+
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+    }
+
+    @keyframes fade-out {
+        to {
+            opacity: 0;
+        }
+    }
+
+    @keyframes status-breathe {
+        to {
+            opacity: 0.45;
+        }
+    }
+
     /* Print styles (disable hardware effects) */
     @media print {
         .rack-container,
@@ -996,4 +1355,46 @@
             border: 1px solid #ccc;
         }
     }
+}
+
+/* Toasts (ding, System 05). Outside any layer: ding prepends its own
+   unlayered stylesheet to <head>, and layered rules would always lose to
+   it. Surface, text and ring come from the --toast-* tokens; status
+   badges are filled with the status colour and carry a contrasting
+   glyph (ink on green and yellow, white on terracotta). */
+.tst-viewport {
+    --tst-bg: var(--toast-surface);
+    --tst-fg: var(--toast-text);
+    --tst-ring: var(--toast-ring);
+    --tst-shadow: 0 0 0 1px var(--tst-ring), var(--toast-shadow);
+    --tst-success: var(--status-ready);
+    --tst-error: var(--terracotta);
+    --tst-warning: var(--status-working);
+    --tst-info: var(--toast-text);
+    font-family: var(--font-sans);
+}
+
+.tst:is(
+        [data-type="success"],
+        [data-type="error"],
+        [data-type="warning"],
+        [data-type="info"]
+    )
+    .tst-svg
+    path:first-child {
+    fill: var(--c);
+}
+
+.tst:is([data-type="success"], [data-type="warning"])
+    .tst-svg
+    path:not(:first-child) {
+    stroke: var(--ink);
+}
+
+.tst[data-type="error"] .tst-svg path:not(:first-child) {
+    stroke: var(--primary-foreground);
+}
+
+.tst[data-type="info"] .tst-svg path:not(:first-child) {
+    stroke: var(--tst-bg);
 }

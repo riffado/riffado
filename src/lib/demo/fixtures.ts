@@ -3,6 +3,7 @@ import {
     INITIAL_SETTINGS_DEFAULTS,
     type InitialSettings,
 } from "@/lib/settings/initial-settings";
+import type { RecorderDevice } from "@/types/device";
 import type { Recording } from "@/types/recording";
 
 /**
@@ -21,7 +22,22 @@ import type { Recording } from "@/types/recording";
 interface TranscriptionFixture {
     text: string;
     language?: string;
+    source: string;
+    provider: string;
+    transcriptionType: string;
 }
+
+/** Where a demo transcript came from; defaults to the user's Groq key. */
+type TranscriptOrigin = Pick<
+    TranscriptionFixture,
+    "source" | "provider" | "transcriptionType"
+>;
+
+const DEFAULT_ORIGIN: TranscriptOrigin = {
+    source: "riffado",
+    provider: "Groq",
+    transcriptionType: "server",
+};
 
 interface DemoRecordingSeed {
     id: string;
@@ -36,6 +52,8 @@ interface DemoRecordingSeed {
     transcript?: string;
     /** Optional ISO-639-1 detected language. Defaults to "en" when transcript is set. */
     language?: string;
+    /** Transcript provenance. Defaults to `DEFAULT_ORIGIN`. */
+    origin?: TranscriptOrigin;
     summary?: SummaryData;
 }
 
@@ -117,6 +135,11 @@ const SEEDS: DemoRecordingSeed[] = [
         filesize: 22_600_000,
         minutesAgo: 60 * 4 + 12,
         deviceSn: DEMO_DEVICE_SN,
+        origin: {
+            source: "plaud",
+            provider: "plaud",
+            transcriptionType: "server",
+        },
         transcript: [
             "[00:00] How was the week? You mentioned wanting to talk through the on-call rotation, let's start there.",
             "[00:14] Yeah, the rotation's basically working but I want to revisit the escalation policy. Last Tuesday we had a P2 that should have paged me and didn't — alert fired but routing rules dropped it.",
@@ -166,6 +189,11 @@ const SEEDS: DemoRecordingSeed[] = [
         filesize: 6_900_000,
         minutesAgo: 60 * 26,
         deviceSn: DEMO_DEVICE_SN,
+        origin: {
+            source: "riffado",
+            provider: "browser",
+            transcriptionType: "browser",
+        },
         transcript: [
             "[00:00] Going around. Sam, you start.",
             "[00:03] Yesterday I finished the storage adapter refactor. Today, code review on the migration PR and starting the export-format spec. No blockers.",
@@ -261,6 +289,7 @@ export function buildDemoTranscriptions(): Map<string, TranscriptionFixture> {
             map.set(seed.id, {
                 text: seed.transcript,
                 language: seed.language ?? "en",
+                ...(seed.origin ?? DEFAULT_ORIGIN),
             });
         }
     }
@@ -285,6 +314,11 @@ export const DEMO_SUMMARIES: Map<string, SummaryData> = new Map(
 export function isDemoRecordingId(id: string): boolean {
     return id.startsWith("demo-");
 }
+
+/** Demo recorders for the sidebar; the serial matches every demo recording. */
+export const DEMO_DEVICES: RecorderDevice[] = [
+    { serialNumber: DEMO_DEVICE_SN, name: "Note Pro", model: "notepro" },
+];
 
 /**
  * Demo `InitialSettings`. Built on top of the real defaults so any new

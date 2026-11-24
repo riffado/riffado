@@ -1,24 +1,20 @@
 "use client";
 
-import {
-    AlertTriangle,
-    CreditCard,
-    Download,
-    ExternalLink,
-    Loader2,
-    Receipt,
-} from "lucide-react";
+import { Download, ExternalLink, Loader2, Receipt } from "lucide-react";
 import posthog from "posthog-js";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { useConfirm } from "@/components/confirm-dialog";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { DotNumber, UsageReadout } from "@/components/settings/dot-meter";
+import { shortBytes, splitBytes } from "@/components/settings/format-usage";
+import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
+import { SettingsRow, SettingsRows } from "@/components/settings/toggle-row";
 import { Button } from "@/components/ui/button";
+import { FilterGroup } from "@/components/ui/filter-group";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatBytes } from "@/lib/format-bytes";
-import { cn } from "@/lib/utils";
+import { StatusDot, type StatusTone } from "@/components/ui/status-dot";
+import { toast } from "@/lib/toast";
 
 interface CatalogPrice {
     currency: "usd" | "eur";
@@ -165,69 +161,6 @@ function billingIntervalFromMirroredInterval(
     interval: string,
 ): BillingInterval {
     return interval === "1 year" ? "year" : "month";
-}
-
-/** formatBytes but without a noisy trailing ".00" on round caps. */
-function prettyBytes(bytes: number): string {
-    return formatBytes(bytes).replace(".00 ", " ");
-}
-
-type StatusTone = "active" | "warn" | "neutral";
-
-const TONE_DOT: Record<StatusTone, string> = {
-    active: "bg-[var(--led-active)]",
-    warn: "bg-[var(--led-warning)]",
-    neutral: "bg-muted-foreground/60",
-};
-
-function StatusPill({ label, tone }: { label: string; tone: StatusTone }) {
-    return (
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-background/60 px-2.5 py-1 text-xs font-medium text-foreground">
-            <span className={cn("size-1.5 rounded-full", TONE_DOT[tone])} />
-            {label}
-        </span>
-    );
-}
-
-/** Usage meter with a used-fraction bar that turns amber near the cap. */
-function UsageMeter({
-    label,
-    detail,
-    usedPct,
-    footer,
-}: {
-    label: string;
-    detail: string;
-    usedPct: number | null;
-    footer?: string;
-}) {
-    const pct = usedPct === null ? null : Math.max(0, Math.min(100, usedPct));
-    return (
-        <div>
-            <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-medium">{label}</span>
-                <span className="text-muted-foreground tabular-nums">
-                    {detail}
-                </span>
-            </div>
-            {pct !== null && (
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/10">
-                    <div
-                        className={cn(
-                            "h-full rounded-full transition-all",
-                            pct >= 90
-                                ? "bg-[var(--led-warning)]"
-                                : "bg-primary",
-                        )}
-                        style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
-                    />
-                </div>
-            )}
-            {footer && (
-                <p className="mt-1.5 text-xs text-muted-foreground">{footer}</p>
-            )}
-        </div>
-    );
 }
 
 export function BillingSection() {
@@ -448,42 +381,47 @@ export function BillingSection() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-16">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
+            <output
+                className="flex flex-col gap-10"
+                aria-busy="true"
+                aria-label="Loading your plan"
+            >
+                <div className="h-15 w-72 animate-pulse rounded-[var(--radius-inner)] bg-surface" />
+                <div className="squircle h-60 animate-pulse rounded-[var(--radius-card)] border border-hairline bg-surface" />
+            </output>
         );
     }
 
     if (!state) {
         return (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-                <p className="text-sm text-muted-foreground">
-                    {loadError ?? "Failed to load billing state."}
-                </p>
-                <Button variant="outline" size="sm" onClick={() => void load()}>
-                    Try again
-                </Button>
-            </div>
+            <SettingsCard
+                description={loadError ?? "Failed to load billing state."}
+                action={
+                    <Button
+                        variant="quiet"
+                        size="compact"
+                        onClick={() => void load()}
+                    >
+                        Try again
+                    </Button>
+                }
+            />
         );
     }
 
     if (!state.enabled) {
         return (
-            <>
-                <SettingsSectionHeader
-                    icon={CreditCard}
-                    title="Billing"
-                    description="Hosted billing is not configured on this instance."
-                />
-                <SettingsCard>
-                    <p className="text-sm text-muted-foreground">
+            <SettingsCard
+                title="Billing isn't set up on this server"
+                description={
+                    <>
                         Self-host instances run on the AGPL source with no paid
                         plan. To enable hosted billing, the operator must set{" "}
                         <code>BILLING_ENABLED=true</code> and
                         <code> STRIPE_SECRET_KEY</code>.
-                    </p>
-                </SettingsCard>
-            </>
+                    </>
+                }
+            />
         );
     }
 
@@ -506,7 +444,7 @@ export function BillingSection() {
                     ? `Your trial ends on ${formatDate(state.planTransitionUntil)}. Add a card below to keep your recordings syncing.`
                     : "Add a card below to keep your recordings syncing after the trial.";
             } else {
-                planName = "Pro";
+                planName = "Riffado Pro";
             }
             break;
         case "hosted_free": {
@@ -524,30 +462,33 @@ export function BillingSection() {
 
     let status: { label: string; tone: StatusTone };
     if (state.plan === "self_host") {
-        status = { label: "Self-hosted", tone: "neutral" };
+        status = { label: "Self-hosted", tone: "idle" };
     } else if (isTrial) {
-        status = { label: "Trial", tone: "warn" };
+        status = { label: "Trial", tone: "working" };
     } else if (isLapsed) {
-        status = { label: "Read-only", tone: "neutral" };
+        status = { label: "Read-only", tone: "idle" };
     } else if (sub?.status === "past_due") {
-        status = { label: "Past due", tone: "warn" };
+        status = { label: "Past due", tone: "working" };
     } else if (cancelPending) {
-        status = { label: "Canceling", tone: "warn" };
+        status = { label: "Canceling", tone: "working" };
     } else {
-        status = { label: "Active", tone: "active" };
+        status = { label: "Active", tone: "ready" };
     }
 
-    const storagePct =
-        state.entitlements.maxStorageBytes !== null
-            ? (state.usage.storageBytes / state.entitlements.maxStorageBytes) *
-              100
+    const storageMax = state.entitlements.maxStorageBytes;
+    const storageFraction =
+        storageMax !== null && storageMax > 0
+            ? state.usage.storageBytes / storageMax
             : null;
+    const storageUsed = splitBytes(state.usage.storageBytes);
     const mynahTotal = state.entitlements.monthlyMynahSeconds;
     const mynahUsed = Math.max(
         0,
         mynahTotal - state.usage.monthlyMynahSecondsRemaining,
     );
-    const mynahPct = mynahTotal > 0 ? (mynahUsed / mynahTotal) * 100 : null;
+    const mynahFraction = mynahTotal > 0 ? mynahUsed / mynahTotal : null;
+    const mynahUsedHours = Math.floor(mynahUsed / 3600);
+    const mynahUsedMinutes = Math.floor((mynahUsed % 3600) / 60);
 
     const monthlyCatalog =
         (state.pricing.monthly.foundingAvailability?.remaining ?? 0) > 0
@@ -586,128 +527,143 @@ export function BillingSection() {
               ? "Add a card before your trial ends. Stripe confirms the exact charge before you subscribe."
               : "Stripe confirms the exact charge before you subscribe.";
 
-    const graceBanner =
-        state.grace !== null ? (
-            <SettingsCard>
-                <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4">
-                    <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
-                    <div className="flex-1 space-y-2">
-                        <div>
-                            <h3 className="text-sm font-semibold text-foreground">
-                                {state.grace.path === "trial"
-                                    ? "Your trial has ended"
-                                    : "Your subscription has ended"}
-                            </h3>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Your account will be permanently deleted on{" "}
-                                {formatDate(state.grace.deletionAt)} (in{" "}
-                                {daysBetween(
-                                    new Date(state.grace.deletionAt),
-                                    new Date(),
-                                )}{" "}
-                                day(s)). Until then you can still play and
-                                export your recordings; syncing and new
-                                transcriptions are paused. Subscribe below to
-                                keep everything.
-                            </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    window.location.hash = "export";
-                                }}
-                            >
-                                <Download className="mr-2 size-4" />
-                                Export my data
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={handleDeleteNow}
-                                disabled={submitting}
-                            >
-                                Delete now
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            </SettingsCard>
-        ) : null;
+    const subscriptionLine =
+        hasLiveSub && sub
+            ? `${formatMoney(sub.amountValue, sub.amountCurrency)}${subscriptionIntervalSuffix(sub.interval)}${
+                  cancelPending && sub.canceledAt
+                      ? `, ends ${formatDate(sub.canceledAt)}`
+                      : sub.nextPaymentAt
+                        ? `, renews ${formatDate(sub.nextPaymentAt)}`
+                        : ""
+              }`
+            : null;
+
+    const portalButton = (
+        <Button
+            variant="quiet"
+            size="compact"
+            onClick={handlePortal}
+            disabled={portalLoading}
+        >
+            {portalLoading ? <Loader2 className="animate-spin" /> : <Receipt />}
+            Payment method & invoices
+        </Button>
+    );
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                icon={CreditCard}
-                title="Billing"
-                description="Manage your plan, usage, and subscription."
-            />
-
-            <div className="space-y-3">
-                {graceBanner}
-
-                <SettingsCard title="Plan">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 space-y-1">
-                            <div className="flex items-center gap-2">
-                                <span className="text-lg font-semibold leading-none">
-                                    {planName}
-                                </span>
-                                {state.foundingMember && (
-                                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                                        Founding member
-                                    </span>
-                                )}
-                            </div>
-                            {hasLiveSub && sub && (
-                                <p className="text-sm text-muted-foreground tabular-nums">
-                                    {formatMoney(
-                                        sub.amountValue,
-                                        sub.amountCurrency,
-                                    )}
-                                    {subscriptionIntervalSuffix(sub.interval)}
-                                    {cancelPending && sub.canceledAt
-                                        ? ` · ends ${formatDate(sub.canceledAt)}`
-                                        : sub.nextPaymentAt
-                                          ? ` · renews ${formatDate(sub.nextPaymentAt)}`
-                                          : ""}
-                                </p>
-                            )}
-                            {planNote && (
-                                <p className="text-sm text-muted-foreground">
-                                    {planNote}
-                                </p>
-                            )}
-                            {hasLiveSub && sub?.status === "past_due" && (
-                                <p className="text-sm text-foreground">
-                                    Your last payment didn't go through. Update
-                                    your payment method to keep your
-                                    subscription.
-                                </p>
-                            )}
-                        </div>
-                        <StatusPill label={status.label} tone={status.tone} />
+        <div className="flex flex-col gap-10">
+            {state.grace !== null && (
+                <SettingsCard
+                    title={
+                        <span className="flex items-center gap-2">
+                            <StatusDot tone="attention" />
+                            {state.grace.path === "trial"
+                                ? "Your trial has ended"
+                                : "Your subscription has ended"}
+                        </span>
+                    }
+                    description={
+                        <>
+                            Your account will be permanently deleted on{" "}
+                            {formatDate(state.grace.deletionAt)} (in{" "}
+                            {daysBetween(
+                                new Date(state.grace.deletionAt),
+                                new Date(),
+                            )}{" "}
+                            day(s)). Until then you can still play and export
+                            your recordings; syncing and new transcriptions are
+                            paused. Subscribe below to keep everything.
+                        </>
+                    }
+                >
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="quiet"
+                            size="compact"
+                            onClick={() => {
+                                window.location.hash = "export";
+                            }}
+                        >
+                            <Download />
+                            Export my data
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            size="compact"
+                            onClick={handleDeleteNow}
+                            disabled={submitting}
+                        >
+                            Delete now
+                        </Button>
                     </div>
                 </SettingsCard>
+            )}
 
-                <SettingsCard title="Usage">
-                    <div className="space-y-4">
-                        <UsageMeter
-                            label="Storage"
-                            detail={`${prettyBytes(state.usage.storageBytes)} of ${
-                                state.entitlements.maxStorageBytes !== null
-                                    ? prettyBytes(
-                                          state.entitlements.maxStorageBytes,
-                                      )
-                                    : "unlimited"
-                            }`}
-                            usedPct={storagePct}
-                        />
-                        <UsageMeter
-                            label="Included transcription"
-                            detail={`${formatSeconds(mynahUsed)} of ${formatSeconds(mynahTotal)}`}
-                            usedPct={mynahPct}
+            <div className="flex flex-wrap items-end justify-between gap-6 border-b border-hairline pb-7">
+                <div className="flex min-w-0 flex-col gap-1.5">
+                    <h2 className="font-display text-plan-title font-semibold text-strong">
+                        {planName}
+                    </h2>
+                    <p className="flex items-center gap-2 text-row leading-5 text-strong">
+                        <StatusDot tone={status.tone} />
+                        {status.label}
+                        {state.foundingMember && (
+                            <span className="text-subtle">
+                                · Founding member
+                            </span>
+                        )}
+                    </p>
+                    {subscriptionLine && (
+                        <p className="text-row leading-5 text-subtle tabular-nums">
+                            {subscriptionLine}
+                        </p>
+                    )}
+                    {planNote && (
+                        <p className="max-w-155 text-ui text-subtle">
+                            {planNote}
+                        </p>
+                    )}
+                    {hasLiveSub && sub?.status === "past_due" && (
+                        <p className="max-w-155 text-ui text-strong">
+                            Your last payment didn't go through. Update your
+                            payment method to keep your subscription.
+                        </p>
+                    )}
+                </div>
+                {hasLiveSub && portalButton}
+            </div>
+
+            <SettingsGroup title="Usage">
+                <SettingsCard
+                    tone="quiet"
+                    className="gap-0 divide-y divide-hairline py-0"
+                >
+                    {mynahTotal > 0 && (
+                        <UsageReadout
+                            label="Transcription with Mynah"
+                            value={
+                                <>
+                                    {mynahUsedHours > 0 && (
+                                        <>
+                                            <DotNumber>
+                                                {mynahUsedHours}
+                                            </DotNumber>
+                                            <span>h</span>
+                                        </>
+                                    )}
+                                    <DotNumber>{mynahUsedMinutes}</DotNumber>
+                                    <span>
+                                        min of {formatSeconds(mynahTotal)} used
+                                    </span>
+                                </>
+                            }
+                            fraction={mynahFraction}
+                            tone={
+                                mynahFraction !== null && mynahFraction >= 0.9
+                                    ? "warning"
+                                    : "default"
+                            }
+                            meterLabel={`${formatSeconds(mynahUsed)} of ${formatSeconds(mynahTotal)} used`}
                             footer={[
                                 `${formatSeconds(state.usage.monthlyMynahSecondsRemaining)} left this cycle`,
                                 state.usage.monthlyMynahGrantResetAt
@@ -717,59 +673,81 @@ export function BillingSection() {
                                 .filter(Boolean)
                                 .join(" · ")}
                         />
-                    </div>
-                </SettingsCard>
-
-                {!hasLiveSub ? (
-                    <SettingsCard
-                        title={
-                            isTrial
-                                ? "Keep Pro after your trial"
-                                : isLapsed && state.everPaidAt
-                                  ? "Resubscribe to Pro"
-                                  : "Upgrade to Pro"
+                    )}
+                    <UsageReadout
+                        label="Storage"
+                        value={
+                            <>
+                                <DotNumber>{storageUsed.value}</DotNumber>
+                                <span>
+                                    {storageUsed.unit}
+                                    {storageMax === 0
+                                        ? ""
+                                        : ` of ${
+                                              storageMax !== null
+                                                  ? shortBytes(storageMax)
+                                                  : "unlimited"
+                                          }`}{" "}
+                                    used
+                                </span>
+                            </>
                         }
-                    >
-                        <div className="space-y-4">
+                        fraction={storageFraction}
+                        tone={
+                            storageFraction !== null && storageFraction >= 0.9
+                                ? "warning"
+                                : "default"
+                        }
+                        meterLabel={`${shortBytes(state.usage.storageBytes)}${
+                            storageMax === 0
+                                ? ""
+                                : ` of ${
+                                      storageMax !== null
+                                          ? shortBytes(storageMax)
+                                          : "unlimited"
+                                  }`
+                        } used`}
+                        footer={
+                            storageMax !== null && storageMax > 0
+                                ? `${shortBytes(Math.max(0, storageMax - state.usage.storageBytes))} free`
+                                : null
+                        }
+                    />
+                </SettingsCard>
+            </SettingsGroup>
+
+            {!hasLiveSub ? (
+                <SettingsGroup
+                    title={
+                        isTrial
+                            ? "Keep Pro after your trial"
+                            : isLapsed && state.everPaidAt
+                              ? "Resubscribe to Pro"
+                              : "Upgrade to Pro"
+                    }
+                >
+                    <SettingsCard>
+                        <div className="flex flex-col gap-5">
                             {showIntervalPicker && (
-                                <fieldset className="inline-flex rounded-md border p-0.5">
-                                    <legend className="sr-only">
-                                        Billing interval
-                                    </legend>
-                                    {(
-                                        [
-                                            ["month", "Monthly"],
-                                            ["year", "Annual"],
-                                        ] as const
-                                    ).map(([value, label]) => (
-                                        <button
-                                            key={value}
-                                            type="button"
-                                            onClick={() => setInterval(value)}
-                                            aria-pressed={
-                                                effectiveInterval === value
-                                            }
-                                            className={cn(
-                                                "rounded px-3 py-1 text-xs font-medium transition-colors",
-                                                effectiveInterval === value
-                                                    ? "bg-primary/10 text-primary"
-                                                    : "text-muted-foreground hover:text-foreground",
-                                            )}
-                                        >
-                                            {label}
-                                        </button>
-                                    ))}
-                                </fieldset>
+                                <FilterGroup
+                                    aria-label="Billing interval"
+                                    value={effectiveInterval}
+                                    onValueChange={setInterval}
+                                    options={[
+                                        { value: "month", label: "Monthly" },
+                                        { value: "year", label: "Annual" },
+                                    ]}
+                                />
                             )}
-                            <div>
-                                <p className="text-2xl font-semibold tracking-tight tabular-nums">
+                            <div className="flex flex-col gap-1">
+                                <p className="font-display text-plan-title font-semibold text-strong tabular-nums">
                                     {proPrice}
                                 </p>
-                                <p className="mt-1 text-sm text-muted-foreground">
+                                <p className="text-ui text-subtle">
                                     {proPriceNote}
                                 </p>
                             </div>
-                            <ul className="ml-5 list-disc space-y-1 text-sm text-muted-foreground">
+                            <ul className="ml-5 list-disc space-y-1 text-ui text-subtle">
                                 <li>50 GB storage</li>
                                 <li>
                                     15 hours of Mynah transcription every 30
@@ -777,7 +755,7 @@ export function BillingSection() {
                                 </li>
                                 <li>Unlimited devices, background sync</li>
                             </ul>
-                            <div className="space-y-3 rounded-md border p-3">
+                            <div className="squircle flex flex-col gap-3 rounded-[var(--radius-item)] bg-background p-4">
                                 <div className="flex items-start gap-2">
                                     <input
                                         id="business-purchase"
@@ -788,11 +766,11 @@ export function BillingSection() {
                                                 event.target.checked,
                                             )
                                         }
-                                        className="mt-0.5 size-4 rounded border-input"
+                                        className="mt-0.5 size-4 rounded border-input accent-ink"
                                     />
                                     <Label
                                         htmlFor="business-purchase"
-                                        className="text-sm"
+                                        className="text-ui"
                                     >
                                         Buying as an EU business
                                     </Label>
@@ -848,7 +826,7 @@ export function BillingSection() {
                                     onChange={(e) =>
                                         setWaiver(e.target.checked)
                                     }
-                                    className="mt-0.5 size-4 rounded border-input"
+                                    className="mt-0.5 size-4 rounded border-input accent-ink"
                                 />
                                 <Label
                                     htmlFor="waiver"
@@ -860,117 +838,88 @@ export function BillingSection() {
                                     longer applies once the paid plan starts.
                                 </Label>
                             </div>
-                            <Button
-                                onClick={() =>
-                                    handleSubscribe(effectiveInterval)
+                            <div>
+                                <Button
+                                    variant="ink"
+                                    size="compact"
+                                    onClick={() =>
+                                        handleSubscribe(effectiveInterval)
+                                    }
+                                    disabled={!waiver || submitting}
+                                >
+                                    {submitting ? (
+                                        <Loader2 className="animate-spin" />
+                                    ) : (
+                                        <ExternalLink />
+                                    )}
+                                    Subscribe via Stripe
+                                </Button>
+                            </div>
+                        </div>
+                    </SettingsCard>
+                </SettingsGroup>
+            ) : (
+                <SettingsGroup title="Subscription">
+                    <SettingsRows>
+                        {cancelPending && sub?.canceledAt ? (
+                            <SettingsRow
+                                label="Ending soon"
+                                description={`Ends on ${formatDate(sub.canceledAt)}. You keep full access until then. Resume any time before that date at no extra charge; your next payment simply continues as scheduled.`}
+                                control={
+                                    <Button
+                                        variant="ink"
+                                        size="compact"
+                                        onClick={handleResume}
+                                        disabled={submitting}
+                                    >
+                                        {submitting && (
+                                            <Loader2 className="animate-spin" />
+                                        )}
+                                        Resume subscription
+                                    </Button>
                                 }
-                                disabled={!waiver || submitting}
-                            >
-                                {submitting ? (
-                                    <Loader2 className="mr-2 size-4 animate-spin" />
-                                ) : (
-                                    <ExternalLink className="mr-2 size-4" />
-                                )}
-                                Subscribe via Stripe
-                            </Button>
-                        </div>
-                    </SettingsCard>
-                ) : (
-                    <SettingsCard title="Manage subscription">
-                        <div className="space-y-3">
-                            {cancelPending && sub?.canceledAt ? (
-                                <>
-                                    <p className="text-sm text-muted-foreground">
-                                        Your subscription is set to end on{" "}
-                                        {formatDate(sub.canceledAt)}. You keep
-                                        full access until then. Resume any time
-                                        before that date at no extra charge.
-                                        Your next payment simply continues as
-                                        scheduled.
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                        <Button
-                                            onClick={handleResume}
-                                            disabled={submitting}
-                                        >
-                                            {submitting && (
-                                                <Loader2 className="mr-2 size-4 animate-spin" />
-                                            )}
-                                            Resume subscription
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={handlePortal}
-                                            disabled={portalLoading}
-                                        >
-                                            {portalLoading ? (
-                                                <Loader2 className="mr-2 size-4 animate-spin" />
-                                            ) : (
-                                                <Receipt className="mr-2 size-4" />
-                                            )}
-                                            Payment method & invoices
-                                        </Button>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-sm text-muted-foreground">
-                                        Update your card or download invoices
-                                        anytime in the billing portal.
-                                    </p>
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <Button
-                                            variant="outline"
-                                            onClick={handlePortal}
-                                            disabled={portalLoading}
-                                        >
-                                            {portalLoading ? (
-                                                <Loader2 className="mr-2 size-4 animate-spin" />
-                                            ) : (
-                                                <Receipt className="mr-2 size-4" />
-                                            )}
-                                            Payment method & invoices
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-muted-foreground hover:text-destructive"
-                                            onClick={() =>
-                                                handleCancel(
-                                                    sub?.nextPaymentAt ?? null,
-                                                )
-                                            }
-                                        >
-                                            Cancel subscription
-                                        </Button>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </SettingsCard>
-                )}
+                            />
+                        ) : (
+                            <SettingsRow
+                                label="Cancel subscription"
+                                description="You keep full access until the end of the period you paid for"
+                                control={
+                                    <Button
+                                        variant="quiet"
+                                        size="compact"
+                                        onClick={() =>
+                                            handleCancel(
+                                                sub?.nextPaymentAt ?? null,
+                                            )
+                                        }
+                                    >
+                                        Cancel subscription
+                                    </Button>
+                                }
+                            />
+                        )}
+                    </SettingsRows>
+                </SettingsGroup>
+            )}
 
-                <SettingsCard title="Delete account">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="max-w-xl">
-                            <p className="text-sm text-muted-foreground">
-                                Export your data first. Deletion ends any active
-                                subscription immediately without a prorated
-                                refund, then permanently removes your account
-                                and its data.
-                            </p>
-                        </div>
-                        <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={handleDeleteNow}
-                            disabled={submitting}
-                        >
-                            Delete account
-                        </Button>
-                    </div>
-                </SettingsCard>
-            </div>
+            <SettingsGroup title="Delete account">
+                <SettingsRows>
+                    <SettingsRow
+                        label="Delete your account and data"
+                        description="Export your data first. Deletion ends any active subscription right away without a prorated refund, then permanently removes your account and its data"
+                        control={
+                            <Button
+                                variant="destructive"
+                                size="compact"
+                                onClick={handleDeleteNow}
+                                disabled={submitting}
+                            >
+                                Delete account
+                            </Button>
+                        }
+                    />
+                </SettingsRows>
+            </SettingsGroup>
         </div>
     );
 }

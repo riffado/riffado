@@ -1,10 +1,17 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { RecordingWorkstation } from "@/components/recordings/recording-workstation";
 import { db } from "@/db";
-import { recordings, transcriptions, userSettings } from "@/db/schema";
-import { requireAuth, requireCompletedOnboarding } from "@/lib/auth-server";
+import {
+    aiEnhancements,
+    plaudDevices,
+    recordings,
+    transcriptions,
+    userSettings,
+} from "@/db/schema";
+import { requireAuth } from "@/lib/auth-server";
 import { decryptText } from "@/lib/encryption/fields";
+import { env } from "@/lib/env";
 import { resolvePrimaryTranscript } from "@/lib/v1/serialize";
 
 interface RecordingDetailPageProps {
@@ -16,7 +23,6 @@ export default async function RecordingDetailPage({
 }: RecordingDetailPageProps) {
     // Check authentication server-side
     const session = await requireAuth();
-    await requireCompletedOnboarding(session);
     const { id } = await params;
 
     // Fetch recording from database
@@ -43,29 +49,56 @@ export default async function RecordingDetailPage({
     // 75 / 1x / false defaults regardless of what the user picked
     // in Settings → Playback (the dashboard route already plumbs
     // these through Workstation).
-    const [transcriptRows, [settingsRow]] = await Promise.all([
-        db
-            .select()
-            .from(transcriptions)
-            .where(
-                and(
-                    eq(transcriptions.recordingId, id),
-                    eq(transcriptions.userId, session.user.id),
+    const [transcriptRows, [settingsRow], [summaryRow], [deviceRow]] =
+        await Promise.all([
+            db
+                .select()
+                .from(transcriptions)
+                .where(
+                    and(
+                        eq(transcriptions.recordingId, id),
+                        eq(transcriptions.userId, session.user.id),
+                    ),
                 ),
-            ),
-        db
-            .select({
-                defaultPlaybackSpeed: userSettings.defaultPlaybackSpeed,
-                defaultVolume: userSettings.defaultVolume,
-                autoPlayNext: userSettings.autoPlayNext,
-                playerScrubber: userSettings.playerScrubber,
-                preferredTranscriptSource:
-                    userSettings.preferredTranscriptSource,
-            })
-            .from(userSettings)
-            .where(eq(userSettings.userId, session.user.id))
-            .limit(1),
-    ]);
+            db
+                .select({
+                    defaultPlaybackSpeed: userSettings.defaultPlaybackSpeed,
+                    defaultVolume: userSettings.defaultVolume,
+                    autoPlayNext: userSettings.autoPlayNext,
+                    playerScrubber: userSettings.playerScrubber,
+                    preferredTranscriptSource:
+                        userSettings.preferredTranscriptSource,
+                })
+                .from(userSettings)
+                .where(eq(userSettings.userId, session.user.id))
+                .limit(1),
+            // Whether a summary exists picks the default tab; the summary
+            // itself is fetched by the client from the summary route.
+            db
+                .select({ id: aiEnhancements.id })
+                .from(aiEnhancements)
+                .where(
+                    and(
+                        eq(aiEnhancements.recordingId, id),
+                        eq(aiEnhancements.userId, session.user.id),
+                        isNotNull(aiEnhancements.summary),
+                    ),
+                )
+                .limit(1),
+            db
+                .select({
+                    name: plaudDevices.name,
+                    model: plaudDevices.model,
+                })
+                .from(plaudDevices)
+                .where(
+                    and(
+                        eq(plaudDevices.userId, session.user.id),
+                        eq(plaudDevices.serialNumber, recording.deviceSn),
+                    ),
+                )
+                .limit(1),
+        ]);
 
     // Order primary-first (per the user's preferred source) so the switcher
     // defaults to it, then decrypt for the client component.
@@ -81,7 +114,7 @@ export default async function RecordingDetailPage({
         text: decryptText(t.text),
         language: t.detectedLanguage || undefined,
         provider: t.provider,
-        model: t.model,
+        transcriptionType: t.transcriptionType,
     }));
     const scrubberStyle: "waveform" | "slider" =
         settingsRow?.playerScrubber === "slider" ? "slider" : "waveform";
@@ -101,7 +134,11 @@ export default async function RecordingDetailPage({
                 filename: decryptText(recording.filename),
                 startTime: recording.startTime.toISOString(),
                 waveformPeaks,
+                hasTranscript: transcriptOptions.length > 0,
+                hasSummary: summaryRow !== undefined,
             }}
+            deviceName={deviceRow ? deviceRow.name || deviceRow.model : null}
+            isHosted={env.IS_HOSTED}
             initialPlaybackSpeed={settingsRow?.defaultPlaybackSpeed ?? 1.0}
             initialVolume={settingsRow?.defaultVolume ?? 75}
             initialAutoPlayNext={settingsRow?.autoPlayNext ?? false}

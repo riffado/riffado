@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/lib/toast";
 
 /**
  * Operator action panel. Each button opens a small confirm flow that requires

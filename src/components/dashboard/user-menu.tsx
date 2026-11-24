@@ -1,17 +1,11 @@
 "use client";
 
-import {
-    Keyboard,
-    LogOut,
-    Monitor,
-    Moon,
-    Settings,
-    Shield,
-    Sun,
-} from "lucide-react";
+import { Keyboard, LogOut, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
+import { AppLinksMenuItems, AppVersionLine } from "@/components/app-links";
+import { ReportBugDialog } from "@/components/report-bug-dialog";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -19,17 +13,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTheme } from "@/hooks/use-theme";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 interface UserMenuProps {
     isAdmin: boolean;
-    initialTheme: "light" | "dark" | "system";
+    isHosted: boolean;
     userEmail: string | null;
-    onOpenSettings: () => void;
-    /** Called on hover or focus of the Settings item so its data can load before the click. */
-    onSettingsIntent: () => void;
+    /** Display name from the session, when the account has one. */
+    userName?: string | null;
     onOpenShortcuts: () => void;
 }
 
@@ -48,134 +40,152 @@ function emailInitial(email: string | null): string {
     return trimmed[0].toUpperCase();
 }
 
+/** Up to two initials from the display name, else the email's first letter. */
+export function accountInitials(
+    name: string | null | undefined,
+    email: string | null,
+): string {
+    const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return emailInitial(email);
+    const first = words[0][0] ?? "";
+    const last = words.length > 1 ? (words[words.length - 1][0] ?? "") : "";
+    return `${first}${last}`.toUpperCase();
+}
+
+/** Sand circle with ink initials (DESIGN.md: account items). */
+export function AccountAvatar({
+    initials,
+    size = "default",
+}: {
+    initials: string;
+    size?: "default" | "large";
+}) {
+    return (
+        <span
+            className={cn(
+                "flex shrink-0 items-center justify-center rounded-full bg-secondary font-semibold text-strong select-none",
+                size === "large" ? "size-9 text-sm" : "size-7 text-xs",
+            )}
+            aria-hidden="true"
+        >
+            {initials}
+        </span>
+    );
+}
+
+/** Logs out, resets analytics and returns to the start page. */
+export function useLogOut() {
+    const { push, refresh } = useRouter();
+    return async () => {
+        if (posthog.__loaded) {
+            posthog.capture("user_signed_out");
+            posthog.reset();
+        }
+        await signOut();
+        push("/");
+        refresh();
+    };
+}
+
+/**
+ * The desktop sidebar's account row and menu: name and email, Keyboard
+ * shortcuts, the about links and Log out. On phones the same items live
+ * in the menu drawer.
+ */
 export function UserMenu({
     isAdmin,
-    initialTheme,
+    isHosted,
     userEmail,
-    onOpenSettings,
-    onSettingsIntent,
+    userName = null,
     onOpenShortcuts,
 }: UserMenuProps) {
-    const { push, refresh } = useRouter();
-    const { theme, setTheme } = useTheme(initialTheme);
-
-    const themeOptions = [
-        { value: "light" as const, label: "Light", icon: Sun },
-        { value: "dark" as const, label: "Dark", icon: Moon },
-        { value: "system" as const, label: "Auto", icon: Monitor },
-    ];
+    const { push } = useRouter();
+    const logOut = useLogOut();
+    const [reportOpen, setReportOpen] = useState(false);
+    // Set by Report a bug; the dialog opens once the menu has closed and
+    // handed focus back to its trigger, so the dialog returns it there.
+    const reportPending = useRef(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const name = userName?.trim() || null;
+    const initials = accountInitials(userName, userEmail);
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Account menu"
-                    className="font-semibold"
+        <>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        ref={triggerRef}
+                        type="button"
+                        aria-label="Account menu"
+                        className="squircle flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--radius-inner)] px-1.5 py-1 text-left outline-none select-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
+                    >
+                        <AccountAvatar initials={initials} />
+                        <span className="truncate text-ui font-medium text-foreground">
+                            {userName || userEmail || "Account"}
+                        </span>
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="start"
+                    side="top"
+                    className="w-72 p-0"
+                    onCloseAutoFocus={() => {
+                        if (!reportPending.current) return;
+                        reportPending.current = false;
+                        queueMicrotask(() => setReportOpen(true));
+                    }}
                 >
-                    {emailInitial(userEmail)}
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-72 p-0">
-                <div className="flex items-center gap-3 border-b p-3">
-                    <div
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                        aria-hidden="true"
-                    >
-                        {emailInitial(userEmail)}
+                    <div className="flex items-center gap-3 border-b p-3 select-none">
+                        <AccountAvatar initials={initials} size="large" />
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                                {name ?? userEmail ?? "Account"}
+                            </p>
+                            {name && userEmail ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                    {userEmail}
+                                </p>
+                            ) : null}
+                        </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                            {userEmail || "Signed in"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {isAdmin ? "Admin" : "Signed in"}
-                        </p>
-                    </div>
-                </div>
 
-                <div className="p-1">
-                    <DropdownMenuItem
-                        onSelect={onOpenSettings}
-                        onPointerEnter={onSettingsIntent}
-                        onFocus={onSettingsIntent}
-                    >
-                        <Settings />
-                        <span className="flex-1">Settings</span>
-                        <Kbd>,</Kbd>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={onOpenShortcuts}>
-                        <Keyboard />
-                        <span className="flex-1">Keyboard shortcuts</span>
-                        <Kbd>?</Kbd>
-                    </DropdownMenuItem>
-                    {isAdmin && (
-                        <DropdownMenuItem onSelect={() => push("/admin")}>
-                            <Shield />
-                            <span className="flex-1">Admin dashboard</span>
+                    <div className="p-1">
+                        <DropdownMenuItem onSelect={onOpenShortcuts}>
+                            <Keyboard />
+                            <span className="flex-1">Keyboard shortcuts</span>
+                            <Kbd>?</Kbd>
                         </DropdownMenuItem>
-                    )}
-                </div>
-
-                <div className="border-t px-3 py-2">
-                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
-                        Theme
+                        {isAdmin && (
+                            <DropdownMenuItem onSelect={() => push("/admin")}>
+                                <Shield />
+                                <span className="flex-1">Admin dashboard</span>
+                            </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <AppLinksMenuItems
+                            onReportBug={() => {
+                                reportPending.current = true;
+                            }}
+                        />
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={logOut}
+                        >
+                            <LogOut />
+                            Log out
+                        </DropdownMenuItem>
                     </div>
-                    <div
-                        role="radiogroup"
-                        aria-label="Theme"
-                        className="grid grid-cols-3 gap-1 rounded-md border bg-muted/40 p-0.5"
-                    >
-                        {themeOptions.map((opt) => {
-                            const isActive = theme === opt.value;
-                            return (
-                                // biome-ignore lint/a11y/useSemanticElements: segmented control
-                                <button
-                                    key={opt.value}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={isActive}
-                                    onClick={() => setTheme(opt.value)}
-                                    className={cn(
-                                        "inline-flex items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-xs font-medium transition-colors",
-                                        isActive
-                                            ? "bg-background text-foreground shadow-sm"
-                                            : "text-muted-foreground hover:text-foreground",
-                                    )}
-                                >
-                                    <opt.icon
-                                        className="size-3.5"
-                                        aria-hidden="true"
-                                    />
-                                    {opt.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
 
-                <DropdownMenuSeparator className="my-0" />
-
-                {/* Sign out */}
-                <div className="p-1">
-                    <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={async () => {
-                            if (posthog.__loaded) {
-                                posthog.capture("user_signed_out");
-                                posthog.reset();
-                            }
-                            await signOut();
-                            push("/");
-                            refresh();
-                        }}
-                    >
-                        <LogOut />
-                        Log out
-                    </DropdownMenuItem>
-                </div>
-            </DropdownMenuContent>
-        </DropdownMenu>
+                    <AppVersionLine className="border-t px-3.5 py-2.5 select-none" />
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <ReportBugDialog
+                isHosted={isHosted}
+                open={reportOpen}
+                onOpenChange={setReportOpen}
+                returnFocusTo={triggerRef}
+            />
+        </>
     );
 }

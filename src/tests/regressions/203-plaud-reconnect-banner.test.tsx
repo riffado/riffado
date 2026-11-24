@@ -17,12 +17,19 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/components/plaud-connect-tabs", () => ({
-    PlaudConnectTabs: ({ onConnected }: { onConnected: () => void }) => (
-        <button type="button" onClick={onConnected}>
-            Finish reconnect
-        </button>
-    ),
+vi.mock("@/components/plaud-connect/connect-dialog", () => ({
+    PlaudConnectDialog: ({
+        open,
+        onConnected,
+    }: {
+        open: boolean;
+        onConnected: () => void;
+    }) =>
+        open ? (
+            <button type="button" onClick={onConnected}>
+                Finish reconnect
+            </button>
+        ) : null,
 }));
 
 import { PlaudReconnectBanner } from "@/components/dashboard/plaud-reconnect-banner";
@@ -45,7 +52,7 @@ function endingNotice() {
 }
 
 function reconnectNotice() {
-    return screen.queryByText("Your Plaud connection needs to be reconnected");
+    return screen.queryByText("Plaud signed you out");
 }
 
 function bannerProps(show: boolean, sessionExpiresAt: string | null) {
@@ -116,9 +123,7 @@ describe("PlaudReconnectBanner ending-soon dismissal", () => {
                 onReconnected={() => {}}
             />,
         );
-        expect(
-            screen.getByText("Your Plaud connection needs to be reconnected"),
-        ).not.toBeNull();
+        expect(screen.getByText("Plaud signed you out")).not.toBeNull();
         expect(
             screen.queryByRole("button", {
                 name: "Dismiss Plaud connection ending notice",

@@ -10,7 +10,6 @@ import {
     Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 import { LEDIndicator } from "@/components/led-indicator";
 import { MetalButton } from "@/components/metal-button";
 import { Panel } from "@/components/panel";
@@ -22,6 +21,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useTranscriptionSummary } from "@/hooks/use-transcription-summary";
+import { toast } from "@/lib/toast";
 
 interface TranscriptionSectionProps {
     recordingId: string;
@@ -205,7 +205,7 @@ export function TranscriptionSection({
                                     </Select>
                                 )}
                                 <MetalButton
-                                    onClick={handleSummarize}
+                                    onClick={() => handleSummarize()}
                                     variant="cyan"
                                     disabled={isSummarizing}
                                     className="w-full md:w-auto"

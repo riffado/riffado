@@ -1,57 +1,41 @@
 "use client";
 
-import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { RecordingPlayer } from "@/components/dashboard/recording-player";
-import {
-    TranscriptionPanel,
-    type TranscriptOption,
-} from "@/components/dashboard/transcription-panel";
-import { LocalTime } from "@/components/local-time";
-import { DownloadAudioButton } from "@/components/recordings/download-audio-button";
-import { RecordingTitle } from "@/components/recordings/recording-title";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
+import { AppLinksLine } from "@/components/app-links";
+import { RecordingView } from "@/components/recording/recording-view";
+import { summaryProviderStateFor } from "@/components/recording/summary-provider";
+import type {
+    PlayerPreferences,
+    RecordingTranscript,
+} from "@/components/recording/types";
+import { useProviderList } from "@/hooks/use-provider-list";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { toast } from "@/lib/toast";
 import type { Recording } from "@/types/recording";
 
-interface Transcription {
-    text?: string;
-    detectedLanguage?: string;
-    transcriptionType?: string;
-}
-
-interface RecordingWorkstationProps {
+interface RecordingWorkstationProps extends PlayerPreferences {
     recording: Recording;
-    transcription?: Transcription;
-    /** All transcripts (one per source) for the in-panel source switcher. */
-    transcripts?: TranscriptOption[];
-    /**
-     * User playback preferences forwarded into the embedded
-     * RecordingPlayer. Server-resolved (with the same defaults as the
-     * dashboard's Workstation) so callers don't need to know the
-     * shape of user_settings; the page server-component reads them
-     * once and hands them down here.
-     */
-    initialPlaybackSpeed?: number;
-    initialVolume?: number;
-    initialAutoPlayNext?: boolean;
-    scrubberStyle?: "waveform" | "slider";
+    /** All transcripts (one per source), primary first. */
+    transcripts: RecordingTranscript[];
+    /** Recorder name, when the serial matches a linked recorder. */
+    deviceName: string | null;
+    /** Picks the bug-report channels in the about links. Server-supplied. */
+    isHosted: boolean;
 }
 
+/**
+ * Standalone recording page (`/recordings/[id]`). Renders the same
+ * `RecordingView` as the dashboard pane, full height, with a back link
+ * to the library on every screen size. This page has no account menu,
+ * so the about links (docs, source code, licence) close the reading
+ * column.
+ */
 export function RecordingWorkstation({
     recording,
-    transcription,
     transcripts,
+    deviceName,
+    isHosted,
     initialPlaybackSpeed,
     initialVolume,
     initialAutoPlayNext,
@@ -59,13 +43,16 @@ export function RecordingWorkstation({
 }: RecordingWorkstationProps) {
     const { push, refresh } = useRouter();
     const [isTranscribing, setIsTranscribing] = useState(false);
-    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
     const [filename, setFilename] = useState(recording.filename);
+    const { providers, prefetch: prefetchProviders } = useProviderList();
 
     useEffect(() => {
         setFilename(recording.filename);
     }, [recording.filename]);
+
+    useEffect(() => {
+        prefetchProviders();
+    }, [prefetchProviders]);
 
     const displayRecording = useMemo(
         () =>
@@ -88,17 +75,15 @@ export function RecordingWorkstation({
         try {
             const response = await fetch(
                 `/api/recordings/${recording.id}/transcribe`,
-                {
-                    method: "POST",
-                },
+                { method: "POST" },
             );
-
             if (response.ok) {
                 toast.success("Transcription complete");
                 refresh();
             } else {
-                const error = await response.json();
-                toast.error(error.error || "Transcription failed");
+                toast.error(
+                    await getApiErrorMessage(response, "Transcription failed"),
+                );
             }
         } catch {
             toast.error("Failed to transcribe recording");
@@ -108,181 +93,52 @@ export function RecordingWorkstation({
     }, [recording.id, refresh]);
 
     const handleDelete = useCallback(async () => {
-        setIsDeleting(true);
-        try {
-            const response = await fetch(`/api/recordings/${recording.id}`, {
-                method: "DELETE",
-            });
-
-            if (response.ok) {
-                toast.success("Recording deleted");
-                setDeleteDialogOpen(false);
-                push("/dashboard");
-                refresh();
-            } else {
-                const error = await response.json().catch(() => ({}));
-                toast.error(error.error || "Failed to delete recording");
-                setIsDeleting(false);
-            }
-        } catch {
-            toast.error("Failed to delete recording");
-            setIsDeleting(false);
+        const response = await fetch(`/api/recordings/${recording.id}`, {
+            method: "DELETE",
+        });
+        if (!response.ok) {
+            throw new Error(
+                await getApiErrorMessage(
+                    response,
+                    "Failed to delete recording",
+                ),
+            );
         }
+        toast.success("Recording deleted");
+        push("/dashboard");
+        refresh();
     }, [recording.id, refresh, push]);
 
     return (
-        <div className="bg-background">
-            <div className="container mx-auto px-4 py-6 max-w-4xl">
-                {/* Header */}
-                <div className="flex items-center gap-4 mb-6">
-                    <Button
-                        onClick={() => push("/dashboard")}
-                        variant="outline"
-                        size="icon"
-                    >
-                        <ArrowLeft className="size-4" />
-                    </Button>
-                    <div className="flex-1 min-w-0">
-                        <h1 className="min-w-0">
-                            <RecordingTitle
-                                recordingId={recording.id}
-                                filename={filename}
-                                onRenamed={handleRenamed}
-                                className="text-3xl font-semibold"
-                            />
-                        </h1>
-                        <p className="text-muted-foreground text-sm mt-1">
-                            <LocalTime value={recording.startTime} />
-                        </p>
-                    </div>
-                    <DownloadAudioButton recordingId={recording.id} />
-                    <Button
-                        onClick={() => setDeleteDialogOpen(true)}
-                        variant="outline"
-                        size="icon"
-                        aria-label="Delete recording"
-                        title="Delete recording"
-                    >
-                        <Trash2 className="size-4" />
-                    </Button>
-                </div>
-
-                {/* Content */}
-                <div className="space-y-6">
-                    <RecordingPlayer
-                        recording={displayRecording}
-                        initialPlaybackSpeed={initialPlaybackSpeed}
-                        initialVolume={initialVolume}
-                        initialAutoPlayNext={initialAutoPlayNext}
-                        scrubberStyle={scrubberStyle}
-                        onRenamed={handleRenamed}
-                    />
-                    <TranscriptionPanel
-                        recording={displayRecording}
-                        transcription={transcription}
-                        transcripts={transcripts}
-                        isTranscribing={isTranscribing}
-                        onTranscribe={handleTranscribe}
-                        onTranscribeComplete={refresh}
-                    />
-
-                    {/* Metadata */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Details</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div>
-                                    <div className="text-muted-foreground text-xs mb-1">
-                                        Duration
-                                    </div>
-                                    <div className="font-medium">
-                                        {Math.floor(recording.duration / 60000)}
-                                        :
-                                        {((recording.duration % 60000) / 1000)
-                                            .toFixed(0)
-                                            .padStart(2, "0")}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-muted-foreground text-xs mb-1">
-                                        File Size
-                                    </div>
-                                    <div className="font-medium">
-                                        {(
-                                            recording.filesize /
-                                            (1024 * 1024)
-                                        ).toFixed(2)}{" "}
-                                        MB
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-muted-foreground text-xs mb-1">
-                                        Device
-                                    </div>
-                                    <div className="font-mono text-xs truncate">
-                                        {recording.deviceSn}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="text-muted-foreground text-xs mb-1">
-                                        Date
-                                    </div>
-                                    <div className="font-medium">
-                                        <LocalTime
-                                            value={recording.startTime}
-                                            variant="date"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
-            <Dialog
-                open={deleteDialogOpen}
-                onOpenChange={(open) => {
-                    if (!isDeleting) setDeleteDialogOpen(open);
+        <div className="flex h-dvh flex-col">
+            <RecordingView
+                recording={displayRecording}
+                deviceName={deviceName}
+                transcripts={transcripts}
+                isTranscribing={isTranscribing}
+                onTranscribe={handleTranscribe}
+                onTranscribeComplete={refresh}
+                onRenamed={handleRenamed}
+                onDelete={handleDelete}
+                back={{
+                    label: "Library",
+                    onBack: () => push("/dashboard"),
+                    showOnDesktop: true,
                 }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete this recording?</DialogTitle>
-                        <DialogDescription>
-                            This permanently removes the audio file,
-                            transcription, and AI summary from Riffado. The
-                            recording on your Plaud account is not affected, but
-                            it will not be re-synced to Riffado.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDeleteDialogOpen(false)}
-                            disabled={isDeleting}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                        >
-                            {isDeleting ? (
-                                <>
-                                    <Loader2 className="size-4 mr-2 animate-spin" />
-                                    Deleting…
-                                </>
-                            ) : (
-                                "Delete recording"
-                            )}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                summaryProviderState={summaryProviderStateFor(providers)}
+                footer={
+                    <AppLinksLine
+                        isHosted={isHosted}
+                        className="mt-12 border-t border-hairline pt-4"
+                    />
+                }
+                player={{
+                    initialPlaybackSpeed,
+                    initialVolume,
+                    initialAutoPlayNext,
+                    scrubberStyle,
+                }}
+            />
         </div>
     );
 }

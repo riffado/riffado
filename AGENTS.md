@@ -149,9 +149,12 @@ Title prefixes match commit prefixes. Labels: `bug`, `enhancement`, `task`, `tri
 
 Include `closes #<n>` or `fixes #<n>` in the commit message — GitHub auto-closes when merged to `main`.
 
-### TODOs
+### TODOs and task tracking
 
-Plans and TODOs that need to survive a session belong in GitHub Issues, not in code comments or `plans/*.md`.
+- **GitHub Issues** (public): bugs, feature requests and tasks anyone could pick up or should be able to see. Use the issue templates. Commits reference them with `closes #<n>`.
+- **Linear** (private, Perier workspace, Riffado project): internal planning, the redesign plan, hosted pricing and billing decisions, competitor notes, and community reply drafts. GitHub issues sync into Linear one-way, so Linear also shows the public backlog.
+- Never copy private Linear content into public issues, commits or PRs.
+- Plans and TODOs that need to outlast a session go in one of these two places, never in code comments or `plans/*.md`.
 
 ## Changelog
 
@@ -294,7 +297,7 @@ In priority order when in doubt:
 - Database access via Drizzle. Fluent Drizzle queries (`db.select().from(...).where(...)`) may live inline in route handlers and feature `lib/` files. **Raw-SQL queries — anything calling `db.execute(sql\`...\`)` or holding a full `SELECT`/`INSERT`/`UPDATE`/`DELETE` inside a `sql\`\`` template — MUST live in `src/db/queries/`** and be imported by feature code. Inline `sql\`\`` *expression fragments* embedded inside Drizzle's fluent builder (`set: { col: sql\`col + 1\` }`, `where(sql\`json @> ...\`)`, `orderBy(sql\`...\`)`) stay where they're used — they're operator helpers, not queries.
 - When you write or touch any `sql\`\`` template: every interpolated value must be a `${...}` placeholder (param-bound, never string-concatenated); every `Date` value must be `.toISOString()` and cast (`${iso}::timestamp` for `timestamp` columns, `::timestamptz` only when the column is `timestamptz`); user-supplied `ILIKE` patterns must escape `%` and `_` with `escape '\\'`; sort columns and identifiers come from a fixed allowlist, never from user input.
 - Environment variables are validated via Zod in `src/lib/env.ts`. Add new vars there and access via the validated `env` object. **Never `process.env.X` directly in feature code.**
-- Toasts via `sonner`; no `alert()` or custom toast systems.
+- Toasts via ding: call `toast` from `@/lib/toast` (never import `@yusufceng1z/ding-react` directly), and keep the single `<Toaster />` from `@/components/ui/toaster` in the root layout. No `alert()` or other toast systems.
 - Client components that fetch from our own API use existing `/api/...` routes — no duplicate client-side Plaud API calls.
 
 ## **CRITICAL** User-Scoped Queries **CRITICAL**

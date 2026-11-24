@@ -2,24 +2,40 @@
 
 import { Command } from "cmdk";
 import {
-    FileText,
+    ArrowDown,
+    ArrowUp,
+    Check,
+    CornerDownLeft,
     Keyboard,
-    Loader2,
-    Mic,
     Monitor,
     Moon,
     RefreshCw,
     Settings,
-    Sparkles,
     Sun,
     Upload,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { type DateTimeFormat, formatDateTime } from "@/lib/format-date";
-import { formatDurationMs } from "@/lib/format-duration";
+import { Keycap } from "@/components/dashboard/keycap";
+import { recordingRowTone } from "@/components/dashboard/recording-row";
+import {
+    displayTitle,
+    formatSpokenDuration,
+} from "@/components/recording/format";
+import { StatusDot } from "@/components/ui/status-dot";
+import {
+    type DateTimeFormat,
+    formatDateTime,
+    formatRowTime,
+} from "@/lib/format-date";
+
 import type { Recording } from "@/types/recording";
 
 export const RECORDING_CAP = 200;
+
+/** cmdk item value for a recording row; unique per recording. */
+export function recordingItemValue(id: string): string {
+    return `recording:${id}`;
+}
 
 interface TranscriptionData {
     text?: string;
@@ -42,175 +58,220 @@ export function transcriptSnippet(
     return `${stripped.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
-export function Row({
-    icon,
-    title,
-    subtitle,
-    accessory,
-}: {
-    icon: ReactNode;
-    title: ReactNode;
-    subtitle?: ReactNode;
-    accessory?: ReactNode;
-}) {
+/** ⌘ then Return, as one keycap. */
+export function CommandEnterKeys() {
     return (
-        <>
-            <span aria-hidden="true" className="shrink-0">
-                {icon}
-            </span>
-            <span className="cmd-body">
-                <span className="cmd-title">{title}</span>
-                {subtitle ? (
-                    <span className="cmd-subtitle">{subtitle}</span>
-                ) : null}
-            </span>
-            {accessory ? (
-                <span className="cmd-accessory">{accessory}</span>
-            ) : null}
-        </>
+        <Keycap size="small" className="gap-0.5">
+            ⌘<CornerDownLeft aria-hidden="true" />
+            <span className="sr-only">Return</span>
+        </Keycap>
     );
 }
 
-export function Kbd({ children }: { children: ReactNode }) {
-    return <kbd className="cmd-kbd">{children}</kbd>;
+function TranscribeChip({
+    title,
+    onTranscribe,
+}: {
+    title: string;
+    onTranscribe: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            className="cmd-row-action squircle flex h-7 shrink-0 items-center gap-1.5 rounded-[8px] border border-border bg-dialog-surface pr-1.5 pl-2.5 text-small leading-4.5 font-medium text-strong"
+            // cmdk treats an inner pointerdown as selecting the row.
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+                e.stopPropagation();
+                onTranscribe();
+            }}
+            aria-label={`Transcribe ${title}`}
+        >
+            Transcribe
+            <CommandEnterKeys />
+        </button>
+    );
 }
 
 export function RecordingsGroup({
     recordings,
+    totalCount,
+    heading,
     transcriptions,
     currentRecording,
     inFlightActions,
     dateTimeFormat,
+    activeValue,
     onSelectRecording,
     onTranscribeRecording,
     runAction,
 }: {
+    /** The rows to show, already capped at `RECORDING_CAP`. */
     recordings: Recording[];
+    /** How many recordings matched before the cap. */
+    totalCount: number;
+    heading: string;
     transcriptions: Map<string, TranscriptionData>;
     currentRecording: Recording | null;
     inFlightActions: Map<string, "transcribing" | "summarizing">;
     dateTimeFormat: DateTimeFormat;
+    /** cmdk value of the highlighted row; only that row offers Transcribe. */
+    activeValue: string;
     onSelectRecording: (r: Recording) => void;
-    onTranscribeRecording: (id: string) => void;
+    onTranscribeRecording?: (id: string) => void;
     runAction: (fn: () => void) => () => void;
 }) {
     if (recordings.length === 0) return null;
-    const overflowCount = Math.max(0, recordings.length - RECORDING_CAP);
+    const overflowCount = Math.max(0, totalCount - recordings.length);
+    const now = new Date();
 
     return (
-        <Command.Group heading="Recent">
+        <Command.Group heading={heading}>
             {recordings.map((r) => {
+                const value = recordingItemValue(r.id);
+                const title = displayTitle(r.filename);
+                const inFlight = inFlightActions.get(r.id);
+                const isCurrent = currentRecording?.id === r.id;
                 const snippet = transcriptSnippet(
                     transcriptions.get(r.id)?.text,
                 );
-                const inFlight = inFlightActions.get(r.id);
-                const isCurrent = currentRecording?.id === r.id;
-
-                let stateIcon: ReactNode;
-                let stateLabel: string;
-                if (inFlight) {
-                    stateIcon = (
-                        <Loader2 className="size-4 animate-spin text-primary" />
-                    );
-                    stateLabel =
-                        inFlight === "transcribing"
-                            ? "Transcribing"
-                            : "Summarizing";
-                } else if (!r.hasTranscript) {
-                    stateIcon = (
-                        <Mic className="size-4 text-muted-foreground" />
-                    );
-                    stateLabel = "Audio only";
-                } else if (!r.hasSummary) {
-                    stateIcon = (
-                        <FileText className="size-4 text-foreground/70" />
-                    );
-                    stateLabel = "Transcribed";
-                } else {
-                    stateIcon = <Sparkles className="size-4 text-primary" />;
-                    stateLabel = "Transcribed & summarized";
-                }
-
-                const durationText =
-                    r.duration != null ? formatDurationMs(r.duration) : null;
-                const timeText = formatDateTime(r.startTime, dateTimeFormat);
-                const subtitle: ReactNode = snippet
-                    ? snippet
-                    : durationText
-                      ? `${durationText} · ${timeText}`
-                      : timeText;
-
-                const searchValue = [r.filename, r.id, snippet ?? ""].join(" ");
-
-                let accessory: ReactNode = null;
-                if (inFlight === "transcribing") {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <Loader2 className="size-3 animate-spin" />
-                            Transcribing
-                        </span>
-                    );
-                } else if (inFlight === "summarizing") {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <Loader2 className="size-3 animate-spin" />
-                            Summarizing
-                        </span>
-                    );
-                } else if (!r.hasTranscript) {
-                    // stopPropagation: cmdk treats inner pointerdown as selection.
-                    accessory = (
-                        <button
-                            type="button"
-                            className="cmd-row-action"
-                            onPointerDown={(e) => e.stopPropagation()}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onTranscribeRecording(r.id);
-                            }}
-                            aria-label={`Transcribe ${r.filename}`}
-                        >
-                            <Sparkles className="size-3" aria-hidden="true" />
-                            Transcribe
-                        </button>
-                    );
-                } else if (isCurrent) {
-                    accessory = (
-                        <span className="cmd-pill">
-                            <span
-                                aria-hidden="true"
-                                className="inline-block size-1.5 rounded-full bg-primary"
-                            />
-                            Selected
-                        </span>
-                    );
-                }
+                const subtitle =
+                    inFlight === "transcribing"
+                        ? "Transcribing…"
+                        : (snippet ??
+                          (r.hasTranscript ? null : "Not transcribed yet"));
+                const stateLabel = inFlight
+                    ? inFlight === "transcribing"
+                        ? "Transcribing"
+                        : "Summarizing"
+                    : r.hasTranscript
+                      ? "Transcribed"
+                      : "Not transcribed yet";
+                const subtitleSaysState =
+                    inFlight === "transcribing" ||
+                    (!inFlight && !r.hasTranscript);
+                // Same time detail as the library row's metadata line.
+                const timeText =
+                    dateTimeFormat === "relative"
+                        ? formatRowTime(r.startTime, now)
+                        : formatDateTime(r.startTime, dateTimeFormat);
+                const canTranscribe =
+                    onTranscribeRecording !== undefined &&
+                    !r.hasTranscript &&
+                    !inFlight &&
+                    activeValue === value;
 
                 return (
                     <Command.Item
                         key={r.id}
-                        value={searchValue}
+                        value={value}
+                        data-current={isCurrent || undefined}
+                        className="cmd-recording squircle"
                         onSelect={runAction(() => onSelectRecording(r))}
                     >
-                        <Row
-                            icon={
-                                <span title={stateLabel} aria-hidden="true">
-                                    {stateIcon}
+                        {isCurrent ? (
+                            <span className="cmd-current-stripe" />
+                        ) : null}
+                        <span
+                            className="flex h-10 w-2 shrink-0 items-start justify-center pt-1.75"
+                            title={stateLabel}
+                        >
+                            <StatusDot
+                                tone={recordingRowTone(
+                                    r.hasTranscript === true,
+                                    inFlight,
+                                )}
+                            />
+                            {subtitleSaysState ? null : (
+                                <span className="sr-only">{stateLabel}</span>
+                            )}
+                        </span>
+                        <span className="cmd-body">
+                            <span className="cmd-title text-ui leading-5 font-medium text-strong">
+                                {title}
+                            </span>
+                            {subtitle ? (
+                                <span className="cmd-subtitle text-small leading-4.5 text-muted-foreground">
+                                    {subtitle}
                                 </span>
-                            }
-                            title={r.filename}
-                            subtitle={subtitle}
-                            accessory={accessory}
-                        />
+                            ) : null}
+                        </span>
+                        {canTranscribe ? (
+                            <TranscribeChip
+                                title={title}
+                                onTranscribe={() =>
+                                    onTranscribeRecording?.(r.id)
+                                }
+                            />
+                        ) : null}
+                        <span className="flex w-18 shrink-0 flex-col items-end gap-0.5 tabular-nums">
+                            {r.duration != null ? (
+                                <span className="text-small leading-5 text-foreground">
+                                    {formatSpokenDuration(r.duration)}
+                                </span>
+                            ) : null}
+                            <span className="text-xs text-muted-foreground">
+                                {timeText}
+                            </span>
+                        </span>
                     </Command.Item>
                 );
             })}
             {overflowCount > 0 && (
                 <div className="cmd-more-hint">
-                    +{overflowCount} more · refine your search to narrow the
-                    list
+                    {overflowCount} more. Type to narrow the list
                 </div>
             )}
+        </Command.Group>
+    );
+}
+
+interface PaletteAction {
+    title: string;
+    icon: ReactNode;
+    accessory?: ReactNode;
+    run: () => void;
+}
+
+/** One cmdk group of fixed actions, showing only those whose title matches. */
+function ActionItems({
+    heading,
+    actions,
+    matches,
+    runAction,
+}: {
+    heading: string;
+    actions: PaletteAction[];
+    matches: (label: string) => boolean;
+    runAction: (fn: () => void) => () => void;
+}) {
+    const shown = actions.filter((a) => matches(a.title));
+    if (shown.length === 0) return null;
+    return (
+        <Command.Group heading={heading}>
+            {shown.map((a) => (
+                <Command.Item
+                    key={a.title}
+                    value={a.title}
+                    className="cmd-action squircle"
+                    onSelect={runAction(a.run)}
+                >
+                    <span
+                        aria-hidden="true"
+                        className="flex shrink-0 text-subtle [&_svg]:size-4"
+                    >
+                        {a.icon}
+                    </span>
+                    <span className="cmd-title flex-1 text-ui leading-5 text-strong">
+                        {a.title}
+                    </span>
+                    {a.accessory ? (
+                        <span className="flex shrink-0 items-center">
+                            {a.accessory}
+                        </span>
+                    ) : null}
+                </Command.Item>
+            ))}
         </Command.Group>
     );
 }
@@ -220,129 +281,145 @@ export function ActionsGroup({
     onUpload,
     onOpenSettings,
     onOpenShortcuts,
+    matches,
     runAction,
 }: {
-    onSync: () => void;
+    onSync?: () => void;
     onUpload: () => void;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
+    /** Whether an action title matches the current query. */
+    matches: (label: string) => boolean;
     runAction: (fn: () => void) => () => void;
 }) {
+    const actions: PaletteAction[] = [
+        ...(onSync
+            ? [{ title: "Sync now", icon: <RefreshCw />, run: onSync }]
+            : []),
+        { title: "Upload audio", icon: <Upload />, run: onUpload },
+        {
+            title: "Open settings",
+            icon: <Settings />,
+            accessory: <Keycap size="small">,</Keycap>,
+            run: onOpenSettings,
+        },
+        {
+            title: "Keyboard shortcuts",
+            icon: <Keyboard />,
+            accessory: <Keycap size="small">?</Keycap>,
+            run: onOpenShortcuts,
+        },
+    ];
     return (
-        <Command.Group heading="Actions">
-            <Command.Item onSelect={runAction(onSync)}>
-                <Row
-                    icon={
-                        <RefreshCw className="size-4 text-muted-foreground" />
-                    }
-                    title="Sync device"
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onUpload)}>
-                <Row
-                    icon={<Upload className="size-4 text-muted-foreground" />}
-                    title="Upload audio"
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenSettings)}>
-                <Row
-                    icon={<Settings className="size-4 text-muted-foreground" />}
-                    title="Open settings"
-                    accessory={<Kbd>,</Kbd>}
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(onOpenShortcuts)}>
-                <Row
-                    icon={<Keyboard className="size-4 text-muted-foreground" />}
-                    title="Keyboard shortcuts"
-                    accessory={<Kbd>?</Kbd>}
-                />
-            </Command.Item>
-        </Command.Group>
+        <ActionItems
+            heading="Actions"
+            actions={actions}
+            matches={matches}
+            runAction={runAction}
+        />
     );
 }
 
 export function ThemeGroup({
     currentTheme,
     onSetTheme,
+    matches,
     runAction,
 }: {
     currentTheme: "light" | "dark" | "system";
     onSetTheme: (t: "light" | "dark" | "system") => void;
+    /** Whether a theme name matches the current query. */
+    matches: (label: string) => boolean;
     runAction: (fn: () => void) => () => void;
 }) {
+    const themes = [
+        { value: "light", title: "Light", Icon: Sun },
+        { value: "dark", title: "Dark", Icon: Moon },
+        { value: "system", title: "Auto", Icon: Monitor },
+    ] as const;
     return (
-        <Command.Group heading="Theme">
-            <Command.Item onSelect={runAction(() => onSetTheme("light"))}>
-                <Row
-                    icon={<Sun className="size-4 text-muted-foreground" />}
-                    title="Light"
-                    accessory={
-                        currentTheme === "light" ? (
-                            <span className="cmd-pill">Active</span>
-                        ) : null
-                    }
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("dark"))}>
-                <Row
-                    icon={<Moon className="size-4 text-muted-foreground" />}
-                    title="Dark"
-                    accessory={
-                        currentTheme === "dark" ? (
-                            <span className="cmd-pill">Active</span>
-                        ) : null
-                    }
-                />
-            </Command.Item>
-            <Command.Item onSelect={runAction(() => onSetTheme("system"))}>
-                <Row
-                    icon={<Monitor className="size-4 text-muted-foreground" />}
-                    title="Auto"
-                    accessory={
-                        currentTheme === "system" ? (
-                            <span className="cmd-pill">Active</span>
-                        ) : null
-                    }
-                />
-            </Command.Item>
-        </Command.Group>
+        <ActionItems
+            heading="Theme"
+            actions={themes.map(({ value, title, Icon }) => ({
+                title,
+                icon: <Icon />,
+                accessory:
+                    currentTheme === value ? (
+                        <>
+                            <Check
+                                className="size-4 text-strong"
+                                aria-hidden="true"
+                            />
+                            <span className="sr-only">Active</span>
+                        </>
+                    ) : null,
+                run: () => onSetTheme(value),
+            }))}
+            matches={matches}
+            runAction={runAction}
+        />
     );
 }
 
+function FooterHint({
+    keys,
+    children,
+}: {
+    keys: ReactNode;
+    children: ReactNode;
+}) {
+    return (
+        <span className="flex items-center gap-1.5">
+            <span className="flex gap-1">{keys}</span>
+            {children}
+        </span>
+    );
+}
+
+/**
+ * Key hints under the list. Transcribe shows only while the highlighted
+ * row can be transcribed, matching its chip.
+ */
 export function PaletteFooter({
     showTranscribeHint,
 }: {
     showTranscribeHint: boolean;
 }) {
     return (
-        <div className="cmd-footer">
-            <div className="cmd-footer-group">
-                <span className="cmd-footer-hint">
-                    <Kbd>↑</Kbd>
-                    <Kbd>↓</Kbd>
-                    navigate
-                </span>
-                <span className="cmd-footer-hint">
-                    <Kbd>↵</Kbd>
-                    select
-                </span>
-                <span className="cmd-footer-hint">
-                    <Kbd>esc</Kbd>
-                    close
-                </span>
-                {showTranscribeHint && (
-                    <span className="cmd-footer-hint">
-                        <Kbd>⌘</Kbd>
-                        <Kbd>↵</Kbd>
-                        transcribe
-                    </span>
-                )}
-            </div>
-            <span className="cmd-footer-hint">
-                <Kbd>⌘K</Kbd>
-                toggle
-            </span>
+        <div className="flex h-11 shrink-0 items-center gap-4 border-t border-border bg-surface px-5 text-xs text-muted-foreground select-none">
+            <FooterHint
+                keys={
+                    <>
+                        <Keycap size="small">
+                            <ArrowUp aria-hidden="true" />
+                            <span className="sr-only">Up arrow</span>
+                        </Keycap>
+                        <Keycap size="small">
+                            <ArrowDown aria-hidden="true" />
+                            <span className="sr-only">Down arrow</span>
+                        </Keycap>
+                    </>
+                }
+            >
+                Move
+            </FooterHint>
+            <FooterHint
+                keys={
+                    <Keycap size="small">
+                        <CornerDownLeft aria-hidden="true" />
+                        <span className="sr-only">Return</span>
+                    </Keycap>
+                }
+            >
+                Open
+            </FooterHint>
+            {showTranscribeHint ? (
+                <FooterHint keys={<CommandEnterKeys />}>Transcribe</FooterHint>
+            ) : null}
+            <span className="flex-1" />
+            <FooterHint keys={<Keycap size="small">esc</Keycap>}>
+                Close
+            </FooterHint>
         </div>
     );
 }

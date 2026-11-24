@@ -1,19 +1,19 @@
 "use client";
 
-import { Command } from "cmdk";
+import { Command, defaultFilter } from "cmdk";
 import { Search } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     ActionsGroup,
-    Kbd,
     PaletteFooter,
     RECORDING_CAP,
     RecordingsGroup,
+    recordingItemValue,
     ThemeGroup,
-    transcriptSnippet,
 } from "@/components/dashboard/command-palette-parts";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import type { DateTimeFormat } from "@/lib/format-date";
+import { filterRecordingsByQuery } from "@/lib/recordings/search";
 import type { Recording } from "@/types/recording";
 import "@/components/dashboard/command-palette.css";
 
@@ -32,12 +32,14 @@ interface CommandPaletteProps {
     currentTheme: "light" | "dark" | "system";
     dateTimeFormat: DateTimeFormat;
     onSelectRecording: (r: Recording) => void;
-    onSync: () => void;
+    /** Omitted when there is no Plaud connection; hides the Sync action. */
+    onSync?: () => void;
     onUpload: () => void;
     onOpenSettings: () => void;
     onOpenShortcuts: () => void;
     onSetTheme: (t: "light" | "dark" | "system") => void;
-    onTranscribeRecording: (id: string) => void;
+    /** Omitted when no transcription provider is set up; hides Transcribe. */
+    onTranscribeRecording?: (id: string) => void;
 }
 
 export function CommandPalette({
@@ -66,7 +68,20 @@ export function CommandPalette({
         setTimeout(fn, 0);
     };
 
-    const visibleRecordings = recordings.slice(0, RECORDING_CAP);
+    // Filtering is ours, not cmdk's: recordings match exactly like the
+    // library search (title and full transcript), and actions keep
+    // cmdk's fuzzy match on their labels.
+    const [search, setSearch] = useState("");
+    useEffect(() => {
+        if (!open) setSearch("");
+    }, [open]);
+    const matchingRecordings = useMemo(
+        () => filterRecordingsByQuery(recordings, transcriptions, search),
+        [recordings, transcriptions, search],
+    );
+    const visibleRecordings = matchingRecordings.slice(0, RECORDING_CAP);
+    const matchesLabel = (label: string) =>
+        !search.trim() || defaultFilter(label, search.trim()) > 0;
 
     // Controlled `value` on the cmdk root lets us look up the
     // currently-highlighted item when the user fires a global
@@ -75,30 +90,20 @@ export function CommandPalette({
     // keydown handler.
     const [activeValue, setActiveValue] = useState("");
 
-    // Build a lookup from a row's cmdk `value` string to its
-    // recording id. The Transcribe quick action only applies to
-    // recordings without a transcript, so the map deliberately
-    // skips rows that wouldn't render the button — keying off this
-    // map is both the "is this row a recording" check and the
-    // "does it have a transcribe action" check.
+    // Lookup from a row's cmdk `value` to its recording id, for rows
+    // that can be transcribed (no transcript, nothing in flight). The
+    // highlighted row shows its Transcribe chip and answers ⌘↵ only
+    // when it is in this map.
     const transcribeTargets = useMemo(() => {
         const map = new Map<string, string>();
+        if (!onTranscribeRecording) return map;
         for (const r of visibleRecordings) {
             if (r.hasTranscript) continue;
             if (inFlightActions.get(r.id) === "transcribing") continue;
-            const snippet = transcriptSnippet(transcriptions.get(r.id)?.text);
-            // Filter falsy parts before joining so the value doesn't
-            // end in a trailing space when `snippet` is null. cmdk
-            // trims values internally, so a trailing space would
-            // make `activeValue` (trimmed) miss this map's key and
-            // ⌘↵ / Ctrl+↵ would silently no-op.
-            const value = [r.filename, r.id, snippet]
-                .filter((p): p is string => Boolean(p))
-                .join(" ");
-            map.set(value, r.id);
+            map.set(recordingItemValue(r.id), r.id);
         }
         return map;
-    }, [visibleRecordings, inFlightActions, transcriptions]);
+    }, [visibleRecordings, inFlightActions, onTranscribeRecording]);
 
     // Stable ref to the latest map + handler so the keydown listener
     // doesn't have to be re-created (or get stale) on every render.
@@ -119,33 +124,40 @@ export function CommandPalette({
         if (!id) return;
         e.preventDefault();
         e.stopPropagation();
-        onTranscribeRef.current(id);
+        onTranscribeRef.current?.(id);
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-xl gap-0 overflow-hidden p-0"
+                instant
+                aria-describedby={undefined}
+                className="squircle top-24 translate-y-0 gap-0 overflow-hidden rounded-[24px] p-0 sm:max-w-160"
                 showCloseButton={false}
             >
                 <DialogTitle className="sr-only">Command palette</DialogTitle>
                 <Command
                     className="command-palette"
                     label="Command palette"
+                    shouldFilter={false}
                     value={activeValue}
                     onValueChange={setActiveValue}
                     onKeyDownCapture={handleKeyDownCapture}
                 >
-                    <div className="cmd-input-row">
+                    <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-5">
                         <Search
-                            className="cmd-input-icon size-4"
+                            className="size-4.5 shrink-0 text-subtle"
                             aria-hidden="true"
                         />
-                        <Command.Input placeholder="Search recordings, transcripts, or actions…" />
-                        <Kbd>⌘K</Kbd>
+                        <Command.Input
+                            value={search}
+                            onValueChange={setSearch}
+                            placeholder="Search recordings, transcripts and actions"
+                            className="min-w-0 flex-1 bg-transparent text-base leading-5.5 text-strong outline-none placeholder:text-muted-foreground"
+                        />
                     </div>
 
-                    <Command.List className="max-h-[60vh] overflow-y-auto p-2">
+                    <Command.List className="max-h-[min(60vh,560px)] overflow-y-auto px-2 pt-1 pb-2">
                         <Command.Empty>
                             No matches.
                             <div className="cmd-empty-hint">
@@ -155,10 +167,13 @@ export function CommandPalette({
 
                         <RecordingsGroup
                             recordings={visibleRecordings}
+                            totalCount={matchingRecordings.length}
+                            heading={search.trim() ? "Recordings" : "Recent"}
                             transcriptions={transcriptions}
                             currentRecording={currentRecording}
                             inFlightActions={inFlightActions}
                             dateTimeFormat={dateTimeFormat}
+                            activeValue={activeValue}
                             onSelectRecording={onSelectRecording}
                             onTranscribeRecording={onTranscribeRecording}
                             runAction={runAction}
@@ -169,18 +184,20 @@ export function CommandPalette({
                             onUpload={onUpload}
                             onOpenSettings={onOpenSettings}
                             onOpenShortcuts={onOpenShortcuts}
+                            matches={matchesLabel}
                             runAction={runAction}
                         />
 
                         <ThemeGroup
                             currentTheme={currentTheme}
                             onSetTheme={onSetTheme}
+                            matches={matchesLabel}
                             runAction={runAction}
                         />
                     </Command.List>
 
                     <PaletteFooter
-                        showTranscribeHint={transcribeTargets.size > 0}
+                        showTranscribeHint={transcribeTargets.has(activeValue)}
                     />
                 </Command>
             </DialogContent>

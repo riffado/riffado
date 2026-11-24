@@ -1,36 +1,37 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { RecordingRowLayout } from "@/components/dashboard/recording-row";
+import { displayTitle } from "@/components/recording/format";
+import { formatBytes } from "@/lib/format-bytes";
 
 export interface PendingUpload {
     id: string;
     filename: string;
     filesize: number;
-}
-
-function formatSize(bytes: number) {
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    /** `performance.now()` when the upload started. */
+    startedAt: number;
+    /**
+     * The stored recording's filename once the server accepted the
+     * upload. The row stays until that recording shows up in the list.
+     */
+    uploadedAs?: string;
 }
 
 export function PendingUploadRow({
     upload,
-    rowPadding,
+    isCompact,
 }: {
     upload: PendingUpload;
-    rowPadding: string;
+    isCompact: boolean;
 }) {
     return (
-        <div className={cn("flex items-center gap-3", rowPadding)}>
-            <Loader2 className="size-4 animate-spin text-primary" />
-            <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-muted-foreground">
-                    {upload.filename}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                    Uploading… {formatSize(upload.filesize)}
-                </p>
-            </div>
+        <div aria-busy="true" data-flip-key={upload.id} className="select-none">
+            <RecordingRowLayout
+                tone="working"
+                title={displayTitle(upload.filename)}
+                detail={`Uploading… ${formatBytes(upload.filesize)}`}
+                isCompact={isCompact}
+            />
         </div>
     );
 }

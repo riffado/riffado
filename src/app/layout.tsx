@@ -1,18 +1,34 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import {
+    Doto,
+    Funnel_Display,
+    Funnel_Sans,
+    Geist_Mono,
+} from "next/font/google";
 import { AppProgress } from "@/components/app-progress";
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { OpenAnalytics } from "@/components/open-analytics";
 import { PostHogAnalytics } from "@/components/posthog-analytics";
 import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { env } from "@/lib/env";
 import "./globals.css";
 
-const geistSans = Geist({
-    variable: "--font-geist-sans",
+const funnelSans = Funnel_Sans({
+    variable: "--font-funnel-sans",
     subsets: ["latin"],
+});
+
+const funnelDisplay = Funnel_Display({
+    variable: "--font-funnel-display",
+    subsets: ["latin"],
+});
+
+const doto = Doto({
+    variable: "--font-doto",
+    subsets: ["latin"],
+    axes: ["ROND"],
 });
 
 const geistMono = Geist_Mono({
@@ -62,9 +78,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+    viewportFit: "cover",
     themeColor: [
-        { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-        { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+        { media: "(prefers-color-scheme: light)", color: "#faf9f5" },
+        { media: "(prefers-color-scheme: dark)", color: "#262624" },
     ],
 };
 
@@ -74,10 +91,13 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" suppressHydrationWarning>
-            <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
+        <html
+            lang="en"
+            data-scroll-behavior="smooth"
+            suppressHydrationWarning
+            className={`${funnelSans.variable} ${funnelDisplay.variable} ${doto.variable} ${geistMono.variable}`}
+        >
+            <body className="font-sans antialiased">
                 <AppProgress>
                     <ThemeProvider
                         attribute="class"

@@ -1,11 +1,35 @@
 "use client";
 
-import { Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { Waveform } from "@/components/dashboard/waveform";
-import { Button } from "@/components/ui/button";
+import {
+    AudioWaveform,
+    Pause,
+    Play,
+    RotateCcw,
+    RotateCw,
+    Volume2,
+    VolumeX,
+} from "lucide-react";
+import { Popover as PopoverPrimitive } from "radix-ui";
+import {
+    type KeyboardEvent,
+    type PointerEvent,
+    type ReactNode,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
+import { NightSlider } from "@/components/recording/night-slider";
+import { DotWaveform } from "@/components/ui/dot-waveform";
 import { Slider } from "@/components/ui/slider";
-import { PLAYBACK_SPEED_OPTIONS } from "@/hooks/use-playback-engine";
 import { formatTimeLike } from "@/lib/format-duration";
+import { cn } from "@/lib/utils";
+
+/** Seconds the skip buttons and the arrow keys jump. */
+export const SKIP_SECONDS = 10;
+
+const NO_PEAKS: number[] = [];
+
+type WaveformStatus = "idle" | "ready" | "decoding" | "skipped" | "error";
 
 interface Props {
     isPlaying: boolean;
@@ -13,6 +37,7 @@ interface Props {
     currentTime: number;
     duration: number;
     onSeekRatio: (ratio: number) => void;
+    onSkip: (deltaSeconds: number) => void;
     playbackSpeed: number;
     onCycleSpeed: () => void;
     volume: number;
@@ -20,15 +45,18 @@ interface Props {
     onToggleMute: () => void;
     scrubberStyle: "waveform" | "slider";
     waveformPeaks: number[] | null;
+    waveformStatus: WaveformStatus;
+    onDecodeWaveform: () => void;
 }
 
 /**
- * Controls row for the recording player: play/pause, time label,
- * scrubber (waveform when peaks are decoded, slider otherwise), speed
- * cycle button, and volume slider with a mute toggle.
+ * The night player bar: terracotta play/pause, skip back/forward, the
+ * current time, the scrubber (dot waveform, or a slider when the user
+ * picked "slider"), total time, speed and volume.
  *
- * Pure presentation -- all state lives in usePlaybackEngine, and the
- * parent wires this component's callbacks to that hook's handlers.
+ * Pure presentation: state lives in usePlaybackEngine and the parent
+ * wires the callbacks. Arrow keys and Space are handled globally by
+ * usePlaybackKeyboard, so the scrubber only adds Home/End.
  */
 export function RecordingPlayerControls({
     isPlaying,
@@ -36,6 +64,7 @@ export function RecordingPlayerControls({
     currentTime,
     duration,
     onSeekRatio,
+    onSkip,
     playbackSpeed,
     onCycleSpeed,
     volume,
@@ -43,114 +72,306 @@ export function RecordingPlayerControls({
     onToggleMute,
     scrubberStyle,
     waveformPeaks,
+    waveformStatus,
+    onDecodeWaveform,
 }: Props) {
-    const seekDisabled = !duration || duration === 0;
-    const seekRatio = duration > 0 ? currentTime / duration : 0;
-    const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-
-    const speedLabel =
-        PLAYBACK_SPEED_OPTIONS.find((opt) => opt.value === playbackSpeed)
-            ?.label || "1x";
-    const speakerIcon =
-        volume === 0 ? (
-            <VolumeX className="size-4" />
-        ) : (
-            <Volume2 className="size-4" />
-        );
+    const seekDisabled = !duration;
+    const ratio = duration > 0 ? currentTime / duration : 0;
+    const canGenerateWaveform =
+        scrubberStyle === "waveform" &&
+        (waveformStatus === "skipped" || waveformStatus === "error");
 
     return (
-        <div className="flex items-center gap-4">
-            <Button
+        <div className="flex items-center gap-3 lg:gap-3.5">
+            <button
+                type="button"
                 onClick={onTogglePlay}
-                size="lg"
                 aria-label={isPlaying ? "Pause" : "Play"}
-                className="size-12 shrink-0 rounded-full"
+                className="motion-press flex size-11.5 shrink-0 items-center justify-center rounded-full bg-terracotta-bright text-night-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-terracotta-bright/40 lg:size-12"
             >
                 {isPlaying ? (
-                    <Pause className="size-5" />
+                    <Pause className="size-4 fill-current" strokeWidth={0} />
                 ) : (
-                    <Play className="size-5" />
+                    <Play
+                        className="ml-0.5 size-4 fill-current"
+                        strokeWidth={0}
+                    />
                 )}
-            </Button>
+            </button>
 
-            {/*
-              Fixed-width time label, monospace + tabular-nums so digit
-              width is stable, and `formatTimeLike` pads currentTime to
-              match duration's segment structure so the whole
-              `M:SS / H:MM:SS` line never resizes mid-playback. Sits
-              next to play so the eye can pair them without scanning.
-            */}
+            <NightIconButton
+                label={`Back ${SKIP_SECONDS} seconds`}
+                onClick={() => onSkip(-SKIP_SECONDS)}
+                disabled={seekDisabled}
+                className="max-sm:hidden"
+            >
+                <RotateCcw className="size-5" strokeWidth={1.8} />
+            </NightIconButton>
+            <NightIconButton
+                label={`Forward ${SKIP_SECONDS} seconds`}
+                onClick={() => onSkip(SKIP_SECONDS)}
+                disabled={seekDisabled}
+                className="max-sm:hidden"
+            >
+                <RotateCw className="size-5" strokeWidth={1.8} />
+            </NightIconButton>
+
             <span
-                className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground"
+                className="shrink-0 text-small font-medium tabular-nums text-night-foreground"
                 aria-live="off"
             >
-                <span className="text-foreground">
-                    {formatTimeLike(currentTime, duration)}
-                </span>
-                <span className="mx-1 opacity-40">/</span>
-                <span>{formatTimeLike(duration, duration)}</span>
+                {formatTimeLike(currentTime, duration)}
             </span>
 
-            {/*
-              Waveform takes whatever's left, with min-w-0 so flex
-              doesn't expand the parent when bars are dense.
-            */}
-            <div className="min-w-0 flex-1">
-                {scrubberStyle === "waveform" && waveformPeaks ? (
-                    <Waveform
-                        peaks={waveformPeaks}
-                        progress={seekRatio}
-                        durationSeconds={duration}
-                        onSeek={onSeekRatio}
-                        disabled={seekDisabled}
-                        height={56}
-                    />
-                ) : (
-                    <Slider
-                        value={[progress]}
+            <div className="relative min-w-0 flex-1">
+                {scrubberStyle === "slider" ? (
+                    <NightSlider
+                        value={[ratio * 100]}
                         onValueChange={(value) =>
-                            onSeekRatio((value[0] ?? 0) / 100)
-                        }
-                        onValueCommit={(value) =>
                             onSeekRatio((value[0] ?? 0) / 100)
                         }
                         max={100}
                         step={0.1}
-                        className="w-full"
                         disabled={seekDisabled}
+                        aria-label="Seek"
+                    />
+                ) : (
+                    <DotScrubber
+                        peaks={waveformPeaks ?? NO_PEAKS}
+                        ratio={ratio}
+                        currentTime={currentTime}
+                        duration={duration}
+                        disabled={seekDisabled}
+                        busy={waveformStatus === "decoding"}
+                        onSeekRatio={onSeekRatio}
                     />
                 )}
             </div>
 
-            <Button
-                onClick={onCycleSpeed}
-                variant="outline"
-                size="sm"
-                className="h-8 w-12 shrink-0 px-0 font-mono text-xs tabular-nums"
-                title="Click to cycle playback speed"
-                aria-label={`Playback speed ${speedLabel}. Click to change.`}
-            >
-                {speedLabel}
-            </Button>
+            <span className="shrink-0 text-small tabular-nums text-night-text">
+                {formatTimeLike(duration, duration)}
+            </span>
 
-            <div className="flex shrink-0 items-center gap-2">
+            {canGenerateWaveform ? (
+                <NightIconButton
+                    label={
+                        waveformStatus === "error"
+                            ? "Retry waveform"
+                            : "Generate waveform"
+                    }
+                    onClick={onDecodeWaveform}
+                    className="max-sm:hidden"
+                >
+                    <AudioWaveform className="size-4" strokeWidth={1.8} />
+                </NightIconButton>
+            ) : null}
+
+            <button
+                type="button"
+                onClick={onCycleSpeed}
+                aria-label={`Playback speed ${formatSpeed(playbackSpeed)}. Click to change.`}
+                className="motion-press flex h-7 w-10 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums text-night-text outline-none hover:text-night-foreground focus-visible:ring-[3px] focus-visible:ring-night-text/40"
+            >
+                {formatSpeed(playbackSpeed)}
+            </button>
+
+            <VolumeControl
+                volume={volume}
+                onVolumeChange={onVolumeChange}
+                onToggleMute={onToggleMute}
+            />
+        </div>
+    );
+}
+
+function formatSpeed(speed: number): string {
+    return `${speed}×`;
+}
+
+function NightIconButton({
+    label,
+    onClick,
+    disabled,
+    className,
+    children,
+}: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    className?: string;
+    children: ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={label}
+            title={label}
+            className={cn(
+                "motion-press flex size-8 shrink-0 items-center justify-center rounded-full text-night-text outline-none hover:text-night-foreground focus-visible:ring-[3px] focus-visible:ring-night-text/40 disabled:opacity-40",
+                className,
+            )}
+        >
+            {children}
+        </button>
+    );
+}
+
+/** DotWaveform draws 7 rows on a 6-unit grid, so a column is height / 7 wide. */
+const DOT_ROWS = 7;
+
+/**
+ * Seekable dot waveform. Reports itself as a slider; click or drag to
+ * seek. Columns follow the measured width so the dots fill the bar.
+ */
+function DotScrubber({
+    peaks,
+    ratio,
+    currentTime,
+    duration,
+    disabled,
+    busy,
+    onSeekRatio,
+}: {
+    peaks: number[];
+    ratio: number;
+    currentTime: number;
+    duration: number;
+    disabled: boolean;
+    busy: boolean;
+    onSeekRatio: (ratio: number) => void;
+}) {
+    const ref = useRef<HTMLDivElement>(null);
+    const [columns, setColumns] = useState(60);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el || typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(([entry]) => {
+            const width = entry?.contentRect.width ?? 0;
+            const height = entry?.contentRect.height ?? 0;
+            if (width > 0 && height > 0) {
+                setColumns(
+                    Math.max(12, Math.floor((width * DOT_ROWS) / height)),
+                );
+            }
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    const seekFromPointer = (e: PointerEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        onSeekRatio(
+            Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
+        );
+    };
+
+    const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === "Home") {
+            e.preventDefault();
+            onSeekRatio(0);
+        } else if (e.key === "End") {
+            e.preventDefault();
+            onSeekRatio(1);
+        }
+    };
+
+    return (
+        <div
+            ref={ref}
+            role="slider"
+            tabIndex={disabled ? -1 : 0}
+            aria-label="Seek"
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            aria-valuenow={Math.round(currentTime)}
+            aria-valuetext={`${formatTimeLike(currentTime, duration)} of ${formatTimeLike(duration, duration)}`}
+            aria-disabled={disabled || undefined}
+            aria-busy={busy || undefined}
+            data-testid="player-scrubber"
+            onPointerDown={(e) => {
+                if (disabled) return;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                seekFromPointer(e);
+            }}
+            onPointerMove={(e) => {
+                if (
+                    disabled ||
+                    !e.currentTarget.hasPointerCapture(e.pointerId)
+                ) {
+                    return;
+                }
+                seekFromPointer(e);
+            }}
+            onKeyDown={onKeyDown}
+            className={cn(
+                "rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-night-text/40",
+                disabled ? "cursor-default" : "cursor-pointer",
+            )}
+        >
+            <DotWaveform
+                peaks={peaks}
+                progress={ratio}
+                columns={columns}
+                tone="night"
+                className="h-7 lg:h-9"
+            />
+        </div>
+    );
+}
+
+function VolumeControl({
+    volume,
+    onVolumeChange,
+    onToggleMute,
+}: {
+    volume: number;
+    onVolumeChange: (volume: number) => void;
+    onToggleMute: () => void;
+}) {
+    const muted = volume === 0;
+    const Icon = muted ? VolumeX : Volume2;
+    return (
+        <PopoverPrimitive.Root>
+            <PopoverPrimitive.Trigger asChild>
                 <button
                     type="button"
-                    onClick={onToggleMute}
-                    className="text-muted-foreground transition-colors hover:text-foreground"
-                    aria-label={volume === 0 ? "Unmute" : "Mute"}
-                    title={volume === 0 ? "Unmute" : "Mute"}
-                >
-                    {speakerIcon}
-                </button>
-                <Slider
-                    value={[volume]}
-                    onValueChange={(value) => onVolumeChange(value[0] ?? 75)}
-                    max={100}
-                    className="w-20"
                     aria-label="Volume"
-                />
-            </div>
-        </div>
+                    title="Volume"
+                    className="motion-press flex size-8 shrink-0 items-center justify-center rounded-full text-night-text outline-none hover:text-night-foreground focus-visible:ring-[3px] focus-visible:ring-night-text/40 max-lg:hidden"
+                >
+                    <Icon className="size-4" strokeWidth={1.8} />
+                </button>
+            </PopoverPrimitive.Trigger>
+            <PopoverPrimitive.Portal>
+                <PopoverPrimitive.Content
+                    side="top"
+                    align="end"
+                    sideOffset={14}
+                    collisionPadding={12}
+                    className="motion-popover squircle z-50 flex w-48 origin-(--radix-popover-content-transform-origin) items-center gap-3 rounded-[var(--radius-control)] border border-border bg-popover p-3 text-popover-foreground shadow-md"
+                >
+                    <button
+                        type="button"
+                        onClick={onToggleMute}
+                        aria-label={muted ? "Unmute" : "Mute"}
+                        className="motion-press flex size-7 shrink-0 items-center justify-center rounded-md text-subtle outline-none hover:text-strong focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                        <Icon className="size-4" />
+                    </button>
+                    <Slider
+                        value={[volume]}
+                        onValueChange={(value) =>
+                            onVolumeChange(value[0] ?? 75)
+                        }
+                        max={100}
+                        aria-label="Volume"
+                    />
+                </PopoverPrimitive.Content>
+            </PopoverPrimitive.Portal>
+        </PopoverPrimitive.Root>
     );
 }

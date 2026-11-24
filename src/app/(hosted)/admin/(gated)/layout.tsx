@@ -1,6 +1,5 @@
 import { headers as nextHeaders } from "next/headers";
 import { redirect } from "next/navigation";
-import { Toaster } from "@/components/ui/sonner";
 import { requireAdminPage } from "@/lib/hosted/admin/guard";
 import { AdminNav } from "./_components/admin-nav";
 
@@ -74,7 +73,6 @@ export default async function AdminLayout({
             <main className="flex-1 max-w-7xl w-full mx-auto p-6">
                 {children}
             </main>
-            <Toaster />
         </div>
     );
 }

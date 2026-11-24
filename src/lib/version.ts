@@ -3,6 +3,9 @@ import packageJson from "../../package.json" with { type: "json" };
 export const APP_VERSION = packageJson.version;
 export const APP_VERSION_TAG = `v${packageJson.version}`;
 export const APP_RELEASE_URL = `https://github.com/riffado/riffado/releases/tag/${APP_VERSION_TAG}`;
+/** Riffado's public source repository (the AGPL network-use source offer). */
+export const APP_SOURCE_URL = "https://github.com/riffado/riffado";
+export const AGPL_LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
 
 /** Compare `vX.Y.Z` strings. Returns `null` (not 0) on unparseable input. */
 export function compareSemver(a: string, b: string): -1 | 0 | 1 | null {

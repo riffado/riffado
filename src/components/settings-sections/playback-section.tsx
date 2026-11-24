@@ -1,21 +1,23 @@
 "use client";
 
-import { AudioWaveform, Keyboard, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
-import { SettingsCard } from "@/components/settings/settings-card";
-import { ToggleRow } from "@/components/settings/toggle-row";
-import { Label } from "@/components/ui/label";
+import { SettingsGroup } from "@/components/settings/section-header";
+import { SettingsSelectTrigger } from "@/components/settings/settings-select";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+    ToggleRow,
+} from "@/components/settings/toggle-row";
 import {
     Select,
     SelectContent,
     SelectItem,
-    SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useSettings } from "@/hooks/use-settings";
+import { toast } from "@/lib/toast";
 
 const playbackSpeedOptions = [
     { label: "0.5x", value: 0.5 },
@@ -141,107 +143,90 @@ export function PlaybackSection() {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
-
     const shortcuts: { keys: string; description: string }[] = [
         { keys: "Space", description: "Play / pause" },
-        { keys: "←", description: "Seek backward 5s" },
-        { keys: "→", description: "Seek forward 5s" },
+        { keys: "←", description: "Skip back 10 seconds" },
+        { keys: "→", description: "Skip forward 10 seconds" },
         { keys: "↑", description: "Increase volume" },
         { keys: "↓", description: "Decrease volume" },
     ];
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Playback"
-                description="Defaults applied to every recording when it loads in the player."
-                icon={Play}
-            />
-
-            <div className="space-y-3">
-                {/* Speed + volume defaults grouped — the audio knobs that
-                    apply at the moment a recording is selected. */}
-                <SettingsCard title="Audio defaults">
-                    <div className="space-y-2">
-                        <Label htmlFor="playback-speed">
-                            Default playback speed
-                        </Label>
-                        <Select
-                            value={defaultPlaybackSpeed.toString()}
-                            onValueChange={(value) => {
-                                const speed = parseFloat(value);
-                                setDefaultPlaybackSpeed(speed);
-                                handlePlaybackSettingChange({
-                                    defaultPlaybackSpeed: speed,
-                                });
-                            }}
-                            disabled={isSavingSettings}
-                        >
-                            <SelectTrigger
-                                id="playback-speed"
-                                className="w-full"
+        <SettingsGroup
+            title="Playback"
+            description="Applied to every recording when it opens in the player"
+        >
+            {isLoadingSettings ? (
+                <SettingsRowsSkeleton rows={4} />
+            ) : (
+                <SettingsRows>
+                    <SettingsRow
+                        label="Speed"
+                        controlId="playback-speed"
+                        control={
+                            <Select
+                                value={defaultPlaybackSpeed.toString()}
+                                onValueChange={(value) => {
+                                    const speed = parseFloat(value);
+                                    setDefaultPlaybackSpeed(speed);
+                                    handlePlaybackSettingChange({
+                                        defaultPlaybackSpeed: speed,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
                             >
-                                <SelectValue>
-                                    {playbackSpeedOptions.find(
-                                        (opt) =>
-                                            opt.value === defaultPlaybackSpeed,
-                                    )?.label || "1x"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {playbackSpeedOptions.map((option) => (
-                                    <SelectItem
-                                        key={option.value}
-                                        value={option.value.toString()}
-                                    >
-                                        {option.label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="default-volume">
-                                Default volume
-                            </Label>
-                            <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                                {defaultVolume}%
-                            </span>
-                        </div>
-                        <Slider
-                            id="default-volume"
-                            value={[defaultVolume]}
-                            onValueChange={(value) => {
-                                const volume = value[0] ?? 75;
-                                setDefaultVolume(volume);
-                                handlePlaybackSettingChange(
-                                    { defaultVolume: volume },
-                                    500,
-                                );
-                            }}
-                            min={0}
-                            max={100}
-                            step={1}
-                        />
-                    </div>
-                </SettingsCard>
-
-                {/* Behavior toggles — things that change what the player
-                    does, not what it sounds like. */}
-                <SettingsCard title="Behavior">
+                                <SettingsSelectTrigger id="playback-speed">
+                                    <SelectValue>
+                                        {playbackSpeedOptions.find(
+                                            (opt) =>
+                                                opt.value ===
+                                                defaultPlaybackSpeed,
+                                        )?.label || "1x"}
+                                    </SelectValue>
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    {playbackSpeedOptions.map((option) => (
+                                        <SelectItem
+                                            key={option.value}
+                                            value={option.value.toString()}
+                                        >
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                    <SettingsRow
+                        label="Volume"
+                        controlId="default-volume"
+                        control={
+                            <div className="flex w-56 items-center gap-3 max-sm:w-44">
+                                <Slider
+                                    id="default-volume"
+                                    value={[defaultVolume]}
+                                    onValueChange={(value) => {
+                                        const volume = value[0] ?? 75;
+                                        setDefaultVolume(volume);
+                                        handlePlaybackSettingChange(
+                                            { defaultVolume: volume },
+                                            500,
+                                        );
+                                    }}
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                />
+                                <span className="w-10 shrink-0 text-right text-small text-subtle tabular-nums">
+                                    {defaultVolume}%
+                                </span>
+                            </div>
+                        }
+                    />
                     <ToggleRow
                         id="auto-play-next"
-                        label="Auto-play next recording"
-                        description="Automatically play the next recording when the current one ends."
+                        label="Play the next recording"
+                        description="Starts the next one when the current recording ends"
                         checked={autoPlayNext}
                         onCheckedChange={(checked) => {
                             setAutoPlayNext(checked);
@@ -251,81 +236,58 @@ export function PlaybackSection() {
                         }}
                         disabled={isSavingSettings}
                     />
-                </SettingsCard>
-
-                {/* Visual appearance of the player itself. */}
-                <SettingsCard title="Appearance">
-                    <div className="space-y-2">
-                        <Label
-                            htmlFor="player-scrubber"
-                            className="flex items-center gap-2"
-                        >
-                            <AudioWaveform className="size-4 text-muted-foreground" />
-                            Scrubber style
-                        </Label>
-                        <Select
-                            value={playerScrubber}
-                            onValueChange={(value) => {
-                                const next =
-                                    value === "slider" ? "slider" : "waveform";
-                                handlePlaybackSettingChange({
-                                    playerScrubber: next,
-                                });
-                            }}
-                            disabled={isSavingSettings}
-                        >
-                            <SelectTrigger
-                                id="player-scrubber"
-                                className="w-full"
+                    <SettingsRow
+                        label="Scrubber"
+                        description="The waveform decodes audio in the browser on first listen. The progress bar skips that"
+                        controlId="player-scrubber"
+                        control={
+                            <Select
+                                value={playerScrubber}
+                                onValueChange={(value) => {
+                                    const next =
+                                        value === "slider"
+                                            ? "slider"
+                                            : "waveform";
+                                    handlePlaybackSettingChange({
+                                        playerScrubber: next,
+                                    });
+                                }}
+                                disabled={isSavingSettings}
                             >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="waveform">
-                                    Waveform (default)
-                                </SelectItem>
-                                <SelectItem value="slider">
-                                    Progress bar
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                            Waveform shows audio amplitude and decodes
-                            in-browser on first listen. Progress bar is the
-                            plain horizontal slider with no decoding cost.
-                        </p>
-                    </div>
-                </SettingsCard>
-
-                {/* Reference — read-only. Lives in the same card system
-                    so the visual rhythm doesn't break at the bottom. */}
-                <SettingsCard
-                    title={
-                        <span className="inline-flex items-center gap-2">
-                            <Keyboard
-                                className="size-4 text-muted-foreground"
-                                aria-hidden="true"
-                            />
-                            Keyboard shortcuts
-                        </span>
-                    }
-                    description="Available when the player has focus."
-                >
-                    <ul className="space-y-1.5">
-                        {shortcuts.map((s) => (
-                            <li
-                                key={s.keys}
-                                className="flex items-center justify-between text-sm"
-                            >
-                                <span>{s.description}</span>
-                                <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border bg-muted px-1.5 font-mono text-[11px] text-foreground">
-                                    {s.keys}
-                                </kbd>
-                            </li>
-                        ))}
-                    </ul>
-                </SettingsCard>
-            </div>
-        </div>
+                                <SettingsSelectTrigger id="player-scrubber">
+                                    <SelectValue />
+                                </SettingsSelectTrigger>
+                                <SelectContent align="end">
+                                    <SelectItem value="waveform">
+                                        Waveform
+                                    </SelectItem>
+                                    <SelectItem value="slider">
+                                        Progress bar
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        }
+                    />
+                    <SettingsRow
+                        label="Keyboard shortcuts"
+                        description="When the player has focus"
+                    >
+                        <ul className="grid gap-x-8 gap-y-1.5 sm:grid-cols-2">
+                            {shortcuts.map((s) => (
+                                <li
+                                    key={s.keys}
+                                    className="flex items-center justify-between gap-3 text-ui text-foreground"
+                                >
+                                    <span>{s.description}</span>
+                                    <kbd className="squircle inline-flex h-6 min-w-6 items-center justify-center rounded-[var(--radius-small)] bg-accent px-1.5 font-sans text-xs text-subtle">
+                                        {s.keys}
+                                    </kbd>
+                                </li>
+                            ))}
+                        </ul>
+                    </SettingsRow>
+                </SettingsRows>
+            )}
+        </SettingsGroup>
     );
 }

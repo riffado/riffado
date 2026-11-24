@@ -8,7 +8,6 @@ import {
     useRef,
     useState,
 } from "react";
-import { toast } from "sonner";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -19,7 +18,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 /**
  * App-wide confirm dialog. Single instance, called imperatively via
@@ -41,6 +40,9 @@ import { cn } from "@/lib/utils";
  *
  * Behavior:
  *  - Cancel / backdrop / Escape \u2192 dialog closes, `onConfirm` never\n *    runs, the promise resolves with `false`.
+ *  - Focus returns to `returnFocusTo`, or else to whatever had focus
+ *    when `confirm()` was called (the menu trigger or row that asked),
+ *    as long as it is still on the page.
  *  - Confirm click \u2192 button switches to `pendingLabel`, inputs disable,
  *    `onConfirm` is awaited. On success the dialog closes and the
  *    promise resolves with `true`. On thrown error a toast surfaces
@@ -61,12 +63,20 @@ interface ConfirmOptions {
     cancelLabel?: string;
     /** Default: same as `confirmLabel` */
     pendingLabel?: string;
-    /** Tints the confirm button red. Default false. */
+    /**
+     * Marks the action as destructive. The button stays ink, like every
+     * confirm: the dialog's title and copy carry the weight (DESIGN.md).
+     */
     destructive?: boolean;
     /** Awaited before the dialog closes. Throw to keep the dialog open. */
     onConfirm: () => void | Promise<void>;
     /** Override the toast message on `onConfirm` failure. */
     errorMessage?: string;
+    /**
+     * Element to focus when the dialog closes. Defaults to the element
+     * that had focus when `confirm()` was called.
+     */
+    returnFocusTo?: HTMLElement | null;
 }
 
 type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
@@ -93,6 +103,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     // Ref guard so the imperative `confirm()` can reject re-entrancy
     // without having to read state (which is one render behind).
     const activeRef = useRef<ActiveConfirm | null>(null);
+    const returnFocusRef = useRef<HTMLElement | null>(null);
 
     const confirm = useCallback<ConfirmFn>((opts) => {
         if (activeRef.current) {
@@ -102,6 +113,12 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                 ),
             );
         }
+        const focused = document.activeElement;
+        returnFocusRef.current =
+            opts.returnFocusTo ??
+            (focused instanceof HTMLElement && focused !== document.body
+                ? focused
+                : null);
         return new Promise<boolean>((resolve) => {
             const entry = { ...opts, resolve };
             activeRef.current = entry;
@@ -149,7 +166,18 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                     closeWithResult(false);
                 }}
             >
-                <AlertDialogContent>
+                <AlertDialogContent
+                    onCloseAutoFocus={(event) => {
+                        // The dialog has no trigger of its own, so Radix
+                        // would leave focus on <body>.
+                        const target = returnFocusRef.current;
+                        returnFocusRef.current = null;
+                        if (target?.isConnected) {
+                            event.preventDefault();
+                            target.focus({ preventScroll: true });
+                        }
+                    }}
+                >
                     <AlertDialogHeader>
                         <AlertDialogTitle>
                             {active?.title ?? ""}
@@ -173,10 +201,6 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
                                 e.preventDefault();
                                 void handleConfirm();
                             }}
-                            className={cn(
-                                active?.destructive &&
-                                    "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40",
-                            )}
                         >
                             {isRunning
                                 ? (active?.pendingLabel ??

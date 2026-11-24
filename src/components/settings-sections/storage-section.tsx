@@ -1,17 +1,20 @@
 "use client";
 
-import { HardDrive } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
-import { SettingsSectionHeader } from "@/components/settings/section-header";
+import { SettingsGroup } from "@/components/settings/section-header";
 import { SettingsCard } from "@/components/settings/settings-card";
+import {
+    SettingsRow,
+    SettingsRows,
+    SettingsRowsSkeleton,
+    ToggleRow,
+} from "@/components/settings/toggle-row";
 import { BreakdownBar } from "@/components/settings-sections/storage/breakdown-bar";
 import { LargestRecordings } from "@/components/settings-sections/storage/largest-recordings";
 import { UsageHero } from "@/components/settings-sections/storage/usage-hero";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useSettings } from "@/hooks/use-settings";
+import { toast } from "@/lib/toast";
 
 interface StorageSectionProps {
     isHosted?: boolean;
@@ -194,161 +197,168 @@ export function StorageSection({ isHosted = false }: StorageSectionProps) {
         }
     };
 
-    if (isLoadingSettings) {
-        return (
-            <div className="flex items-center justify-center py-8">
-                <div className="animate-spin size-6 border-2 border-primary border-t-transparent rounded-full" />
-            </div>
-        );
-    }
+    const isLocal = (usage?.storageType ?? "local") === "local";
+    const storageDescription = isHosted
+        ? undefined
+        : isLocal
+          ? "Audio files are stored on this server's disk"
+          : "Audio files are stored in S3-compatible object storage";
+    const backendFootnote = isHosted
+        ? null
+        : `${isLocal ? "Local disk" : "S3"}, set in the server's environment variables`;
 
     return (
-        <div className="space-y-6">
-            <SettingsSectionHeader
-                title="Storage"
-                description="Where Riffado keeps the audio files behind your recordings."
-                icon={HardDrive}
-            />
-
-            {isLoadingUsage ? (
-                // Match UsageHero's vertical footprint so the layout
-                // doesn't jump when the fetch resolves. animate-pulse
-                // signals "data on the way" without committing to
-                // specific numbers (which would falsely read as
-                // "you have 0 recordings").
-                <div
-                    className="h-32 animate-pulse rounded-lg border bg-muted/40"
-                    aria-hidden="true"
-                />
-            ) : usage ? (
-                <UsageHero
-                    usedBytes={usage.usedBytes}
-                    recordingCount={usage.recordingCount}
-                    totalDurationMs={usage.totalDurationMs}
-                    diskFreeBytes={usage.diskFreeBytes}
-                    quotaBytes={usage.quotaBytes}
-                />
-            ) : (
-                <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-6 text-center text-sm text-muted-foreground">
-                    Couldn't load storage usage. Refresh to try again.
-                </div>
-            )}
-
-            {!isLoadingUsage && usage && usage.largest.length > 0 && (
-                <div className="space-y-3">
-                    <BreakdownBar
-                        segments={usage.largest.map((r) => ({
-                            id: r.id,
-                            bytes: r.filesize,
-                        }))}
-                        totalBytes={usage.usedBytes}
+        <div className="flex flex-col gap-11">
+            <SettingsGroup title="Storage" description={storageDescription}>
+                {isLoadingUsage ? (
+                    // Match UsageHero's footprint so the layout doesn't
+                    // jump when the fetch resolves, without committing to
+                    // numbers that would read as a real empty account.
+                    <div
+                        className="squircle h-32 animate-pulse rounded-[var(--radius-card)] border border-hairline bg-surface"
+                        aria-hidden="true"
                     />
-                    <LargestRecordings items={usage.largest} />
-                </div>
-            )}
-
-            {!isHosted && (
-                <div className="rounded-lg border bg-card/40 px-4 py-3 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Backend</span>
-                        <span className="font-medium capitalize">
-                            {usage?.storageType ?? "local"}
-                        </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                        Storage backend is configured at the instance level via
-                        environment variables.
-                    </p>
-                </div>
-            )}
-
-            <SettingsCard
-                title="Auto-delete old recordings"
-                description="Automatically delete recordings older than the retention period."
-                action={
-                    <Switch
-                        id="auto-delete"
-                        checked={autoDeleteRecordings}
-                        onCheckedChange={(checked) => {
-                            // The toggle settles retentionDays itself, so any
-                            // debounced retention edit is now stale and must
-                            // not be flushed on unmount.
-                            cancelPendingRetentionSave();
-                            setAutoDeleteRecordings(checked);
-                            if (!checked) {
-                                setRetentionDays(null);
-                            }
-                            handleStorageSettingChange({
-                                autoDeleteRecordings: checked,
-                                retentionDays: checked ? retentionDays : null,
-                            });
-                        }}
-                        disabled={isSavingSettings}
+                ) : usage ? (
+                    <UsageHero
+                        usedBytes={usage.usedBytes}
+                        recordingCount={usage.recordingCount}
+                        totalDurationMs={usage.totalDurationMs}
+                        diskFreeBytes={usage.diskFreeBytes}
+                        quotaBytes={usage.quotaBytes}
+                        footnote={backendFootnote}
                     />
-                }
-            >
-                {autoDeleteRecordings && (
-                    <div className="space-y-2">
-                        <Label htmlFor="retention-days">
-                            Retention period (days)
-                        </Label>
-                        <Input
-                            id="retention-days"
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={365}
-                            step={1}
-                            value={retentionDays || ""}
-                            onChange={(e) => {
-                                const raw = e.target.value;
-                                if (raw === "") {
-                                    setRetentionDays(null);
-                                    if (saveTimeoutRef.current) {
-                                        clearTimeout(saveTimeoutRef.current);
-                                        saveTimeoutRef.current = undefined;
-                                    }
-                                    pendingRetentionRef.current = undefined;
-                                    handleStorageSettingChange({
-                                        retentionDays: null,
-                                    });
-                                    return;
-                                }
-                                const value = Number(raw);
-                                if (
-                                    !Number.isInteger(value) ||
-                                    value < 1 ||
-                                    value > 365
-                                ) {
-                                    // Reject non-integer or out-of-range
-                                    // values silently. Previously parseInt
-                                    // would silently floor "1.5" to 1 and
-                                    // save it; we now require an integer.
-                                    return;
-                                }
-                                setRetentionDays(value);
-                                if (saveTimeoutRef.current) {
-                                    clearTimeout(saveTimeoutRef.current);
-                                }
-                                pendingRetentionRef.current = value;
-                                saveTimeoutRef.current = setTimeout(() => {
-                                    saveTimeoutRef.current = undefined;
-                                    pendingRetentionRef.current = undefined;
-                                    handleStorageSettingChange({
-                                        retentionDays: value,
-                                    });
-                                }, 500);
-                            }}
-                            onBlur={flushPendingRetentionSave}
-                            placeholder="30"
+                ) : (
+                    <SettingsCard
+                        tone="quiet"
+                        description="Couldn't load storage usage. Refresh the page to try again"
+                    />
+                )}
+
+                {!isLoadingUsage && usage && usage.largest.length > 0 && (
+                    <div className="flex flex-col gap-6 pt-3">
+                        <BreakdownBar
+                            segments={usage.largest.map((r) => ({
+                                id: r.id,
+                                bytes: r.filesize,
+                            }))}
+                            totalBytes={usage.usedBytes}
                         />
-                        <p className="text-xs text-muted-foreground">
-                            Recordings older than this will be automatically
-                            deleted (1-365 days)
-                        </p>
+                        <LargestRecordings items={usage.largest} />
                     </div>
                 )}
-            </SettingsCard>
+            </SettingsGroup>
+
+            <SettingsGroup title="Clean-up">
+                {isLoadingSettings ? (
+                    <SettingsRowsSkeleton rows={1} />
+                ) : (
+                    <SettingsRows>
+                        <ToggleRow
+                            id="auto-delete"
+                            label="Delete old recordings"
+                            description="Removes recordings older than the period below"
+                            checked={autoDeleteRecordings}
+                            onCheckedChange={(checked) => {
+                                // The toggle settles retentionDays itself, so any
+                                // debounced retention edit is now stale and must
+                                // not be flushed on unmount.
+                                cancelPendingRetentionSave();
+                                setAutoDeleteRecordings(checked);
+                                if (!checked) {
+                                    setRetentionDays(null);
+                                }
+                                handleStorageSettingChange({
+                                    autoDeleteRecordings: checked,
+                                    retentionDays: checked
+                                        ? retentionDays
+                                        : null,
+                                });
+                            }}
+                            disabled={isSavingSettings}
+                        />
+                        {autoDeleteRecordings && (
+                            <SettingsRow
+                                label="Keep recordings for"
+                                description="Between 1 and 365 days"
+                                controlId="retention-days"
+                                control={
+                                    <>
+                                        <Input
+                                            id="retention-days"
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={1}
+                                            max={365}
+                                            step={1}
+                                            value={retentionDays || ""}
+                                            onChange={(e) => {
+                                                const raw = e.target.value;
+                                                if (raw === "") {
+                                                    setRetentionDays(null);
+                                                    if (
+                                                        saveTimeoutRef.current
+                                                    ) {
+                                                        clearTimeout(
+                                                            saveTimeoutRef.current,
+                                                        );
+                                                        saveTimeoutRef.current =
+                                                            undefined;
+                                                    }
+                                                    pendingRetentionRef.current =
+                                                        undefined;
+                                                    handleStorageSettingChange({
+                                                        retentionDays: null,
+                                                    });
+                                                    return;
+                                                }
+                                                const value = Number(raw);
+                                                if (
+                                                    !Number.isInteger(value) ||
+                                                    value < 1 ||
+                                                    value > 365
+                                                ) {
+                                                    // Reject non-integer or out-of-range
+                                                    // values silently. Previously parseInt
+                                                    // would silently floor "1.5" to 1 and
+                                                    // save it; we now require an integer.
+                                                    return;
+                                                }
+                                                setRetentionDays(value);
+                                                if (saveTimeoutRef.current) {
+                                                    clearTimeout(
+                                                        saveTimeoutRef.current,
+                                                    );
+                                                }
+                                                pendingRetentionRef.current =
+                                                    value;
+                                                saveTimeoutRef.current =
+                                                    setTimeout(() => {
+                                                        saveTimeoutRef.current =
+                                                            undefined;
+                                                        pendingRetentionRef.current =
+                                                            undefined;
+                                                        handleStorageSettingChange(
+                                                            {
+                                                                retentionDays:
+                                                                    value,
+                                                            },
+                                                        );
+                                                    }, 500);
+                                            }}
+                                            onBlur={flushPendingRetentionSave}
+                                            placeholder="30"
+                                            className="squircle h-9.5 w-24 rounded-[var(--radius-control)] border-border text-right tabular-nums"
+                                        />
+                                        <span className="text-ui text-subtle">
+                                            days
+                                        </span>
+                                    </>
+                                }
+                            />
+                        )}
+                    </SettingsRows>
+                )}
+            </SettingsGroup>
         </div>
     );
 }

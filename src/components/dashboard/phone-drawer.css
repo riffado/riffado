@@ -1,0 +1,63 @@
+/*
+ * Phone menu drawer: a left sheet that slides in over a dimmed page and
+ * leaves faster than it came. A swipe drives `transform` (sheet) and
+ * `opacity` (scrim) directly from phone-drawer.tsx; the exit animations
+ * below start from wherever the swipe left them.
+ */
+
+.phone-drawer {
+    touch-action: pan-y;
+}
+
+/* 250ms in: no --duration token covers a full-height sheet yet. */
+.phone-drawer[data-state="open"] {
+    animation: phone-drawer-in 250ms var(--ease-out);
+}
+
+.phone-drawer[data-state="closed"] {
+    animation: phone-drawer-out var(--duration-dialog-out) var(--ease-out)
+        forwards;
+}
+
+.phone-drawer-overlay[data-state="open"] {
+    animation: phone-drawer-fade-in 250ms var(--ease-out);
+}
+
+.phone-drawer-overlay[data-state="closed"] {
+    animation: phone-drawer-fade-out var(--duration-dialog-out) var(--ease-out)
+        forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .phone-drawer[data-state="open"] {
+        animation-name: phone-drawer-fade-in;
+    }
+
+    .phone-drawer[data-state="closed"] {
+        animation-name: phone-drawer-fade-out;
+    }
+}
+
+@keyframes phone-drawer-in {
+    from {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes phone-drawer-out {
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes phone-drawer-fade-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes phone-drawer-fade-out {
+    to {
+        opacity: 0;
+    }
+}

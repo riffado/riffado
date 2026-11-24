@@ -16,12 +16,12 @@ export interface InitialSettings {
     syncOnVisibilityChange: boolean;
     syncNotifications: boolean;
     browserNotifications: boolean;
+    /** Plays a short sound for errors and newly synced recordings. */
+    notificationSound: boolean;
     /**
-     * True once the user has clicked through the onboarding dialog's
-     * "Get Started" step. Drives the mandatory onboarding gate in
-     * `Workstation` -- when false, the dialog auto-opens and can't be
-     * dismissed. See `onboarding-dialog.tsx` and `requireCompletedOnboarding`
-     * in `auth-server.ts`.
+     * Mirrors `userSettings.onboardingCompleted`. Nothing reads it since
+     * the onboarding dialog was removed (sign-up lands on the first-run
+     * screen); the column stays for the additive-schema rule.
      */
     onboardingCompleted: boolean;
 }
@@ -42,6 +42,7 @@ export const INITIAL_SETTINGS_DEFAULTS: InitialSettings = {
     syncOnVisibilityChange: true,
     syncNotifications: true,
     browserNotifications: true,
+    notificationSound: true,
     onboardingCompleted: false,
 };
 
@@ -79,6 +80,8 @@ export function initialSettingsFromRow(row: Row): InitialSettings {
         browserNotifications:
             r?.browserNotifications ??
             INITIAL_SETTINGS_DEFAULTS.browserNotifications,
+        notificationSound:
+            r?.notificationSound ?? INITIAL_SETTINGS_DEFAULTS.notificationSound,
         onboardingCompleted:
             r?.onboardingCompleted ??
             INITIAL_SETTINGS_DEFAULTS.onboardingCompleted,

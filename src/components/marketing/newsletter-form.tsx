@@ -147,7 +147,7 @@ export function NewsletterForm({
                     aria-label="Email address"
                     className="sm:flex-1"
                 />
-                <Button type="submit" disabled={isSubmitting}>
+                <Button type="submit" variant="primary" disabled={isSubmitting}>
                     {isSubmitting ? (
                         <>
                             <Loader2

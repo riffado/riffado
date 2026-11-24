@@ -4,7 +4,8 @@ import { useEffect } from "react";
 
 interface Options {
     onToggle: () => void;
-    onSeekRelative: (deltaSeconds: number) => void;
+    /** Skip one step back (-1) or forward (1); the player decides the size. */
+    onSkip: (direction: -1 | 1) => void;
     onVolumeDelta: (delta: number) => void;
 }
 
@@ -12,8 +13,8 @@ interface Options {
  * Global keyboard shortcuts for the recording player.
  *
  * Space     -> play/pause
- * ArrowLeft -> seek -5s
- * ArrowRight-> seek +5s
+ * ArrowLeft -> skip back one step (same as the player's skip button)
+ * ArrowRight-> skip forward one step
  * ArrowUp   -> volume +5
  * ArrowDown -> volume -5
  *
@@ -25,7 +26,7 @@ interface Options {
  */
 export function usePlaybackKeyboard({
     onToggle,
-    onSeekRelative,
+    onSkip,
     onVolumeDelta,
 }: Options) {
     useEffect(() => {
@@ -46,11 +47,11 @@ export function usePlaybackKeyboard({
                     break;
                 case "ArrowLeft":
                     e.preventDefault();
-                    onSeekRelative(-5);
+                    onSkip(-1);
                     break;
                 case "ArrowRight":
                     e.preventDefault();
-                    onSeekRelative(5);
+                    onSkip(1);
                     break;
                 case "ArrowUp":
                     e.preventDefault();
@@ -65,5 +66,5 @@ export function usePlaybackKeyboard({
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [onToggle, onSeekRelative, onVolumeDelta]);
+    }, [onToggle, onSkip, onVolumeDelta]);
 }

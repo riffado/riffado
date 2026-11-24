@@ -1,5 +1,9 @@
 "use client";
 
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from "lucide-react";
+import { type ReactNode, useRef } from "react";
+import { Keycap } from "@/components/dashboard/keycap";
+import { SKIP_SECONDS } from "@/components/dashboard/recording-player-controls";
 import {
     Dialog,
     DialogContent,
@@ -13,85 +17,175 @@ interface ShortcutsDialogProps {
     onOpenChange: (open: boolean) => void;
 }
 
-interface ShortcutRow {
+/** One shortcut row: what it does, the keys shown, and the keydown it answers to. */
+export interface Shortcut {
+    label: string;
     keys: string[];
-    description: string;
+    event: { key: string; metaKey?: boolean };
 }
 
-const groups: { title: string; rows: ShortcutRow[] }[] = [
-    {
-        title: "Global",
-        rows: [
-            { keys: ["⌘", "K"], description: "Command palette" },
-            { keys: ["?"], description: "Show this cheatsheet" },
-            { keys: [","], description: "Open settings" },
-            { keys: ["/"], description: "Focus search" },
-        ],
-    },
-    {
-        title: "Recording list",
-        rows: [
-            { keys: ["j"], description: "Next recording" },
-            { keys: ["k"], description: "Previous recording" },
-            // No `Enter → Focus player` row here: selecting a recording
-            // via j/k already mounts the player; there's no separate
-            // "focus the player" gesture and adding one would conflict
-            // with the search box's Enter handler.
-        ],
-    },
-    {
-        title: "Player",
-        rows: [
-            { keys: ["Space"], description: "Play / pause" },
-            { keys: ["←"], description: "Seek back 5s" },
-            { keys: ["→"], description: "Seek forward 5s" },
-            { keys: ["↑"], description: "Volume up" },
-            { keys: ["↓"], description: "Volume down" },
-        ],
-    },
+export interface ShortcutGroup {
+    title: string;
+    shortcuts: Shortcut[];
+}
+
+/**
+ * Every shortcut the library answers to, in the two columns of the
+ * sheet. Mirrors `useListKeyboardNav` and `usePlaybackKeyboard`; a test
+ * fires each `event` at those hooks so the two can't drift apart.
+ */
+export const SHORTCUT_COLUMNS: ShortcutGroup[][] = [
+    [
+        {
+            title: "Anywhere",
+            shortcuts: [
+                {
+                    label: "Search and run commands",
+                    keys: ["⌘", "K"],
+                    event: { key: "k", metaKey: true },
+                },
+                {
+                    label: "Search recordings",
+                    keys: ["/"],
+                    event: { key: "/" },
+                },
+                { label: "Open settings", keys: [","], event: { key: "," } },
+                { label: "Show shortcuts", keys: ["?"], event: { key: "?" } },
+            ],
+        },
+        {
+            title: "Recording list",
+            shortcuts: [
+                {
+                    label: "Select next recording",
+                    keys: ["J"],
+                    event: { key: "j" },
+                },
+                {
+                    label: "Select previous recording",
+                    keys: ["K"],
+                    event: { key: "k" },
+                },
+            ],
+        },
+    ],
+    [
+        {
+            title: "Player",
+            shortcuts: [
+                {
+                    label: "Play or pause",
+                    keys: ["Space"],
+                    event: { key: " " },
+                },
+                {
+                    label: `Skip back ${SKIP_SECONDS} seconds`,
+                    keys: ["←"],
+                    event: { key: "ArrowLeft" },
+                },
+                {
+                    label: `Skip forward ${SKIP_SECONDS} seconds`,
+                    keys: ["→"],
+                    event: { key: "ArrowRight" },
+                },
+                {
+                    label: "Turn volume up",
+                    keys: ["↑"],
+                    event: { key: "ArrowUp" },
+                },
+                {
+                    label: "Turn volume down",
+                    keys: ["↓"],
+                    event: { key: "ArrowDown" },
+                },
+            ],
+        },
+    ],
 ];
 
-function Kbd({ children }: { children: React.ReactNode }) {
+const ARROWS: Record<string, { icon: ReactNode; name: string }> = {
+    "←": { icon: <ArrowLeft aria-hidden="true" />, name: "Left arrow" },
+    "→": { icon: <ArrowRight aria-hidden="true" />, name: "Right arrow" },
+    "↑": { icon: <ArrowUp aria-hidden="true" />, name: "Up arrow" },
+    "↓": { icon: <ArrowDown aria-hidden="true" />, name: "Down arrow" },
+};
+
+function KeyLabel({ name }: { name: string }) {
+    const arrow = ARROWS[name];
+    if (!arrow) return <Keycap>{name}</Keycap>;
     return (
-        <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-[11px] text-foreground shadow-sm">
-            {children}
-        </kbd>
+        <Keycap>
+            {arrow.icon}
+            <span className="sr-only">{arrow.name}</span>
+        </Keycap>
     );
 }
 
 export function ShortcutsDialog({ open, onOpenChange }: ShortcutsDialogProps) {
+    // Opened by a key or from a menu, so there is no trigger for Radix to
+    // return focus to; put it back where it was.
+    const returnFocusTo = useRef<HTMLElement | null>(null);
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
+            <DialogContent
+                instant
+                className="gap-0 p-0 sm:max-w-160"
+                onOpenAutoFocus={() => {
+                    returnFocusTo.current =
+                        document.activeElement instanceof HTMLElement
+                            ? document.activeElement
+                            : null;
+                }}
+                onCloseAutoFocus={(e) => {
+                    const target = returnFocusTo.current;
+                    returnFocusTo.current = null;
+                    if (!target?.isConnected) return;
+                    e.preventDefault();
+                    target.focus();
+                }}
+            >
+                <DialogHeader className="gap-1.5 pt-7 pr-16 pl-7">
                     <DialogTitle>Keyboard shortcuts</DialogTitle>
-                    <DialogDescription>
-                        Power-user shortcuts available across the dashboard.
+                    <DialogDescription className="text-ui leading-5">
+                        Press ? anytime to see this
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-5">
-                    {groups.map((group) => (
-                        <div key={group.title}>
-                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                                {group.title}
-                            </h3>
-                            <ul className="space-y-1.5">
-                                {group.rows.map((row) => (
-                                    <li
-                                        key={row.description}
-                                        className="flex items-center justify-between text-sm"
-                                    >
-                                        <span className="text-foreground">
-                                            {row.description}
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                            {row.keys.map((k) => (
-                                                <Kbd key={k}>{k}</Kbd>
-                                            ))}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
+                <div className="flex flex-col gap-6 px-7 pt-5 pb-7 sm:flex-row sm:items-start sm:gap-8">
+                    {SHORTCUT_COLUMNS.map((column) => (
+                        <div
+                            key={column[0]?.title}
+                            className="flex min-w-0 flex-1 flex-col gap-6"
+                        >
+                            {column.map((group) => (
+                                <section
+                                    key={group.title}
+                                    aria-label={group.title}
+                                >
+                                    <h3 className="pb-1.5 text-xs font-medium text-muted-foreground select-none">
+                                        {group.title}
+                                    </h3>
+                                    <ul>
+                                        {group.shortcuts.map((shortcut) => (
+                                            <li
+                                                key={shortcut.label}
+                                                className="flex h-8.5 items-center justify-between gap-3 border-b border-surface text-ui leading-5 text-foreground"
+                                            >
+                                                <span className="truncate">
+                                                    {shortcut.label}
+                                                </span>
+                                                <span className="flex shrink-0 gap-1">
+                                                    {shortcut.keys.map((k) => (
+                                                        <KeyLabel
+                                                            key={k}
+                                                            name={k}
+                                                        />
+                                                    ))}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ))}
                         </div>
                     ))}
                 </div>

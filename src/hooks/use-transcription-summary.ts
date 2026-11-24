@@ -1,12 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import {
-    getAllSummaryPrompts,
-    getDefaultSummaryPromptConfig,
-    type SummaryPromptConfiguration,
-} from "@/lib/ai/summary-presets";
+    type SummaryPrompts,
+    useSummaryPrompts,
+} from "@/hooks/use-summary-prompts";
 import {
     addSummarizingId,
     bumpContentGeneration,
@@ -17,12 +15,9 @@ import {
     shouldApplyFetchedSummary,
     shouldApplySummaryToView,
 } from "@/lib/summary/job-scope";
+import { toast } from "@/lib/toast";
 
-export interface SummaryPromptOption {
-    id: string;
-    name: string;
-    isPreset: boolean;
-}
+export type { SummaryPromptOption } from "@/hooks/use-summary-prompts";
 
 export interface SummaryData {
     summary: string | null;
@@ -40,6 +35,20 @@ export interface SummaryData {
     promptFallback?: boolean;
 }
 
+/** Why the last summary request for the current recording failed. */
+export interface SummaryError {
+    /** API error code, e.g. `AI_PROVIDER_NOT_CONFIGURED`, or `NETWORK_ERROR`. */
+    code: string;
+    message: string;
+}
+
+/**
+ * Where loading the stored summary stands for the current recording:
+ * `loading` while the GET is in flight, `failed` when it couldn't be
+ * read (not "there is no summary"), `loaded` once it answered.
+ */
+export type SummaryLoadStatus = "loading" | "loaded" | "failed";
+
 interface UseTranscriptionSummaryOptions {
     /** Recording id used for `/api/recordings/:id/summary` requests. */
     recordingId: string | null | undefined;
@@ -49,22 +58,32 @@ interface UseTranscriptionSummaryOptions {
      * server may have already auto-summarized after a re-transcribe.
      */
     transcriptionText: string | null | undefined;
+    /**
+     * Prompt list and selection shared with other surfaces (the library
+     * row menus). When omitted, the hook loads its own.
+     */
+    prompts?: SummaryPrompts;
+    /** Called after a summary is generated or deleted on the server. */
+    onSummaryChange?: () => void;
 }
 
 /**
- * Shared summary state for the transcription views. Both the dashboard
- * (`TranscriptionPanel`) and the recording detail page
- * (`recordings/TranscriptionSection`) use the same endpoints with the
- * same expand/preset/optimistic-delete UX -- only the visual chrome
- * differs.
+ * Shared summary state for the recording view (`RecordingView`, used by
+ * the dashboard detail pane and the standalone recording page).
  *
- * Returns flat state + handlers; callers compose their own JSX so the
- * dashboard's shadcn `Card`/`Button` look and the recording page's
- * `Panel`/`MetalButton` look stay distinct on purpose.
+ * Returns flat state + handlers; callers compose their own JSX.
+ * `handleSummarize(preset?)` generates with the given prompt (and makes
+ * it the selected one) or the current selection. `summaryError` holds
+ * the last failure for the current recording until the next attempt.
+ * `summaryLoadStatus` says whether the stored summary is still loading
+ * or couldn't be read; `retrySummaryLoad` asks again.
+ * `summarizingIds` lists every recording this view is summarizing.
  */
 export function useTranscriptionSummary({
     recordingId,
     transcriptionText,
+    prompts,
+    onSummaryChange,
 }: UseTranscriptionSummaryOptions) {
     const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
     const [summarizingIds, setSummarizingIds] = useState(
@@ -72,60 +91,35 @@ export function useTranscriptionSummary({
     );
     const summarizingIdsRef = useRef(summarizingIds);
     const isSummarizing = isSummarizingForView(recordingId, summarizingIds);
+    const [errorState, setErrorState] = useState<
+        (SummaryError & { recordingId: string }) | null
+    >(null);
+    const summaryError: SummaryError | null =
+        errorState && errorState.recordingId === recordingId
+            ? { code: errorState.code, message: errorState.message }
+            : null;
+    const [loadState, setLoadState] = useState<{
+        recordingId: string | null | undefined;
+        status: SummaryLoadStatus;
+    }>({ recordingId, status: "loading" });
+    const summaryLoadStatus: SummaryLoadStatus =
+        loadState.recordingId === recordingId ? loadState.status : "loading";
     const [summaryExpanded, setSummaryExpanded] = useState(true);
-    const [summaryPreset, setSummaryPresetState] = useState("general");
-    // Set the moment the caller (the per-recording dropdown) makes an
-    // explicit choice. Guards the settings-fetch effect below from
-    // clobbering that choice if the fetch resolves afterwards -- without
-    // this, picking a prompt right after the page loads could get silently
-    // reverted back to the saved default a moment later.
-    const userSelectedPresetRef = useRef(false);
-    const setSummaryPreset = useCallback((preset: string) => {
-        userSelectedPresetRef.current = true;
-        setSummaryPresetState(preset);
-    }, []);
-    const [summaryPromptOptions, setSummaryPromptOptions] = useState<
-        SummaryPromptOption[]
-    >(() =>
-        getAllSummaryPrompts(getDefaultSummaryPromptConfig()).map((p) => ({
-            id: p.id,
-            name: p.name,
-            isPreset: p.isPreset,
-        })),
-    );
+    const ownPrompts = useSummaryPrompts({ enabled: !prompts });
+    const {
+        options: summaryPromptOptions,
+        selectedId: summaryPreset,
+        select: setSummaryPreset,
+    } = prompts ?? ownPrompts;
+    const onSummaryChangeRef = useRef(onSummaryChange);
+    useEffect(() => {
+        onSummaryChangeRef.current = onSummaryChange;
+    }, [onSummaryChange]);
 
     // Re-fetch trigger separate from the URL/id key so callers can
     // bump it imperatively (e.g. right after a re-transcribe finishes,
     // before the new text has propagated through props).
     const [summaryFetchKey, setSummaryFetchKey] = useState(0);
-
-    // Load the user's saved default prompt + custom prompts once so the
-    // per-recording dropdown initializes to the actual default (not a
-    // hardcoded "general") and lists custom prompts alongside presets.
-    useEffect(() => {
-        const controller = new AbortController();
-        fetch("/api/settings/user", { signal: controller.signal })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                const config = data?.summaryPrompt as
-                    | SummaryPromptConfiguration
-                    | null
-                    | undefined;
-                if (!config) return;
-                if (config.selectedPrompt && !userSelectedPresetRef.current) {
-                    setSummaryPresetState(config.selectedPrompt);
-                }
-                setSummaryPromptOptions(
-                    getAllSummaryPrompts(config).map((p) => ({
-                        id: p.id,
-                        name: p.name,
-                        isPreset: p.isPreset,
-                    })),
-                );
-            })
-            .catch(() => {});
-        return () => controller.abort();
-    }, []);
 
     const recordingIdRef = useRef(recordingId);
     const fetchGenerationRef = useRef(0);
@@ -175,28 +169,34 @@ export function useTranscriptionSummary({
         const generation = ++fetchGenerationRef.current;
         const controller = new AbortController();
         getAbortRef.current = controller;
+        const isCurrent = () =>
+            shouldApplyFetchedSummary(
+                recordingIdRef.current,
+                requestedId,
+                fetchGenerationRef.current,
+                generation,
+            );
+        setLoadState({ recordingId: requestedId, status: "loading" });
         fetch(`/api/recordings/${requestedId}/summary`, {
             signal: controller.signal,
         })
-            .then((res) => res.json())
+            .then((res) => {
+                if (!res.ok) throw new Error(`Summary GET ${res.status}`);
+                return res.json() as Promise<Partial<SummaryData>>;
+            })
             .then((data) => {
-                if (
-                    !shouldApplyFetchedSummary(
-                        recordingIdRef.current,
-                        requestedId,
-                        fetchGenerationRef.current,
-                        generation,
-                    )
-                ) {
-                    return;
-                }
+                if (!isCurrent()) return;
                 if (data.summary) {
-                    setSummaryData(data);
+                    setSummaryData(data as SummaryData);
                 } else {
                     setSummaryData(null);
                 }
+                setLoadState({ recordingId: requestedId, status: "loaded" });
             })
-            .catch(() => {});
+            .catch(() => {
+                if (controller.signal.aborted || !isCurrent()) return;
+                setLoadState({ recordingId: requestedId, status: "failed" });
+            });
         return () => {
             controller.abort();
             if (getAbortRef.current === controller) {
@@ -205,68 +205,91 @@ export function useTranscriptionSummary({
         };
     }, [recordingId, summaryFetchKey]);
 
-    const handleSummarize = useCallback(async () => {
-        if (!recordingId) return;
-        if (summarizingIdsRef.current.has(recordingId)) return;
-        const targetId = recordingId;
-        const postGeneration = contentGenerationFor(
-            contentGenByIdRef.current,
-            targetId,
-        );
-        const postIsCurrent = () =>
-            shouldApplyFetchedSummary(
-                recordingIdRef.current,
+    const handleSummarize = useCallback(
+        async (presetOverride?: string) => {
+            if (!recordingId) return;
+            if (summarizingIdsRef.current.has(recordingId)) return;
+            const targetId = recordingId;
+            const preset = presetOverride ?? summaryPreset;
+            if (presetOverride) setSummaryPreset(presetOverride);
+            setErrorState(null);
+            const postGeneration = contentGenerationFor(
+                contentGenByIdRef.current,
                 targetId,
-                contentGenerationFor(contentGenByIdRef.current, targetId),
-                postGeneration,
             );
-        getAbortRef.current?.abort();
-        fetchGenerationRef.current += 1;
-        summarizingIdsRef.current = addSummarizingId(
-            summarizingIdsRef.current,
-            targetId,
-        );
-        setSummarizingIds(summarizingIdsRef.current);
-        try {
-            const response = await fetch(
-                `/api/recordings/${targetId}/summary`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ preset: summaryPreset }),
-                },
-            );
-            if (response.ok) {
-                const data = (await response.json()) as SummaryData;
-                if (postIsCurrent()) {
-                    fetchGenerationRef.current += 1;
-                    setSummaryData(data);
-                    if (data.promptFallback) {
-                        toast.warning(
-                            "Selected summary prompt is no longer available -- used your default prompt instead.",
-                        );
-                    } else {
-                        toast.success("Summary generated");
-                    }
-                }
-            } else {
-                const error = await response.json().catch(() => ({}));
-                if (postIsCurrent()) {
-                    toast.error(error.error || "Summary generation failed");
-                }
-            }
-        } catch {
-            if (postIsCurrent()) {
-                toast.error("Failed to generate summary");
-            }
-        } finally {
-            summarizingIdsRef.current = removeSummarizingId(
+            const postIsCurrent = () =>
+                shouldApplyFetchedSummary(
+                    recordingIdRef.current,
+                    targetId,
+                    contentGenerationFor(contentGenByIdRef.current, targetId),
+                    postGeneration,
+                );
+            getAbortRef.current?.abort();
+            fetchGenerationRef.current += 1;
+            setLoadState({ recordingId: targetId, status: "loaded" });
+            summarizingIdsRef.current = addSummarizingId(
                 summarizingIdsRef.current,
                 targetId,
             );
             setSummarizingIds(summarizingIdsRef.current);
-        }
-    }, [recordingId, summaryPreset]);
+            try {
+                const response = await fetch(
+                    `/api/recordings/${targetId}/summary`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ preset }),
+                    },
+                );
+                if (response.ok) {
+                    const data = (await response.json()) as SummaryData;
+                    onSummaryChangeRef.current?.();
+                    if (postIsCurrent()) {
+                        fetchGenerationRef.current += 1;
+                        setSummaryData(data);
+                        if (data.promptFallback) {
+                            toast.warning(
+                                "That summary style no longer exists, so your default style was used",
+                            );
+                        } else {
+                            toast.success("Summary generated");
+                        }
+                    }
+                } else {
+                    const error = await response.json().catch(() => ({}));
+                    if (postIsCurrent()) {
+                        const message =
+                            error.error || "Summary generation failed";
+                        setErrorState({
+                            recordingId: targetId,
+                            code:
+                                typeof error.code === "string"
+                                    ? error.code
+                                    : "UNKNOWN_ERROR",
+                            message,
+                        });
+                        toast.error(message);
+                    }
+                }
+            } catch {
+                if (postIsCurrent()) {
+                    setErrorState({
+                        recordingId: targetId,
+                        code: "NETWORK_ERROR",
+                        message: "Couldn't reach the server.",
+                    });
+                    toast.error("Failed to generate summary");
+                }
+            } finally {
+                summarizingIdsRef.current = removeSummarizingId(
+                    summarizingIdsRef.current,
+                    targetId,
+                );
+                setSummarizingIds(summarizingIdsRef.current);
+            }
+        },
+        [recordingId, summaryPreset, setSummaryPreset],
+    );
 
     const handleDeleteSummary = useCallback(async () => {
         if (!recordingId) return;
@@ -275,6 +298,11 @@ export function useTranscriptionSummary({
         // only comes back if the server rejects the request.
         const previous = summaryData;
         setSummaryData(null);
+        // A summary GET still in flight (the recording was just opened)
+        // must not bring the deleted summary back.
+        getAbortRef.current?.abort();
+        fetchGenerationRef.current += 1;
+        setLoadState({ recordingId: targetId, status: "loaded" });
         const deleteIsCurrent = () =>
             shouldApplySummaryToView(recordingIdRef.current, targetId);
 
@@ -284,6 +312,7 @@ export function useTranscriptionSummary({
                 { method: "DELETE" },
             );
             if (response.ok) {
+                onSummaryChangeRef.current?.();
                 if (deleteIsCurrent()) {
                     toast.success("Summary deleted");
                 }
@@ -315,14 +344,23 @@ export function useTranscriptionSummary({
         setSummaryFetchKey((k) => k + 1);
     }, []);
 
+    /** Asks for the stored summary again after a failed load. */
+    const retrySummaryLoad = useCallback(() => {
+        setSummaryFetchKey((k) => k + 1);
+    }, []);
+
     return {
         summaryData,
+        summaryLoadStatus,
+        retrySummaryLoad,
         isSummarizing,
+        summarizingIds,
         summaryExpanded,
         setSummaryExpanded,
         summaryPreset,
         setSummaryPreset,
         summaryPromptOptions,
+        summaryError,
         handleSummarize,
         handleDeleteSummary,
         refetchSummary,

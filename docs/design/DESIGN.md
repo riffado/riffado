@@ -1,0 +1,247 @@
+# Riffado design system
+
+Living record of design decisions for the 2026 redesign (web, iOS, Android).
+Source of truth for visuals: Paper file `riffado` (pages: 01 Foundations, 02 Web app, 03 Mobile app).
+Update this file in the same session a decision is made. If a rule here and a design disagree, fix one of them before moving on.
+
+Last updated: 2026-11-23
+
+---
+
+## 1. Product principles
+
+1. **Intuitive by default, powerful on demand.** The default path needs zero decisions. Power features (glossary, agents, API keys, webhooks) live one level deeper and never clutter the main flow.
+2. **The app does the work, not the user.** Detect before asking. Example: the recorder is found automatically over Bluetooth; the model picker only appears as a fallback when nothing is found.
+3. **Always show where data lives.** Every recording shows its location and state (phone, uploading, server, failed). Privacy is shown, not claimed.
+4. **Failures explain themselves and offer the fix.** Never a bare "Error". State the reason in plain words and give the next action (Fix key, Try another provider). Stop retrying permanent failures.
+5. **Everything is intentional.** Every element must earn its place by serving something the user reads, decides or does on that screen. Aesthetic elements are allowed when they support that (the dot waveform shows where you are in the audio; the device photo helps you recognise your recorder). If you can't name the reason, remove it. Ask for each element: what does the user do with this here, and how often?
+6. **Teach once, apply everywhere.** Corrections and speaker names are learned from normal editing (Always fix this, voice match), not from separate settings pages.
+
+## 2. Product decisions
+
+| Decision | Detail |
+|---|---|
+| Agent-first platform | Every capability is an MCP tool and CLI command first, over the same API. Users bring their own agent (Claude, ChatGPT, Cursor, Hermes, ...). |
+| In-app Ask stays, thin | Ask is a client of the same tools, not a separate agent runtime. Runs on the user's provider: own API key, local Ollama/LM Studio, or Sign in with ChatGPT. |
+| Mynah is transcription only | Mynah = transcription model included in the Riffado subscription. Never show it as an option for Ask, summaries, titles or any LLM feature. |
+| Direct recorder connection | Recorder -> phone over Bluetooth -> user's chosen home (Riffado Cloud, own server, or only this phone). No vendor cloud in between. |
+| Three homes | Riffado Cloud, Your own server, Only this phone. Changeable anytime. |
+| Recorder detection | Auto-detect first. "We couldn't find it yet" + model grid only as fallback, to show wake instructions. |
+| Live recording | Uses the phone mic unless we confirm recorders can stream live. Label honestly ("This phone"). |
+| Highlights | One feed of moments worth returning to: what you marked (Mark during live recording, or later in the transcript), decisions, to-dos, open questions, pulled from every recording. Each item: type, quote/statement, who said it, which recording, play-from-timestamp. Web: sidebar entry + page with a "Your to-dos" rail (only tasks assigned to you). Mobile: entry row in Library, no extra tab. Exposed to agents as an MCP tool. Reason: people rarely reread transcripts; they come back for what was decided and what they owe. |
+| Agents & tools (Settings) | Web: pick your client (Claude, ChatGPT, Cursor, Terminal, Other), choose permission (Read / Read and act, never deletes), one-click add plus copyable config, list of connections with revoke, webhooks. Each connection has its own key. Mobile: approve sign-in requests from new agents (device-flow code shown on both screens) and manage/revoke connections. Setup itself happens on the computer, where the agent lives. |
+| AI for Ask & summaries (Settings) | Three choices: Sign in with ChatGPT (uses the ChatGPT plan), your own API key, or a model on your server. Always state what gets sent (transcript text only, never audio, and to whom). Transcription is a separate setting; Mynah lives there only. |
+| Ask | Thin client over the same tools agents use. Every claim carries a numbered citation; sources list recording + quote + play-from-timestamp. Scope selector (e.g. This week) and the model in use ("Answers with ChatGPT") are always visible in the composer, so the user knows what is searched and who answers. Mobile: Ask tab with a glass composer above the tab bar and history behind a clock button. Follow-up suggestions only after an answer, labelled "Ask next". |
+| First run | Empty states teach the one next action and show only what is real: no folder/recorder/count chrome when there is nothing. Mobile: recorder photo + "Your first recording" + upload fallback. Web: "Connect your Plaud account" + "Upload audio" (drop a file on the card); never offers Sync before Plaud is connected. |
+| Onboarding (web) | Decided 2026-11-23: no onboarding dialog. Sign-up lands on the first-run screen, with a toast greeting the user by name and one line naming the transcription in use ("Transcription uses Mynah, included with your plan" on hosted; browser or own provider on self-host) linking to Settings. |
+| Sign in and account | Auth screens: quiet cream page, wordmark top left, 400px form column pinned to the top, the dot-waveform band as the only decoration. Field errors sit under their field (never toasts). "Forgot password?" always shows; without email on the server it explains who to ask. Settings > Account is in v1: name, password change with "sign out of other devices", sign out other devices; email change only where the instance can send the confirmation, otherwise read-only; delete account links to the hosted flow in Plan & usage. |
+| Account items | Desktop: the sidebar account menu (name/email, Keyboard shortcuts, Docs, Changelog, Report a bug, Source code, Log out, "Riffado <version> · AGPL-3.0"). Phone: the same items live only in the menu drawer. The Source code and AGPL links must stay reachable from every app page (AGPL network-use offer). Avatar: Sand with ink initials. |
+| Web-only v1 source | Plaud account sync. Plaud is named factually ("Syncs from your Plaud account"), never as something we replace. Connection method order follows success rate: Sign in with Plaud first, Email code and Paste token as other options (Monarch's "best connection first" pattern). |
+| Recording sources | A recorder always shows how its recordings arrive: "Via Plaud" today, "Via iPhone" once the app ships. Settings > Recorders is structured as Sources > Plaud account so the app becomes a second source, not a redesign. The app is not mentioned in the UI until it ships. |
+| Connect Plaud dialog | Not-installed state leads: three numbered steps (add Riffado Connector, sign in to Plaud as usual, come back connected), one ink button, the honest "up to 30 days" note, then Email code and Paste a token as rows on a quiet footer. Reconnect reuses the same dialog with the account email and Plaud server shown. |
+| Included AI for summaries (hosted, paid plan) | Planned (2026-11-21): the paid plan includes AI for summaries and titles. Shown as the first option in AI for summaries ("Included with your plan") with a usage line in plain units and its reset date, and as a meter in Plan & usage. It is not Mynah (Mynah stays transcription only) and is never offered on self-host. Own API key and a model on your server stay available next to it. Don't state the vendor or region behind it until verified. |
+| Phone browser | The phone-browser web app uses the same layout and components as the `app ·` screens minus native chrome (no Liquid Glass, plain top bar, non-glass night player), so the Expo app can reuse them. |
+| Server is not home-screen content | People rarely switch servers. The server lives in You / Settings. It appears on the home screen only when something is wrong (unreachable, auth expired) as a banner that says what is safe and what happens next. Per-recording location ("Your server", "On this phone") stays on rows and detail. |
+
+## 2a. Release scope
+
+Goal: ship v1 as soon as possible. Rule: v1 = the core loop end to end plus a reskin of features that already exist. Artboards in Paper are prefixed `v1 ·`, `app ·` or `later ·`.
+
+Features that don't exist yet are still designed (2026-11-21: they are planned, not cut). Decided 2026-11-22: each one ships as a vertical slice (UI, backend, export/backup) behind a flag, and no entry point appears in production before its destination works.
+
+Task tracking: the build plan lives in Linear (Riffado project, INT-51 and its sub-issues), not in this repo.
+
+**Decided 2026-10-03: v1 is web-only.** The Apple developer account is gone, so the phone app (and with it the direct Bluetooth connection) is postponed. Recordings reach Riffado through Plaud account sync, which already exists (`plaud-connect-tabs.tsx`: Sign in with Plaud via the connector, Email code, Paste token). v1 loop: recorder -> Plaud account -> sync -> your server -> transcript + summary -> read and listen, in a desktop or phone browser.
+
+- `app ·` artboards: designed for the phone app. Kept unchanged; they are what we build once the iOS app is back. Do not delete or edit them to fit web-only.
+- `v1 ·` web artboards that assumed the phone get a web-only sibling next to them (sync instead of "waiting on phone", Connect Plaud instead of "Get the app").
+- No PWA work in v1: the manifest and `appleWebApp` meta already exist, and nothing in v1 needs install-only features.
+
+**app (phone, postponed):** Welcome, Allow Bluetooth (pre-permission, before the system prompt), Sign in (self-host, email + password, matches current auth), Create Riffado Cloud account, Choose a home (Riffado Cloud / Your own server), Connect server, Pair (auto-detect + not-found fallback), Transfer, Transfer interrupted (recorder out of range: paused, nothing lost, resumes), Library (processing states, unreachable banner, first run), Recording (Overview, Transcript with speaker labels, glass mini player), Recorders, You/Settings (not designed yet). Tab bar: Library, Recorders, You. You screen: profile, Server group (server, transcription, summaries; each opens details), On this phone (Upload on Wi-Fi only, Remove audio after upload), Sign out.
+
+**v1 web:** Sign in, create account, password reset, Connect Plaud (first run + Settings), sync status and Sync now, Reconnect when the Plaud token expires, Library (All / Untranscribed filters), Recording (Overview with summary, key points and action items; Transcript; player; download and rename in the action menu), Processing states, First run, Settings: Account, Plan & usage (hosted), Recorders, Server & storage, Transcription, AI for summaries (included with plan on hosted, own API key, or model on your server), API & webhooks, Export & backup, Preferences. Sidebar: Search, Library, Recorders, account. Phone browser: top bar + menu drawer, Library and Recording. Dark mode for every v1 screen (Paper page 08).
+
+**Post-v1:** Ask (web + mobile), Highlights, marking moments, speaker naming + voice match, corrections glossary, folders, agent connections UI and phone approval (the read-only MCP server itself ships separately, PR #369), Sign in with ChatGPT (PR #321), phone-mic recording + live transcription, Photo/Note capture, "Only this phone" home (needs on-device transcription), summary styles, automations, share links and the Share button (decided 2026-11-23: no entry point until share links exist), "Decided" items with play-from-timestamp in Overview (needs timestamped summaries), share sheet, transcription language display.
+
+Mobile stack: Expo (decided 2026-10-02). Glass via `expo-glass-effect` behind a single `GlassSurface` wrapper.
+
+Decided 2026-10-02: Sign in with ChatGPT, phone-mic recording and "Only this phone" are all post-v1.
+
+## 3. Color
+
+Palette is fixed (existing brand). One accent.
+
+| Token | Hex | Role |
+|---|---|---|
+| `--color-background` | `#FAF9F5` | Cream ground (light) |
+| `--color-surface` | `#F5F4EE` | Sidebar, quiet surface |
+| `--color-card` | `#FFFFFF` | Raised surface, reader |
+| `--color-secondary` | `#E9E6DC` | Selected row, hover |
+| `--color-border` | `#DAD9D4` | Hairlines |
+| `--color-muted` | `#66655E` (web, was `#83827D`) | Tertiary text and small metadata. Darkened 2026-11-23 so 12-13px labels pass 4.5:1 on cream and on the Sand selected row |
+| `--color-subtle` | `#535146` | Secondary text |
+| `--color-foreground` | `#3D3929` | Body text |
+| `--color-ink` | `#141413` | Headlines, primary buttons |
+| `--color-night` / `-deep` / `-raised` | `#262624` / `#1A1915` / `#30302E` | Immersive dark (recording, pairing, transfer, player) |
+| `--color-night-text` | `#C3C0B6` | Text on night |
+| `--color-primary` | `#C96442` | Terracotta. The one accent. |
+| `--color-primary-bright` | `#D97757` | Terracotta on night |
+| `--color-led-active` | `#11AD32` | Connected, synced, ready |
+| `--color-led-warning` | `#D9A514` | Working, waiting |
+
+Rules:
+- Terracotta marks one thing per view: the primary live/record action, the playhead, the active timestamp, or something that needs the user. Never decoration.
+- Status uses LED colors as 7px dots, never as filled backgrounds.
+- Switches "on" are ink, not terracotta (several toggles on one screen would spend the accent). Sign out is ink too; the selected tab already uses terracotta.
+- Night surfaces are for immersive moments (recording, pairing, transfer, playback) in light mode.
+- Dark mode (web, designed 2026-11-23, Paper page 08): sidebar `#1F1E1D`; list, reader and settings content Night `#262624`; cards, menus, inputs, player Night-raised `#30302E`; hairlines `#3E3E38`. Text: strong `#FAF9F5`, body `#C3C0B6`, muted `#A3A196`. Primary buttons, selected chips and switches that are on are `#FAF9F5` with ink text. Selected row `#1A1915` + 2px `#FAF9F5` leading stripe; active nav item Night-raised. The player keeps its own raised surface, a 1px border and a deeper shadow so it stands apart from the night reader. Status dots brighten: `#3FCF5C`, `#E8B931`; terracotta becomes `#D97757`.
+
+## 4. Type
+
+| Role | Font | Spec |
+|---|---|---|
+| Display | Funnel Display 500 | 40-72px, tracking -0.04 to -0.045em, line-height ~1.0 |
+| Title | Funnel Display 600 | 20-34px, tracking -0.02 to -0.03em |
+| Reading | Funnel Sans 400 | 17-19px / 27-31px line-height |
+| UI | Funnel Sans 400/500/600 | 13-16px |
+| Signal | Doto 700-900, `font-variation-settings: 'ROND' 100` | Timers, counts, live numbers only |
+
+Rules:
+- Doto always uses round dots (`ROND 100`) so it matches the dot-matrix logo. Square Doto is not allowed.
+- Doto is reserved for numbers that are alive (timers, progress, counts). Never for words or labels.
+- Use `font-variant-numeric: tabular-nums` for durations and timestamps in Funnel Sans.
+- Minimum text size 12px, and 12px only for metadata. Body on mobile >= 15px.
+- Avoid overusing spaced em dashes in copy (repo rule).
+
+## 5. Shape and corners
+
+Follows Apple's practice: continuous corners and concentric radii.
+
+**Continuous corners.** Every radius >= 6px uses `corner-shape: squircle`. Because a squircle reads tighter than a circular arc, the CSS radius is ~1.5x the Apple point value.
+
+| Token | Value (squircle) | Use |
+|---|---|---|
+| `--radius-inner` | 12px | Icon tiles, thumbnails, fields inside cards |
+| `--radius-control` | 15px | Buttons and inputs 44-54pt tall |
+| `--radius-card` | 30px | Cards with 16pt padding |
+| `--radius-sheet` | 56px | Floating sheets, concentric with the device corner |
+
+**Concentricity.** A nested shape's radius = parent radius - padding between them (min ~8px). Do not use the same radius at every nesting level.
+
+**When a full capsule (pill) is allowed** (keep the list short):
+- System Liquid Glass controls on iOS 26: tab bar, toolbar button groups, floating bottom accessory (mini player). This is the native shape.
+- Circular controls: play, record, avatars, status dots, icon-only glass buttons.
+- Toggles/switches, progress dots, the NotePin device silhouette.
+
+**Not pills:**
+- Content buttons: rounded rectangle (`--radius-control`).
+- Status: dot + text, no container.
+- Speaker labels: avatar + name, no container.
+- Timestamps, playback speed, metadata tags: plain text.
+- Filters and segmented controls: small radius (8-12px), not capsules.
+
+## 6. Liquid Glass (iOS 26)
+
+Liquid Glass ships in iOS 26 (and iPadOS/macOS 26). iOS 17 and 18 do not have it.
+
+- **Glass is for the navigation layer only**: tab bar, nav bar buttons, toolbars, floating mini player, floating sheets. Content (cards, lists, transcripts) is never glass.
+- Content must scroll **behind** glass. Design screens so content visibly passes under the tab bar and toolbars.
+- Tab bar: floating capsule inset 16pt from edges, 28pt from bottom; selected tab gets an inner tinted capsule and terracotta icon/label. Record is a separate tinted glass circle at the trailing end (like the iOS 26 search tab role).
+- Nav bar items are 44pt glass circles or grouped glass capsules. Never bare 22px icons (tap target).
+- Glass recipe in mockups (approximates the real material; production uses the system material):
+  - Light: `rgba(255,255,255,0.56)` + `backdrop-filter: blur(24px) saturate(180%)` + 1px `rgba(255,255,255,0.8)` rim + soft shadow + inner top highlight.
+  - Dark (on night): `rgba(58,58,55,0.5)` + same blur + 1px `rgba(255,255,255,0.14)` rim.
+  - Tinted (record): terracotta at 88% with glass rim.
+- **Fallback (iOS 17-18, Android):** same layout, standard blur material (`.regularMaterial` / Material 3 surface). No layout differences between versions.
+- **Minimum iOS: 26 at launch** (decided 2026-10-02). Lowering it later is planned for and cheap if:
+  - all glass goes through one wrapper component (e.g. `GlassSurface`) that renders the system material on 26 and the standard blur fallback below it;
+  - no iOS 26-only API is called outside that wrapper without an availability check.
+- The non-glass fallback must be designed anyway, because Android has no Liquid Glass. Same layout, standard material.
+
+## 6a. Android (Material 3)
+
+Paper page "03b — Android". Same layout, content, colors, type and dot language as iOS; platform chrome follows Material 3:
+- Large top app bar (back arrow, overflow menu), 48dp icon buttons.
+- Bottom navigation bar with a pill active indicator (terracotta wash) instead of the glass tab bar.
+- Tabs with an underline indicator instead of a segmented control.
+- Buttons use M3 shapes (full-round filled buttons are native here); player is a tonal surface with 28dp corners and a 16dp-radius play button. Circular corners, no squircle.
+- Gesture bar instead of the home indicator; 412x915 frame.
+- No Liquid Glass and no blur materials.
+
+## 7. Layout and touch (mobile)
+
+- Frame 390x844. Status bar at top (Paper guide markup), home indicator at bottom (134x5, 8pt from bottom).
+- Screen margins 16-20pt. Minimum tap target 44x44pt.
+- Primary action anchored at the bottom (thumb zone), full width, 54pt tall.
+- Bottom content padding must clear the floating tab bar (~100pt) so the last item can scroll above it.
+
+## 8. Components
+
+- **Recording row:** status dot lane (fixed 8px) | title + duration | snippet | meta. Dot lane keeps vertical alignment across rows.
+- **Status line (processing):** one line per row: state + plain-language detail + one action. States: On your phone, Uploading, Transcribing (with part progress), Failed (reason + fix), Ready.
+- **Speaker:** avatar circle + name. Unknown speaker = terracotta name and "?" avatar, no dashed chip.
+- **Voice match card:** suggestion + two buttons (confirm / someone else) + "voices stay on your server" note.
+- **Correction popover:** wrong -> right field, Fix button, "Always fix this" switch with scope count ("Also corrects 23 past recordings").
+- **Player:** night bar, terracotta play/pause circle, dot waveform (played = cream, rest = dim, playhead = terracotta). On iOS 26 the floating mini player is a glass capsule.
+- **Transcript actions:** one entry point per platform, same verbs. Mobile: long-press a paragraph -> lifted paragraph + glass context menu (Mark as highlight, Play from here, Fix a word, Change speaker, Copy). Web: hover a paragraph -> small toolbar (Mark, Play, Copy); clicking a word opens the correction popover. Mark is always first and terracotta.
+- **Sheets (iOS 26):** partial sheets float inset 8pt from the screen edges with `--radius-sheet`, light glass at ~94% so text stays readable over the scrim.
+- **Device imagery:** real product photos from the "imports from figma" page, cropped to the device shape. Used for recognition (pairing, transfer, library card, recorders list, web sidebar).
+- **Menus (web):** one recording action list, shown identically from the row "…" menu, a right-click on the row, and the recording's More button: Rename, Download audio | Transcribe or Re-transcribe, Transcribe in browser | Summarize or Regenerate summary (submenu of summary styles, your own prompts after a separator), Delete summary | Delete recording. Items that don't apply are hidden, never disabled. Surface: card, 16px squircle, 6px padding, soft border + shadow; items 36px, 10px radius, 16px line icon, 14px ink label; hover = Sand. Delete is ink like every item (no red, no terracotta); the confirm dialog carries the weight. Menus grow from their trigger (or the cursor for right-click), ~150 ms ease-out, from scale 0.97. Paper: 01 Foundations > System > 04 Menus & dialogs.
+- **Confirm dialog:** card, 30px squircle, 24px padding, Funnel Display 22/600 title, the item's name in medium ink inside the body, Cancel (outline) then the action (ink), labelled with the verb ("Delete recording"), never "OK".
+- **Motion (web):** tokens in globals.css. Press 0.96 / 150 ms; tooltips 125 ms, first only; on-screen movement --ease-in-out; phone push 24 px / 200 ms in, 150 ms out; list reflow 200 ms on delete/upload only; ⌘K and keyboard actions never animate; content the user came for never animates in.
+- **Toasts (web):** ding (`@yusufceng1z/ding-react`, pinned), one region at the top centre, following the app theme. Decided 2026-11-22, replacing sonner. Toasts close on their own (errors after 8 s, others after 5 s; hover pauses). A toast with a button (e.g. "Report") stays until closed with x, Esc or a swipe. Covering content underneath is accepted. Repeats collapse into a counter. Sound follows the "Notification sound" setting: errors and newly synced recordings only.
+
+## 9. Signature elements
+
+- **Dot-matrix language** from the logo: dot waveforms, round Doto numerals, dot progress bars, dot radar on pairing. Keep dots round and on a grid.
+- One immersive dark moment per flow (welcome, pairing, transfer, live recording).
+
+## 10. Copy rules
+
+- Plain words for non-technical users: "Your server", "Only this phone", "Uploads when you're on Wi-Fi".
+- Vendor-agnostic marketing positioning (see AGENTS.md). Device names are factual only.
+- Never claim compliance we don't own.
+- Don't invent hardware specs (removed "4 mics"). Verify before stating.
+- Device photos show Plaud branding: fine for in-app recognition; check licensing before marketing or store screenshots.
+
+## 11. Mistakes log (don't repeat)
+
+| Mistake | Rule now |
+|---|---|
+| Used pills for buttons, tags, status, timestamps, speed | Section 5: pills only for system glass and circular controls |
+| Asked the user which recorder they own up front | Detect first, ask only on failure |
+| Implied Mynah could power Ask/summaries | Mynah is transcription only |
+| Square Doto dots clashed with the round logo | Always `ROND 100` |
+| Bare 22px nav icons | 44pt glass buttons |
+| Same radius at every nesting level | Concentric radii + squircle |
+| Invented device specs in subtitles | Only verified facts |
+| Tab bar content wider than the frame | Measure: tabs + gap + record <= frame - 2 x inset |
+| Empty-state mockup cloned a populated sidebar (counts, folders, recorders) | Empty states must strip every populated element. |
+| "Searched 3 recordings" while citing 2 | Copy must match the data shown on the same screen. |
+| SVG dots with `fill-opacity` rendered black in Paper | Use `opacity` on SVG shapes in Paper mockups. |
+| Promised "Transcription is included" at Cloud sign-up | Mynah depends on the plan; don't promise it before checkout. |
+| Stated a hosting region for Mynah ("in the EU") without knowing it | Never state infrastructure facts we haven't verified. |
+| "Import over Wi-Fi only" (import is Bluetooth; Wi-Fi is the upload) | Name settings after the step they actually control. |
+| Inserted a new element inside a sibling chip instead of next to it, and judged the result from a cropped screenshot | Check the target's parent before inserting; screenshot the whole container after structural edits. |
+| Used Doto for a pairing code with letters | Doto is for live numbers only; codes use Geist Mono. |
+| Showed two overlays (hover toolbar + correction popover) in one mockup | One transient overlay per frame; show other states as separate artboards. |
+| Server switcher in the Library header | Infrequent settings never sit on the home screen. Surface them only when they need attention. |
+| "Your server" card in the web sidebar | Same rule as mobile: removed; banner only when something is wrong. |
+| Removed "Highlights" because no feature existed yet | Wrong test. We are designing the product, so "doesn't exist yet" is not a reason to cut. Ask whether the user needs it and define what it is. An entry point must have a designed destination, so design the feature or drop it, but decide on user value. |
+| "Recorders" nav item duplicating the sidebar Recorders section | One entry point per thing. |
+
+## 12. Competitive reference
+
+Paper page "04 — Reference: Plaud & Pocket" (App Store screenshots, pulled via the iTunes lookup API; marketing frames, not verified flows). Mobbin has neither app.
+
+- **Take:** capture photo/note during recording pinned to the timeline; summary styles; plain-language automations (When/Then); one share/export sheet; visible transcription language; recording consent line near record (Notion, Manus, Fireflies).
+- **Already stronger:** cited answers, real data location instead of badges, persistent speaker names, honest processing states.
+- **Skip:** mind maps, compliance badges, template counts as a selling point, decorative stickers/gradients.
+- Positioning rule still applies: these are references for our design, never comparison copy.
+
+## 13. Paper workflow notes
+
+- `x-paper-clone` of the device photos keeps the source's absolute `left/top`; set `position: relative; left: 0; top: 0` on the clone.
+- `set_text_content` takes `{ updates: [{ nodeId, textContent }] }`.
+- Screenshots can lag right after a write; re-screenshot before judging.
+- Paper supports `backdrop-filter` and `corner-shape: squircle`.

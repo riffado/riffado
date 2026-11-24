@@ -5,6 +5,10 @@
  * empty AI Providers list the first time, because the Providers section
  * seeded its state from a list that was still being fetched and never
  * picked up the result.
+ *
+ * Settings is now its own page that reads providers on the server, so the
+ * list is complete on first paint. The dashboard entry points navigate to
+ * it and warm the route on intent.
  */
 
 import {
@@ -14,16 +18,25 @@ import {
     render,
     renderHook,
     screen,
-    waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const push = vi.fn();
+const prefetch = vi.fn();
+const searchParams = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
-    useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+    useRouter: () => ({ refresh: vi.fn(), push, prefetch }),
+    useSearchParams: () => searchParams,
 }));
 
 import { ConfirmDialogProvider } from "@/components/confirm-dialog";
 import { Workstation } from "@/components/dashboard/workstation";
+import { SettingsPageContent } from "@/components/settings/settings-page-content";
+import {
+    type Provider,
+    ProvidersSection,
+} from "@/components/settings-sections/providers-section";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useProviderList } from "@/hooks/use-provider-list";
 import { INITIAL_SETTINGS_DEFAULTS } from "@/lib/settings/initial-settings";
@@ -57,6 +70,8 @@ function renderWorkstation() {
                 <Workstation
                     recordings={[]}
                     transcriptions={new Map()}
+                    userName={null}
+                    devices={[]}
                     initialSettings={{
                         ...INITIAL_SETTINGS_DEFAULTS,
                         onboardingCompleted: true,
@@ -66,6 +81,8 @@ function renderWorkstation() {
                     }}
                     plaudNeedsReconnect={false}
                     plaudSessionExpiresAt={null}
+                    plaudLastSyncAt={null}
+                    hasPlaudConnection={false}
                     isHosted={false}
                 />
             </TooltipProvider>
@@ -77,6 +94,7 @@ beforeEach(() => {
     providerRequests = 0;
     window.location.hash = "";
     localStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
@@ -101,6 +119,9 @@ beforeEach(() => {
                     resolve(jsonResponse({ providers: PROVIDERS }));
             });
         }
+        if (url === "/api/plaud/connection") {
+            return Promise.resolve(jsonResponse({ connected: false }));
+        }
         return Promise.resolve(jsonResponse({}));
     });
 });
@@ -108,75 +129,72 @@ beforeEach(() => {
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    push.mockReset();
+    prefetch.mockReset();
 });
 
-describe("Settings dialog providers on first open (#288)", () => {
-    it("shows the configured providers once the list arrives", async () => {
+describe("Settings providers on first open (#288)", () => {
+    it("opens the Settings page from the keyboard shortcut", () => {
         renderWorkstation();
 
         act(() => {
             fireEvent.keyDown(window, { key: "," });
         });
-        expect(await screen.findByText("AI Providers")).not.toBeNull();
-        await waitFor(() => expect(providerRequests).toBe(1));
-        expect(screen.queryByText("No providers configured")).toBeNull();
-
-        await act(async () => {
-            releaseProviders();
-        });
-
-        expect(await screen.findByText("OpenRouter")).not.toBeNull();
-        expect(screen.queryByText("No providers configured")).toBeNull();
+        expect(push).toHaveBeenCalledWith("/settings");
     });
 
-    it("loads providers before the Settings menu item is clicked", async () => {
+    it("warms the Settings route before the menu item is clicked", async () => {
         renderWorkstation();
 
-        fireEvent.keyDown(
-            screen.getByRole("button", { name: "Account menu" }),
-            {
-                key: "Enter",
-            },
-        );
-        const item = await screen.findByRole("menuitem", { name: /Settings/ });
-        fireEvent.pointerEnter(item);
-        expect(providerRequests).toBe(1);
-        await act(async () => {
-            releaseProviders();
-        });
+        // Below lg, Settings sits in the menu drawer (the sidebar has a
+        // gear). jsdom applies no media queries, so the top bar is present.
+        fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+        const item = await screen.findByRole("button", { name: "Settings" });
+        fireEvent.pointerDown(item);
+        expect(prefetch).toHaveBeenCalledWith("/settings");
 
         fireEvent.click(item);
-        expect(await screen.findByText("OpenRouter")).not.toBeNull();
-        expect(providerRequests).toBe(1);
+        expect(push).toHaveBeenCalledWith("/settings");
     });
 
-    it("shows a load error with retry instead of an empty account", async () => {
-        vi.mocked(global.fetch).mockImplementation((input) => {
-            const url = typeof input === "string" ? input : String(input);
-            if (url === "/api/settings/ai/providers") {
-                providerRequests++;
-                if (providerRequests === 1) {
-                    return Promise.resolve(
-                        new Response("boom", { status: 500 }),
-                    );
-                }
-                return Promise.resolve(jsonResponse({ providers: PROVIDERS }));
-            }
-            return Promise.resolve(jsonResponse({}));
-        });
-        renderWorkstation();
+    it("shows the configured providers on first paint", async () => {
+        window.history.replaceState(null, "", "/settings#providers");
+        render(
+            <ConfirmDialogProvider>
+                <SettingsPageContent
+                    initialProviders={PROVIDERS as unknown as Provider[]}
+                    devices={[]}
+                    plaudLastSyncAt={null}
+                    hasPlaudConnection={false}
+                />
+            </ConfirmDialogProvider>,
+        );
 
-        act(() => {
-            fireEvent.keyDown(window, { key: "," });
-        });
+        expect(await screen.findByText("OpenRouter")).not.toBeNull();
+        expect(screen.queryByText("No providers yet")).toBeNull();
+        expect(providerRequests).toBe(0);
+    });
+
+    it("shows a load error with retry instead of an empty account", () => {
+        const onRetry = vi.fn();
+        render(
+            <ConfirmDialogProvider>
+                <ProvidersSection
+                    providers={null}
+                    onProvidersChange={vi.fn()}
+                    loadFailed
+                    onRetry={onRetry}
+                />
+            </ConfirmDialogProvider>,
+        );
+
         expect(
-            await screen.findByText("Couldn't load your AI providers."),
+            screen.getByText("Couldn't load your AI providers."),
         ).not.toBeNull();
-        expect(screen.queryByText("No providers configured")).toBeNull();
+        expect(screen.queryByText("No providers yet")).toBeNull();
 
         fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-        expect(await screen.findByText("OpenRouter")).not.toBeNull();
-        expect(providerRequests).toBe(2);
+        expect(onRetry).toHaveBeenCalledTimes(1);
     });
 });
 
