@@ -1,0 +1,156 @@
+---
+title: MCP server
+description: Give Claude, Cursor, and other MCP clients read-only access to your recordings, transcripts, and summaries.
+---
+
+Riffado runs a [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) server, so AI assistants that speak MCP can look up your
+recordings for you. Ask Claude "what did we decide in Tuesday's budget
+call?" and it can search your transcripts, open the right recording, and
+read its summary.
+
+Access is **read-only**. An MCP client can list, search, and read your
+recordings. It cannot change, delete, or create anything.
+
+## 1. Create an API key
+
+MCP clients authenticate with a personal API key, the same kind the
+[Automation API](./automation-and-webhooks) uses.
+
+**Settings → Integrations → API Keys → Create API key.** Give it a name
+such as "Claude" and copy the key. It is shown once and starts with
+`op_`.
+
+Use one key per client so you can revoke one without breaking the
+others. Browser sign-in does not work for MCP; a key is required.
+
+## 2. Point your client at Riffado
+
+The endpoint is:
+
+```
+https://<your-riffado>/api/v1/mcp
+```
+
+Replace `<your-riffado>` with the address you open Riffado at (your
+`APP_URL` on self-host). Every request sends the key as a Bearer token:
+
+```http
+Authorization: Bearer op_...
+```
+
+The server uses the Streamable HTTP transport and is stateless, so it
+works behind a load balancer and needs no session setup.
+
+### Claude Code
+
+Run this in your terminal, not inside a Claude Code session:
+
+```bash
+claude mcp add --transport http riffado https://<your-riffado>/api/v1/mcp \
+  --header "Authorization: Bearer op_..."
+```
+
+Or add it to a project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "riffado": {
+      "type": "http",
+      "url": "https://<your-riffado>/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer op_..."
+      }
+    }
+  }
+}
+```
+
+Run `/mcp` inside Claude Code to check that the server connected.
+
+### Claude (web, desktop, and mobile)
+
+Claude adds remote MCP servers as custom connectors:
+
+1. Open **Customize → Connectors**, then **+ Add → Add custom connector**.
+2. Enter a name and the endpoint URL.
+3. Under **Request headers**, choose `authorization` and enter
+   `Bearer op_...` as the value, including the word `Bearer` and the
+   space.
+
+Two things to know:
+
+- Request headers are in beta and not every Claude account has them
+  yet. If you don't see the section, your account doesn't have access.
+- Claude connects from Anthropic's servers, not from your computer. Your
+  Riffado instance must be reachable from the public internet over
+  HTTPS on port 443. A self-hosted instance that only answers on your
+  home network or a VPN won't connect. Use Claude Code or Cursor for
+  those.
+
+### Cursor
+
+Add the server to `.cursor/mcp.json` in a project, or to
+`~/.cursor/mcp.json` for every project:
+
+```json
+{
+  "mcpServers": {
+    "riffado": {
+      "url": "https://<your-riffado>/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer op_..."
+      }
+    }
+  }
+}
+```
+
+Save the file and restart Cursor.
+
+### Other clients
+
+Any client that supports the Streamable HTTP transport with custom
+headers can connect. Configure:
+
+- **Transport:** Streamable HTTP
+- **URL:** `https://<your-riffado>/api/v1/mcp`
+- **Header:** `Authorization: Bearer op_...`
+
+Clients that only support OAuth sign-in can't connect yet.
+
+## Tools
+
+| Tool                | What it does                                                                 |
+| ------------------- | ---------------------------------------------------------------------------- |
+| `list_recordings`   | Lists recordings, most recently updated first. Takes `limit` (1 to 100, default 25) and a `cursor` for the next page. |
+| `get_recording`     | One recording by `id`, with its metadata, transcripts, and summary.          |
+| `get_transcript`    | The primary transcript of a recording by `id`.                               |
+| `get_summary`       | The summary, key points, and action items of a recording by `id`.            |
+| `search_recordings` | Finds recordings whose title or transcript contains `query` (1 to 200 characters). Takes `limit` (1 to 50, default 10). |
+
+Results use the same shapes as the [Public API](../reference/public-api),
+so a recording from `list_recordings` looks like one from
+`GET /api/v1/recordings`.
+
+### How search works
+
+Titles and transcripts are encrypted at rest, so the database can't
+search them. `search_recordings` decrypts and scans your **500 most
+recent recordings** on each call and matches case-insensitively. Older
+recordings are not searched. To reach them, page through
+`list_recordings` and open recordings by id.
+
+Each match includes a short snippet around the first hit in the
+transcript.
+
+## Limits
+
+- **Read-only.** Write actions, such as renaming a recording or starting
+  a transcription, are not available yet.
+- **Rate limits.** MCP requests count against the same per-IP and
+  per-key limits as the rest of `/api/v1/*`. See
+  [Public API](../reference/public-api#rate-limits).
+- **Revoking access.** Revoke the key in **Settings → Integrations → API
+  Keys**. The client loses access on its next request.

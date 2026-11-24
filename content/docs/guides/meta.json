@@ -5,6 +5,7 @@
         "ai-providers",
         "notifications",
         "automation-and-webhooks",
+        "mcp",
         "backup-and-restore"
     ]
 }
