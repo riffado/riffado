@@ -638,48 +638,56 @@ export function BillingSection() {
                     tone="quiet"
                     className="gap-0 divide-y divide-hairline py-0"
                 >
-                    <UsageReadout
-                        label="Transcription with Mynah"
-                        value={
-                            <>
-                                {mynahUsedHours > 0 && (
-                                    <>
-                                        <DotNumber>{mynahUsedHours}</DotNumber>
-                                        <span>h</span>
-                                    </>
-                                )}
-                                <DotNumber>{mynahUsedMinutes}</DotNumber>
-                                <span>
-                                    min of {formatSeconds(mynahTotal)} used
-                                </span>
-                            </>
-                        }
-                        fraction={mynahFraction}
-                        tone={
-                            mynahFraction !== null && mynahFraction >= 0.9
-                                ? "warning"
-                                : "default"
-                        }
-                        meterLabel={`${formatSeconds(mynahUsed)} of ${formatSeconds(mynahTotal)} used`}
-                        footer={[
-                            `${formatSeconds(state.usage.monthlyMynahSecondsRemaining)} left this cycle`,
-                            state.usage.monthlyMynahGrantResetAt
-                                ? `resets ${formatDate(state.usage.monthlyMynahGrantResetAt)}`
-                                : null,
-                        ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                    />
+                    {mynahTotal > 0 && (
+                        <UsageReadout
+                            label="Transcription with Mynah"
+                            value={
+                                <>
+                                    {mynahUsedHours > 0 && (
+                                        <>
+                                            <DotNumber>
+                                                {mynahUsedHours}
+                                            </DotNumber>
+                                            <span>h</span>
+                                        </>
+                                    )}
+                                    <DotNumber>{mynahUsedMinutes}</DotNumber>
+                                    <span>
+                                        min of {formatSeconds(mynahTotal)} used
+                                    </span>
+                                </>
+                            }
+                            fraction={mynahFraction}
+                            tone={
+                                mynahFraction !== null && mynahFraction >= 0.9
+                                    ? "warning"
+                                    : "default"
+                            }
+                            meterLabel={`${formatSeconds(mynahUsed)} of ${formatSeconds(mynahTotal)} used`}
+                            footer={[
+                                `${formatSeconds(state.usage.monthlyMynahSecondsRemaining)} left this cycle`,
+                                state.usage.monthlyMynahGrantResetAt
+                                    ? `resets ${formatDate(state.usage.monthlyMynahGrantResetAt)}`
+                                    : null,
+                            ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                        />
+                    )}
                     <UsageReadout
                         label="Storage"
                         value={
                             <>
                                 <DotNumber>{storageUsed.value}</DotNumber>
                                 <span>
-                                    {storageUsed.unit} of{" "}
-                                    {storageMax !== null
-                                        ? shortBytes(storageMax)
-                                        : "unlimited"}{" "}
+                                    {storageUsed.unit}
+                                    {storageMax === 0
+                                        ? ""
+                                        : ` of ${
+                                              storageMax !== null
+                                                  ? shortBytes(storageMax)
+                                                  : "unlimited"
+                                          }`}{" "}
                                     used
                                 </span>
                             </>
@@ -690,13 +698,17 @@ export function BillingSection() {
                                 ? "warning"
                                 : "default"
                         }
-                        meterLabel={`${shortBytes(state.usage.storageBytes)} of ${
-                            storageMax !== null
-                                ? shortBytes(storageMax)
-                                : "unlimited"
+                        meterLabel={`${shortBytes(state.usage.storageBytes)}${
+                            storageMax === 0
+                                ? ""
+                                : ` of ${
+                                      storageMax !== null
+                                          ? shortBytes(storageMax)
+                                          : "unlimited"
+                                  }`
                         } used`}
                         footer={
-                            storageMax !== null
+                            storageMax !== null && storageMax > 0
                                 ? `${shortBytes(Math.max(0, storageMax - state.usage.storageBytes))} free`
                                 : null
                         }

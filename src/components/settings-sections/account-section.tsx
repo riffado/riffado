@@ -212,7 +212,10 @@ function EmailRow({ email, canChange }: { email: string; canChange: boolean }) {
         setError(null);
         const { error: authError } = await authClient.changeEmail({
             newEmail: next,
-            callbackURL: "/settings#account",
+            callbackURL: new URL(
+                "/settings#account",
+                window.location.origin,
+            ).toString(),
         });
         setSending(false);
         if (authError) {
@@ -221,7 +224,7 @@ function EmailRow({ email, canChange }: { email: string; canChange: boolean }) {
         }
         setPending(next);
         close();
-        toast.success("Check your inbox to confirm the change");
+        toast.success(`Check ${email} to approve the change`);
     };
 
     return (
@@ -229,7 +232,7 @@ function EmailRow({ email, canChange }: { email: string; canChange: boolean }) {
             label="Email"
             description={
                 canChange
-                    ? "You sign in with it. A change waits until you confirm it from your inbox"
+                    ? "You sign in with it. A change needs a confirmation from both addresses"
                     : "You sign in with it"
             }
             control={
@@ -251,8 +254,8 @@ function EmailRow({ email, canChange }: { email: string; canChange: boolean }) {
         >
             {pending && !editing && (
                 <p className="text-small text-muted-foreground">
-                    Waiting for you to confirm {pending}. Until then you sign in
-                    with {email}
+                    Approve the change from {email}, then confirm it from{" "}
+                    {pending}. Until then you sign in with {email}
                 </p>
             )}
             {editing && (
@@ -264,7 +267,7 @@ function EmailRow({ email, canChange }: { email: string; canChange: boolean }) {
                     <Field
                         label="New email"
                         error={error}
-                        hint="We send a link to confirm it. Nothing changes until you open it"
+                        hint={`We email ${email} to approve the change, then the new address to confirm it`}
                         className="max-w-80"
                     >
                         <FieldInput

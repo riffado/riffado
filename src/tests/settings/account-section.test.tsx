@@ -226,11 +226,11 @@ describe("email", () => {
         await vi.waitFor(() =>
             expect(changeEmail).toHaveBeenCalledWith({
                 newEmail: "maya@reedstudio.com",
-                callbackURL: "/settings#account",
+                callbackURL: `${window.location.origin}/settings#account`,
             }),
         );
         expect(
-            await screen.findByText(/Waiting for you to confirm/),
+            await screen.findByText(/Approve the change from maya@example.com/),
         ).not.toBeNull();
     });
 });

@@ -1,8 +1,17 @@
 "use client";
 
-import { AlertTriangle, CreditCard, Download, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { X } from "lucide-react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { StatusDot, type StatusTone } from "@/components/ui/status-dot";
+
+function formatDate(iso: string): string {
+    return new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+    });
+}
 
 const DISMISS_KEY = "riffado-trial-banner-dismissed";
 
@@ -81,6 +90,52 @@ export function resolveBillingBannerMode(
     return null;
 }
 
+function BannerCard({
+    tone,
+    title,
+    body,
+    actions,
+    onDismiss,
+    dismissLabel,
+}: {
+    tone: StatusTone;
+    title: string;
+    body: string;
+    actions: ReactNode;
+    onDismiss?: () => void;
+    dismissLabel?: string;
+}) {
+    return (
+        <div className="pb-2.5 lg:pb-0">
+            <div className="squircle flex gap-3 rounded-[var(--radius-item)] border border-accent bg-card p-3.5 dark:border-border">
+                <div className="flex w-2 shrink-0 pt-1.5">
+                    <StatusDot tone={tone} />
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.75">
+                        <p className="text-ui font-semibold text-strong">
+                            {title}
+                        </p>
+                        <p className="text-small text-subtle">{body}</p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">{actions}</div>
+                </div>
+                {onDismiss ? (
+                    <Button
+                        variant="ghost"
+                        size="icon-compact"
+                        onClick={onDismiss}
+                        className="-mt-1 -mr-1 shrink-0 text-muted-foreground hover:text-foreground sm:mt-0 sm:self-center dark:hover:bg-border"
+                        aria-label={dismissLabel}
+                    >
+                        <X className="size-4" />
+                    </Button>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
 /**
  * Hosted billing banner. Covers three states off a single
  * `/api/billing/me` read: the trial nudge (dismissible), the grace
@@ -139,91 +194,60 @@ export function TrialBanner({ isHosted }: { isHosted: boolean }) {
         if (dismissed && !forcedVisible) {
             return null;
         }
+        const windowName =
+            mode.kind === "trial" ? "trial" : "free Hosted Pro window";
+        const title =
+            mode.daysLeft !== null
+                ? `${mode.daysLeft} day${mode.daysLeft !== 1 ? "s" : ""} left in your ${windowName}`
+                : `Your ${windowName} is running`;
+        const body = mode.foundingOfferAvailable
+            ? "Add a card and choose the monthly plan to lock in founding-member pricing."
+            : `Add a card and choose a plan to keep Hosted Pro after your ${windowName}.`;
         return (
-            <div className="mb-4 flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-                <CreditCard className="size-4 shrink-0 text-primary" />
-                <p className="flex-1 text-sm text-foreground">
-                    {mode.daysLeft !== null ? (
-                        <>
-                            <span className="font-medium">
-                                {mode.daysLeft} day
-                                {mode.daysLeft !== 1 && "s"} left in your{" "}
-                                {mode.kind === "trial"
-                                    ? "trial"
-                                    : "free Hosted Pro window"}
-                                .
-                            </span>{" "}
-                        </>
-                    ) : null}
-                    {mode.foundingOfferAvailable ? (
-                        <>
-                            Add a card and pick the monthly plan to claim{" "}
-                            <span className="font-medium">
-                                founding-member monthly pricing
-                            </span>
-                            . You keep it while your subscription remains
-                            active.
-                        </>
-                    ) : (
-                        `Add a card and choose a plan to keep Hosted Pro active after your ${mode.kind === "trial" ? "trial" : "free Hosted Pro window"}.`
-                    )}
-                </p>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToBilling}
-                    className="shrink-0"
-                >
-                    {mode.kind === "trial" ? "Add card" : "See plans"}
-                </Button>
-                {!forcedVisible && (
-                    <button
-                        type="button"
-                        onClick={dismiss}
-                        className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-                        aria-label={`Dismiss ${mode.kind === "trial" ? "trial" : "Hosted Pro transition"} banner`}
-                    >
-                        <X className="size-4" />
-                    </button>
-                )}
-            </div>
+            <BannerCard
+                tone="working"
+                title={title}
+                body={body}
+                actions={
+                    <Button variant="ink" size="compact" onClick={goToBilling}>
+                        {mode.kind === "trial" ? "Add card" : "See plans"}
+                    </Button>
+                }
+                onDismiss={forcedVisible ? undefined : dismiss}
+                dismissLabel={`Dismiss ${mode.kind === "trial" ? "trial" : "Hosted Pro transition"} banner`}
+            />
         );
     }
 
-    // grace + locked share the destructive treatment and are not
-    // dismissible.
+    // grace + locked gate the account and are not dismissible.
     const isGrace = mode.kind === "grace";
+    const title = isGrace
+        ? mode.path === "trial"
+            ? "Your trial ended"
+            : "Your subscription ended"
+        : "Your free Hosted Pro window has ended";
+    const body = isGrace
+        ? `Recordings still play and export. Sync and new transcriptions are paused, and the account is deleted on ${formatDate(mode.deletionAt)}.`
+        : "Your account is read-only. Sync, upload and transcription are paused until you subscribe. You can still export your data.";
     return (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-            <div className="flex-1 text-sm text-foreground">
-                <p className="font-medium">
-                    {isGrace
-                        ? mode.path === "trial"
-                            ? "Your trial ended."
-                            : "Your subscription ended."
-                        : "Your free Hosted Pro window has ended."}
-                </p>
-                <p className="mt-0.5 text-muted-foreground">
-                    {isGrace
-                        ? `Your recordings are still playable and exportable, but sync and new transcriptions are paused. Scheduled for deletion in ${daysUntil(mode.deletionAt)} day(s).`
-                        : "Your account is read-only. Sync, upload, and transcription are paused. Subscribe to resume, or export your data."}
-                </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={goToExport}
-                    className="shrink-0"
-                >
-                    <Download className="mr-1.5 size-4" />
-                    Export
-                </Button>
-                <Button size="sm" onClick={goToBilling} className="shrink-0">
-                    Subscribe
-                </Button>
-            </div>
-        </div>
+        <BannerCard
+            tone="attention"
+            title={title}
+            body={body}
+            actions={
+                <>
+                    <Button
+                        variant="outline"
+                        size="compact"
+                        onClick={goToExport}
+                    >
+                        Export
+                    </Button>
+                    <Button variant="ink" size="compact" onClick={goToBilling}>
+                        Subscribe
+                    </Button>
+                </>
+            }
+        />
     );
 }
