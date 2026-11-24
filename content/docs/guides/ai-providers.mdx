@@ -45,6 +45,7 @@ for additional providers.
 | ElevenLabs  | `https://api.elevenlabs.io/v1`               | Scribe transcription; speaker labels; auto language detection    |
 | LM Studio   | `http://localhost:1234/v1`                   | Local, 100% offline                                              |
 | Ollama      | `http://localhost:11434/v1`                  | Local, easy model management                                     |
+| ChatGPT     | *(Sign in with ChatGPT, no key)*             | Self-host only; summaries/titles on your ChatGPT plan            |
 | Custom      | *(freeform)*                                 | Anything else OpenAI-compatible                                  |
 
 LM Studio and Ollama presets default to `http://localhost`. From inside
@@ -53,6 +54,40 @@ machine — use `http://host.docker.internal:<port>` on Mac/Windows, or
 the Docker bridge IP on Linux, to reach an AI server running on the
 host. If you run Ollama in the same Docker network as Riffado, use the
 service hostname (`http://ollama:11434/v1`).
+
+## ChatGPT plan usage (self-host only)
+
+If you pay for ChatGPT, self-hosted Riffado can run **summaries and
+titles** on your ChatGPT plan instead of an API key, using OpenAI's
+"Sign in with ChatGPT". Transcription still needs another provider
+(plan usage covers text requests only, not audio).
+
+It's **off by default**. Connecting it means transcript text for
+summaries and titles goes to OpenAI, so the server operator has to opt
+in first: set `ENABLE_CHATGPT_PLAN_USAGE=true` in `.env` and recreate the
+app container (`docker compose up -d`). Until then the ChatGPT option
+doesn't appear, and turning the flag back off stops any existing
+ChatGPT connection from being used.
+
+1. **Settings → AI providers → Add provider → ChatGPT**.
+2. Click **Sign in with ChatGPT**. A new tab opens on OpenAI; sign in and
+   allow Riffado to use your plan.
+3. OpenAI then redirects that tab to `http://127.0.0.1:…/auth/callback?…`,
+   which won't load. That's expected: OpenAI only redirects to the
+   computer the browser runs on, and Riffado usually runs somewhere else.
+   Copy the full address from that tab, paste it into Riffado, and click
+   **Connect**.
+
+Riffado keeps the tokens encrypted like any other provider key and
+refreshes them automatically. Pick the model under **Edit provider**; the
+list comes from your plan. Requests count toward your ChatGPT plan's
+usage, and you can cap or revoke Riffado's access in ChatGPT's settings.
+Deleting the provider in Riffado also asks OpenAI to revoke its access.
+That's best effort: if it fails (for example, the server is offline), revoke
+Riffado in ChatGPT's settings.
+
+This option isn't available on the hosted app: OpenAI only allows plan
+usage in open-source, locally hosted apps without a separate approval.
 
 ## Choosing models
 

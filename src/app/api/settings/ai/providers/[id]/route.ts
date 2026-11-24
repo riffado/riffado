@@ -2,7 +2,16 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { apiCredentials, userSettings } from "@/db/schema";
-import { supportsEnhancement } from "@/lib/ai/provider-presets";
+import {
+    forgetChatGptModels,
+    revokeChatGptCredential,
+} from "@/lib/ai/chatgpt/connect";
+import { CHATGPT_PROVIDER_NAME } from "@/lib/ai/chatgpt/shared";
+import {
+    supportsEnhancement,
+    supportsTranscription,
+    usesChatGptSignIn,
+} from "@/lib/ai/provider-presets";
 import { setDefaultTranscriptionProvider } from "@/lib/ai/set-default-transcription";
 import { validateAiBaseUrl } from "@/lib/ai/validate-base-url";
 import { requireApiSession } from "@/lib/auth-server";
@@ -40,6 +49,28 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
 
     if (!existing) {
         throw new AppError(ErrorCode.NOT_FOUND, "Provider not found", 404);
+    }
+
+    if (isDefaultTranscription && !supportsTranscription(existing.provider)) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            `${existing.provider} can't transcribe audio (AI enhancements only)`,
+            400,
+            { field: "isDefaultTranscription" },
+        );
+    }
+
+    // ChatGPT rows hold an OAuth token set, not an API key, and always
+    // talk to OpenAI. Only the model and enhancement default are editable;
+    // reconnecting goes through the sign-in flow.
+    const isChatGpt = usesChatGptSignIn(existing.provider);
+    if (isChatGpt && apiKey) {
+        throw new AppError(
+            ErrorCode.INVALID_INPUT,
+            "Reconnect ChatGPT with “Sign in with ChatGPT” instead of pasting a key",
+            400,
+            { field: "apiKey" },
+        );
     }
 
     if (isDefaultEnhancement && !supportsEnhancement(existing.provider)) {
@@ -112,7 +143,7 @@ export const PUT = apiHandler<IdContext>(async (request, context) => {
             updatedAt: Date;
             apiKey?: string;
         } = {
-            baseUrl: baseUrl || null,
+            baseUrl: isChatGpt ? existing.baseUrl : baseUrl || null,
             defaultModel: defaultModel || null,
             isDefaultTranscription: isDefaultTranscription || false,
             isDefaultEnhancement: isDefaultEnhancement || false,
@@ -165,6 +196,24 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
         .where(eq(userSettings.userId, session.user.id))
         .limit(1);
 
+    // ChatGPT connections: revoke the refresh token at OpenAI before the
+    // row (and our copy of it) goes away. Best-effort, never blocks.
+    const [chatGptRow] = await db
+        .select({ apiKey: apiCredentials.apiKey })
+        .from(apiCredentials)
+        .where(
+            and(
+                eq(apiCredentials.id, id),
+                eq(apiCredentials.userId, session.user.id),
+                eq(apiCredentials.provider, CHATGPT_PROVIDER_NAME),
+            ),
+        )
+        .limit(1);
+    const revoked = chatGptRow
+        ? await revokeChatGptCredential(chatGptRow.apiKey)
+        : true;
+    if (chatGptRow) forgetChatGptModels(id);
+
     // Verify ownership and delete
     await db
         .delete(apiCredentials)
@@ -177,6 +226,16 @@ export const DELETE = apiHandler<IdContext>(async (request, context) => {
 
     if (settings?.pointer === id) {
         await setDefaultTranscriptionProvider(session.user.id, null);
+    }
+
+    if (!revoked) {
+        // The row is gone either way (the user asked to disconnect), but
+        // tell them OpenAI didn't confirm so they can revoke it there.
+        return NextResponse.json({
+            success: true,
+            warning:
+                "Removed from Riffado, but OpenAI didn't confirm revoking access. Revoke Riffado in ChatGPT's settings to be sure.",
+        });
     }
 
     return NextResponse.json({ success: true });

@@ -1,3 +1,5 @@
+import { CHATGPT_BASE_URL, CHATGPT_PROVIDER_NAME } from "./chatgpt/constants";
+
 export type TranscriptionStyle = "whisper" | "chat" | "gemini" | "elevenlabs";
 
 export interface ProviderPreset {
@@ -15,6 +17,19 @@ export interface ProviderPreset {
      * to `false`.
      */
     supportsEnhancement?: boolean;
+    /**
+     * Whether this provider can transcribe audio. Defaults to `true` when
+     * omitted -- only enhancement-only providers (ChatGPT plan usage, which
+     * covers text requests only) set this to `false`.
+     */
+    supportsTranscription?: boolean;
+    /**
+     * Connected through "Sign in with ChatGPT" instead of an API key. The
+     * provider dialogs render the sign-in flow instead of key/URL fields.
+     */
+    usesChatGptSignIn?: boolean;
+    /** Only offered on self-hosted instances. */
+    selfHostOnly?: boolean;
 }
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
@@ -99,6 +114,20 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
         supportsEnhancement: false,
     },
     {
+        // ChatGPT plan usage via "Sign in with ChatGPT". OpenAI allows it
+        // for open-source, locally hosted apps; remotely hosted apps need
+        // OpenAI's approval, so it's self-host only. Text-only: summaries
+        // and titles, never transcription.
+        name: CHATGPT_PROVIDER_NAME,
+        baseUrl: CHATGPT_BASE_URL,
+        placeholder: "",
+        defaultModel: "",
+        transcriptionStyle: "whisper",
+        supportsTranscription: false,
+        usesChatGptSignIn: true,
+        selfHostOnly: true,
+    },
+    {
         name: "Custom",
         baseUrl: "",
         placeholder: "Your API key",
@@ -118,7 +147,9 @@ export function getVisiblePresets({
     isHosted: boolean;
 }): readonly ProviderPreset[] {
     if (!isHosted) return PROVIDER_PRESETS;
-    return PROVIDER_PRESETS.filter((p) => !LOCAL_PRESET_NAMES.has(p.name));
+    return PROVIDER_PRESETS.filter(
+        (p) => !LOCAL_PRESET_NAMES.has(p.name) && !p.selfHostOnly,
+    );
 }
 
 export function findPreset(name: string): ProviderPreset | undefined {
@@ -141,4 +172,17 @@ export function getTranscriptionStyle(
  */
 export function supportsEnhancement(providerName: string): boolean {
     return findPreset(providerName)?.supportsEnhancement ?? true;
+}
+
+/**
+ * Whether a provider can transcribe audio. Unknown/custom provider names
+ * default to `true`.
+ */
+export function supportsTranscription(providerName: string): boolean {
+    return findPreset(providerName)?.supportsTranscription ?? true;
+}
+
+/** Whether a provider is connected via "Sign in with ChatGPT". */
+export function usesChatGptSignIn(providerName: string): boolean {
+    return findPreset(providerName)?.usesChatGptSignIn ?? false;
 }
