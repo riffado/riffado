@@ -53,6 +53,20 @@ const baseEnvSchema = z.object({
     /** Trust X-Forwarded-For for IP rate limiting; only enable behind a trusted proxy. */
     RATE_LIMIT_TRUST_PROXY_HEADERS: optionalStrictBoolean,
 
+    /**
+     * Cloudflare Turnstile widget keys. When both are set, sign-up, sign-in,
+     * and password-reset requests must carry a valid Turnstile token. Unset
+     * (default) disables the check. Setting only one fails validation.
+     */
+    TURNSTILE_SITE_KEY: z
+        .string()
+        .optional()
+        .transform((val) => (val?.trim() ? val.trim() : undefined)),
+    TURNSTILE_SECRET_KEY: z
+        .string()
+        .optional()
+        .transform((val) => (val?.trim() ? val.trim() : undefined)),
+
     ENCRYPTION_KEY: z.string().optional(),
 
     DEFAULT_STORAGE_TYPE: z.enum(["local", "s3"]).optional().default("local"),
@@ -649,6 +663,22 @@ const baseEnvSchema = z.object({
 });
 
 export const envSchema = baseEnvSchema.superRefine((parsed, ctx) => {
+    if (
+        Boolean(parsed.TURNSTILE_SITE_KEY) !==
+        Boolean(parsed.TURNSTILE_SECRET_KEY)
+    ) {
+        ctx.addIssue({
+            code: "custom",
+            path: [
+                parsed.TURNSTILE_SITE_KEY
+                    ? "TURNSTILE_SECRET_KEY"
+                    : "TURNSTILE_SITE_KEY",
+            ],
+            message:
+                "TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY must be set together",
+        });
+    }
+
     const annualConfigPresent = Boolean(
         parsed.STRIPE_PRICE_ID_USD_ANNUAL ||
             parsed.STRIPE_PRICE_ID_EUR_ANNUAL ||
@@ -748,6 +778,8 @@ function validateEnv(): Env {
                 process.env.WEBHOOKS_REQUIRE_PUBLIC_TARGETS,
             RATE_LIMIT_TRUST_PROXY_HEADERS:
                 process.env.RATE_LIMIT_TRUST_PROXY_HEADERS,
+            TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
+            TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
             ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
             DEFAULT_STORAGE_TYPE: process.env.DEFAULT_STORAGE_TYPE,
             LOCAL_STORAGE_PATH: process.env.LOCAL_STORAGE_PATH,

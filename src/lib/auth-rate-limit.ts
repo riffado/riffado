@@ -52,7 +52,8 @@ const RULES: Record<string, AuthRateRule> = {
     "/send-verification-email": { ipLimit: 5, emailLimit: 3 },
 };
 
-function authPath(request: Request): string {
+/** Better Auth endpoint path for a request, normalized (the part after `/api/auth`). */
+export function authEndpointPath(request: Request): string {
     const { pathname } = new URL(request.url);
     const marker = "/api/auth";
     const index = pathname.indexOf(marker);
@@ -128,7 +129,7 @@ function tooManyRequests(result: RateLimitResult): Response {
 export async function enforceAuthRateLimit(
     request: Request,
 ): Promise<Response | null> {
-    const path = authPath(request);
+    const path = authEndpointPath(request);
     const rule = RULES[path];
     if (!rule) return null;
 

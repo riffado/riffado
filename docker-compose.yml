@@ -46,6 +46,9 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-}
+      # Optional Cloudflare Turnstile on auth forms (set both)
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
 
       # Encryption
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}

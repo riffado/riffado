@@ -65,6 +65,12 @@ rephrased between releases without notice; `code` will not.
 | `UNAUTHORIZED`          |   401  | Legacy alias for `AUTH_SESSION_MISSING`. Kept for compat.      |
 | `SESSION_EXPIRED`       |   401  | Legacy alias for `AUTH_SESSION_EXPIRED`. Kept for compat.      |
 | `FORBIDDEN`             |   403  | Authenticated but the resource is not yours / not allowed.     |
+| `CAPTCHA_REQUIRED`      |   400  | Turnstile is enabled and the auth request carried no `x-captcha-response` token. |
+| `CAPTCHA_FAILED`        |   403  | Cloudflare rejected the Turnstile token (invalid, expired, or already used). |
+
+When Turnstile is enabled and Cloudflare's verification endpoint is
+unreachable or rejects the server's secret key, protected auth requests
+fail closed with `SERVICE_UNAVAILABLE` (`503`).
 
 ## Input
 

@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    CAPTCHA_PENDING_MESSAGE,
+    captchaFetchOptions,
+    TurnstileWidget,
+    type TurnstileWidgetHandle,
+} from "@/components/auth/turnstile-widget";
 import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +34,8 @@ interface LoginFormProps {
      * directly, which is also linked from the README.
      */
     smtpConfigured?: boolean;
+    /** Turnstile site key; null when the instance has Turnstile disabled. */
+    turnstileSiteKey?: string | null;
 }
 
 /**
@@ -37,20 +45,32 @@ interface LoginFormProps {
 export function LoginForm({
     registrationEnabled = true,
     smtpConfigured = false,
+    turnstileSiteKey = null,
 }: LoginFormProps) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const turnstileRef = useRef<TurnstileWidgetHandle>(null);
     const { push, refresh } = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        let captchaToken: string | null = null;
 
         try {
+            if (turnstileSiteKey) {
+                captchaToken = (await turnstileRef.current?.getToken()) ?? null;
+                if (!captchaToken) {
+                    toast.error(CAPTCHA_PENDING_MESSAGE);
+                    return;
+                }
+            }
+
             const result = await signIn.email({
                 email,
                 password,
+                fetchOptions: captchaFetchOptions(captchaToken),
             });
 
             if (result.error) {
@@ -76,6 +96,7 @@ export function LoginForm({
                     : "Invalid email or password";
             toast.error(message);
         } finally {
+            if (captchaToken) turnstileRef.current?.reset();
             setIsLoading(false);
         }
     };
@@ -120,6 +141,14 @@ export function LoginForm({
                         autoComplete="current-password"
                     />
                 </div>
+
+                {turnstileSiteKey ? (
+                    <TurnstileWidget
+                        ref={turnstileRef}
+                        siteKey={turnstileSiteKey}
+                        action="sign-in"
+                    />
+                ) : null}
 
                 <MetalButton
                     type="submit"

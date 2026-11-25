@@ -1,8 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    CAPTCHA_PENDING_MESSAGE,
+    captchaFetchOptions,
+    TurnstileWidget,
+    type TurnstileWidgetHandle,
+} from "@/components/auth/turnstile-widget";
 import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +21,8 @@ interface ForgotPasswordFormProps {
      * rather than letting the user submit a request that can't be delivered.
      */
     smtpConfigured: boolean;
+    /** Turnstile site key; null when the instance has Turnstile disabled. */
+    turnstileSiteKey?: string | null;
 }
 
 /**
@@ -23,32 +31,50 @@ interface ForgotPasswordFormProps {
  */
 export function ForgotPasswordForm({
     smtpConfigured,
+    turnstileSiteKey = null,
 }: ForgotPasswordFormProps) {
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const turnstileRef = useRef<TurnstileWidgetHandle>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!smtpConfigured) return;
         setIsLoading(true);
+        let captchaToken: string | null = null;
 
         try {
+            if (turnstileSiteKey) {
+                captchaToken = (await turnstileRef.current?.getToken()) ?? null;
+                if (!captchaToken) {
+                    toast.error(CAPTCHA_PENDING_MESSAGE);
+                    return;
+                }
+            }
+
             // We intentionally don't surface the better-auth response: we
             // always show the same success message so this endpoint can't
             // be used to enumerate which emails have accounts.
             const result = await requestPasswordReset({
                 email,
                 redirectTo: "/reset-password",
+                fetchOptions: captchaFetchOptions(captchaToken),
             });
-            // Rate-limit rejections (429) are a request-volume signal, not an
-            // account-existence signal, so surfacing them doesn't leak
-            // enumeration. Show the limiter's message instead of a false
-            // "check your email" when no email was actually sent.
-            if (result?.error?.status === 429) {
+            // Rate-limit (429) and security-check rejections happen before
+            // any account lookup, so surfacing them doesn't leak
+            // enumeration. Show their message instead of a false "check
+            // your email" when no email was actually sent.
+            const errorCode = result?.error?.code;
+            if (
+                result?.error?.status === 429 ||
+                errorCode === "CAPTCHA_REQUIRED" ||
+                errorCode === "CAPTCHA_FAILED" ||
+                errorCode === "SERVICE_UNAVAILABLE"
+            ) {
                 toast.error(
-                    result.error.message ||
-                        "Too many requests. Please wait a moment and try again.",
+                    result?.error?.message ||
+                        "Could not send reset email. Please try again.",
                 );
                 return;
             }
@@ -62,6 +88,7 @@ export function ForgotPasswordForm({
                     : "Could not send reset email. Please try again.";
             toast.error(message);
         } finally {
+            if (captchaToken) turnstileRef.current?.reset();
             setIsLoading(false);
         }
     };
@@ -110,6 +137,14 @@ export function ForgotPasswordForm({
                             autoComplete="email"
                         />
                     </div>
+
+                    {turnstileSiteKey ? (
+                        <TurnstileWidget
+                            ref={turnstileRef}
+                            siteKey={turnstileSiteKey}
+                            action="password-reset"
+                        />
+                    ) : null}
 
                     <MetalButton
                         type="submit"

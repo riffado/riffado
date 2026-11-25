@@ -6,11 +6,13 @@ import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export default async function ForgotPasswordPage() {
     await redirectIfAuthenticated();
 
     const smtp = isSmtpConfigured();
+    const turnstileSiteKey = getTurnstileSiteKey();
 
     // The hosted instance always has SMTP configured, so the friendly
     // subtitle is fine. On self-host, SMTP may not be configured -- the
@@ -24,14 +26,20 @@ export default async function ForgotPasswordPage() {
     if (env.IS_HOSTED) {
         return (
             <HostedAuthChrome title={title} subtitle={subtitle}>
-                <ForgotPasswordForm smtpConfigured={smtp} />
+                <ForgotPasswordForm
+                    smtpConfigured={smtp}
+                    turnstileSiteKey={turnstileSiteKey}
+                />
             </HostedAuthChrome>
         );
     }
 
     return (
         <SelfHostAuthChrome title={title} subtitle={subtitle}>
-            <ForgotPasswordForm smtpConfigured={smtp} />
+            <ForgotPasswordForm
+                smtpConfigured={smtp}
+                turnstileSiteKey={turnstileSiteKey}
+            />
         </SelfHostAuthChrome>
     );
 }

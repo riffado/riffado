@@ -33,6 +33,8 @@ on production secrets.
 | `WEBHOOKS_REQUIRE_PUBLIC_TARGETS`   | `false`                            | When `true`, webhook URLs must be HTTPS and resolve to public IPs. Useful when your instance is exposed to others.  |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS`    | `false`                            | When `true`, trust `X-Forwarded-For` for rate-limit buckets. Only safe behind a reverse proxy that overwrites the header. |
 | `API_TOKEN_HASH_SECRET`             | falls back to `BETTER_AUTH_SECRET` | At least 32 chars. HMAC key for personal API token hashing. Set independently if you want token-hash rotation without rotating session secrets. |
+| `TURNSTILE_SITE_KEY`                | —                                  | Cloudflare Turnstile site key. With `TURNSTILE_SECRET_KEY`, requires a Turnstile check on sign-up, sign-in, password reset, and verification-email resend. Set both or neither. The widget's hostname list must include every host that serves `/login`. |
+| `TURNSTILE_SECRET_KEY`              | —                                  | Cloudflare Turnstile secret key, used server-side to verify tokens. |
 
 Setting `RATE_LIMIT_TRUST_PROXY_HEADERS=true` without a proxy that
 overwrites forwarding headers lets clients forge their own IPs and

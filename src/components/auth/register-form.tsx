@@ -3,8 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+    CAPTCHA_PENDING_MESSAGE,
+    captchaFetchOptions,
+    TurnstileWidget,
+    type TurnstileWidgetHandle,
+} from "@/components/auth/turnstile-widget";
 import { MetalButton } from "@/components/metal-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,13 +27,18 @@ interface RegisterFormProps {
      * show an in-place "check your email" panel instead.
      */
     requireEmailVerification: boolean;
+    /** Turnstile site key; null when the instance has Turnstile disabled. */
+    turnstileSiteKey?: string | null;
 }
 
 /**
  * Renders only the form (fields + submit + sign-in footer).
  * Page chrome (logo, headings, panel, background) is owned by the route.
  */
-export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
+export function RegisterForm({
+    requireEmailVerification,
+    turnstileSiteKey = null,
+}: RegisterFormProps) {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -36,6 +47,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
     const [awaitingVerification, setAwaitingVerification] = useState(false);
     const [lastResentAt, setLastResentAt] = useState(0);
     const [isResending, setIsResending] = useState(false);
+    const turnstileRef = useRef<TurnstileWidgetHandle>(null);
     const { push, refresh } = useRouter();
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -52,8 +64,17 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
         }
 
         setIsLoading(true);
+        let captchaToken: string | null = null;
 
         try {
+            if (turnstileSiteKey) {
+                captchaToken = (await turnstileRef.current?.getToken()) ?? null;
+                if (!captchaToken) {
+                    toast.error(CAPTCHA_PENDING_MESSAGE);
+                    return;
+                }
+            }
+
             const result = await signUp.email({
                 email,
                 password,
@@ -64,6 +85,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                 // OnboardingDialog (Workstation) takes over from here for
                 // any account that hasn't finished onboarding yet.
                 callbackURL: "/dashboard",
+                fetchOptions: captchaFetchOptions(captchaToken),
             });
 
             if (result.error) {
@@ -93,6 +115,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                     : "Failed to create account";
             toast.error(message);
         } finally {
+            if (captchaToken) turnstileRef.current?.reset();
             setIsLoading(false);
         }
     };
@@ -108,10 +131,20 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
         }
 
         setIsResending(true);
+        let captchaToken: string | null = null;
         try {
+            if (turnstileSiteKey) {
+                captchaToken = (await turnstileRef.current?.getToken()) ?? null;
+                if (!captchaToken) {
+                    toast.error(CAPTCHA_PENDING_MESSAGE);
+                    return;
+                }
+            }
+
             const result = await sendVerificationEmail({
                 email,
                 callbackURL: "/dashboard",
+                fetchOptions: captchaFetchOptions(captchaToken),
             });
 
             if (result.error) {
@@ -131,6 +164,7 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                     : "Failed to resend verification email";
             toast.error(message);
         } finally {
+            if (captchaToken) turnstileRef.current?.reset();
             setIsResending(false);
         }
     };
@@ -154,6 +188,13 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                     >
                         {isResending ? "Resending..." : "Resend email"}
                     </button>
+                    {turnstileSiteKey ? (
+                        <TurnstileWidget
+                            ref={turnstileRef}
+                            siteKey={turnstileSiteKey}
+                            action="verify-email"
+                        />
+                    ) : null}
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -215,6 +256,14 @@ export function RegisterForm({ requireEmailVerification }: RegisterFormProps) {
                             autoComplete="new-password"
                         />
                     </div>
+
+                    {turnstileSiteKey ? (
+                        <TurnstileWidget
+                            ref={turnstileRef}
+                            siteKey={turnstileSiteKey}
+                            action="sign-up"
+                        />
+                    ) : null}
 
                     <MetalButton
                         type="submit"

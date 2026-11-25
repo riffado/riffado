@@ -6,6 +6,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import { isSmtpConfigured } from "@/lib/smtp";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export default async function LoginPage() {
     await redirectIfAuthenticated();
@@ -13,6 +14,7 @@ export default async function LoginPage() {
     const formProps = {
         registrationEnabled: !env.DISABLE_REGISTRATION,
         smtpConfigured: isSmtpConfigured(),
+        turnstileSiteKey: getTurnstileSiteKey(),
     };
 
     if (env.IS_HOSTED) {

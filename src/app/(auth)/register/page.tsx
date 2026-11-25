@@ -7,6 +7,7 @@ import { RegisterForm } from "@/components/auth/register-form";
 import { emailVerificationRequired } from "@/lib/auth";
 import { redirectIfAuthenticated } from "@/lib/auth-server";
 import { env } from "@/lib/env";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export default async function RegisterPage() {
     await redirectIfAuthenticated();
@@ -19,6 +20,8 @@ export default async function RegisterPage() {
         redirect("/login");
     }
 
+    const turnstileSiteKey = getTurnstileSiteKey();
+
     if (env.IS_HOSTED) {
         return (
             <HostedAuthChrome
@@ -27,6 +30,7 @@ export default async function RegisterPage() {
             >
                 <RegisterForm
                     requireEmailVerification={emailVerificationRequired}
+                    turnstileSiteKey={turnstileSiteKey}
                 />
             </HostedAuthChrome>
         );
@@ -39,6 +43,7 @@ export default async function RegisterPage() {
         >
             <RegisterForm
                 requireEmailVerification={emailVerificationRequired}
+                turnstileSiteKey={turnstileSiteKey}
             />
         </SelfHostAuthChrome>
     );
